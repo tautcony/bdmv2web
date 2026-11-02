@@ -1,0 +1,40 @@
+.agents/skills/.openspec-target
+  h_3705811fa4502c 1
+.agents/skills/openspec-apply-change/SKILL.md
+  h_3705811fa4502c 1-206
+.agents/skills/openspec-archive-change/SKILL.md
+  h_3705811fa4502c 1-221
+.agents/skills/openspec-bulk-archive-change/SKILL.md
+  h_3705811fa4502c 1-377
+.agents/skills/openspec-continue-change/SKILL.md
+  h_3705811fa4502c 1-138
+.agents/skills/openspec-explore/SKILL.md
+  h_3705811fa4502c 1-356
+.agents/skills/openspec-ff-change/SKILL.md
+  h_3705811fa4502c 1-129
+.agents/skills/openspec-new-change/SKILL.md
+  h_3705811fa4502c 1-88
+.agents/skills/openspec-onboard/SKILL.md
+  h_3705811fa4502c 1-575
+.agents/skills/openspec-propose/SKILL.md
+  h_3705811fa4502c 1-175
+.agents/skills/openspec-sync-specs/SKILL.md
+  h_3705811fa4502c 1-290
+.agents/skills/openspec-verify-change/SKILL.md
+  h_3705811fa4502c 1-223
+bdmv_hdmv_offline_web_architecture.md
+  h_3705811fa4502c 1-858
+openspec/config.yaml
+  h_3705811fa4502c 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0da48406d3166fc0b8ae0788861b2bba7a783126",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
