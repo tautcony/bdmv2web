@@ -93,6 +93,8 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/test-runner: {}
+
 packages:
 
   '@apidevtools/json-schema-ref-parser@11.9.3':

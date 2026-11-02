@@ -2,11 +2,11 @@
 
 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
 
-共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。文中命令/文件是目标交付物，当前未实现。
+共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。依赖独立的 M6 原语已放在 `packages/test-runner/src`（包审计、离线 URL/data MIME 检查、完成度与 coverage 计算、VM/IG compare/report primitives）；payload 指纹沿用 M0 的 locale `en` 排序相对路径、NUL、SHA-256、LF 契约，字节长度另行校验。原语尚未接入 CLI，也未取得本 change 所列产品验收证据，因此对应任务保持未勾选。浏览器、跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
 
 ## 1. 独立包检查
 
-- [ ] 1.1 实现validate的schema/引用/manifest/大小/hash与payloadFingerprint重算；验收：无原碟/FFmpeg可验证，字节篡改和缺必需资产失败。
+- [ ] 1.1 实现validate的schema/引用/manifest/大小/hash与payloadFingerprint重算；验收：无原碟/FFmpeg可验证，指纹缺失/格式错误/不匹配、启动文件`index.html`缺失或未列入manifest、字节篡改和缺必需资产均失败。
 - [ ] 1.2 解析HTML/CSS/数据/JS资源入口并统一URL/realpath检查；验收：远程/协议相对/file原盘/编码逃逸/外symlink均定位，合法中文/百分号路径和说明链接不误报。
 - [ ] 1.3 限制data MIME并检查嵌套依赖和bundle禁用入口；验收：HTML/SVG执行载荷与远程嵌套拒绝，已生成PNG data允许。
 - [ ] 1.4 生成dependency-audit及checks[]；验收：每项有pass/fail/not-verified和具体字段/证据，不盲信旧status。
