@@ -6,16 +6,16 @@
 
 ## 1. 传输与时间域
 
-- [ ] 1.1 实现分块192B源包识别与残余处理；验收：每种读取块分割结果一致，非192B格式/失同步可诊断。
-- [ ] 1.2 实现TS header/adaptation/PUSI、PAT/PMT和逐PID连续性；验收：adaptation-only/重复包/丢包/discontinuity分别处理，不拼接破损payload。
-- [ ] 1.3 实现每PID有界PES及PTS/DTS重组；验收：跨包/跨块、33位回绕和新时间域黄金值正确，来源偏移完整。
+- [x] 1.1 实现分块192B源包识别与残余处理；验收：每种读取块分割结果一致，非192B格式/失同步可诊断。
+- [x] 1.2 实现TS header/adaptation/PUSI、PAT/PMT和逐PID连续性；验收：adaptation-only/重复包/丢包/discontinuity分别处理，不拼接破损payload。
+- [x] 1.3 实现每PID有界PES及PTS/DTS重组；验收：跨包/跨块、33位回绕和新时间域黄金值正确，来源偏移完整。
 - [ ] 1.4 交叉核验MPLS/CLPI/PMT的IG PID；验收：冲突报告双方来源，PG不误识别为IG。
 
 ## 2. IG和图像
 
 - [ ] 2.1 登记ICS/PDS/ODS/Display Set字段与版本依据；验收：支持项有固定参考revision与独立字节样本，未核验项不标supported。
 - [ ] 2.2 实现跨PES段/分片和epoch/version缓存；验收：缺首末片/EOF/超预算不提交完整场景，新旧对象版本不混拼。
-- [ ] 2.3 实现有界RLE；验收：透明run/行结束黄金像素正确，越行/超图/异常尺寸在写入前拒绝。
+- [x] 2.3 实现有界RLE；验收：透明run/行结束黄金像素正确，越行/超图/异常尺寸在写入前拒绝。
 - [ ] 2.4 固定并实现YCbCrA转换/rounding/alpha及PNG输出；验收：独立色块/透明样本逐像素一致，同ODS双PDS有各自正确资产映射。
 
 ## 3. 场景与交接

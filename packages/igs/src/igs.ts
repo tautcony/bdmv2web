@@ -1,0 +1,250 @@
+import { checkedObjectPixels, DEFAULT_LIMITS, type Limits } from "@bdmv-web/core";
+import type { IgsButton, IgsDiagnostic, IgsObject, IgsPage, IgsPalette, IgsScene, PtsValue } from "./types.js";
+import { source } from "./transport.js";
+
+export interface IgsSegment { type: number; data: Uint8Array; offset: bigint; }
+export interface SegmentParseResult { segments: IgsSegment[]; residual: Uint8Array; diagnostics: IgsDiagnostic[]; }
+export interface IgsStreamState {
+  objects: Map<string, IgsObject>;
+  palettes: Map<string, IgsPalette>;
+  pendingObjects: Map<string, { id: number; version: number; width: number; height: number; declaredLength: number; bytes: Uint8Array; source: IgsObject["source"]; last: boolean }>;
+  scenes: IgsScene[];
+  diagnostics: IgsDiagnostic[];
+  current: { ics: Uint8Array; source: IgsScene["source"]; pts: string | null; timeDomain: number; objects: IgsObject[]; palettes: IgsPalette[]; invalid: boolean } | null;
+}
+
+export function createIgsState(): IgsStreamState {
+  return { objects: new Map(), palettes: new Map(), pendingObjects: new Map(), scenes: [], diagnostics: [], current: null };
+}
+
+export function parseSegments(input: Uint8Array, baseOffset = 0n, residual = new Uint8Array(), clipId = "", pid = 0, pts: PtsValue | null = null): SegmentParseResult {
+  const bytes = join(residual, input); const segments: IgsSegment[] = []; const diagnostics: IgsDiagnostic[] = [];
+  let pos = 0;
+  while (bytes.length - pos >= 3) {
+    const type = bytes[pos]!; const length = (bytes[pos + 1]! << 8) | bytes[pos + 2]!;
+    if (length > 0xffff) { diagnostics.push(error("IGS_INVALID_SEGMENT", "Segment length exceeds its 16-bit field", source(clipId, pid, baseOffset + BigInt(pos)))); break; }
+    const total = length + 3;
+    if (bytes.length - pos < total) break;
+    segments.push({ type, data: bytes.slice(pos + 3, pos + total), offset: baseOffset + BigInt(pos) });
+    pos += total;
+  }
+  return { segments, residual: bytes.slice(pos), diagnostics };
+}
+
+export function decodeRle(data: Uint8Array, width: number, height: number, limits: Limits = DEFAULT_LIMITS): Uint8Array {
+  const pixelCount = checkedObjectPixels(width, height, limits);
+  const output = new Uint8Array(pixelCount);
+  let inPos = 0; let x = 0; let y = 0; let outPos = 0;
+  while (inPos < data.length) {
+    const color = data[inPos++]!;
+    let run = 1; let value = color;
+    if (color === 0) {
+      if (inPos >= data.length) throw new IgsError("IGS_INVALID_RLE", "Zero run marker has no control byte");
+      const control = data[inPos++]!;
+      if (control === 0) {
+        if (x !== width || y >= height) throw new IgsError("IGS_INVALID_RLE", "Line end marker occurs before a full row or beyond image height");
+        x = 0;
+        y++;
+        continue;
+      }
+      const hasColor = !!(control & 0x80);
+      run = control & 0x3f;
+      if (control & 0x40) {
+        if (inPos >= data.length) throw new IgsError("IGS_INVALID_RLE", "Extended run marker has no low length byte");
+        run = (run << 8) | data[inPos++]!;
+      }
+      if (hasColor) {
+        if (inPos >= data.length) throw new IgsError("IGS_INVALID_RLE", "Colored run marker has no color byte");
+        value = data[inPos++]!;
+      } else value = 0;
+    }
+    if (run === 0) continue;
+    if (y >= height || run > width - x) throw new IgsError("IGS_RLE_OVERRUN", `Run of ${run} pixels crosses row ${y} width ${width}`);
+    if (outPos + run > pixelCount) throw new IgsError("IGS_RLE_OVERRUN", "Decoded RLE exceeds declared pixel count");
+    output.fill(value, outPos, outPos + run); outPos += run; x += run;
+  }
+  if (outPos !== pixelCount || !((x === width && y === height - 1) || (x === 0 && y === height))) throw new IgsError("IGS_RLE_TRUNCATED", `RLE ended at ${outPos}/${pixelCount} pixels (${y} rows)`);
+  return output;
+}
+
+export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipId: string, pid: number, pts: PtsValue | null, packetOffset: bigint, pesOffset: bigint, segmentFileOffset: bigint, limits: Limits = DEFAULT_LIMITS): void {
+  const src = source(clipId, pid, packetOffset, pesOffset, segment.offset, pts?.normalized.toString() ?? null, pts?.timeDomain ?? 0, segmentFileOffset);
+  try {
+    if (segment.type === 0x18) {
+      if (state.current) {
+        state.diagnostics.push(error("IGS_UNCOMPLETED_DISPLAY_SET", "New ICS arrived before prior Display Set reached END", state.current.source, [sceneId(state.current.source)]));
+        state.pendingObjects.clear();
+      }
+      const parsed = parseIcs(segment.data, limits);
+      if (parsed.compositionState === 2) { state.objects.clear(); state.palettes.clear(); state.pendingObjects.clear(); }
+      state.current = { ics: segment.data.slice(), source: src, pts: pts?.normalized.toString() ?? null, timeDomain: pts?.timeDomain ?? 0, objects: [], palettes: [], invalid: false };
+      return;
+    }
+    if (segment.type === 0x14) {
+      const palette = parsePalette(segment.data, src);
+      state.palettes.set(`${palette.id}:${palette.version}`, palette);
+      if (state.current) state.current.palettes.push(palette);
+      return;
+    }
+    if (segment.type === 0x15) {
+      consumeObjectSegment(state, segment.data, src, limits);
+      return;
+    }
+    if (segment.type === 0x80) {
+      if (!state.current) { state.diagnostics.push(error("IGS_ORPHAN_END", "END segment has no active ICS composition", src)); return; }
+      for (const pending of state.pendingObjects.values()) {
+        state.current.invalid = true;
+        state.diagnostics.push(error("IGS_INCOMPLETE_OBJECT", `END arrived with incomplete ODS object ${pending.id} version ${pending.version}`, pending.source, [sceneId(state.current.source)]));
+        for (const objectKey of state.objects.keys()) if (objectKey.startsWith(`${pending.id}:`)) state.objects.delete(objectKey);
+        state.current.objects = state.current.objects.filter((object) => object.id !== pending.id);
+      }
+      state.pendingObjects.clear();
+      const scene = parseIcs(state.current.ics, limits);
+      scene.id = `${clipId}:${pid}:${scene.compositionNumber}:${state.current.timeDomain}:${state.current.pts ?? "no-pts"}`;
+      scene.source = state.current.source; scene.clipId = clipId; scene.pid = pid; scene.pts90k = state.current.pts; scene.timeDomain = state.current.timeDomain;
+      scene.rawIcs = state.current.ics.slice();
+      for (const page of scene.pages) for (const button of page.buttons) for (const command of button.commands) {
+        command.sourceOffset = (BigInt(scene.source.segmentFileOffset) + 3n + BigInt(command.sourceOffset)).toString();
+      }
+      scene.objects = [...new Map([...state.current.objects, ...state.objects.values()].map((o) => [`${o.id}:${o.version}`, o])).values()];
+      scene.palettes = [...new Map([...state.current.palettes, ...state.palettes.values()].map((p) => [`${p.id}:${p.version}`, p])).values()];
+      scene.complete = !state.current.invalid;
+      state.scenes.push(scene);
+      state.current = null;
+      return;
+    }
+    state.diagnostics.push({ severity: "warning", code: "IGS_UNSUPPORTED_SEGMENT", message: `Segment type 0x${segment.type.toString(16).padStart(2, "0")} is retained only as an unknown segment`, source: src, affectedSceneIds: state.current ? [sceneId(state.current.source)] : [] });
+  } catch (e) {
+    const err = e instanceof IgsError ? e : new IgsError("IGS_INVALID_SEGMENT", e instanceof Error ? e.message : String(e));
+    state.diagnostics.push(error(err.code, err.message, src, state.current ? [sceneId(state.current.source)] : []));
+    if (state.current) state.current.invalid = true;
+    if (segment.type === 0x15 && segment.data.length >= 3) {
+      const id = u16(segment.data, 0), key = `${id}:${segment.data[2]}`;
+      state.pendingObjects.delete(key);
+      for (const objectKey of state.objects.keys()) if (objectKey.startsWith(`${id}:`)) state.objects.delete(objectKey);
+      if (state.current) state.current.objects = state.current.objects.filter((object) => object.id !== id);
+    } else if (segment.type === 0x14 && segment.data.length >= 2) {
+      const id = segment.data[0]!;
+      for (const paletteKey of state.palettes.keys()) if (paletteKey.startsWith(`${id}:`)) state.palettes.delete(paletteKey);
+      if (state.current) state.current.palettes = state.current.palettes.filter((palette) => palette.id !== id);
+    }
+    if (segment.type === 0x18) state.current = null;
+  }
+}
+
+function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsObject["source"], limits: Limits): void {
+  if (data.length < 4) throw new IgsError("IGS_INVALID_SEGMENT", "ODS is shorter than its object id, version and sequence descriptor");
+  const id = u16(data, 0), version = data[2]!, flags = data[3]!;
+  const first = !!(flags & 0x80), last = !!(flags & 0x40);
+  const key = `${id}:${version}`;
+  let pending = state.pendingObjects.get(key);
+  let cursor = 4;
+  if (first) {
+    if (data.length < 10) throw new IgsError("IGS_INVALID_SEGMENT", "First ODS fragment has no length and dimensions");
+    const declaredLength = u24(data, cursor); cursor += 3;
+    const width = u16(data, cursor); const height = u16(data, cursor + 2); cursor += 4;
+    const pixels = checkedObjectPixels(width, height, limits);
+    if (declaredLength < 4 || declaredLength > limits.maxSegmentBytes || declaredLength - 4 > limits.maxReassemblyBytes) throw new IgsError("LIMIT_EXCEEDED", `ODS declared data length ${declaredLength} exceeds supported limits`);
+    pending = { id, version, width, height, declaredLength, bytes: new Uint8Array(), source: src, last };
+    state.pendingObjects.set(key, pending);
+    void pixels;
+  } else if (!pending) {
+    throw new IgsError("UNRESOLVED_OBJECT", `ODS continuation for object ${id} version ${version} has no first fragment`);
+  }
+  if (!pending) return;
+  pending.bytes = join(pending.bytes, data.subarray(cursor));
+  pending.last ||= last;
+  if (pending.bytes.length > limits.maxReassemblyBytes || pending.bytes.length > pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} fragment bytes exceed declared object length`);
+  if (!pending.last) return;
+  if (pending.bytes.length !== pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} ended at ${pending.bytes.length} bytes; expected ${pending.declaredLength - 4}`);
+  const indices = decodeRle(pending.bytes, pending.width, pending.height, limits);
+  const object: IgsObject = { id, version, width: pending.width, height: pending.height, indices, source: pending.source };
+  state.objects.set(key, object);
+  if (state.current) state.current.objects.push(object);
+  state.pendingObjects.delete(key);
+}
+
+function parsePalette(data: Uint8Array, src: IgsPalette["source"]): IgsPalette {
+  if (data.length < 2 || (data.length - 2) % 5 !== 0) throw new IgsError("IGS_INVALID_SEGMENT", "PDS must contain palette id/version and complete 5-byte entries");
+  const entries = new Map<number, IgsPalette["entries"] extends Map<number, infer E> ? E : never>();
+  for (let i = 2; i < data.length; i += 5) entries.set(data[i]!, { y: data[i + 1]!, cr: data[i + 2]!, cb: data[i + 3]!, alpha: data[i + 4]! });
+  return { id: data[0]!, version: data[1]!, entries, source: src };
+}
+
+function parseIcs(data: Uint8Array, limits: Limits): IgsScene {
+  const r = new BitReader(data);
+  const width = r.u16(), height = r.u16(); r.u8();
+  const compositionNumber = r.u16(); const compositionState = r.bits(2); r.bits(6); const sequenceFlags = r.u8();
+  if (!(sequenceFlags & 0x80) || !(sequenceFlags & 0x40)) throw new IgsError("IGS_INVALID_SEGMENT", "ICS sequence must be complete before decoding");
+  const dataLength = r.u24();
+  if (dataLength !== r.remaining) throw new IgsError("IGS_INVALID_SEGMENT", `ICS data length ${dataLength} does not match ${r.remaining} remaining bytes`);
+  const streamModel = r.bits(1), uiModel = r.bits(1); r.bits(6);
+  let compositionTimeout90k: string | null = null, selectionTimeout90k: string | null = null;
+  if (streamModel === 0) { r.bits(7); compositionTimeout90k = r.bigBits(33).toString(); r.bits(7); selectionTimeout90k = r.bigBits(33).toString(); }
+  const userTimeoutDuration = r.u24();
+  const pageCount = r.u8();
+  if (pageCount > 255) throw new IgsError("IGS_INVALID_SEGMENT", "Invalid page count");
+  checkedObjectPixels(width, height, limits);
+  const pages: IgsPage[] = [];
+  for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) pages.push(parsePage(r));
+  if (r.remaining !== 0) throw new IgsError("IGS_INVALID_SEGMENT", `ICS has ${r.remaining} unparsed bytes`);
+  return { id: "", clipId: "", pid: 0, compositionNumber, compositionState, width, height, timeDomain: 0, pts90k: null, streamModel, uiModel, compositionTimeout90k, selectionTimeout90k, userTimeoutDuration, rawIcs: data.slice(), pages, objects: [], palettes: [], complete: false, source: source("", 0, 0n) };
+}
+
+function parsePage(r: BitReader): IgsPage {
+  const id = r.u8(), version = r.u8(); const uoMask = BigInt(`0x${[...r.bytes(8)].map((n) => n.toString(16).padStart(2, "0")).join("")}`);
+  const enter = parseEffectSequence(r); const exit = parseEffectSequence(r);
+  const animationFrameRateCode = r.u8(); const defaultSelectedButtonId = r.u16(); const defaultActivatedButtonId = r.u16(); const paletteId = r.u8(); const bogCount = r.u8();
+  const buttons: IgsButton[] = [];
+  const bogs: IgsPage["bogs"] = [];
+  for (let i = 0; i < bogCount; i++) {
+    const defaultButtonId = r.u16(); const count = r.u8(); const buttonIds: number[] = [];
+    for (let j = 0; j < count; j++) {
+      const buttonStart = r.position;
+      const buttonId = r.u16(); r.u16(); const flags = r.u8(); const x = r.u16(), y = r.u16();
+      const up = r.u16(), down = r.u16(), left = r.u16(), right = r.u16();
+      const normalStart = r.u16(), normalEnd = r.u16(), normalFlags = r.u8();
+      const selectedSoundId = r.u8(), selectedStart = r.u16(), selectedEnd = r.u16(), selectedFlags = r.u8();
+      const activatedSoundId = r.u8(), activatedStart = r.u16(), activatedEnd = r.u16(); const commandCount = r.u16();
+      const commands: IgsButton["commands"] = [];
+      for (let commandIndex = 0; commandIndex < commandCount; commandIndex++) {
+        const sourceOffset = r.position; commands.push({ bytes: r.bytes(12), recordIndex: commandIndex, sourceOffset: String(sourceOffset) });
+      }
+      buttons.push({ id: buttonId, x, y, autoAction: !!(flags & 0x80), neighbors: { up, down, left, right }, visuals: { normal: { startObjectId: normalStart, endObjectId: normalEnd, repeat: !!(normalFlags & 0x80) }, selected: { startObjectId: selectedStart, endObjectId: selectedEnd, repeat: !!(selectedFlags & 0x80), soundId: selectedSoundId }, activated: { startObjectId: activatedStart, endObjectId: activatedEnd, soundId: activatedSoundId } }, commands });
+      buttonIds.push(buttonId);
+      void buttonStart;
+    }
+    bogs.push({ defaultButtonId, buttonIds });
+  }
+  return { id, version, uoMask, defaultSelectedButtonId, defaultActivatedButtonId, paletteId, buttons, bogs, animationFrameRateCode, rawEffects: { enter: enter.bytes, exit: exit.bytes, enterEffectCount: enter.effectCount, exitEffectCount: exit.effectCount } };
+}
+
+function parseEffectSequence(r: BitReader): { bytes: Uint8Array; effectCount: number } {
+  const start = r.position; const windows = r.u8(); r.skip(windows * 9); const effects = r.u8();
+  for (let i = 0; i < effects; i++) { r.u24(); r.u8(); const objects = r.u8(); for (let j = 0; j < objects; j++) { r.u16(); r.u8(); const flags = r.u8(); r.u16(); r.u16(); if (flags & 0x80) r.skip(8); } }
+  return { bytes: r.slice(start, r.position), effectCount: effects };
+}
+
+export class IgsError extends Error { constructor(readonly code: string, message: string) { super(message); this.name = "IgsError"; } }
+
+class BitReader {
+  private bit = 0;
+  constructor(private readonly data: Uint8Array) {}
+  get remaining(): number { return Math.ceil((this.data.length * 8 - this.bit) / 8); }
+  get position(): number { return this.bit >>> 3; }
+  bits(n: number): number { if (n < 0 || n > 32 || this.bit + n > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS field of ${n} bits exceeds segment`); let value = 0; for (let i = 0; i < n; i++) value = (value << 1) | ((this.data[this.bit >>> 3]! >> (7 - (this.bit & 7))) & 1), this.bit++; return value >>> 0; }
+  bigBits(n: number): bigint { if (n < 0 || n > 64 || this.bit + n > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS field of ${n} bits exceeds segment`); let value = 0n; for (let i = 0; i < n; i++) value = (value << 1n) | BigInt((this.data[this.bit >>> 3]! >> (7 - (this.bit & 7))) & 1), this.bit++; return value; }
+  u8(): number { this.align(); return this.bits(8); }
+  u16(): number { this.align(); return this.bits(16); }
+  u24(): number { this.align(); return this.bits(24); }
+  bytes(n: number): Uint8Array { this.align(); const start = this.position; this.skip(n); return this.data.slice(start, start + n); }
+  skip(n: number): void { this.align(); if (!Number.isSafeInteger(n) || n < 0 || this.bit + n * 8 > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS skip of ${n} bytes exceeds segment`); this.bit += n * 8; }
+  slice(start: number, end: number): Uint8Array { return this.data.slice(start, end); }
+  private align(): void { this.bit = (this.bit + 7) & ~7; }
+}
+
+function error(code: string, message: string, src: IgsDiagnostic["source"], affectedSceneIds: string[] = []): IgsDiagnostic { return { severity: "error", code, message, source: src, affectedSceneIds }; }
+function sceneId(src: IgsDiagnostic["source"]): string { return `${src?.clipId ?? "unknown"}:${src?.pid ?? 0}:${src?.packetOffset ?? 0}`; }
+function u16(bytes: Uint8Array, pos: number): number { return (bytes[pos]! << 8) | bytes[pos + 1]!; }
+function u24(bytes: Uint8Array, pos: number): number { return (bytes[pos]! << 16) | (bytes[pos + 1]! << 8) | bytes[pos + 2]!; }
+function join(a: Uint8Array, b: Uint8Array): Uint8Array { const out = new Uint8Array(a.length + b.length); out.set(a); out.set(b, a.length); return out; }
