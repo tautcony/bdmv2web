@@ -1,0 +1,23 @@
+packages/hdmv/src/vm.ts
+  s_3a3ffd5e9a879b::t_e73d4075053e09 17,55-57,59-60,62-92
+  s_3a3ffd5e9a879b::t_0a44a79cd4aa45 54,58,61
+packages/hdmv/src/index.test.ts
+  s_3a3ffd5e9a879b::t_ef34b854d76e06 21-27,29-38
+  s_3a3ffd5e9a879b::t_0accd841c3c689 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "43270525f828e4ad865a5ad3c1c7ade36f95f946",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
