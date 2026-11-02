@@ -1,0 +1,86 @@
+openspec/changes/export-playable-media/design.md
+  s_22438f96ffd6c0::t_03e8e08f8b8ede 49
+  s_22438f96ffd6c0::t_db7ae45e307f8b 5,9,11,15,17-48,50-63,67,71
+openspec/changes/establish-core-contracts/specs/disc-contracts/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,9-22,25-27,29-30,32-40,44,46,48-54,58-91,93,95-96
+openspec/changes/parse-bdmv-structure/design.md
+  s_22438f96ffd6c0::t_a61c99a11a90f5 5,9,11,15,17-57,61,65
+openspec/changes/build-offline-menu-runtime/design.md
+  s_22438f96ffd6c0::t_db7ae45e307f8b 5,9,11,15,17-47,51,55
+openspec/changes/establish-core-contracts/design.md
+  s_22438f96ffd6c0::t_0a754871e1d926 41
+  s_22438f96ffd6c0::t_a61c99a11a90f5 5,9,11,15,17-40,42-51,55,59
+openspec/changes/build-offline-menu-runtime/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/export-playable-media/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/verify-offline-release/tasks.md
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-32
+openspec/changes/build-offline-menu-runtime/tasks.md
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-32
+openspec/changes/extract-igs-scenes/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/parse-bdmv-structure/specs/bdmv-disc-inspection/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-40,44-54,56,58-87,91-96,98,100-101
+openspec/changes/execute-hdmv-navigation/design.md
+  s_22438f96ffd6c0::t_03e8e08f8b8ede 42
+  s_22438f96ffd6c0::t_db7ae45e307f8b 5,9,11,15,17-41,43-56,60,64
+openspec/changes/parse-bdmv-structure/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_22438f96ffd6c0::t_0a754871e1d926 22
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-21,23-32
+openspec/changes/DEPENDENCIES.md
+  s_22438f96ffd6c0::t_03e8e08f8b8ede 42-56
+openspec/changes/build-offline-menu-runtime/specs/offline-menu-runtime/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-26,30-51,53-54,56-78,82-84,86-87,89-92,96-101,103,105-106
+openspec/changes/export-playable-media/tasks.md
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-33
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  s_22438f96ffd6c0::t_03e8e08f8b8ede 47,49-50,91,95-98
+  s_22438f96ffd6c0::t_0a754871e1d926 76
+  s_22438f96ffd6c0::t_a61c99a11a90f5 1-46,48,51-75,77-90,92-94,99-106
+openspec/changes/READINESS_REVIEW.md
+  s_22438f96ffd6c0::t_18a5ee1aa0d840 1-118
+openspec/changes/extract-igs-scenes/design.md
+  s_22438f96ffd6c0::t_db7ae45e307f8b 5,9,11,15,17-58,62,66
+openspec/changes/verify-offline-release/design.md
+  s_22438f96ffd6c0::t_db7ae45e307f8b 5,9,11,15,17-64,68,72
+openspec/changes/execute-hdmv-navigation/specs/hdmv-navigation/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-26,30-35,37,39-45,49-53,55-87,89,91-92
+  s_22438f96ffd6c0::t_0a754871e1d926 54
+openspec/changes/extract-igs-scenes/specs/interactive-graphics-extraction/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-54,58-63,65,67-73,77-87,89,91-92
+openspec/changes/extract-igs-scenes/tasks.md
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-27
+openspec/changes/establish-core-contracts/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-31,35-59,61,63-69,73-88,90,92-107,111-116,118,120-121
+openspec/changes/verify-offline-release/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/execute-hdmv-navigation/proposal.md
+  s_22438f96ffd6c0::t_33e38be8824295 5,9-13,19,23,27-33
+openspec/changes/establish-core-contracts/tasks.md
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-26
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-45,49-56,58-59,61-64,68-75,77-78,80-83,87-111,113,115-116
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_22438f96ffd6c0::t_e3080c8ab1bebb 3,5,7-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f7c122ad7dc72d8773f4b2f8d6ce8d16d2b22c8e",
+  "prompts": {},
+  "sessions": {
+    "s_22438f96ffd6c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b34-42c0-7723-b0f9-f814d54e004c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
