@@ -1,0 +1,89 @@
+openspec/changes/verify-offline-release/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-12
+openspec/changes/establish-core-contracts/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/establish-core-contracts/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/DEPENDENCIES.md
+  s_e53c1dd79dd4bf::t_b04c56e57e79ab 1-41
+openspec/changes/verify-offline-release/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/build-offline-menu-runtime/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-12
+openspec/changes/parse-bdmv-structure/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/build-offline-menu-runtime/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+openspec/changes/verify-offline-release/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/establish-core-contracts/specs/disc-contracts/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-34
+openspec/changes/extract-igs-scenes/specs/interactive-graphics-extraction/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-34
+openspec/changes/execute-hdmv-navigation/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-11
+openspec/changes/execute-hdmv-navigation/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/extract-igs-scenes/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-11
+openspec/changes/export-playable-media/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-12
+openspec/changes/build-offline-menu-runtime/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/parse-bdmv-structure/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+openspec/changes/export-playable-media/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/parse-bdmv-structure/specs/bdmv-disc-inspection/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-34
+openspec/changes/extract-igs-scenes/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/build-offline-menu-runtime/specs/offline-menu-runtime/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-43
+openspec/changes/build-offline-menu-runtime/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/verify-offline-release/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+openspec/changes/export-playable-media/proposal.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-25
+openspec/changes/execute-hdmv-navigation/specs/hdmv-navigation/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-34
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-12
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-43
+openspec/changes/extract-igs-scenes/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/extract-igs-scenes/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+openspec/changes/parse-bdmv-structure/.openspec.yaml
+  s_e53c1dd79dd4bf::t_4d402cdaa42683 1-2
+openspec/changes/establish-core-contracts/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+openspec/changes/execute-hdmv-navigation/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+openspec/changes/establish-core-contracts/tasks.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-11
+openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-43
+openspec/changes/export-playable-media/design.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 1-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "acf238840ef8cea805bdcaa331c3e08770a5dce2",
+  "prompts": {},
+  "sessions": {
+    "s_e53c1dd79dd4bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b30-045c-73f2-9ddd-19a20c15a41d",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
