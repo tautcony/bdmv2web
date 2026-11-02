@@ -47,3 +47,5 @@ export function simulatedBridge<TAction, TEvent>(action: ActionEnvelope<TAction>
     event,
   };
 }
+
+export * from "./bdmv.js";

@@ -48,7 +48,7 @@ Mark 核验 PlayItem 及 IN/OUT 范围；STREAM 缺失和 CLPI 缺失分开诊�
 
 ### 4. CLI 交付
 
-inspect JSON 含版本/指纹/实际来源/entries/结构摘要/图/诊断/支持预测及 analysisStage: structural。声明数、成功数、未知数分开，BD-J 不从分母消失。stdout 不混进度。
+inspect JSON 含 schema 版本、实际来源、entries/结构摘要/图/诊断/支持预测及 analysisStage: structural；不对外部 BDMV 输入树计算或输出哈希/指纹。声明数、成功数、未知数分开，BD-J 不从分母消失。stdout 不混进度。
 
 extract 在 M1 交付 parsed-disc.json、raw 命令表/源映射和 manifest；M2 再追加图形。不把原 M2TS 复制为可交付播放器，不声称 complete。写入通过 M0 事务，不修改源文件；不为源目录计算完整性哈希。
 

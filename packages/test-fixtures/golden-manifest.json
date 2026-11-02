@@ -45,6 +45,96 @@
       "source": "project-authored synthetic fixture",
       "license": "MIT project license",
       "status": "contract-only"
+    },
+    {
+      "id": "m1-index-mixed-entry",
+      "kind": "synthetic INDX bytes",
+      "builder": "src/bdmv.ts:buildM1Index",
+      "expectedBasis": "Field bytes and parsed expectations are hand-authored from the versioned project fixture definition; not a Blu-ray conformance vector.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-mobj-two-raw-instructions",
+      "kind": "synthetic MOBJ bytes",
+      "builder": "src/bdmv.ts:buildM1MovieObject",
+      "expectedBasis": "Exact 12-byte literals and offsets are hand-authored independently of parser output.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-empty-mpls",
+      "kind": "synthetic MPLS bytes",
+      "builder": "src/bdmv.ts:buildM1EmptyPlaylist",
+      "expectedBasis": "Hand-authored section offsets and zero counts for parser boundary coverage.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-empty-clpi",
+      "kind": "synthetic CLPI bytes",
+      "builder": "src/bdmv.ts:buildM1EmptyClipInfo",
+      "expectedBasis": "Hand-authored fixed header and zero optional section pointers.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-clpi-program-cpi",
+      "kind": "synthetic CLPI bytes",
+      "builder": "src/bdmv.ts:buildM1ClipInfoProgramAndCpi",
+      "expectedBasis": "Hand-authored nonempty ProgramInfo and CPI section values, including PID, language, PTS and SPN; not a Blu-ray conformance vector.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-mpls-two-items-and-marks",
+      "kind": "synthetic MPLS bytes",
+      "builder": "src/bdmv.ts:buildM1PlaylistGolden",
+      "expectedBasis": "Hand-authored two PlayItems, 45 kHz times, marks, angle declarations and SubPath fields; invalid Mark coverage mutates the second PlayItem reference to 9.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-mpls-stn-audio-pid",
+      "kind": "synthetic MPLS bytes",
+      "builder": "src/bdmv.ts:buildM1PlaylistWithAudioPid",
+      "expectedBasis": "Hand-authored STN audio PID, coding type and language for matching and deliberate CLPI mismatch checks.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-mpls-subplayitem",
+      "kind": "synthetic MPLS bytes",
+      "builder": "src/bdmv.ts:buildM1PlaylistWithSubPlayItem",
+      "expectedBasis": "Hand-authored SubPath and SubPlayItem lengths, clip reference, timing and synchronization values; companion mutations test STN and SubPlayItem boundaries against their enclosing records.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-single-sound-range",
+      "kind": "synthetic sound.bdmv bytes",
+      "builder": "src/bdmv.ts:buildM1Sound",
+      "expectedBasis": "Hand-authored sound table fields and four-byte sample extent.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m1-sound-two-ranges",
+      "kind": "synthetic sound.bdmv bytes",
+      "builder": "src/bdmv.ts:buildM1SoundTwoRanges",
+      "expectedBasis": "Hand-authored two disjoint four-byte sample ranges; test mutates the second range offset beyond the file boundary.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "synthetic parser coverage; protocol remains unverified"
     }
   ]
 }

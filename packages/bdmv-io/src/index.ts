@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, mkdir, mkdtemp, open, readdir, realpath, rename, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { Limits } from "@bdmv-web/core";
 import { ContractError, DEFAULT_LIMITS } from "@bdmv-web/core";
@@ -42,6 +42,46 @@ export async function resolveInputFile(root: string, relativePath: string): Prom
 export interface InputFileTable {
   readonly root: string;
   readonly files: ReadonlyMap<string, string>;
+}
+
+export async function discoverBdmvInput(inputPath: string): Promise<{ root: string; table: InputFileTable }> {
+  const requested = resolve(inputPath);
+  if ((await lstat(requested)).isSymbolicLink()) throw new ContractError("SYMLINK_REJECTED", inputPath, "Input root symlinks are not accepted");
+  const canonical = await realpath(requested);
+  if (!(await stat(canonical)).isDirectory()) throw new ContractError("PATH_NOT_DIRECTORY", inputPath, "Expected a BDMV root or its direct parent");
+  let root = canonical;
+  if (basename(canonical).toLocaleLowerCase("en-US") !== "bdmv") {
+    const children = await readdir(canonical, { withFileTypes: true });
+    if (children.some((entry) => entry.isSymbolicLink() && entry.name.toLocaleLowerCase("en-US") === "bdmv")) throw new ContractError("SYMLINK_REJECTED", inputPath, "BDMV root symlinks are not accepted");
+    const candidates = children.filter((entry) => entry.isDirectory() && entry.name.toLocaleLowerCase("en-US") === "bdmv");
+    if (candidates.length === 0) throw new ContractError("BDMV_ROOT_NOT_FOUND", inputPath, "Input must be a BDMV root or its direct parent");
+    if (candidates.length > 1) throw new ContractError("BDMV_ROOT_AMBIGUOUS", inputPath, "More than one case-variant BDMV root was found");
+    root = await realpath(resolve(canonical, candidates[0]!.name));
+  }
+  const paths: string[] = [];
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = resolve(dir, entry.name);
+      if (entry.isSymbolicLink()) throw new ContractError("SYMLINK_REJECTED", path, "Symlinks are not accepted in a BDMV input tree");
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile()) paths.push(relative(root, path).split(sep).join("/"));
+    }
+  };
+  await walk(root);
+  return { root, table: await buildInputFileTable(root, paths.sort((a, b) => a.localeCompare(b, "en"))) };
+}
+
+export async function readRegisteredFile(table: InputFileTable, relativePath: string, maxBytes: number, prefixOnly = false): Promise<{ bytes: Uint8Array; byteLength: number }> {
+  const path = resolveFileReference(table, relativePath);
+  const byteLength = await checkedFileSize(path, Number.MAX_SAFE_INTEGER);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new ContractError("INVALID_LIMIT", "/maxBytes", "Read bound must be a positive safe integer");
+  if (!prefixOnly && byteLength > maxBytes) throw new ContractError("LIMIT_EXCEEDED", relativePath, `File exceeds configured bounded read limit ${maxBytes}`);
+  if (prefixOnly) {
+    const handle = await open(path, "r");
+    try { const buffer = Buffer.alloc(Math.min(byteLength, maxBytes)); const result = await handle.read(buffer, 0, buffer.length, 0); return { bytes: new Uint8Array(buffer.subarray(0, result.bytesRead)), byteLength }; }
+    finally { await handle.close(); }
+  }
+  return { bytes: new Uint8Array(await readFile(path)), byteLength };
 }
 
 export async function buildInputFileTable(rootPath: string, relativePaths: string[]): Promise<InputFileTable> {

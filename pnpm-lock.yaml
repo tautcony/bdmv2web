@@ -26,15 +26,38 @@ importers:
 
   apps/cli:
     dependencies:
+      '@bdmv-web/bdmv-io':
+        specifier: workspace:*
+        version: link:../../packages/bdmv-io
+      '@bdmv-web/bdmv-parser':
+        specifier: workspace:*
+        version: link:../../packages/bdmv-parser
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../../packages/core
+    devDependencies:
+      '@bdmv-web/test-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/test-fixtures
 
   packages/bdmv-io:
     dependencies:
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/bdmv-parser:
+    dependencies:
+      '@bdmv-web/bdmv-io':
+        specifier: workspace:*
+        version: link:../bdmv-io
+      '@bdmv-web/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@bdmv-web/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
 
   packages/core:
     dependencies:
@@ -45,6 +68,24 @@ importers:
       json-schema-to-typescript:
         specifier: 15.0.4
         version: 15.0.4
+
+  packages/hdmv:
+    dependencies:
+      '@bdmv-web/bdmv-parser':
+        specifier: workspace:*
+        version: link:../bdmv-parser
+
+  packages/igs:
+    dependencies:
+      '@bdmv-web/bdmv-io':
+        specifier: workspace:*
+        version: link:../bdmv-io
+      '@bdmv-web/bdmv-parser':
+        specifier: workspace:*
+        version: link:../bdmv-parser
+      '@bdmv-web/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/test-fixtures:
     dependencies:
