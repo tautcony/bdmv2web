@@ -1,0 +1,71 @@
+packages/test-runner/tsconfig.json
+  s_3a3ffd5e9a879b::t_cbdba23555c6d6 1
+packages/test-runner/src/decisions.ts
+  s_3a3ffd5e9a879b::t_811db929e12ab5 44-45,64-65,76
+  s_3a3ffd5e9a879b::t_6f034236d7589f 55-59,61,69-71
+  s_3a3ffd5e9a879b::t_3df02695db2e48 1-43,46-54,60,62-63,66-68,72-75,77-81
+packages/test-runner/src/coverage.ts
+  s_3a3ffd5e9a879b::t_4b320d117e4dc9 61-63
+  s_3a3ffd5e9a879b::t_811db929e12ab5 40
+  s_3a3ffd5e9a879b::t_6f034236d7589f 37,60
+  s_3a3ffd5e9a879b::t_3df02695db2e48 1-36,38-39,41-59,64
+packages/test-runner/src/report.ts
+  s_3a3ffd5e9a879b::t_4fbc19537602ef 40
+  s_3a3ffd5e9a879b::t_3df02695db2e48 1-39,41-55
+packages/test-runner/src/types.ts
+  s_3a3ffd5e9a879b::t_cbdba23555c6d6 1-38
+packages/test-runner/src/package-audit.ts
+  s_3a3ffd5e9a879b::t_b64d80b4a7b7cd 14,72-74,85,264-268
+  s_3a3ffd5e9a879b::t_92377a545feb1d 194-201,240-241
+  s_3a3ffd5e9a879b::t_4fbc19537602ef 188-191,362-365
+  s_3a3ffd5e9a879b::t_e41e0a28046655 212
+  s_3a3ffd5e9a879b::t_4b320d117e4dc9 218-228,231-239
+  s_3a3ffd5e9a879b::t_60034abb8f655e 88-98,210,215,217,230,307-310,345
+  s_3a3ffd5e9a879b::t_c88da526d5e909 296,356
+  s_3a3ffd5e9a879b::t_9c14e76a756b12 4,278-279
+  s_3a3ffd5e9a879b::t_437c7f0378d1b1 2,71
+  s_3a3ffd5e9a879b::t_cbdba23555c6d6 1,3,5-9,12-13,15-42,45-62,68-70,75-84,86-87,99-153,157-158,160-169,171-174,177-179,184,186,192-193,202-203,207-208,211,213-214,216,242-243,245-251,253-259,261-262,292-294,297,300-306,311-314,317-334,337-344,346-348,350-351,355,361,367
+  s_3a3ffd5e9a879b::t_924fa94ba81e61 175-176,187
+  s_3a3ffd5e9a879b::t_f094e027700fa1 10-11,63-67,263,316,335,349,353-354,366
+  s_3a3ffd5e9a879b::t_1f075a0b694569 43-44,298-299,315,336,352,357-360
+  s_3a3ffd5e9a879b::t_8f0e0355909222 154-156,159,170,185,204-206,209,229,244,260,269-271,273-275,277,280-291
+  s_3a3ffd5e9a879b::t_2e65ebd2988bb4 276
+  s_3a3ffd5e9a879b::t_811db929e12ab5 180-183,252,272
+  s_3a3ffd5e9a879b::t_b87fd1518b9271 295
+packages/test-runner/src/index.test.ts
+  s_3a3ffd5e9a879b::t_4b320d117e4dc9 129-139,173-174
+  s_3a3ffd5e9a879b::t_b06c1c05d31d69 1-10,12-36,40-54,87-128,140-172,175-206
+  s_3a3ffd5e9a879b::t_c88da526d5e909 11,57-62
+  s_3a3ffd5e9a879b::t_91b19a3b5a9050 37-39,55-56,63-86
+openspec/changes/verify-offline-release/tasks.md
+  s_3a3ffd5e9a879b::t_bbd9a8ce118ca1 9
+  s_3a3ffd5e9a879b::t_b87fd1518b9271 5
+packages/test-runner/src/index.ts
+  s_3a3ffd5e9a879b::t_cbdba23555c6d6 1-5
+packages/test-runner/src/compare.ts
+  s_3a3ffd5e9a879b::t_664e0ef9a2c1c0 53
+  s_3a3ffd5e9a879b::t_a5177e857481f1 49,51-52,54,56
+  s_3a3ffd5e9a879b::t_3df02695db2e48 1-48,50,55,57-103,105-133
+  s_3a3ffd5e9a879b::t_811db929e12ab5 104
+packages/test-runner/package.json
+  s_3a3ffd5e9a879b::t_cbdba23555c6d6 1-12,15-16
+  s_3a3ffd5e9a879b::t_b06c1c05d31d69 13-14
+pnpm-lock.yaml
+  s_3a3ffd5e9a879b::t_2fcc8fabd44efe 96-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "95a8c407d4d453d3e12a0dd95baaac2592106bf6",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
