@@ -1,0 +1,19 @@
+test-data/tamako-love-story-bd/README.md
+  s_3a3ffd5e9a879b::t_c472308fc33299 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76a2ca3e6ed2a89b0eb12002c4e6abdbbfc8121e",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
