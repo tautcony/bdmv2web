@@ -63,6 +63,6 @@ python3 scripts/fetch-reference-cache.py
 ## 本轮明确未验证
 
 - 未取得受限 BDA Blu-ray 规范书；libbluray、libhdmv、igstools、BDedit 及公共白皮书均不能代替它。
-- 未解密/解析商业碟、未建立项目独立 golden、未验证像素/导航语义或真实浏览器矩阵；任何源中的“支持”声明仅属该源自身范围。
-- `file://` 跨浏览器行为和媒体播放策略需按项目定义的实际 OS/浏览器矩阵执行；WHATWG/MDN 文档不能代替运行证据。
+- 未解密/解析商业碟、未建立项目独立 golden、未验证像素/导航语义或 V1 Chrome 场景；任何源中的“支持”声明仅属该源自身范围。
+- V1 的 `file://` 与媒体播放策略按 macOS Google Chrome 环境实测；跨系统及其它浏览器不作为首版门槛。WHATWG/MDN 文档不能代替运行证据。
 - FFmpeg 文档是滚动文档。M5 应选定可再分发构建并记录 binary hash、`ffmpeg -version`、`ffprobe -version` 和 configure flags；按任务要求在转换输入数组中调用，不能用此索引暗中锁定转码工具版本。

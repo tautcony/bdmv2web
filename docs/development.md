@@ -45,4 +45,4 @@ The CLI scaffold recognizes `inspect`, `extract`, `convert`, `validate`, and `co
 
 Run `corepack pnpm test` for the shared contracts, cursor, file I/O, path, transaction, fingerprint, CLI and fixture tests. Synthetic fixtures in `@bdmv-web/test-fixtures` are authored for interface checks. They are not BDMV protocol evidence. No commercial disc, licensed Blu-ray standard, or third-party parser output is included.
 
-The current environment did not provide the required Windows Chrome/Edge/Firefox or macOS Chrome/Safari verification matrix. See [browser-matrix.md](browser-matrix.md); every row remains unverified until someone records an actual OS and complete browser build and runs the relevant offline scenario.
+V1 browser acceptance targets macOS Google Chrome only; cross-system and other-browser testing is outside the first-version gate. The environment is recorded in [browser-matrix.md](browser-matrix.md), but its offline `file://` scenarios remain not verified until the built package is tested and artifact-bound evidence is saved.

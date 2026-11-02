@@ -593,7 +593,7 @@
       "used_for": [
         "M6"
       ],
-      "limits": "Playwright WebKit is not Safari; bundled Chromium is not the full branded Chrome or Edge. Use as supplementary automation only; required actual OS/browser matrix remains manual/native evidence."
+      "limits": "V1 requires actual branded Google Chrome on macOS for direct file:// evidence; Playwright's bundled Chromium is supplementary and does not replace that run. Other systems and browsers are outside the V1 gate."
     },
     {
       "id": "WPT",

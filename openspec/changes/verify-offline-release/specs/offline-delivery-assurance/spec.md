@@ -51,7 +51,7 @@
 
 #### Scenario: 所有门槛满足
 
-- **WHEN** standalone-full的资源/支持/对照及必测矩阵全部通过
+- **WHEN** standalone-full的资源/支持/对照及 V1 macOS Chrome 场景全部通过
 - **THEN** 才可complete，strict退出0；menu-only即便其它通过仍partial
 
 ### Requirement: 覆盖统计与未知项
@@ -82,9 +82,9 @@
 - **WHEN** 同时间/分辨率/颜色规则比较IG和转码视频
 - **THEN** IG纯图形按独立RGBA golden比较，视频质量另计，不混合编码误差
 
-#### Scenario: 矩阵缺席
+#### Scenario: V1 Chrome 证据缺席
 
-- **WHEN** Windows或macOS任一必测组合无环境或证据
+- **WHEN** V1 macOS Chrome 环境无实际版本记录或场景证据
 - **THEN** 记not-verified并阻止complete，不假设另一个平台结果可代替
 
 #### Scenario: 制品变动
@@ -94,7 +94,7 @@
 
 ### Requirement: 直接打开与便携性
 
-系统 SHALL 必测矩阵在无网络/后台/原碟条件下直接file://验证A–J适用场景及媒体实播。
+系统 SHALL 在 V1 macOS Google Chrome 环境中，于无网络/后台/原碟条件下直接 `file://` 验证 A–J 适用场景及媒体实播。跨系统和其它浏览器不属于 V1 发布门槛。
 
 #### Scenario: 移动断网播放
 

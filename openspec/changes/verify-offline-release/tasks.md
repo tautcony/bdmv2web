@@ -26,7 +26,7 @@
 
 ## 4. 浏览器与发布
 
-- [ ] 4.1 锁定Windows Chrome/Edge/Firefox、macOS Chrome/Safari实际版本并执行断网file://；验收：无后台/原碟，记录真实版本、console/资源/有声结果，缺席不假通过。
+- [ ] 4.1 锁定 V1 macOS Google Chrome 实际版本并执行断网 `file://`；验收：无后台/原碟，记录 macOS build、Chrome 完整版本、console/资源/有声结果，缺席不假通过。跨系统和其它浏览器不作为 V1 门槛。
 - [ ] 4.2 完成A–J场景适用路径的双击/移动目录/中文空格/DPI/播放策略恢复证据；验收：每项expected/actual/result及制品hash可复查。
 - [ ] 4.3 实现证据与payload/profile/mode/矩阵绑定和失效；验收：换bundle/媒体/profile不能复用旧截图过门槛。
 - [ ] 4.4 生成最终compatibility/audit/manifest/发布摘要和README；验收：只有全部门槛满足可complete，失败/未验证列具体缺口，完整包无开发/参考工具依赖。

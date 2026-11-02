@@ -6,7 +6,7 @@
 
 ## Goals / Non-Goals
 
-**Goals:** 独立包校验、完整度/strict 决策、trace/IG 对照、浏览器矩阵、可复现发布证据。
+**Goals:** 独立包校验、完整度/strict 决策、trace/IG 对照、V1 Chrome 证据、可复现发布证据。
 
 **Non-Goals:** 替前置模块补业务实现、执行 BD-J、假设未验证浏览器通过、把参考工具作为输出运行依赖。
 
@@ -38,7 +38,7 @@ VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随�
 
 ### 5. 矩阵与 A–J 证据
 
-必测组合为 Windows Chrome/Edge/Firefox、macOS Chrome/Safari。M0 建模板，M4/M5 记录冒烟，M6 锁定实际 OS/build/browser 完整版本及自动化工具版本；不在没有机器时编造通过。直接 file://、断网、无后台、移走原碟、复制到中文/空格新路径；人工双击测试也保存可复查记录，HTTP 冒烟不能替代。
+V1 唯一必测环境为 macOS Google Chrome。M0 建立单行模板，M4/M5 记录冒烟，M6 锁定实际 macOS build、Chrome 完整版本及自动化工具版本；不在没有机器时编造通过。直接 `file://`、断网、无后台、移走原碟、复制到中文/空格新路径；人工双击测试也保存可复查记录，HTTP 冒烟不能替代。跨系统和其它浏览器的覆盖留给后续版本，不阻断 V1。
 
 | 场景 | 验收主责与证据 |
 | --- | --- |
@@ -51,13 +51,13 @@ VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随�
 | G PSR/GPR/Call/Resume | M3/M5；参考 golden trace/切轨 |
 | H 混合 BD-J | M1/M6；入口保留、partial/strict 退出2 |
 | I 破损/缺失/循环 | 各模块/M6；预算内终止与准确诊断 |
-| J 平台/分辨率/路径 | M4–M6；矩阵版本、DPI、移动包证据 |
+| J Chrome 环境/分辨率/路径 | M4–M6；Chrome 版本、DPI、移动包证据 |
 
 每份证据含 caseId/fixtureId/inputSequence/profile/payloadFingerprint/browser OS版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。
 
 ### 6. 发布与失败保留
 
-validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和人读摘要；compare/矩阵在 reports/evidence 下。发布清单要求全部必测通过、无功能阻断/未知支持、manifest 一致、运行包无开发依赖及说明完整。任一项缺席为 partial 或 failed，并列出下一步，不勾选不存在的通过。M6 没有重新定义此前能力范围的权力。
+validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和人读摘要；compare/Chrome 证据在 reports/evidence 下。发布清单要求 V1 Chrome 场景通过、无功能阻断/未知支持、manifest 一致、运行包无开发依赖及说明完整。任一项缺席为 partial 或 failed，并列出下一步，不勾选不存在的通过。M6 没有重新定义此前能力范围的权力。
 
 ## Verification / Exit Criteria
 
@@ -65,7 +65,7 @@ validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和
 
 ## Risks / Trade-offs
 
-全矩阵/独立参考成本高，但这决定发布承诺；自动化和人工证据可混合，不能用缩减分母隐藏缺席。静态审计与断网测试互补，单项无法给出普遍证明。
+V1 Chrome/独立参考证据决定首版发布承诺；自动化和人工证据可混合，不能用缩减场景分母隐藏缺席。静态审计与断网测试互补，单项无法给出普遍证明。
 
 ## Migration Plan
 

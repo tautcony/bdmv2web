@@ -84,7 +84,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/sourceFing
 | 决策 | 约定 | 锁定/验证任务 |
 | --- | --- | --- |
 | 工具链 | Node LTS、pnpm、TS、Vitest、classic IIFE ES2020 | M0 选择精确版本、lockfile、干净构建 |
-| 浏览器 | Windows Chrome/Edge/Firefox、macOS Chrome/Safari 均为必测 | M0 建表，M4/M5 冒烟，M6 记录实际 OS/build/browser 完整版本；缺席即未验证 |
+| 浏览器 | V1 只要求 macOS Google Chrome | M0 建表，M4/M5 冒烟，M6 记录实际 macOS build 与 Chrome 完整版本，并直接测试 `file://`；此项缺席即未验证。跨系统和其它浏览器不作为 V1 门槛 |
 | 媒体 | SDR H.264/AAC MP4、WAV、无损 PNG；不增加 WebM/HDR profile | M5 具体编码参数、ffprobe、M6 实播 |
 | 质量 | 保真优先，H.264 初始 CRF 18；不放大，保留可表达帧率/比例 | M5 锁定像素格式/level、质量证据；HDR 未验证 tone mapping 则 unsupported |
 | 多音轨 | 主音频轨本地变体，切换按逻辑时间恢复 | M5 PSR 闭环；需要无缝切音语义的路径明确 partial |

@@ -1,11 +1,7 @@
-# Browser verification matrix
+# V1 browser evidence
 
-Required release matrix from the implementation baseline. This is a record template; no browser scenario has been run in the M0 environment.
+V1 targets macOS Google Chrome only. Record the actual OS build and complete Chrome version, then test direct `file://` access with the network disabled. HTTP development-server results do not substitute. Other operating systems and browsers are outside the V1 release gate.
 
-| OS and version/build | Browser and full version/build | Scenario | Artifact/payload hash | Result | Date | Operator |
+| OS/build | Browser/full version | Scenario | Artifact/payload hash | Result | Date | Operator |
 | --- | --- | --- | --- | --- | --- | --- |
-| Windows (record exact build) | Chrome (record full version) | direct `file://` open, offline assets, media policy |  | unverified |  |  |
-| Windows (record exact build) | Edge (record full version) | direct `file://` open, offline assets, media policy |  | unverified |  |  |
-| Windows (record exact build) | Firefox (record full version) | direct `file://` open, offline assets, media policy |  | unverified |  |  |
-| macOS (record exact build) | Chrome (record full version) | direct `file://` open, offline assets, media policy |  | unverified |  |  |
-| macOS (record exact build) | Safari (record full version) | direct `file://` open, offline assets, media policy |  | unverified |  |  |
+| macOS 27.2 (26B123) | Google Chrome 156.0.8078.76 | direct `file://`, offline assets, moved directory, menu/media policy |  | not-verified |  | Environment recorded; V1 scenarios not yet run |

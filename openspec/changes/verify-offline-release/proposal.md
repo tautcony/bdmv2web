@@ -2,13 +2,13 @@
 
 ## Why
 
-生成文件不能证明路径完整、无外部依赖或跨浏览器兼容，需要独立审计及可复查证据。
+生成文件不能证明路径完整、无外部依赖或 V1 Chrome 环境中的实际可用性，需要独立审计及可复查证据。
 
 ## What Changes
 
 - 实现输出包独立 validate、hash/引用/URL/脚本依赖审计及完整度/strict 决策。
 - 建立有分母的支持统计、VM/IG 独立参考对照和安全回归。
-- 执行实际浏览器版本矩阵及 A–J 适用场景，绑定制品指纹后形成发布摘要。
+- V1 在 macOS Google Chrome 执行直接 `file://` 及 A–J 适用场景，记录实际版本并绑定制品指纹后形成发布摘要；不把跨系统或其它浏览器列为 V1 门槛。
 - 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。可基于稳定契约先开发，集成验收须等待相应上游结果。
 - 范围保持首期 HDMV；BD-J 仅识别和保留扩展槽，不实施解密、Java 执行或输出后台服务。
 
