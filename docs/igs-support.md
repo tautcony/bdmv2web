@@ -12,7 +12,9 @@ M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can
 - Diagnostics for malformed or incomplete packet/PES/segment/object state, PID disagreement, unsupported effects, and missing scene references.
 - A PSI continuity error discards the partial section. IG transport damage discards the active Display Set, residual segment bytes, pending ODS fragments, and cached object/palette definitions for that stream. A scene with damaged data, an unresolved object/palette, or an unfinished object sequence cannot retain `complete: true`.
 
-The synthetic fixture IDs are the Vitest cases in `packages/igs/test/transport.test.ts` and `packages/igs/test/extraction.test.ts`; all expected bytes are authored in `packages/igs/test/fixtures.ts`. They test parser mechanics only. They are not independent Blu-ray samples or pixel goldens.
+The synthetic fixture IDs are the Vitest cases in `packages/igs/test/transport.test.ts` and `packages/igs/test/extraction.test.ts`; all expected bytes are authored in `packages/igs/test/fixtures.ts`. They test parser mechanics only.
+
+The repository also includes one externally sourced 6,129-byte real ICS body in `test-data/real-igs/ics-menu-disc14.bin`, with its source and MIT notice alongside it. Its test parses one 1920×1080 composition with four pages and raw button commands. The test supplies a minimal segment wrapper and END marker; the sample does not include transport packets, palettes, object bitmaps, or decoded PNG output. It gives a real IGS-structure positive case, not an end-to-end disc or rendering validation.
 
 ## Host-local real-stream smoke
 
