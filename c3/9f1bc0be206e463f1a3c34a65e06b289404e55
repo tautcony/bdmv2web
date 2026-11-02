@@ -1,0 +1,116 @@
+packages/bdmv-parser/src/parser.ts
+  s_3a3ffd5e9a879b::t_3b7a6d7633c900 42,315,320
+  s_3a3ffd5e9a879b::t_4757a1a611c2d6 175,198,201,203,206
+  s_3a3ffd5e9a879b::t_fd1090c36ac828 128-129,131
+  s_3a3ffd5e9a879b::t_78c5a7273e716a 130,185,208
+  s_3a3ffd5e9a879b::t_e7b3d42249140d 244-265,267-292,295,324
+  s_3a3ffd5e9a879b::t_d3e1124559b08b 137,142,144,155,159
+  s_3a3ffd5e9a879b::t_ed9234f56d05a3 53
+  s_3a3ffd5e9a879b::t_2dfc1d0c06c2ad 214,216,220,227,230,232,234,238
+  s_3a3ffd5e9a879b::t_b884d45bb28a6b 125-127
+  s_3a3ffd5e9a879b::t_de7c17be88b976 76,102
+  s_3a3ffd5e9a879b::t_e30d8e5d218860 23,25,71,73-74,111,138-139,218
+  s_3a3ffd5e9a879b::t_12e4c705ec86c1 182-184
+  s_3a3ffd5e9a879b::t_d1a88bbd9012ae 68,88,93,96
+  s_3a3ffd5e9a879b::t_5d206803777c94 303,313-314,318-319,322
+  s_3a3ffd5e9a879b::t_aed14dd25fa95c 11-12,16,24,26-29,31
+  s_3a3ffd5e9a879b::t_09eb09ceb8f052 1,3-10,13-15,17-22,30,32-41,44-51,54-67,69-70,72,75,77-87,89-92,94-95,97-101,103-110,112-116,119,121-123,132-136,141,145-146,148-154,156,158,160-165,167-174,176-181,186-197,199-200,202,204-205,207,209-210,212-213,215,217,219,221-226,228-229,231,233,235-237,239-243,266,293-294,296-299,302,305-312,316-317,321,323,325-326,328
+  s_3a3ffd5e9a879b::t_7f2876bf25a99f 43,166,211,300-301,304
+  s_3a3ffd5e9a879b::t_024f8ea5816576 117,120,147
+  s_3a3ffd5e9a879b::t_ce210cd64d5bfa 2,327
+  s_3a3ffd5e9a879b::t_b9243b62ae3529 52
+  s_3a3ffd5e9a879b::t_baef388505820f 118,124,140,143,157
+docs/protocol-support.md
+  s_3a3ffd5e9a879b::t_92c1b6bbbb1f40 19
+  s_3a3ffd5e9a879b::t_a0a5f465e5c7cd 1,3,5-18,23-29,34
+  s_3a3ffd5e9a879b::t_08563fe8038e5a 20-21,30-33
+  s_3a3ffd5e9a879b::t_ce210cd64d5bfa 22
+packages/bdmv-parser/vitest.config.ts
+  s_3a3ffd5e9a879b::t_3df83722726ab6 2
+  s_3a3ffd5e9a879b::t_5ab5ae02f37257 1
+packages/test-fixtures/golden-manifest.json
+  s_3a3ffd5e9a879b::t_5216091e0e0bf8 48-85,122-125,135-137
+  s_3a3ffd5e9a879b::t_958e42a47ae67b 86-112,126-134
+  s_3a3ffd5e9a879b::t_92c1b6bbbb1f40 113-121
+apps/cli/src/index.test.ts
+  s_3a3ffd5e9a879b::t_38346bb497f02c 3,7,39-41,43,45-46,49-52,54-57,59-60
+  s_3a3ffd5e9a879b::t_8f764af996c57d 42,44,53
+  s_3a3ffd5e9a879b::t_c7d5bb06eb47a7 47-48
+  s_3a3ffd5e9a879b::t_5d1b820c86075e 35-38,58
+packages/bdmv-parser/tsconfig.json
+  s_3a3ffd5e9a879b::t_5ab5ae02f37257 1
+packages/test-fixtures/src/index.ts
+  s_3a3ffd5e9a879b::t_5216091e0e0bf8 50-51
+packages/bdmv-parser/src/model.ts
+  s_3a3ffd5e9a879b::t_024f8ea5816576 31
+  s_3a3ffd5e9a879b::t_5ab5ae02f37257 1-30,32-46
+packages/bdmv-parser/src/parser.test.ts
+  s_3a3ffd5e9a879b::t_4bfc20318d10ad 105-110,184-189,205,208-213
+  s_3a3ffd5e9a879b::t_55acec2b51ad2f 1,3,7-14,16-24,37-43,45-47,51,70-82,84-86,117-118,120-132,172-174,217-218,226-237,244-250,252-254
+  s_3a3ffd5e9a879b::t_54e65a8759f3f4 87-88,90-94,96-100,102-104,133-135,151-152
+  s_3a3ffd5e9a879b::t_f2f33f9110db5b 5,25-36,83,89,95,101,119
+  s_3a3ffd5e9a879b::t_af71e67a76cba0 193-204
+  s_3a3ffd5e9a879b::t_119f3223ee740a 48-49,52-55,57-62,69
+  s_3a3ffd5e9a879b::t_10bcec9cb48195 44,153
+  s_3a3ffd5e9a879b::t_cdeec3412cf3c6 111-116,238-243
+  s_3a3ffd5e9a879b::t_bb6efe826b998c 251
+  s_3a3ffd5e9a879b::t_14c9ed88645403 56
+  s_3a3ffd5e9a879b::t_3df83722726ab6 2,15
+  s_3a3ffd5e9a879b::t_02476bf712ed7f 175-183,190-192,206-207,214-216,220-225
+  s_3a3ffd5e9a879b::t_fe72a38e151796 6,136-150,154-171,219
+  s_3a3ffd5e9a879b::t_b6610937c09d04 50,63-68
+  s_3a3ffd5e9a879b::t_36947cb31638d4 4
+packages/bdmv-io/src/index.ts
+  s_3a3ffd5e9a879b::t_7480f4c48f624e 3,47-85
+  s_3a3ffd5e9a879b::t_c94d028436e4eb 86
+apps/cli/package.json
+  s_3a3ffd5e9a879b::t_38346bb497f02c 11-12
+packages/test-fixtures/src/bdmv.ts
+  s_3a3ffd5e9a879b::t_35bb0f317a0746 42,44,47,55-57,59-60
+  s_3a3ffd5e9a879b::t_d57de672f99f0e 29-31,120
+  s_3a3ffd5e9a879b::t_8054acee475214 82-89
+  s_3a3ffd5e9a879b::t_10bcec9cb48195 49
+  s_3a3ffd5e9a879b::t_eb7872e1535f4f 64-65,67-81,90-101,103-105
+  s_3a3ffd5e9a879b::t_4bfc20318d10ad 102
+  s_3a3ffd5e9a879b::t_31f198f6c616e9 14-16,19,21-24
+  s_3a3ffd5e9a879b::t_3df83722726ab6 113
+  s_3a3ffd5e9a879b::t_5216091e0e0bf8 1-13,17-18,20,25-28,32-40,106-112,114-119,121
+  s_3a3ffd5e9a879b::t_2bc07a4b513273 41,43,45-46,48,50-54,58,61-63
+  s_3a3ffd5e9a879b::t_c1da1ea5178563 66
+openspec/changes/parse-bdmv-structure/design.md
+  s_3a3ffd5e9a879b::t_024f8ea5816576 51
+apps/cli/src/index.ts
+  s_3a3ffd5e9a879b::t_ce210cd64d5bfa 59,63
+  s_3a3ffd5e9a879b::t_bb6efe826b998c 2,41,51
+  s_3a3ffd5e9a879b::t_02c6915bfb847e 43
+  s_3a3ffd5e9a879b::t_c022d7021b1e77 3-6,8-10,12-15,18-19,31-33,35-40,42,44-50,52-58,60-62,64-71,76-83
+  s_3a3ffd5e9a879b::t_65a37495ba0b31 22-30
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_3a3ffd5e9a879b::t_33f31463d9757d 10
+  s_3a3ffd5e9a879b::t_fce3f26ef72f63 15-17,19-20,25-26,28-32,35
+  s_3a3ffd5e9a879b::t_92c1b6bbbb1f40 33-34
+packages/bdmv-parser/src/index.ts
+  s_3a3ffd5e9a879b::t_a743d45541bfe4 1-2
+packages/bdmv-parser/package.json
+  s_3a3ffd5e9a879b::t_2978c5ff0e1f77 17
+  s_3a3ffd5e9a879b::t_f80adeaa298fc7 14-16
+  s_3a3ffd5e9a879b::t_5ab5ae02f37257 1-13,18-19
+pnpm-lock.yaml
+  s_3a3ffd5e9a879b::t_d1cc90d31b4709 29-34,38-41,49-61,72-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c39f1bc0be206e463f1a3c34a65e06b289404e55",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
