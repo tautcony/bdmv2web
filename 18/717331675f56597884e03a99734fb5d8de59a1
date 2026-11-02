@@ -1,0 +1,45 @@
+openspec/changes/verify-offline-release/design.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 35
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 27,70
+openspec/changes/verify-offline-release/tasks.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 22
+bdmv_hdmv_offline_web_architecture.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 799
+openspec/changes/parse-bdmv-structure/design.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 53
+openspec/changes/establish-core-contracts/tasks.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 20
+openspec/changes/establish-core-contracts/design.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 23,47
+packages/bdmv-io/src/index.test.ts
+  s_3a3ffd5e9a879b::t_bd02c5707cf221 5,44,46,50,56,62,65,68,70
+openspec/changes/extract-igs-scenes/tasks.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 27
+packages/core/schema/disc-ir.schema.json
+  s_3a3ffd5e9a879b::t_bd02c5707cf221 7
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 26
+packages/core/src/contracts.test.ts
+  s_3a3ffd5e9a879b::t_bd02c5707cf221 6
+docs/references/stages/M6-release-verification.md
+  s_3a3ffd5e9a879b::t_79f83584c3002b 9
+packages/core/src/disc-ir.generated.ts
+  s_3a3ffd5e9a879b::t_9691874cb831b0 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18717331675f56597884e03a99734fb5d8de59a1",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
