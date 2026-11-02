@@ -3,7 +3,7 @@ import { allocateBoundedBytes, assertWithinLimit, BinaryCursor, checkedObjectPix
 
 const source = { path: "BDMV/index.bdmv", origin: "primary", byteOffset: "0" } as const;
 const valid = {
-  schemaVersion: "1.0", sourceFingerprint: "a".repeat(64),
+  schemaVersion: "1.0",
   entries: [{ id: "entry-0", navigation: { type: "HDMV", movieObjectId: 0 }, source }, { id: "entry-bdj", navigation: { type: "BDJ", bdjoId: "00001", status: "unsupported" }, source }],
   programs: [{ id: "program-0", title: "Title" }], menus: [{ id: "menu-0" }],
   playlists: [{ id: "playlist-0", programIds: ["program-0"], menuIds: ["menu-0"], duration90k: "9007199254740993" }],

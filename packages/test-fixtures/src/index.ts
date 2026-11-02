@@ -4,7 +4,6 @@ import { parseDiscIR } from "@bdmv-web/core";
 const source = { path: "BDMV/index.bdmv", origin: "primary", byteOffset: "0" } as const;
 const base = {
   schemaVersion: "1.0" as const,
-  sourceFingerprint: "a".repeat(64),
   programs: [{ id: "program-00001", title: "Synthetic Title" }],
   menus: [{ id: "menu-00001" }],
   playlists: [{ id: "playlist-00001", programIds: ["program-00001"], menuIds: ["menu-00001"], duration90k: "90000" }],

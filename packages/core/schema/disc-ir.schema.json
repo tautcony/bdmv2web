@@ -4,10 +4,9 @@
   "title": "DiscIR",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "sourceFingerprint", "entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"],
+  "required": ["schemaVersion", "entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"],
   "properties": {
     "schemaVersion": { "const": "1.0" },
-    "sourceFingerprint": { "$ref": "#/$defs/Sha256" },
     "entries": { "type": "array", "items": { "$ref": "#/$defs/DiscEntry" } },
     "programs": { "type": "array", "items": { "$ref": "#/$defs/Program" } },
     "menus": { "type": "array", "items": { "$ref": "#/$defs/Menu" } },

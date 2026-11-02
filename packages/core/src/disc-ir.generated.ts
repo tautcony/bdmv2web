@@ -1,4 +1,3 @@
-export type Sha256 = string;
 export type NavigationDescriptor =
   | {
       type: "HDMV";
@@ -10,10 +9,10 @@ export type NavigationDescriptor =
       status: "unsupported";
     };
 export type Time90K = string;
+export type Sha256 = string;
 
 export interface DiscIR {
   schemaVersion: "1.0";
-  sourceFingerprint: Sha256;
   entries: DiscEntry[];
   programs: Program[];
   menus: Menu[];

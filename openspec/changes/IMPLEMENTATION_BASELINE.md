@@ -24,7 +24,7 @@ M1 只建立容器结构和明确声明的引用，不声称已得到完整控�
 - `SourceRef` 至少含相对 BDMV 根的 `path`、`origin: primary|backup`、文件字节偏移（十进制字符串），以及可用的 entityId/packetOffset/pid/instructionIndex。偏移从文件起点 0 计；实际备份路径不得伪装成主路径。
 - 原始数值 ID 保留，跨 Clip/页面的全局 ID 带父作用域。局部 buttonId 不能成为全碟唯一键；反汇编行号不能替代原始指令索引。
 - `Time90k` 持久化为匹配 `^(0|[1-9][0-9]*)$` 的字符串，计算用 bigint；45k 原值乘 2 归一化，同时保留原值、单位、时间戳 epoch。时间差可有符号，但不是合法绝对 Time90k。
-- `AssetReference` 至少含 id/kind/relativePath/mime/byteLength/sha256/sources。路径是解码后的包内相对 POSIX 路径，统一生成 URL，正确处理中文、空格、`#`、`%`。业务以资产 ID 关联，不用盘片文件名直接充当 DOM URL。
+- `AssetReference` 至少含 id/kind/relativePath/mime/byteLength/sha256/sources。SHA-256 只用于本工具生成并打包的资产；不为外部 BDMV 输入记录哈希或承诺其完整性。路径是解码后的包内相对 POSIX 路径，统一生成 URL，正确处理中文、空格、`#`、`%`。业务以资产 ID 关联，不用盘片文件名直接充当 DOM URL。
 - 分阶段校验：ParsedDisc 可带 unresolved 引用；归一化菜单可带 unavailable 动作；运行包必须逐项声明可用性。partial 保留不可用实体，禁止用空 programs/menus 冒充解析成功。
 - Diagnostic 必有 severity/code/message/sourcePath/offset/entityId/action/recoverable，另含 stage/affectedEntryIds；无位置取 null。acknowledged Error 仍保留原严重性和功能影响。
 
@@ -67,7 +67,7 @@ interface EventEnvelope<T> {
 
 ## 4. 状态统一判定
 
-compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/sourceFingerprint/payloadFingerprint/mode/profile/status/diagnostics/coverage/browserEvidence。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
+compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/payloadFingerprint/mode/profile/status/diagnostics/coverage/browserEvidence。payloadFingerprint 只绑定本工具生成的交付内容，不记录原始 BDMV 指纹。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |

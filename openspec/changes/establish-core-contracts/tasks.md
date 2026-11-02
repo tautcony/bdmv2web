@@ -16,8 +16,8 @@
 - [x] 2.1 实现 BinaryCursor 全部读法及 subview 推进语义；验收：大小端、嵌套源偏移、截断、负数、非整数、加乘溢出，失败游标不变。
 - [x] 2.2 实现流式读取与有限内存预算配置；验收：超过窗口/对象/分片限制在分配前拒绝，长输入无需全量驻内存；提交默认值表。
 - [x] 2.3 实现 realpath/文件表/输入输出缓存隔离；验收：..、外部symlink、输出包含输入或在输入内均拒绝，中文/空格路径合法。
-- [x] 2.4 实现 staging/commit/abort 和目标存在拒绝；验收：中断/校验失败不覆盖旧包，源目录hash不变。
-- [x] 2.5 实现内容hash、sourceFingerprint、资产ID/来源及payloadFingerprint规则；验收：顺序无关、字节变化失效、reports无自引用。
+- [x] 2.4 实现 staging/commit/abort 和目标存在拒绝；验收：中断/校验失败不覆盖旧包，抽样源文件字节不变。
+- [x] 2.5 实现生成资产ID/来源及payloadFingerprint规则；验收：输出路径顺序无关、生成资产字节变化失效、reports无自引用；不为外部 BDMV 输入生成 sourceFingerprint。
 
 ## 3. 交接与文档
 

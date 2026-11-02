@@ -545,7 +545,6 @@ export interface MenuBackend {
 
 export interface DiscIR {
   schemaVersion: string;
-  sourceFingerprint: string;
   entries: DiscEntry[];
   programs: HdmvProgram[];
   menus: MenuScene[];
@@ -562,7 +561,6 @@ export interface DiscIR {
 ```json
 {
   "schemaVersion": "1.0",
-  "sourceFingerprint": "sha256:...",
   "entries": [
     {
       "role": "topMenu",
@@ -798,7 +796,7 @@ PACKAGE_PARTIAL_CONVERSION
 | 版权/分发 | 输出包含商业碟片受保护内容 | 仅在有合法授权/许可的使用场景转换和分发 |
 | BD-J 混合入口 | 转换不完整 | 显式保留、隔离、诊断，首期不支持其执行 |
 
-转换器只读源目录，输出目录和缓存独立。不得自动覆盖输入文件；FFmpeg 调用采用参数数组而非 shell 字符串拼接；目录写入使用临时目录及校验后的原子切换；保留 `sourceFingerprint` 以支持增量执行和回归比对。
+转换器只读源目录，输出目录和缓存独立。不得自动覆盖输入文件；FFmpeg 调用采用参数数组而非 shell 字符串拼接；目录写入使用临时目录及校验后的原子切换。V1 不为外部 BDMV 输入计算哈希或承诺其完整性；生成资产和交付包可用内容指纹支持包内校验及证据失效。
 
 ---
 

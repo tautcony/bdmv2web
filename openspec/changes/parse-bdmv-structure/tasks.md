@@ -23,5 +23,5 @@
 
 - [ ] 3.1 建立类型化引用图、missing/unresolved与全部声明；验收：缺STREAM/CLPI/对象、PID冲突、循环和未解码命令边可追踪且遍历有界。
 - [ ] 3.2 接入inspect JSON/文件输出与支持预测；验收：stdout可解析，计数不删BD-J，analysisStage=structural。
-- [ ] 3.3 接入extract结构产物/raw源映射/manifest；验收：输出事务及源hash不变，未接IG阶段明确声明。
+- [ ] 3.3 接入extract结构产物/raw源映射/manifest；验收：输出事务完成且源文件字节不变，未接IG阶段明确声明；不生成源目录哈希。
 - [ ] 3.4 提供M2/M3消费ParsedDisc的集成fixture；验收：入口/轨道/raw命令来源一致，结构成功不宣称全路径已验证。

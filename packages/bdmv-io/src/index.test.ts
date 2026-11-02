@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertByteLimit, assertDisjointRoots, assetIdFromSha256, beginOutputTransaction, buildInputFileTable, hashFile, payloadFingerprint, readFileChunks, resolveFileReference, resolveInputFile, sourceFingerprint } from "./index.js";
+import { assertByteLimit, assertDisjointRoots, assetIdFromSha256, beginOutputTransaction, buildInputFileTable, hashFile, payloadFingerprint, readFileChunks, resolveFileReference, resolveInputFile } from "./index.js";
 
 const roots: string[] = [];
 async function temp(name: string) { const path = await mkdtemp(join(tmpdir(), name)); roots.push(path); return path; }
@@ -41,33 +41,33 @@ describe("bounded stream I/O and path isolation", () => {
 describe("output transactions and content fingerprints", () => {
   it("aborts without touching source, refuses existing destinations, and commits atomically", async () => {
     const parent = await temp("bdmv tx "); const input = join(parent, "disc"); await mkdir(input); await writeFile(join(input, "source"), "original");
-    const before = await sourceFingerprint(input);
+    const before = await readFile(join(input, "source"), "utf8");
     const tx = await beginOutputTransaction(join(parent, "package")); await writeFile(join(tx.stagingPath, "partial"), "temp"); await tx.abort();
-    expect(await sourceFingerprint(input)).toBe(before);
+    expect(await readFile(join(input, "source"), "utf8")).toBe(before);
     const good = await beginOutputTransaction(join(parent, "package")); await writeFile(join(good.stagingPath, "index.html"), "ready"); await good.commit();
     expect(await readFile(join(parent, "package", "index.html"), "utf8")).toBe("ready");
     await expect(beginOutputTransaction(join(parent, "package"))).rejects.toThrow(/TARGET_EXISTS/);
-    expect(await sourceFingerprint(input)).toBe(before);
+    expect(await readFile(join(input, "source"), "utf8")).toBe(before);
     const raced = await beginOutputTransaction(join(parent, "appeared-after-begin"));
     await mkdir(join(parent, "appeared-after-begin")); await writeFile(join(parent, "appeared-after-begin", "keep"), "old");
     await expect(raced.commit()).rejects.toThrow(/TARGET_EXISTS/);
     expect(await readFile(join(parent, "appeared-after-begin", "keep"), "utf8")).toBe("old");
     const failed = await beginOutputTransaction(join(parent, "failed-package")); await writeFile(join(failed.stagingPath, "invalid"), "bad");
-    await failed.abort(); expect(await sourceFingerprint(input)).toBe(before);
+    await failed.abort(); expect(await readFile(join(input, "source"), "utf8")).toBe(before);
   });
 
   it("is order-independent, changes on byte edits, and excludes reports from payload identity", async () => {
     const root = await temp("bdmv fingerprint "); await mkdir(join(root, "z")); await mkdir(join(root, "a"));
     await writeFile(join(root, "z", "b"), "B"); await writeFile(join(root, "a", "a"), "A");
-    const source1 = await sourceFingerprint(root); const payload1 = await payloadFingerprint(root);
+    const payload1 = await payloadFingerprint(root);
     const reverse = await temp("bdmv reverse "); await mkdir(join(reverse, "a")); await mkdir(join(reverse, "z"));
     await writeFile(join(reverse, "a", "a"), "A"); await writeFile(join(reverse, "z", "b"), "B");
-    expect(await sourceFingerprint(reverse)).toBe(source1);
+    expect(await payloadFingerprint(reverse)).toBe(payload1);
     await writeFile(join(root, "reports.json"), JSON.stringify({ payloadFingerprint: payload1 }));
     expect(await payloadFingerprint(root)).toBe(payload1);
-    expect(await sourceFingerprint(root)).not.toBe(source1);
+    expect(await payloadFingerprint(root)).toBe(payload1);
     await rm(join(root, "reports.json")); await writeFile(join(root, "a", "a"), "changed");
-    expect(await sourceFingerprint(root)).not.toBe(source1); expect(await payloadFingerprint(root)).not.toBe(payload1);
+    expect(await payloadFingerprint(root)).not.toBe(payload1);
     expect(assetIdFromSha256((await hashFile(join(root, "a", "a"))).sha256)).toMatch(/^sha256-/);
     expect(() => assetIdFromSha256("bad")).toThrow(/INVALID_SHA256/);
   });

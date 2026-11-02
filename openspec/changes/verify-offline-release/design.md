@@ -32,7 +32,7 @@ HTML src/href/srcset、CSS url/@import、数据脚本/IR 资产、JS 静态资�
 
 ### 4. 参考对照
 
-compare 输入序列文件含 sourceFingerprint、PlayerProfile、初始寄存器/稳定入口、确定性 seed、按逻辑时间排序的用户/媒体事件。适配 libbluray/BDedit 等可用参考输出，记录工具版本/调用方法/素材 hash；参考资料缺席为 not-verified，不能用自身 trace 自证。
+compare 输入序列文件含 fixtureId/sourceLabel、PlayerProfile、初始寄存器/稳定入口、确定性 seed、按逻辑时间排序的用户/媒体事件。适配 libbluray/BDedit 等可用参考输出，记录工具版本/调用方法；不为外部原盘样本生成哈希。参考资料缺席为 not-verified，不能用自身 trace 自证。
 
 VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随机 ID 等非语义字段；差异报告首个分歧及双方源位置。IG 纯图层按相同分辨率/时间戳/颜色规则逐像素比较，要求不透明及透明 RGBA 规则一致；视频转码另报质量，不把视频编码误差算 IG 错误。需要容差的浏览器合成截图单独记录容差及原因，不能替代 PNG 解码零差异标准。
 

@@ -20,7 +20,7 @@
 
 | 契约 | 最少内容/约束 |
 | --- | --- |
-| DiscIR | 版本、源指纹、entries/programs/menus/playlists/mediaAssets/diagnostics，顶层必填 |
+| DiscIR | 版本、入口/程序/菜单/播放列表/媒体资产/诊断；顶层必填 |
 | NavigationDescriptor | HDMV movieObjectId 或 BDJ bdjoId/status，判别联合 |
 | SourceRef | 相对路径、实际 origin、无损偏移、原始局部 ID |
 | AssetReference | ID/类型/路径/MIME/大小/SHA-256/来源列表 |
@@ -44,7 +44,7 @@ Limits 至少有 maxReadWindowBytes/maxObjectPixels/maxSegmentBytes/maxReassembl
 
 realpath 检查输入/输出/缓存无重叠，拒绝 symlink 逃逸。二进制资源引用只通过已验证文件表解析。提供 staging/commit/abort：已存在目标拒绝覆盖，同父目录构建，调用方校验后 rename；中断不损坏源与旧输出。
 
-sourceFingerprint 按排序相对路径与内容 SHA-256 构造，流式读取；缓存不能以文件名/mtime 代替首次内容校验。资产以内容 hash 命名并保留多对一来源。payloadFingerprint 覆盖运行文件及路径，不含引用该指纹的 reports，避免自引用。诊断 code/severity 可机器判定，无位置取 null，公开来源用相对路径。
+不为外部 BDMV 输入生成 sourceFingerprint，也不承诺原始文件完整性。生成的资产可按内容 hash 命名并保留多对一来源；payloadFingerprint 只覆盖本工具生成的运行文件及路径，不含引用该指纹的 reports，避免自引用。诊断 code/severity 可机器判定，无位置取 null，公开来源用相对路径。
 
 ## Verification / Exit Criteria
 
