@@ -1,0 +1,206 @@
+.gitignore
+  h_3705811fa4502c 3
+packages/core/src/index.ts
+  s_3a3ffd5e9a879b::t_7b482ce53fcdd1 139-153
+  s_3a3ffd5e9a879b::t_2b54a400dc0e3c 1
+  s_3a3ffd5e9a879b::t_122636450e20f6 2-70,72-85,87-130,154-162
+  s_3a3ffd5e9a879b::t_2e21f708d94dfc 163-164
+  s_3a3ffd5e9a879b::t_df1acd09d12095 86
+  s_3a3ffd5e9a879b::t_b41f00fad89b5b 71
+  s_3a3ffd5e9a879b::t_ea56b2033dcf56 131-138
+docs/browser-matrix.md
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 1-11
+LICENSE
+  s_3a3ffd5e9a879b::t_91d2fb83b6fde5 1-21
+openspec/changes/establish-core-contracts/tasks.md
+  s_3a3ffd5e9a879b::t_3fe7ec97e2c945 20
+  s_3a3ffd5e9a879b::t_9ad94c15621738 11
+  s_3a3ffd5e9a879b::t_17a8b75dec45d5 9
+  s_3a3ffd5e9a879b::t_c225d853ffc559 10
+  s_3a3ffd5e9a879b::t_884b6fa90bc2be 12
+  s_3a3ffd5e9a879b::t_e0a80ffe3a66a0 16
+  s_3a3ffd5e9a879b::t_e1cbb73b29744a 17
+  s_3a3ffd5e9a879b::t_73de2ce0d03450 24
+  s_3a3ffd5e9a879b::t_39f360047cd534 26
+  s_3a3ffd5e9a879b::t_b9b424f52216f5 18
+  s_3a3ffd5e9a879b::t_6f28edf373a6c0 25
+  s_3a3ffd5e9a879b::t_0c6abaa1b38280 19
+apps/cli/dist/index.test.js
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 15-25,38
+  s_3a3ffd5e9a879b::t_14a83d588aa10e 3-4,6,26-37
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1-2,5,7-14,39
+apps/cli/vitest.config.ts
+  s_3a3ffd5e9a879b::t_1e8bf91823dc33 1-2
+apps/cli/dist/index.js
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 4-19,25-29
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1-3,20-24,30-32
+.npmrc
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-2
+packages/core/vitest.config.ts
+  s_3a3ffd5e9a879b::t_1e8bf91823dc33 1-2
+apps/cli/src/index.test.ts
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-2,5,7-16,35
+  s_3a3ffd5e9a879b::t_037cdc0203108e 17-26,34
+  s_3a3ffd5e9a879b::t_f58eda0d8dd9d8 3-4,6,27-33
+packages/test-fixtures/vitest.config.ts
+  s_3a3ffd5e9a879b::t_64ace457dec985 1-2
+.node-version
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 1
+packages/test-fixtures/tsconfig.json
+  s_3a3ffd5e9a879b::t_64ace457dec985 1
+packages/bdmv-io/package.json
+  s_3a3ffd5e9a879b::t_c7377f429de444 1-9
+docs/development.md
+  s_3a3ffd5e9a879b::t_7b482ce53fcdd1 26-40
+  s_3a3ffd5e9a879b::t_90ce4eae339a7b 15-19
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 1-14,20-25,41-48
+packages/core/dist/index.js
+  s_3a3ffd5e9a879b::t_d11af614880c10 1-22,24-87,98,113-122
+  s_3a3ffd5e9a879b::t_2fcc5579889a47 99-112
+  s_3a3ffd5e9a879b::t_8e1a4142c8dd96 23,88-97
+packages/test-fixtures/dist/index.test.d.ts
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 1
+pnpm-workspace.yaml
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-3
+  s_3a3ffd5e9a879b::t_e780c61af29ae3 5
+  s_3a3ffd5e9a879b::t_596229ede1616f 4
+packages/core/src/browser.ts
+  s_3a3ffd5e9a879b::t_122636450e20f6 1
+apps/cli/dist/index.d.ts
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1-2
+packages/core/src/contracts.test.ts
+  s_3a3ffd5e9a879b::t_5e3edf51616033 60
+  s_3a3ffd5e9a879b::t_2e21f708d94dfc 1,3-32,36-46,52-58,63-72
+  s_3a3ffd5e9a879b::t_7b482ce53fcdd1 2,49-51
+  s_3a3ffd5e9a879b::t_ea56b2033dcf56 33-35,47-48,62
+  s_3a3ffd5e9a879b::t_1e8bf91823dc33 61
+  s_3a3ffd5e9a879b::t_ef533f9c2fe886 59
+packages/bdmv-io/src/index.test.ts
+  s_3a3ffd5e9a879b::t_b41f00fad89b5b 2,24
+  s_3a3ffd5e9a879b::t_b2752630f43421 5,25-28
+  s_3a3ffd5e9a879b::t_ea56b2033dcf56 37,55-56,63-65
+  s_3a3ffd5e9a879b::t_2593817b719e81 1,3-4,6-23,29-36,38-50,57-62,66-74
+  s_3a3ffd5e9a879b::t_90ce4eae339a7b 51-54
+docs/protocol-support.md
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 1-7
+tsconfig.base.json
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-10,12-13
+  s_3a3ffd5e9a879b::t_d6777ad1c2a5ca 11
+packages/test-fixtures/golden-manifest.json
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 1-50
+packages/test-fixtures/src/index.test.ts
+  s_3a3ffd5e9a879b::t_64ace457dec985 1,4-19,25-26
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 2-3,20-24
+packages/core/dist/binary-cursor.js
+  s_3a3ffd5e9a879b::t_d11af614880c10 1-55
+packages/bdmv-io/vitest.config.ts
+  s_3a3ffd5e9a879b::t_2593817b719e81 1-2
+apps/cli/package.json
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-12
+packages/test-fixtures/dist/index.test.js
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 1-30
+apps/cli/dist/index.test.d.ts
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1
+packages/core/dist/contracts.test.d.ts
+  s_3a3ffd5e9a879b::t_d11af614880c10 1
+packages/bdmv-io/dist/index.test.d.ts
+  s_3a3ffd5e9a879b::t_936eeb7b9d6e79 1
+packages/bdmv-io/tsconfig.json
+  s_3a3ffd5e9a879b::t_c7377f429de444 1
+packages/core/dist/browser.d.ts
+  s_3a3ffd5e9a879b::t_d11af614880c10 1
+packages/core/dist/browser.js
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1-7576,7578-7627
+  s_3a3ffd5e9a879b::t_e1e89c7229790e 7577
+packages/core/package.json
+  s_3a3ffd5e9a879b::t_dcd9049d4b60db 1-12,14-15,17-21
+  s_3a3ffd5e9a879b::t_fe2e32e9e8f611 16
+  s_3a3ffd5e9a879b::t_122636450e20f6 13
+packages/bdmv-io/dist/index.test.js
+  s_3a3ffd5e9a879b::t_936eeb7b9d6e79 1,3-4,6-27,33-41,43-61,70-79,86-96
+  s_3a3ffd5e9a879b::t_2fcc5579889a47 5,29-32
+  s_3a3ffd5e9a879b::t_b7306c4745c5b2 2,28,42,62-69,80-85
+packages/test-fixtures/src/index.ts
+  s_3a3ffd5e9a879b::t_64ace457dec985 1-36,42-50
+  s_3a3ffd5e9a879b::t_73f82b6a46f287 37-41
+packages/bdmv-io/dist/index.d.ts
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1-8,15-20,24-30
+  s_3a3ffd5e9a879b::t_2fcc5579889a47 9-14
+  s_3a3ffd5e9a879b::t_936eeb7b9d6e79 21-23
+packages/core/src/binary-cursor.ts
+  s_3a3ffd5e9a879b::t_29203544827447 1-44
+packages/bdmv-io/src/index.ts
+  s_3a3ffd5e9a879b::t_b2752630f43421 42-65
+  s_3a3ffd5e9a879b::t_2593817b719e81 99-135
+  s_3a3ffd5e9a879b::t_b41f00fad89b5b 32,34-35,37
+  s_3a3ffd5e9a879b::t_c7377f429de444 1-31,33,36,38-41,66-98,136-149,155-161,168
+  s_3a3ffd5e9a879b::t_90ce4eae339a7b 150-154,162-167
+apps/cli/tsconfig.json
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1
+packages/core/dist/index.d.ts
+  s_3a3ffd5e9a879b::t_d11af614880c10 1-56,60-61
+  s_3a3ffd5e9a879b::t_2fcc5579889a47 58-59
+  s_3a3ffd5e9a879b::t_11d9d5a4472ad8 57
+packages/core/schema/disc-ir.schema.json
+  s_3a3ffd5e9a879b::t_dcd9049d4b60db 1-47
+packages/bdmv-io/dist/index.js
+  s_3a3ffd5e9a879b::t_936eeb7b9d6e79 102-143
+  s_3a3ffd5e9a879b::t_e5dbe9931393ae 1-30,32-33,36-37,39-43,63-101,144-163,172-187,192,197-198
+  s_3a3ffd5e9a879b::t_2fcc5579889a47 44-62
+  s_3a3ffd5e9a879b::t_15eb0acc7b2225 31,34-35,38,164-171,188-191,193-196
+packages/core/dist/binary-cursor.d.ts
+  s_3a3ffd5e9a879b::t_d11af614880c10 1-18
+scripts/build-core-browser.mjs
+  s_3a3ffd5e9a879b::t_fe2e32e9e8f611 1-18
+apps/cli/src/index.ts
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-4,19-22,28-29
+  s_3a3ffd5e9a879b::t_037cdc0203108e 5-18,23-27
+packages/core/tsconfig.json
+  s_3a3ffd5e9a879b::t_dcd9049d4b60db 1
+packages/core/dist/contracts.test.js
+  s_3a3ffd5e9a879b::t_d11af614880c10 1,3-32,37-47,53-61,64-65,70-83
+  s_3a3ffd5e9a879b::t_936eeb7b9d6e79 62
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 67
+  s_3a3ffd5e9a879b::t_4a34038698e0a1 63,66,68
+  s_3a3ffd5e9a879b::t_2fcc5579889a47 2,50-52
+  s_3a3ffd5e9a879b::t_e0790548ebddc7 33-36,48-49,69
+packages/test-fixtures/package.json
+  s_3a3ffd5e9a879b::t_64ace457dec985 1-10
+packages/test-fixtures/dist/index.d.ts
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 1-192
+package.json
+  s_3a3ffd5e9a879b::t_3157249256a7ec 8-9
+  s_3a3ffd5e9a879b::t_4aa4856ba24db6 1-3,5-7,10-20
+  s_3a3ffd5e9a879b::t_e6d13115685023 4
+packages/test-fixtures/dist/index.js
+  s_3a3ffd5e9a879b::t_3c3ec1f00f5b6e 1-42
+packages/core/dist/disc-ir.generated.d.ts
+  s_3a3ffd5e9a879b::t_c454ad9cdfcc50 1-68
+packages/core/dist/disc-ir.generated.js
+  s_3a3ffd5e9a879b::t_a943d2fb534273 1
+packages/core/src/disc-ir.generated.ts
+  s_3a3ffd5e9a879b::t_e6eb0d0ac7e63c 1-71
+pnpm-lock.yaml
+  s_3a3ffd5e9a879b::t_7e160ffbc69a53 1-1383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6191e27f6df3b23654d88d2ad59fd420a5465274",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
