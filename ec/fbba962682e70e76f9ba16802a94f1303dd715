@@ -1,0 +1,25 @@
+packages/bdmv-parser/src/model.ts
+  s_3a3ffd5e9a879b::t_32ac2d3e43b31f 31
+packages/bdmv-parser/src/parser.ts
+  s_3a3ffd5e9a879b::t_3129f2d07baa2b 287-289,297-311
+  s_3a3ffd5e9a879b::t_8d4fcc3158c3c8 198-213,312
+  s_3a3ffd5e9a879b::t_2c10d3e4163a68 313
+packages/bdmv-parser/src/parser.test.ts
+  s_3a3ffd5e9a879b::t_5d785abf6c5e44 37-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ecfbba962682e70e76f9ba16802a94f1303dd715",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
