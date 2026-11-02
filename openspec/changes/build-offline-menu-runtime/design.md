@@ -2,25 +2,54 @@
 
 ## Context
 
-仓库目前只有架构基线和 OpenSpec 配置。上游依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation。架构基线见仓库根目录 `bdmv_hdmv_offline_web_architecture.md`；具体行为以本 change 的规格为准。
+依赖 M0–M3，对应架构 §6.3、§9、§11。共同契约见 [实施基线](../IMPLEMENTATION_BASELINE.md)。M4 交付 menu-only，真实背景/影片与时间表由 M5 接入；M4 不因没有影片而阻止菜单调试。
 
 ## Goals / Non-Goals
 
-**Goals:** 构建 file:// 兼容的菜单运行时、交互渲染、音效及 menu-only 打包；真实影片导出由后续 change 完成。
+**Goals:** classic bundle、安全 IR/图形嵌入、Canvas/输入/音效、VM 交互桥、portable 菜单包、可诊断启动。
 
-**Non-Goals:** 不执行 BD-J、破解保护或要求导出物运行后台服务；不把未经验证的功能声明为支持。
+**Non-Goals:** 真实影片转码、PG 字幕、Service Worker、fetch 本地 JSON、模块脚本、原生/WASM 运行依赖、完整播放声明。
 
 ## Decisions
 
-使用 classic IIFE 脚本和安全内嵌数据，Canvas 按原始坐标绘制，反变换 pointer 命中；动作通过 VM 事件桥接。menu-only 显式把缺失媒体操作标为 unavailable，避免占位实现伪装完整播放。
+### 1. 包生成与启动顺序
 
-共享边界遵循版本化 IR、结构化诊断和来源追踪；上游交付接口与样本，下游负责自己集成时验证接口。实现时依照架构文档核验二进制字段和规范，而非把示意接口当成已验证协议。
+生成 index.html、runtime/disc-data.js、assets-data-*.js、app.bundle.js、assets/graphics、assets/audio、reports 和 README。脚本按数据/图集/runtime 顺序 defer；IIFE ES2020，无 import/export/dynamic import、eval、fetch/XHR、CDN。IR 用安全 JSON 写入传统数据脚本，转义 `<`、`</script>` 及脚本敏感字符；标题用 textContent，不拼接源 HTML。
+
+portable 将交互 PNG 按受限批次 data URL 写入数据脚本，预解码后才开放输入；限制单批/总内存，超限诊断，不创建无限大单脚本。原 PNG 可保留用于溯源。音效从 M1 sound 合规解码/转换为 WAV，相对路径加载；缺失声条目报告受影响按钮，不静默替换。compact 不在首期交付。
+
+Bootloader 顺序：数据/schema 校验 → 资产预解码 → 初始化 PlayerProfile/VM/场景 → 显示开始手势 → 执行 First Play。First Play 缺省/无效时仅能使用明确有效的配置入口，不能按文件排序猜。首屏/加载失败可见诊断，不停在黑屏。刷新重新开始，不依赖 localStorage。
+
+### 2. 画面与命中
+
+Video 底层、IG Canvas、输入层分离。Canvas 使用源分辨率坐标，视口等比缩放并 letterbox；pointer 用相同矩阵逆变换，黑边无命中。DPR 只改变 backing store，不改变按钮位置。依原始 z-order/裁剪合成，不从 DOM 文字/图片 alpha 推断区域。
+
+SceneController 持有 composition/page/BOG/selected/activated/popup/动画状态；默认选择、超时选择、自动动作按已核验场景规则执行。三态序列及进入退出效果由状态/时间驱动；无可用按钮时清空 selection，不保留前页悬空 buttonId。未知效果保留诊断。
+
+### 3. 输入与 VM 动作闭环
+
+Arrow 对应显式邻接，Enter/Space 只激活有效选择；pointermove/click 与触屏遵守页面、BOG、UO mask。激活经统一 MenuController → VM raw 命令，不能在 HTML onClick 写 play。邻接缺省不按几何位置猜。菜单键明确展示 Top Menu/Pop-up，Escape 作为可配置映射；失焦清遗留按键，禁用状态不发命令。重叠按钮按来源层次/规则选取，歧义不得靠 DOM 顺序解决。
+
+M4 的 PreviewPlaybackBridge 对未打包播放动作回送带 actionId 的 unavailable，结束 VM 对应等待并提示，不假发 MEDIA_ENDED。菜单页切换、按钮状态、sound 仍是真实 VM 动作。M5 替换桥，不改指令语义。
+
+### 4. 时间与异步生命周期
+
+M4 提供 EventScheduler 接口和可注入逻辑时钟：静态预览动画按逻辑时间，暂停/页面更换取消旧任务；M5 接入媒体映射。所有回调携 generation，页面/媒体变更只取消对应作用域任务。异步资源加载错误不重入 VM。动画结束与页面效果完成进入同一序列队列。
+
+### 5. 开始手势及模式声明
+
+play Promise 捕捉 NotAllowedError，显示可重试开始按钮，用户手势后只重试仍有效动作，不再次执行整条按钮指令序列。NotSupportedError/资源错误为能力或资产失败，不能伪装成自动播放限制。
+
+menu-only 包 UI、README、compatibility.json 均标 partial；影片操作 unavailable。缺真实动态背景可以显示明确预览底层，不能把纯图形预览宣称视频保真。无网络/原碟/后台要求同时适用于预览包。
+
+## Verification / Exit Criteria
+
+scene fixture 验证多页/BOG/三态/自动动作/方向邻接/UO mask、letterbox/DPR/黑边命中、失焦和触屏。script 注入样本含 `</script>`、中文/空格/百分号路径，启动不执行源字符串。断网 file:// 启动、整目录移动、音效、拒绝播放恢复和 unavailable 后 VM 不挂死；PNG 图层截图与 golden 对比。目标矩阵无证据项目记录未验证，不声称通过。
 
 ## Risks / Trade-offs
 
-- 本地图片和媒体策略因浏览器而异 → portable 图集和首次手势启动，并在目标版本验证；不依赖 fetch 或模块脚本。
-- 浏览器矩阵及媒体支持依赖实际环境 → 记录版本和证据，未验证项目不能作为通过。
+嵌入 PNG 增加体积但可减少 file:// Canvas 策略差异；仍须实际矩阵验证。不能靠本机 HTTP 开发服务器的成功代替直接打开验收。
 
 ## Migration Plan
 
-项目为新建系统，无现有数据迁移；按前置依赖逐步集成，保留兼容的版本化契约。若集成失败，回退对应模块或构建产物，并保留诊断与测试证据。
+无旧播放器。先用合成场景和模拟桥，再接 M1/M2/M3 的真实 IR；M5 通过同一桥/调度接口增加媒体能力。

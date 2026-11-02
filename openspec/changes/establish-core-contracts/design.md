@@ -2,25 +2,58 @@
 
 ## Context
 
-仓库目前只有架构基线和 OpenSpec 配置。上游依赖：无。架构基线见仓库根目录 `bdmv_hdmv_offline_web_architecture.md`；具体行为以本 change 的规格为准。
+当前无业务代码。M0 为所有 change 提供契约，对应架构 §3–4、§10、§12、§15、§17；共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。
 
 ## Goals / Non-Goals
 
-**Goals:** 建立 TypeScript 工作区、共享 IR、版本化 schema、诊断、安全二进制读取和可复现测试基础。
+**Goals:** 可重复 TS 工作区、可校验 IR、精确时间、来源/诊断、安全读取与事务输出、fixture 基础。
 
-**Non-Goals:** 不执行 BD-J、破解保护或要求导出物运行后台服务；不把未经验证的功能声明为支持。
+**Non-Goals:** 业务格式解析、VM、IG 绘制和转码。CLI 未接入的子命令返回明确未实现错误，不输出假数据。
 
 ## Decisions
 
-以独立 core 契约供 Node 和浏览器共享；JSON 中 90 kHz 时间用十进制字符串，运行时显式转换 bigint，避免 JSON 精度损失。采用有界随机访问 Cursor 和只读输入、独立输出；替代方案是各模块自行定义结构，但会导致时间和错误语义分叉。
+### 1. 工作区与依赖方向
 
-共享边界遵循版本化 IR、结构化诊断和来源追踪；上游交付接口与样本，下游负责自己集成时验证接口。实现时依照架构文档核验二进制字段和规范，而非把示意接口当成已验证协议。
+采用 pnpm workspace，包名 @bdmv-web/*。先建 core/bdmv-io/test-fixtures 和 apps/cli，下游随 change 增加。根脚本统一 build/typecheck/test；固定 Node/pnpm/TS/Vitest/bundle 工具版本与 lockfile。core 只用平台无关 TS/Uint8Array，不导入 Buffer、node:fs、DOM；Node I/O 在 bdmv-io，浏览器不得反向依赖转换器。选择单一 schema 来源生成/校验 TS 类型，避免两套结构漂移。
+
+### 2. 契约及阶段校验
+
+| 契约 | 最少内容/约束 |
+| --- | --- |
+| DiscIR | 版本、源指纹、entries/programs/menus/playlists/mediaAssets/diagnostics，顶层必填 |
+| NavigationDescriptor | HDMV movieObjectId 或 BDJ bdjoId/status，判别联合 |
+| SourceRef | 相对路径、实际 origin、无损偏移、原始局部 ID |
+| AssetReference | ID/类型/路径/MIME/大小/SHA-256/来源列表 |
+| MenuScene/PlaylistIR | 作用域 ID、原始/归一化时间及引用；M2/M5 细化须同步 schema |
+| PlayerProfile/Limits | 语言/地区/输出能力、内存/执行/输出预算 |
+| Diagnostic/Action/Event | 共享基线字段、相关 ID、generation；覆盖进程内事件与 JSON trace |
+
+初始 schema 1.0。校验分语法、ID/引用和阶段能力三层；schema 通过不代表引用或功能通过。未知版本、重复 ID、混合导航字段和非法时间在业务执行前拒绝。提供最小有效 HDMV、混合 BD-J、非法版本、悬空引用交接样本。
+
+### 3. 时间与序列化
+
+提供 parseTime90k/serializeTime90k/from45k；拒绝负数、小数、指数、空白和前导零，覆盖 9007199254740993 反复 JSON 往返。core 不根据“时间变小”猜测回绕，M2 负责 epoch。绝对大时间先 bigint 相减，再在 M5 媒体边界转秒。文件偏移/大小同样无损序列化，转 DataView 索引前核验当前窗口。
+
+### 4. Cursor 与 Limits
+
+Cursor 管理 Uint8Array 窗口，offset/length 是窗口内安全整数，另带文件基偏移。u8/u16be/u32be/u64be/bytes/seek/subview 统一读前检查。subview(n) 成功推进父游标 n，子游标从 0 起且基偏移增加；失败不改变父游标。拒绝负数、非整数、offset+length 溢出及未经检查的 count×size，不补零。
+
+Limits 至少有 maxReadWindowBytes/maxObjectPixels/maxSegmentBytes/maxReassemblyBytes/maxInstructionsPerTurn/maxQueueDepth/maxCallDepth/maxExplorationStates/maxOutputBytes。内存和执行项默认有限，M0 提交具体默认值与边界测试；maxOutputBytes 可为空。大文件按块访问，不能把整部正片读入内存。
+
+### 5. 路径、指纹、输出事务
+
+realpath 检查输入/输出/缓存无重叠，拒绝 symlink 逃逸。二进制资源引用只通过已验证文件表解析。提供 staging/commit/abort：已存在目标拒绝覆盖，同父目录构建，调用方校验后 rename；中断不损坏源与旧输出。
+
+sourceFingerprint 按排序相对路径与内容 SHA-256 构造，流式读取；缓存不能以文件名/mtime 代替首次内容校验。资产以内容 hash 命名并保留多对一来源。payloadFingerprint 覆盖运行文件及路径，不含引用该指纹的 reports，避免自引用。诊断 code/severity 可机器判定，无位置取 null，公开来源用相对路径。
+
+## Verification / Exit Criteria
+
+干净安装、build/typecheck/test 通过，core 浏览器构建无 Node 内建依赖。schema 正反例、时间大数、嵌套 subview、溢出、symlink、输入输出重叠及事务中断均有断言。提交开发命令、Limits 默认值、PlayerProfile schema、浏览器矩阵模板和最小消费方样本。
 
 ## Risks / Trade-offs
 
-- 协议细节尚需规范和参考实现核验 → 保留原始信息与源位置，不把示例接口当作协议定义。
-- 浏览器矩阵及媒体支持依赖实际环境 → 记录版本和证据，未验证项目不能作为通过。
+协议新增字段通过 fixture 驱动细化并同步版本，不用 any 绕过校验。内容指纹增加首次扫描成本，但保证缓存和证据可追踪。
 
 ## Migration Plan
 
-项目为新建系统，无现有数据迁移；按前置依赖逐步集成，保留兼容的版本化契约。若集成失败，回退对应模块或构建产物，并保留诊断与测试证据。
+无旧数据。下游以交接样本锁定接口，不兼容变更同步所有消费者。

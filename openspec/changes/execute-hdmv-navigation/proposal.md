@@ -2,24 +2,32 @@
 
 ## Why
 
-菜单按钮和播放链依赖寄存器与机器指令，不能用页面路由代替。
+导航依赖寄存器、条件执行和恢复上下文，硬编码按钮页面动作无法复现行为。
 
 ## What Changes
 
-- 建立命令解码、寄存器、对象调用、动作事件协议、支持覆盖检查与可复现 trace。
-- 实施前置依赖：establish-core-contracts、parse-bdmv-structure。依赖表示前置 change 的契约和相关验收已完成；允许先基于稳定接口并行开发，但集成及完成验收必须等待前置项。
-- 首期只支持 HDMV；BD-J 执行、解密和在线服务均不在范围内。
+- 统一解码 MovieObject 和按钮12字节记录，建立逐编码支持/证据矩阵。
+- 实现寄存器/PC/条件/Jump/Call/Resume/系统动作及有界异步状态机。
+- 输出确定性 trace 和保留 unknown 的导航图，供运行时与媒体分析消费。
+- 前置依赖：establish-core-contracts、parse-bdmv-structure。可基于稳定契约先开发，集成验收须等待相应上游结果。
+- 范围保持首期 HDMV；BD-J 仅识别和保留扩展槽，不实施解密、Java 执行或输出后台服务。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `hdmv-navigation`：执行 HDMV 导航语义。
+- `hdmv-navigation`：HDMV 导航语义。
 
 ### Modified Capabilities
 
-无。
+无；当前尚无已发布主规格。
 
 ## Impact
 
-影响转换器、共享契约、测试和离线运行时的相关模块；当前仓库尚无实现。以架构基线的范围和验收约束为准，具体实施见 design 和 tasks。
+packages/navigation-hdmv、导航分析及支持文档；不依赖 DOM/视频，M2 按钮通过同一接口追加。
+
+## Acceptance Boundary
+
+支持项逐条有依据和正反例；模拟桥可验证成功/失败/旧回信、恢复一次、循环终止及参考轨迹。
+
+详细行为见本 change 规格，设计/任务采用 [共享实施基线](../IMPLEMENTATION_BASELINE.md)；OpenSpec 格式校验不等于产品测试已通过。

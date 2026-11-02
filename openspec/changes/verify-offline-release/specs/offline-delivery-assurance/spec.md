@@ -2,42 +2,120 @@
 
 ## Purpose
 
-为离线 BDMV 转换和浏览器运行提供可验证的验证离线交付并判定发布状态能力，明确输入、输出、错误及对下游的可观察行为。
+通过独立资源审计、差分和浏览器证据判定交付状态。
 
 ## ADDED Requirements
 
 ### Requirement: 资源与离线审计
 
-系统 SHALL 验证资源存在、哈希、引用边界及网络依赖，并报告来源和失败项。
+系统 SHALL 独立验证 schema/引用/资产hash/URL边界/依赖；不读取原碟，不盲信既有 status。
 
-#### Scenario: 包中存在越界路径、远程 URL 或哈希不匹配
+#### Scenario: 远程或越界
 
-- **WHEN** 包中存在越界路径、远程 URL 或哈希不匹配
-- **THEN** validate --offline 报告具体引用并拒绝 complete
+- **WHEN** 运行引用含协议相对URL、原盘fileURL、编码目录逃逸或外部symlink
+- **THEN** validate --offline 报具体引用与规范化目标，状态failed
+
+#### Scenario: 资产被篡改
+
+- **WHEN** 必需媒体/JS/PNG字节与manifest不一致
+- **THEN** 报告 PACKAGE_MISSING_ASSET 或校验错误并拒绝complete，旧证据失效
+
+#### Scenario: 合法说明网址
+
+- **WHEN** README或报告含不被运行时加载的参考链接
+- **THEN** 不当成运行依赖误报；运行资源字段仍逐项审计
+
+#### Scenario: 包独立验证
+
+- **WHEN** 原始BDMV和FFmpeg均不可用但包完整
+- **THEN** 仍能校验manifest/资源/引用/已有证据，不要求安装转换工具
 
 ### Requirement: 完成度与严格模式
 
-系统 SHALL 区分 complete、partial 和 failed，并在 strict 模式下阻止存在未认可错误或关键功能缺失的结果标为成功。
+系统 SHALL 按共享决策表区分complete/partial/failed；strict只改变接受策略，不能改变支持事实。
 
-#### Scenario: 混合 BD-J 入口或可达不支持操作
+#### Scenario: 混合入口或未支持操作
 
-- **WHEN** 混合 BD-J 入口或可达不支持操作
-- **THEN** 报告受影响入口与诊断；不可标为全碟 complete
+- **WHEN** 包可启动但含BD-J或可达unsupported/unknown
+- **THEN** 状态partial并保留受影响入口；strict退出2，非strict不因此升级complete
+
+#### Scenario: 纯BD-J或关键损坏
+
+- **WHEN** 没有有效HDMV启动，或入口/必需资源损坏
+- **THEN** 状态failed，退出非零，不发布正式完整包
+
+#### Scenario: 确认错误
+
+- **WHEN** 用户acknowledge一个阻断功能的Error
+- **THEN** 原severity与功能影响保留，不将partial改complete
+
+#### Scenario: 所有门槛满足
+
+- **WHEN** standalone-full的资源/支持/对照及必测矩阵全部通过
+- **THEN** 才可complete，strict退出0；menu-only即便其它通过仍partial
+
+### Requirement: 覆盖统计与未知项
+
+系统 SHALL 分别报告入口、指令、媒体和测试分母及支持/失败/未知，保留未验证项。
+
+#### Scenario: 缺分母或动态未知
+
+- **WHEN** 分析预算耗尽或存在未解析目标
+- **THEN** 报告unknown与具体来源，不能宣称全路径100%
+
+#### Scenario: 零项类别
+
+- **WHEN** 某包不存在对应指令/媒体类别
+- **THEN** 记N/A和原因，不以0/0自动算100%
 
 ### Requirement: 对照与浏览器证据
 
-系统 SHALL 为指定路径保存 VM 状态、图形对照及离线浏览器版本的验收证据。
+系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并绑定制品指纹与真实浏览器/OS版本。
 
-#### Scenario: 断网移动包后执行包含菜单和影片的路径
+#### Scenario: 首个行为分歧
 
-- **WHEN** 断网移动包后执行包含菜单和影片的路径
-- **THEN** 记录按钮、寄存器、画面、播放状态及浏览器版本的结果；未通过或未验证的矩阵项不能声称通过
+- **WHEN** 参考和Web在某条指令的寄存器/动作首次不同
+- **THEN** 报告首个分歧及双方状态/来源，墙钟差异不冒充语义差异
+
+#### Scenario: 图层比较
+
+- **WHEN** 同时间/分辨率/颜色规则比较IG和转码视频
+- **THEN** IG纯图形按独立RGBA golden比较，视频质量另计，不混合编码误差
+
+#### Scenario: 矩阵缺席
+
+- **WHEN** Windows或macOS任一必测组合无环境或证据
+- **THEN** 记not-verified并阻止complete，不假设另一个平台结果可代替
+
+#### Scenario: 制品变动
+
+- **WHEN** 获得浏览器证据后运行bundle或profile变化
+- **THEN** 相关证据失效，要求重验，不能复用旧截图宣称通过
+
+### Requirement: 直接打开与便携性
+
+系统 SHALL 必测矩阵在无网络/后台/原碟条件下直接file://验证A–J适用场景及媒体实播。
+
+#### Scenario: 移动断网播放
+
+- **WHEN** 整目录复制到含中文/空格的新路径并直接打开
+- **THEN** 记录脚本/图形/声音/章节/菜单返回的实际结果及版本，不能以HTTP测试代替
+
+#### Scenario: 播放被拒后的恢复
+
+- **WHEN** 默认浏览器策略拒绝自动播放
+- **THEN** 用户手势可继续且不重复VM副作用，证据明确有声结果
 
 ### Requirement: 安全失败
 
-系统 SHALL 对损坏文件、无效引用、超限执行和不安全输出路径安全终止并给出可诊断错误。
+系统 SHALL 对损坏/超限/不安全路径有界终止并保留诊断，执行模块与发布校验共用预算和状态语义。
 
-#### Scenario: 输入包含跳转环或路径越界
+#### Scenario: 回归恶意样本
 
-- **WHEN** 输入包含跳转环或路径越界
-- **THEN** 处理受限终止，报告错误且不覆盖源文件
+- **WHEN** 输入含超大尺寸、跳转环、非法路径或截断
+- **THEN** 在预算内终止，报告源位置/错误码，源与旧输出不变
+
+#### Scenario: 证据不足发布
+
+- **WHEN** 存在失败或未验证必测项时生成发布摘要
+- **THEN** 清楚列缺口，不勾选发布通过，也不将未完成实施任务标完成

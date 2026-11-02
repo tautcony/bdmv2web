@@ -2,24 +2,32 @@
 
 ## Why
 
-仅凭生成文件不能证明导航完整、无网络依赖或浏览器实际兼容。
+生成文件不能证明路径完整、无外部依赖或跨浏览器兼容，需要独立审计及可复查证据。
 
 ## What Changes
 
-- 统一 validate、完整度判定、资源和依赖审计、差分对照、浏览器矩阵及发布证据。
-- 实施前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。依赖表示前置 change 的契约和相关验收已完成；允许先基于稳定接口并行开发，但集成及完成验收必须等待前置项。
-- 首期只支持 HDMV；BD-J 执行、解密和在线服务均不在范围内。
+- 实现输出包独立 validate、hash/引用/URL/脚本依赖审计及完整度/strict 决策。
+- 建立有分母的支持统计、VM/IG 独立参考对照和安全回归。
+- 执行实际浏览器版本矩阵及 A–J 适用场景，绑定制品指纹后形成发布摘要。
+- 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。可基于稳定契约先开发，集成验收须等待相应上游结果。
+- 范围保持首期 HDMV；BD-J 仅识别和保留扩展槽，不实施解密、Java 执行或输出后台服务。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `offline-delivery-assurance`：验证离线交付并判定发布状态。
+- `offline-delivery-assurance`：离线交付验证。
 
 ### Modified Capabilities
 
-无。
+无；当前尚无已发布主规格。
 
 ## Impact
 
-影响转换器、共享契约、测试和离线运行时的相关模块；当前仓库尚无实现。以架构基线的范围和验收约束为准，具体实施见 design 和 tasks。
+packages/test-runner、CLI validate/compare、reports 和发布清单；参考工具只用于开发验收。
+
+## Acceptance Boundary
+
+缺资源/外部引用为 failed，能力/证据缺口为 partial；只有完整资源行为与全部声明证据通过才 complete。
+
+详细行为见本 change 规格，设计/任务采用 [共享实施基线](../IMPLEMENTATION_BASELINE.md)；OpenSpec 格式校验不等于产品测试已通过。
