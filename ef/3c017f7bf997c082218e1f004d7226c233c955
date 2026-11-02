@@ -1,0 +1,35 @@
+packages/igs/src/transport.ts
+  s_3a3ffd5e9a879b::t_6efd1d5f421e3e 128,137,193
+packages/igs/test/extraction.test.ts
+  s_3a3ffd5e9a879b::t_f46635d3e9445d 90-91
+  s_3a3ffd5e9a879b::t_740f13777a3fed 8,88-89,92-93
+  s_3a3ffd5e9a879b::t_ea8fdb484ffd36 97-103
+  s_3a3ffd5e9a879b::t_d0ee55145c7302 114
+  s_3a3ffd5e9a879b::t_01c5251a267820 123-152
+  s_3a3ffd5e9a879b::t_d9ca613cb5e8bf 155-182
+  s_3a3ffd5e9a879b::t_64846487b3e3b3 153-154,183-203
+openspec/changes/extract-igs-scenes/tasks.md
+  s_3a3ffd5e9a879b::t_0daf197367176b 12
+packages/igs/src/extract.ts
+  s_3a3ffd5e9a879b::t_317913a84e5d4e 14,59
+  s_3a3ffd5e9a879b::t_4cbbc952ba7c18 18-24
+  s_3a3ffd5e9a879b::t_5a7ef1778f6377 118-119,122-132
+  s_3a3ffd5e9a879b::t_f6503a231eb46d 42-44,154-158
+  s_3a3ffd5e9a879b::t_d9a24959ddae3d 25-35,37-41,45-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ef3c017f7bf997c082218e1f004d7226c233c955",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
