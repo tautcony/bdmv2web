@@ -125,6 +125,7 @@ export class PsiAssembler {
   private readonly buffers = new Map<number, Uint8Array>();
   readonly programs = new Map<number, number>();
   readonly streamsByPid = new Map<number, number>();
+  readonly streamSourcesByPid = new Map<number, ReturnType<typeof source>>();
   constructor(readonly diagnostics: IgsDiagnostic[], private readonly clipId: string) {}
 
   push(packet: TsPacket): PsiSection[] {
@@ -133,6 +134,7 @@ export class PsiAssembler {
         this.buffers.delete(packet.pid);
         if (packet.pid === 0) this.programs.clear();
         this.streamsByPid.clear();
+        this.streamSourcesByPid.clear();
         const reason = packet.discontinuity ? "discontinuity" : packet.transportError ? "transport error" : "continuity error";
         this.diagnostics.push({ severity: "error", code: "PSI_INVALIDATED", message: `PID ${packet.pid} ${reason} discarded the pending PSI section`, source: source(this.clipId, packet.pid, packet.packetOffset), affectedSceneIds: [] });
       }
@@ -188,6 +190,7 @@ export class PsiAssembler {
         const esLen = ((section[i + 3]! & 15) << 8) | section[i + 4]!;
         if (i + 5 + esLen > section.length - 4) break;
         this.streamsByPid.set(streamPid, type);
+        this.streamSourcesByPid.set(streamPid, source(this.clipId, pid, at));
         i += 5 + esLen;
       }
     }

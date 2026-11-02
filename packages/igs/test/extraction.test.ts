@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { buildInputFileTable } from "@bdmv-web/bdmv-io";
 import type { ParsedDisc } from "@bdmv-web/bdmv-parser";
 import { extractIgsFromChunks, extractIgsScenes } from "../src/extract.js";
-import { chunks, IG_PID, m2tsPacket, patPacket, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "./fixtures.js";
+import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "./fixtures.js";
 
 describe("synthetic IGS extraction", () => {
   it("reassembles a complete menu scene with page, BOG, button, object, palette and PNG source mapping", async () => {
@@ -85,8 +85,20 @@ describe("synthetic IGS extraction", () => {
   it("rejects a PMT PID mismatch against the M1 MPLS/CLPI cue", async () => {
     const bytes = syntheticClip({ streamPid: IG_PID + 1 });
     const result = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "99" } }]);
-    expect(result.diagnostics.map((d) => d.code)).toContain("IGS_PID_CONFLICT");
+    const conflict = result.diagnostics.find((d) => d.code === "IGS_PID_CONFLICT");
+    expect(conflict).toBeDefined();
+    expect(conflict?.message).toContain(`${IG_PID} from BDMV/PLAYLIST/00001.mpls (primary) @ 99`);
+    expect(conflict?.message).toContain(`${IG_PID + 1} from clip 00001 PMT PID ${PMT_PID} packet offset 192`);
+    expect(JSON.parse(conflict?.details?.mplsClpiSources as string)).toEqual([{ pid: IG_PID, path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "99" }]);
+    expect(JSON.parse(conflict?.details?.pmtSources as string)).toEqual([{ streamPid: IG_PID + 1, clipId: "00001", pmtPid: PMT_PID, packetOffset: "192" }]);
     expect(result.scenes).toHaveLength(0);
+  });
+
+  it("does not discover a PG PMT stream as IGS when no structural cue exists", async () => {
+    const result = await extractIgsFromChunks("00001", chunks(syntheticClip({ streamType: 0x90 }), 192));
+    expect(result.scenes).toHaveLength(0);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("IGS_PID_CONFLICT");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "IGS_PID_UNRESOLVED", severity: "warning" }));
   });
 
   it.each(["STREAM/00001.m2ts", "BDMV/STREAM/00001.m2ts", "stream/00001.m2ts"])("maps virtual BDMV clip paths through a validated table keyed by %s", async (tablePath) => {
@@ -99,13 +111,94 @@ describe("synthetic IGS extraction", () => {
       const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0" };
       const disc = {
         schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
-        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 0x1b, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, source }], source }], marks: [], subPaths: [], source }],
+        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, source }], source }], marks: [], subPaths: [], source }],
         clips: [], graph: { nodes: [{ id: "clip:00001", type: "clip", state: "present", source: { path: "BDMV/STREAM/00001.m2ts", origin: "primary", offset: "0" } }], edges: [] },
         declarations: { entries: 0, movieObjects: 0, playlists: 1, playItems: 1, clips: 0, streams: 1, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
       } as unknown as ParsedDisc;
       const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
       expect(result.scenes).toHaveLength(1);
       expect(result.diagnostics.map((item) => item.code)).not.toContain("BDMV_MISSING_STREAM");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("follows a streamType=2 IGS cue from primary clip 00004 to subpath clip 00005", async () => {
+    const root = await mkdtemp(join(tmpdir(), "igs-subpath-map-"));
+    try {
+      await mkdir(join(root, "STREAM"), { recursive: true });
+      await writeFile(join(root, "STREAM", "00005.m2ts"), syntheticClip());
+      const table = await buildInputFileTable(root, ["STREAM/00005.m2ts"]);
+      const playlistSource = { path: "BDMV/PLAYLIST/00003.mpls", origin: "primary" as const, offset: "112" };
+      const subclipSource = { path: "BDMV/CLIPINF/00005.clpi", origin: "primary" as const, offset: "27" };
+      const disc = {
+        schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
+        playlists: [{
+          id: "00003", version: "0200",
+          playItems: [{ index: 0, clipId: "00004", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0,
+            streams: [{ streamType: 2, pid: IG_PID, subPathId: 0, subClipId: 0, codingType: 0x91, language: null, source: playlistSource }], source: playlistSource }],
+          marks: [], subPaths: [{ type: 0, repeat: false, items: [{ clipId: "00005", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source: playlistSource }], source: playlistSource }], source: playlistSource,
+        }],
+        clips: [{ id: "00005", version: "0200", programs: [{ sequenceStartSpn: 0, programMapPid: 100, streams: [{ pid: IG_PID, codingType: 0x91, language: null, source: subclipSource }], source: subclipSource }], cpi: [], source: subclipSource }],
+        graph: { nodes: [
+          { id: "clip:00004", type: "clip", state: "present", source: { path: "BDMV/STREAM/00004.m2ts", origin: "primary", offset: "0" } },
+          { id: "clip:00005", type: "clip", state: "present", source: { path: "BDMV/STREAM/00005.m2ts", origin: "primary", offset: "0" } },
+        ], edges: [] },
+        declarations: { entries: 0, movieObjects: 0, playlists: 1, playItems: 1, clips: 1, streams: 1, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
+      } as unknown as ParsedDisc;
+
+      const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
+      expect(result.scenes).toHaveLength(1);
+      expect(result.scenes[0]?.clipId).toBe("00005");
+      expect(result.diagnostics.map((item) => item.code)).not.toContain("BDMV_MISSING_STREAM");
+      expect(result.diagnostics.map((item) => item.code)).not.toContain("IGS_PID_CONFLICT");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("does not open an MPLS source path for a missing subpath clip", async () => {
+    const root = await mkdtemp(join(tmpdir(), "igs-missing-subpath-"));
+    try {
+      await mkdir(join(root, "PLAYLIST"), { recursive: true });
+      // If the missing clip node's MPLS source is mistaken for a STREAM path,
+      // this file contains a valid synthetic scene and would be extracted.
+      await writeFile(join(root, "PLAYLIST", "00003.mpls"), syntheticClip());
+      const table = await buildInputFileTable(root, ["PLAYLIST/00003.mpls"]);
+      const playlistSource = { path: "BDMV/PLAYLIST/00003.mpls", origin: "primary" as const, offset: "112" };
+      const disc = {
+        schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
+        playlists: [{
+          id: "00003", version: "0200",
+          playItems: [{ index: 0, clipId: "00004", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0,
+            streams: [{ streamType: 2, pid: IG_PID, subPathId: 0, subClipId: 0, codingType: 0x91, language: null, source: playlistSource }], source: playlistSource }],
+          marks: [], subPaths: [{ type: 0, repeat: false, items: [{ clipId: "00005", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source: playlistSource }], source: playlistSource }], source: playlistSource,
+        }],
+        clips: [],
+        graph: { nodes: [{ id: "clip:00005", type: "clip", state: "missing", source: playlistSource }], edges: [] },
+        declarations: { entries: 0, movieObjects: 0, playlists: 1, playItems: 1, clips: 0, streams: 1, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
+      } as unknown as ParsedDisc;
+
+      const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
+      expect(result.scenes).toHaveLength(0);
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_MISSING_STREAM", severity: "error" }));
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("keeps render assets and diagnostics from a clip result without rendering it twice", async () => {
+    const root = await mkdtemp(join(tmpdir(), "igs-single-render-"));
+    try {
+      await mkdir(join(root, "STREAM"), { recursive: true });
+      await writeFile(join(root, "STREAM", "00001.m2ts"), syntheticClip({ effects: true }));
+      const table = await buildInputFileTable(root, ["STREAM/00001.m2ts"]);
+      const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0" };
+      const disc = {
+        schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
+        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, source }], source }], marks: [], subPaths: [], source }],
+        clips: [], graph: { nodes: [{ id: "clip:00001", type: "clip", state: "present", source: { path: "BDMV/STREAM/00001.m2ts", origin: "primary", offset: "0" } }], edges: [] },
+        declarations: { entries: 0, movieObjects: 0, playlists: 1, playItems: 1, clips: 0, streams: 1, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
+      } as unknown as ParsedDisc;
+
+      const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
+      expect(result.scenes).toHaveLength(1);
+      expect(result.assets).toHaveLength(1);
+      expect(result.diagnostics.filter((item) => item.code === "IGS_UNSUPPORTED_EFFECT")).toHaveLength(1);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 });

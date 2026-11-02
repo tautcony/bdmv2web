@@ -9,7 +9,7 @@
 - [x] 1.1 实现分块192B源包识别与残余处理；验收：每种读取块分割结果一致，非192B格式/失同步可诊断。
 - [x] 1.2 实现TS header/adaptation/PUSI、PAT/PMT和逐PID连续性；验收：adaptation-only/重复包/丢包/discontinuity分别处理，不拼接破损payload。
 - [x] 1.3 实现每PID有界PES及PTS/DTS重组；验收：跨包/跨块、33位回绕和新时间域黄金值正确，来源偏移完整。
-- [ ] 1.4 交叉核验MPLS/CLPI/PMT的IG PID；验收：冲突报告双方来源，PG不误识别为IG。
+- [x] 1.4 交叉核验MPLS/CLPI/PMT的IG PID；验收：冲突报告双方来源，PG不误识别为IG。
 
 ## 2. IG和图像
 
