@@ -1,2 +1,4 @@
 # Local, non-vendored reference extracts. Re-fetch from the pinned source manifest.
 .reference-cache/
+node_modules/
+**/dist/

@@ -1,0 +1,20 @@
+{
+  "name": "bdmv-web",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "pnpm@11.25.0",
+  "engines": { "node": ">=24.18.0 <25", "pnpm": "11.25.0" },
+  "scripts": {
+    "build": "pnpm generate:contracts && pnpm -r build",
+    "typecheck": "pnpm build && pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "generate:contracts": "pnpm --filter @bdmv-web/core generate"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "esbuild": "0.25.12",
+    "json-schema-to-typescript": "15.0.4",
+    "typescript": "5.9.3",
+    "vitest": "4.0.8"
+  }
+}

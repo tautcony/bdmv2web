@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bdmv-web.invalid/schema/disc-ir-1.0.json",
+  "title": "DiscIR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sourceFingerprint", "entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "sourceFingerprint": { "$ref": "#/$defs/Sha256" },
+    "entries": { "type": "array", "items": { "$ref": "#/$defs/DiscEntry" } },
+    "programs": { "type": "array", "items": { "$ref": "#/$defs/Program" } },
+    "menus": { "type": "array", "items": { "$ref": "#/$defs/Menu" } },
+    "playlists": { "type": "array", "items": { "$ref": "#/$defs/Playlist" } },
+    "mediaAssets": { "type": "array", "items": { "$ref": "#/$defs/AssetReference" } },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/Diagnostic" } }
+  },
+  "$defs": {
+    "Sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "Time90k": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "SourceRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "origin", "byteOffset"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "origin": { "enum": ["primary", "backup"] },
+        "byteOffset": { "$ref": "#/$defs/Time90k" },
+        "entityId": { "type": ["string", "null"] },
+        "packetOffset": { "type": ["string", "null"], "pattern": "^(0|[1-9][0-9]*)$" },
+        "pid": { "type": ["integer", "null"], "minimum": 0, "maximum": 8191 },
+        "instructionIndex": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "NavigationDescriptor": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": false, "required": ["type", "movieObjectId"], "properties": { "type": { "const": "HDMV" }, "movieObjectId": { "type": "integer", "minimum": 0 } } },
+        { "type": "object", "additionalProperties": false, "required": ["type", "bdjoId", "status"], "properties": { "type": { "const": "BDJ" }, "bdjoId": { "type": "string", "minLength": 1 }, "status": { "const": "unsupported" } } }
+      ]
+    },
+    "DiscEntry": { "type": "object", "additionalProperties": false, "required": ["id", "navigation", "source"], "properties": { "id": { "type": "string", "minLength": 1 }, "navigation": { "$ref": "#/$defs/NavigationDescriptor" }, "source": { "$ref": "#/$defs/SourceRef" } } },
+    "Program": { "type": "object", "additionalProperties": false, "required": ["id", "title"], "properties": { "id": { "type": "string", "minLength": 1 }, "title": { "type": "string" } } },
+    "Menu": { "type": "object", "additionalProperties": false, "required": ["id"], "properties": { "id": { "type": "string", "minLength": 1 } } },
+    "Playlist": { "type": "object", "additionalProperties": false, "required": ["id", "programIds", "menuIds"], "properties": { "id": { "type": "string", "minLength": 1 }, "programIds": { "type": "array", "items": { "type": "string" } }, "menuIds": { "type": "array", "items": { "type": "string" } }, "duration90k": { "$ref": "#/$defs/Time90k" } } },
+    "AssetReference": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "relativePath", "mime", "byteLength", "sha256", "sources"], "properties": { "id": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "minLength": 1 }, "relativePath": { "type": "string", "minLength": 1 }, "mime": { "type": "string", "minLength": 1 }, "byteLength": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }, "sha256": { "$ref": "#/$defs/Sha256" }, "sources": { "type": "array", "items": { "$ref": "#/$defs/SourceRef" } } } },
+    "Diagnostic": { "type": "object", "additionalProperties": false, "required": ["severity", "code", "message", "sourcePath", "offset", "entityId", "action", "recoverable", "stage", "affectedEntryIds"], "properties": { "severity": { "enum": ["debug", "info", "warning", "error", "fatal"] }, "code": { "type": "string", "minLength": 1 }, "message": { "type": "string" }, "sourcePath": { "type": ["string", "null"] }, "offset": { "type": ["string", "null"], "pattern": "^(0|[1-9][0-9]*)$" }, "entityId": { "type": ["string", "null"] }, "action": { "type": ["string", "null"] }, "recoverable": { "type": "boolean" }, "stage": { "type": "string" }, "affectedEntryIds": { "type": "array", "items": { "type": "string" } } } }
+  }
+}

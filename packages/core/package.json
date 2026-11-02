@@ -1,0 +1,21 @@
+{
+  "name": "@bdmv-web/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./browser": "./dist/browser.js",
+    "./schema": "./schema/disc-ir.schema.json"
+  },
+  "files": ["dist", "schema"],
+  "dependencies": { "ajv": "8.17.1" },
+  "scripts": {
+    "generate": "json2ts -i schema/disc-ir.schema.json -o src/disc-ir.generated.ts --bannerComment ''",
+    "build": "tsc -p tsconfig.json && node ../../scripts/build-core-browser.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": { "json-schema-to-typescript": "15.0.4" }
+}

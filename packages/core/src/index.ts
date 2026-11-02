@@ -1,0 +1,164 @@
+import { Ajv2020 } from "ajv/dist/2020.js";
+import schema from "../schema/disc-ir.schema.json" with { type: "json" };
+import type { DiscIR as GeneratedDiscIR } from "./disc-ir.generated.js";
+
+export type DiscIR = GeneratedDiscIR;
+export type Time90k = string;
+export type Origin = "primary" | "backup";
+export type SourceRef = DiscIR["entries"][number]["source"];
+export type NavigationDescriptor = DiscIR["entries"][number]["navigation"];
+export type AssetReference = DiscIR["mediaAssets"][number];
+export type Diagnostic = DiscIR["diagnostics"][number];
+
+export interface ActionEnvelope<T> {
+  sessionId: string;
+  generation: number;
+  actionId: string;
+  action: T;
+}
+
+export interface EventEnvelope<T> {
+  sessionId: string;
+  generation: number;
+  sequence: number;
+  responseTo?: string;
+  event: T;
+}
+
+export interface PlayerProfile {
+  menuLanguage: string;
+  audioLanguage: string;
+  subtitleLanguage: string;
+  country: string;
+  region: "A" | "B" | "C";
+  outputProfile: "portable";
+  videoProfiles: string[];
+  audioProfiles: string[];
+}
+
+export interface Limits {
+  maxReadWindowBytes: number;
+  maxSegmentBytes: number;
+  maxReassemblyBytes: number;
+  maxObjectPixels: number;
+  maxInstructionsPerTurn: number;
+  maxQueueDepth: number;
+  maxCallDepth: number;
+  maxExplorationStates: number;
+  maxOutputBytes: number | null;
+}
+
+export const DEFAULT_PLAYER_PROFILE: Readonly<PlayerProfile> = Object.freeze({
+  menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng",
+  country: "US", region: "A", outputProfile: "portable",
+  videoProfiles: [], audioProfiles: [],
+});
+
+export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({
+  maxReadWindowBytes: 8 * 1024 * 1024,
+  maxSegmentBytes: 16 * 1024 * 1024,
+  maxReassemblyBytes: 64 * 1024 * 1024,
+  maxObjectPixels: 16_777_216,
+  maxInstructionsPerTurn: 10_000,
+  maxQueueDepth: 1024,
+  maxCallDepth: 128,
+  maxExplorationStates: 100_000,
+  maxOutputBytes: null,
+});
+
+export class ContractError extends Error {
+  constructor(readonly code: string, readonly path: string, message: string) {
+    super(`${code} at ${path}: ${message}`);
+    this.name = "ContractError";
+  }
+}
+
+const ajv = new Ajv2020({ allErrors: true, strict: true });
+const validateDiscIR = ajv.compile(schema);
+
+export function parseDiscIR(input: unknown): DiscIR {
+  if (!validateDiscIR(input)) {
+    const issue = validateDiscIR.errors?.[0];
+    const path = issue?.instancePath || "/";
+    const code = issue?.keyword === "const" && path.endsWith("/schemaVersion") ? "UNKNOWN_SCHEMA_VERSION" : "SCHEMA_VALIDATION_FAILED";
+    throw new ContractError(code, path, issue?.message ?? "Invalid DiscIR");
+  }
+  const ir = input as unknown as DiscIR;
+  const ids = new Map<string, string>();
+  const add = (id: string, path: string) => {
+    if (ids.has(id)) throw new ContractError("DUPLICATE_ID", path, `ID '${id}' duplicates ${ids.get(id)}`);
+    ids.set(id, path);
+  };
+  ir.entries.forEach((e, i) => add(e.id, `/entries/${i}/id`));
+  ir.programs.forEach((e, i) => add(e.id, `/programs/${i}/id`));
+  ir.menus.forEach((e, i) => add(e.id, `/menus/${i}/id`));
+  ir.playlists.forEach((e, i) => add(e.id, `/playlists/${i}/id`));
+  ir.mediaAssets.forEach((e, i) => add(e.id, `/mediaAssets/${i}/id`));
+  const programs = new Set(ir.programs.map((x) => x.id));
+  const menus = new Set(ir.menus.map((x) => x.id));
+  ir.playlists.forEach((p, i) => {
+    p.programIds.forEach((id, j) => { if (!programs.has(id)) throw new ContractError("DANGLING_REFERENCE", `/playlists/${i}/programIds/${j}`, `Unknown program '${id}'`); });
+    p.menuIds.forEach((id, j) => { if (!menus.has(id)) throw new ContractError("DANGLING_REFERENCE", `/playlists/${i}/menuIds/${j}`, `Unknown menu '${id}'`); });
+  });
+  return ir;
+}
+
+const TIME90K = /^(0|[1-9][0-9]*)$/;
+export function parseTime90k(value: string): bigint {
+  if (!TIME90K.test(value)) throw new ContractError("INVALID_TIME90K", "/time90k", "Expected a non-negative canonical decimal integer");
+  return BigInt(value);
+}
+export function serializeTime90k(value: bigint): Time90k {
+  if (value < 0n) throw new ContractError("INVALID_TIME90K", "/time90k", "Time90k cannot be negative");
+  return value.toString(10);
+}
+export function from45k(value: string): Time90k {
+  return serializeTime90k(parseTime90k(value) * 2n);
+}
+export function serializeOffset(value: bigint): string { return serializeTime90k(value); }
+export function parseOffset(value: string): bigint { return parseTime90k(value); }
+
+export function validateLimits(value: unknown): Limits {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new ContractError("INVALID_LIMITS", "/", "Limits must be an object");
+  const merged = { ...DEFAULT_LIMITS, ...value } as Record<string, unknown>;
+  for (const [key, v] of Object.entries(merged)) {
+    if (key === "maxOutputBytes" && v === null) continue;
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new ContractError("INVALID_LIMIT", `/${key}`, "Limit must be a positive safe integer");
+  }
+  return merged as unknown as Limits;
+}
+
+export function assertWithinLimit(value: number | bigint, key: keyof Limits, limits: Limits = DEFAULT_LIMITS): void {
+  const cap = limits[key];
+  if (cap === null) return;
+  if (typeof value === "number" && (!Number.isSafeInteger(value) || value < 0)) throw new ContractError("INVALID_LENGTH", `/${key}`, "Value must be a non-negative safe integer");
+  if (typeof value === "bigint" && value < 0n) throw new ContractError("INVALID_LENGTH", `/${key}`, "Value must be non-negative");
+  if (BigInt(value) > BigInt(cap)) throw new ContractError("LIMIT_EXCEEDED", `/${key}`, `Value exceeds configured limit ${cap}`);
+}
+
+export function allocateBoundedBytes(size: number, key: "maxReadWindowBytes" | "maxSegmentBytes" | "maxReassemblyBytes" | "maxOutputBytes", limits: Limits = DEFAULT_LIMITS): Uint8Array {
+  assertWithinLimit(size, key, limits);
+  return new Uint8Array(size);
+}
+
+export function checkedObjectPixels(width: number, height: number, limits: Limits = DEFAULT_LIMITS): number {
+  if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
+    throw new ContractError("INVALID_DIMENSIONS", "/dimensions", "Object dimensions must be positive safe integers");
+  }
+  const pixels = width * height;
+  if (!Number.isSafeInteger(pixels)) throw new ContractError("INTEGER_OVERFLOW", "/dimensions", "Object pixel count exceeds safe integer range");
+  assertWithinLimit(pixels, "maxObjectPixels", limits);
+  return pixels;
+}
+
+export function validateStage<T>(value: T, stage: "parsed" | "normalized" | "runtime"): T {
+  if (stage === "runtime") {
+    const ir = parseDiscIR(value);
+    if (ir.entries.some((e) => e.navigation.type === "BDJ")) {
+      // BD-J is retained in the IR; backend capability is reported by the consumer.
+    }
+  }
+  return value;
+}
+
+export { BinaryCursor } from "./binary-cursor.js";

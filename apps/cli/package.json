@@ -1,0 +1,12 @@
+{
+  "name": "@bdmv-web/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "bdmv-web": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": { "@bdmv-web/core": "workspace:*" }
+}

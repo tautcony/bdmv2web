@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "fixtures": [
+    {
+      "id": "core-contracts-minimal-hdmv",
+      "kind": "DiscIR JSON",
+      "builder": "src/index.ts:minimalHdmvGolden",
+      "expectedBasis": "Hand-authored against the published project JSON Schema; no parser is used to generate this value.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "contract-only; no Blu-ray protocol evidence"
+    },
+    {
+      "id": "core-contracts-mixed-bdj",
+      "kind": "DiscIR JSON",
+      "builder": "src/index.ts:mixedBdjGolden",
+      "expectedBasis": "Hand-authored tagged union values against the published project JSON Schema.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "contract-only; no Blu-ray protocol evidence"
+    },
+    {
+      "id": "core-cursor-octets",
+      "kind": "synthetic binary bytes",
+      "builder": "src/index.ts:buildCursorSample",
+      "expectedBasis": "Fixed literal octets; integer expectations are calculated from the listed bytes.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "cursor-only; no Blu-ray protocol evidence"
+    },
+    {
+      "id": "core-contracts-damaged-version",
+      "kind": "invalid DiscIR JSON",
+      "builder": "src/index.ts:damagedUnknownVersion",
+      "expectedBasis": "Hand-authored unsupported schemaVersion.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "contract-only"
+    },
+    {
+      "id": "core-contracts-dangling-reference",
+      "kind": "invalid DiscIR JSON",
+      "builder": "src/index.ts:damagedDanglingReference",
+      "expectedBasis": "Hand-authored dangling playlist program reference.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "contract-only"
+    }
+  ]
+}
