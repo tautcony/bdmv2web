@@ -18,6 +18,24 @@ describe("M3 HDMV fixtures", () => {
     expect(vm.trace.flatMap((x) => Object.entries(x.registerDelta.gpr))).toContainEqual(["0", 12]);
     expect(vm.trace.find((x) => x.decoded?.startsWith("MOVE"))?.pc).toBe(0);
   });
+  it("executes a raw button command in the current VM context with its own source", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
+    const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0x2a0" };
+    const bytes = Uint8Array.from(m3Fixtures.move5.bytes.match(/../g)!, (x) => Number.parseInt(x, 16));
+    const state = vm.executeButtonCommand(bytes, source);
+    expect(state.registers.gpr[0]).toBe(5);
+    expect(state.programId).toBe(0); expect(state.pc).toBe(0);
+    expect(vm.trace.at(-1)).toMatchObject({ programId: 0, pc: 0, raw: m3Fixtures.move5.bytes, decoded: "MOVE gpr[0],#5", source, registerDelta: { gpr: { 0: 5 }, psr: {} } });
+  });
+  it("routes button-command actions through the existing action and continuation path", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
+    const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0x2ac" };
+    const state = vm.executeButtonCommand(m3Fixtures.playPlaylist42, source);
+    expect(state.status).toBe("suspended"); expect(state.programId).toBe(0); expect(state.pc).toBe(0);
+    expect(state.waiting?.type).toBe("PLAY_PLAYLIST"); expect(state.waiting?.source).toEqual(source);
+    expect(vm.drainActions()[0]).toMatchObject({ type: "PLAY_PLAYLIST", payload: { playlist: 42 }, source, waitFor: "started" });
+    expect(vm.trace.at(-1)?.source).toEqual(source);
+  });
   it("applies compare semantics to the next command only", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.move5, m3Fixtures.compareEq7, m3Fixtures.move5, m3Fixtures.break] }]);
     const state = vm.runTurn(); expect(state.registers.gpr[0]).toBe(5); expect(state.pc).toBe(4);

@@ -14,6 +14,7 @@ export interface TraceEntry { sequence: number; generation: number; programId: n
 export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
 export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
+export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
 type Continuation = { action: NavigationAction; nextProgramId: number; nextPc: number; };
 const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
 const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
@@ -50,6 +51,45 @@ export class HdmvVm {
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
+  /** Execute one selected button's command in the current VM register/object context. Ordinary commands leave PC unchanged; control-transfer commands use the current VM context. The button identity is not an object ID. */
+  executeButtonCommand(command: ButtonCommand, source?: SourceLocation): VmSnapshot {
+    if (this.status === "faulted" || this.status === "stopped" || this.status === "suspended") {
+      const diagnostic = { code: this.status === "suspended" ? "HDMV_INPUT_WHILE_SUSPENDED" : "HDMV_EVENT_AFTER_TERMINAL", message: `Button command rejected while VM is ${this.status}`, source: source ?? null };
+      this.record({ source: source ?? null, raw: null, decoded: null, registerDelta: EMPTY_DELTA, status: this.status, diagnostic });
+      return this.snapshot();
+    }
+    this.instructionsThisTurn = 0;
+    const before = this.registers.snapshot(); const from = { programId: this.programId, pc: this.pc };
+    let d: DecodedInstruction;
+    try { d = decodeInstruction(command, source); }
+    catch (error) {
+      this.fail("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), source ?? null);
+      return this.snapshot();
+    }
+    if (d.status === "invalid" || !d.opcode) {
+      this.fail(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, from);
+      return this.snapshot();
+    }
+    const program = this.programs.get(this.programId);
+    if (!program) {
+      this.fail("HDMV_INVALID_TARGET", `No program/object ${this.programId}`, d.source, d, before, from);
+      return this.snapshot();
+    }
+    if (this.instructionsThisTurn >= this.opts.maxInstructionsPerTurn) {
+      this.fail("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, d.source, d, before, from);
+      return this.snapshot();
+    }
+    this.instructionsThisTurn++;
+    if (this.status === "idle") this.status = "running";
+    try { this.execute(d, program); }
+    catch (error) {
+      this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, from);
+      return this.snapshot();
+    }
+    this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status });
+    this.lastAction = undefined;
+    return this.snapshot();
+  }
   runTurn(): VmSnapshot {
     if (this.status === "faulted" || this.status === "stopped" || this.status === "suspended") return this.snapshot();
     this.status = "running"; this.instructionsThisTurn = 0;
