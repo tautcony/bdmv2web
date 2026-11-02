@@ -28,7 +28,7 @@ export interface ClipProgram { sequenceStartSpn: number; programMapPid: number; 
 export interface CpiEntry { pid: number; epStreamType: number; pts45k: number; spn: number; angleChange: boolean; source: SourceLocation; }
 export interface ClipInfo { id: string; version: string; programs: ClipProgram[]; cpi: CpiEntry[]; source: SourceLocation; }
 export interface SoundEntry { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number; source: SourceLocation; }
-export interface GraphNode { id: string; type: "entry" | "title" | "movieObject" | "playlist" | "playItem" | "clip" | "clipInfo" | "stream" | "sound" | "bdjo"; state: "present" | "missing"; source: SourceLocation | null; }
+export interface GraphNode { id: string; type: "entry" | "title" | "movieObject" | "playlist" | "playItem" | "subPath" | "clip" | "clipInfo" | "stream" | "sound" | "bdjo"; state: "present" | "missing"; source: SourceLocation | null; }
 export interface GraphEdge { from: string; to: string; kind: string; resolution: "resolved" | "missing" | "unresolved"; source: SourceLocation; }
 export interface ParsedDisc {
   schemaVersion: "1.0";

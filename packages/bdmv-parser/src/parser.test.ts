@@ -34,6 +34,19 @@ describe("M1 BDMV discovery and structure", () => {
     expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "clip:00002", type: "clip", state: "missing" }));
   });
 
+  it("parses and graph-links CLPI referenced by a SubPath without comparing its IGS cue to the main clip", async () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/tamako-love-story-bd/BDMV");
+    const disc = await parseBdmv(root);
+    const playlist = disc.playlists.find((item) => item.id === "00003")!;
+    const cue = playlist.playItems.flatMap((item) => item.streams).find((stream) => stream.streamType === 2)!;
+    expect(playlist.subPaths).toMatchObject([{ type: 3, items: [{ clipId: "00005" }] }]);
+    expect(cue).toMatchObject({ streamType: 2, subPathId: 0, subClipId: 0 });
+    expect(disc.clips.some((clip) => clip.id === "00005")).toBe(true);
+    expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "clipInfo:00005", type: "clipInfo", state: "present" }));
+    expect(disc.graph.edges).toContainEqual(expect.objectContaining({ from: "subPath:00003:0", to: "clipInfo:00005", kind: "subpath-clip-info-reference", resolution: "resolved" }));
+    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_STN_CLPI_PID_CONFLICT" && diagnostic.sourcePath === cue.source.path && diagnostic.offset === cue.source.offset)).toBe(false);
+  });
+
   it("retains mixed HDMV and BD-J title declarations and exact MOBJ bytes and offsets", async () => {
     const parent = await temp(); const root = await skeleton(parent, buildM1Index({ bdjTitle: "00042", titleAccess: 2 }));
     try {

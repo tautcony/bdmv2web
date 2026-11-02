@@ -195,17 +195,22 @@ function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   }
   const cpi = [] as ClipInfo["cpi"];
   if (cpiPos) {
-    r.seek(cpiPos); const cpiLen = r.u32(); const cpiEnd = r.offset + cpiLen; if (cpiEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/cpiLength", "CLPI CPI section exceeds file"); r.skipBits(12); r.read(4); const mapBase = r.offset; r.skipBits(8); const pidCount = r.u8(); if (r.offset > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", "/cpiLength", "CLPI CPI header exceeds section");
-    const maps = [] as Array<{ pid: number; type: number; coarse: number; fine: number; start: number; source: SourceLocation }>;
-    if (pidCount > Math.floor((cpiEnd - r.offset) / 10)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${r.offset - 1}`, "CPI PID count exceeds section");
-    for (let i = 0; i < pidCount; i++) { if (r.offset + 10 > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${r.offset}`, "CPI PID map exceeds section"); const source = r.source(file.rel, origin); const pid = r.read(16); r.skipBits(10); const type = r.read(4); const coarse = r.read(16); const fine = r.read(18); const start = r.read(32); maps.push({ pid, type, coarse, fine, start, source }); }
-    for (const map of maps) {
-      const block = mapBase + map.start; if (!Number.isSafeInteger(block) || block < mapBase || block + 4 > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${block}`, "CPI entry block exceeds section"); r.seek(block); const fineStart = r.u32();
-      if (map.coarse > Math.floor((cpiEnd - r.offset) / 8)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${block}`, "CPI coarse entry count exceeds section");
-      const coarseEntries = []; for (let j = 0; j < map.coarse; j++) { const refFine = r.read(18); const pts = r.read(14); const spn = r.u32(); coarseEntries.push({ refFine, pts, spn }); }
-      const fineBlock = block + fineStart; if (!Number.isSafeInteger(fineBlock) || fineBlock < r.offset || fineBlock > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${fineBlock}`, "CPI fine entry block exceeds section"); r.seek(fineBlock);
-      if (map.fine > Math.floor((cpiEnd - r.offset) / 4)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${block}`, "CPI fine entry count exceeds section");
-      for (let j = 0; j < map.fine; j++) { const source = r.source(file.rel, origin); const angleChange = !!r.read(1); r.skipBits(3); const pts = r.read(11); const spnOffset = r.read(17); let coarseEntry: typeof coarseEntries[number] | undefined; for (const entry of coarseEntries) if (entry.refFine <= j) coarseEntry = entry; const pts45k = coarseEntry ? ((coarseEntry.pts & ~1) << 18) + (pts << 8) : pts << 8; const spn = ((coarseEntry?.spn ?? 0) & ~0x1ffff) + spnOffset; cpi.push({ pid: map.pid, epStreamType: map.type, pts45k, spn, angleChange, source }); }
+    r.seek(cpiPos); const cpiLen = r.u32(); const cpiEnd = r.offset + cpiLen; if (cpiEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/cpiLength", "CLPI CPI section exceeds file");
+    // Some valid CLPI records point at a zero-length CPI section. It contains
+    // no header or entry maps, so there is nothing to decode.
+    if (cpiLen > 0) {
+      r.skipBits(12); r.read(4); const mapBase = r.offset; r.skipBits(8); const pidCount = r.u8(); if (r.offset > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", "/cpiLength", "CLPI CPI header exceeds section");
+      const maps = [] as Array<{ pid: number; type: number; coarse: number; fine: number; start: number; source: SourceLocation }>;
+      if (pidCount > Math.floor((cpiEnd - r.offset) / 10)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${r.offset - 1}`, "CPI PID count exceeds section");
+      for (let i = 0; i < pidCount; i++) { if (r.offset + 10 > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${r.offset}`, "CPI PID map exceeds section"); const source = r.source(file.rel, origin); const pid = r.read(16); r.skipBits(10); const type = r.read(4); const coarse = r.read(16); const fine = r.read(18); const start = r.read(32); maps.push({ pid, type, coarse, fine, start, source }); }
+      for (const map of maps) {
+        const block = mapBase + map.start; if (!Number.isSafeInteger(block) || block < mapBase || block + 4 > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${block}`, "CPI entry block exceeds section"); r.seek(block); const fineStart = r.u32();
+        if (map.coarse > Math.floor((cpiEnd - r.offset) / 8)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${block}`, "CPI coarse entry count exceeds section");
+        const coarseEntries = []; for (let j = 0; j < map.coarse; j++) { const refFine = r.read(18); const pts = r.read(14); const spn = r.u32(); coarseEntries.push({ refFine, pts, spn }); }
+        const fineBlock = block + fineStart; if (!Number.isSafeInteger(fineBlock) || fineBlock < r.offset || fineBlock > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${fineBlock}`, "CPI fine entry block exceeds section"); r.seek(fineBlock);
+        if (map.fine > Math.floor((cpiEnd - r.offset) / 4)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${block}`, "CPI fine entry count exceeds section");
+        for (let j = 0; j < map.fine; j++) { const source = r.source(file.rel, origin); const angleChange = !!r.read(1); r.skipBits(3); const pts = r.read(11); const spnOffset = r.read(17); let coarseEntry: typeof coarseEntries[number] | undefined; for (const entry of coarseEntries) if (entry.refFine <= j) coarseEntry = entry; const pts45k = coarseEntry ? ((coarseEntry.pts & ~1) << 18) + (pts << 8) : pts << 8; const spn = ((coarseEntry?.spn ?? 0) & ~0x1ffff) + spnOffset; cpi.push({ pid: map.pid, epStreamType: map.type, pts45k, spn, angleChange, source }); }
+      }
     }
   }
   return { value: { id: file.rel.split("/").pop()!.replace(/\.clpi$/i, ""), version, programs, cpi, source: sourceFor(file, "", origin, 0) }, version, raw: data };
@@ -279,11 +284,31 @@ function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[], play
       if (info) {
         const declared = new Map(info.programs.flatMap((program) => program.streams.map((stream) => [stream.pid, stream] as const)));
         for (const stream of item.streams) {
+          // Stream type 2 carries a SubPath/SubClip selector. Its PID belongs to
+          // that secondary clip, so comparing it with this PlayItem's CLPI is false.
+          if (stream.streamType !== 1) continue;
           if (stream.pid === null) continue;
           const clipStream = declared.get(stream.pid);
           if (!clipStream) diagnose(diagnostics, "BDMV_STN_CLPI_PID_CONFLICT", `STN PID ${stream.pid} is not declared by CLPI ${info.id}`, files.find((file) => file.rel === stream.source.path), Number(stream.source.offset), "warning", true, itemId);
           else if (stream.codingType !== null && stream.codingType !== clipStream.codingType) diagnose(diagnostics, "BDMV_STN_CLPI_CODING_CONFLICT", `STN and CLPI coding types differ for PID ${stream.pid}`, files.find((file) => file.rel === stream.source.path), Number(stream.source.offset), "warning", true, itemId);
         }
+      }
+    }
+    for (const [subPathIndex, subPath] of playlist.subPaths.entries()) {
+      const subPathId = `subPath:${playlist.id}:${subPathIndex}`;
+      add({ id: subPathId, type: "subPath", state: "present", source: subPath.source });
+      edges.push({ from: playlistId, to: subPathId, kind: "contains-subpath", resolution: "resolved", source: subPath.source });
+      for (const [subItemIndex, subItem] of subPath.items.entries()) {
+        const clipId = `clip:${subItem.clipId}`;
+        const streamFile = fileByPath.get(normCase(`BDMV/STREAM/${subItem.clipId}.m2ts`));
+        add({ id: clipId, type: "clip", state: streamFile ? "present" : "missing", source: streamFile ? pathSource(streamFile) : subItem.source });
+        edges.push({ from: subPathId, to: clipId, kind: "subpath-clip-reference", resolution: streamFile ? "resolved" : "missing", source: subItem.source });
+        const infoId = `clipInfo:${subItem.clipId}`;
+        const info = clips.find((clip) => normCase(clip.id) === normCase(subItem.clipId));
+        add({ id: infoId, type: "clipInfo", state: info ? "present" : "missing", source: info?.source ?? subItem.source });
+        edges.push({ from: subPathId, to: infoId, kind: "subpath-clip-info-reference", resolution: info ? "resolved" : "missing", source: subItem.source });
+        if (!streamFile) diagnose(diagnostics, "BDMV_MISSING_STREAM", `SubPlayItem ${playlist.id}/${subPathIndex}/${subItemIndex} references missing STREAM clip ${subItem.clipId}`, files.find((file) => file.rel === subItem.source.path), Number(subItem.source.offset), "error", true, subPathId);
+        if (!info) diagnose(diagnostics, "BDMV_MISSING_CLPI", `SubPlayItem ${playlist.id}/${subPathIndex}/${subItemIndex} references missing CLPI ${subItem.clipId}`, files.find((file) => file.rel === subItem.source.path), Number(subItem.source.offset), "error", true, subPathId);
       }
     }
     for (const mark of playlist.marks) {
