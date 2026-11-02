@@ -1,0 +1,614 @@
+{
+  "verified_on": "2026-11-02",
+  "notice": "References only; open implementations are not normative Blu-ray specifications. No restricted standard text or commercial media is included.",
+  "sources": [
+    {
+      "id": "BDA-BDMV-SPECS",
+      "title": "BDA Format Specification FAQ and License Office",
+      "url": "https://blu-raydisc.info/format-spec/faq-info.php",
+      "classification": "official access/licensing information; not the specification text",
+      "version": "access route checked 2026-11-02",
+      "location": "FAQ confirms the BDA specification books are agreement-gated and agreement contents are not published on the site. Official ROM book overview: https://blu-raydisc.info/format-spec/rom2-spec.php. Public PDF chart: https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf (Blu-ray Disc Format Book Structure / All Books, 2017-12-28; version overview only, no BDMV specification text). FAQ also points to a technical-whitepaper catalogue, but no concrete official BDMV whitepaper PDF was verified in this audit.",
+      "license_or_access": "Blu-ray BDMV/HDMV specification books require the applicable agreement; official FAQ says agreement contents are not published on the site; contact agent@blu-raydisc.info",
+      "used_for": [
+        "M1",
+        "M2",
+        "M3",
+        "M6"
+      ],
+      "limits": "Do not use public whitepapers or open-source parsers as replacements for the licensed normative books. No specific BDA technical-whitepaper PDF was confirmed as directly downloadable in this audit.",
+      "public_overview_url": "https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf"
+    },
+    {
+      "id": "BDA-BOOK-CHART-2017",
+      "title": "Blu-ray Disc Format Book Structure / All Books chart",
+      "url": "https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf",
+      "classification": "official public overview chart, not a specification text",
+      "version": "2017-12-28 edition indicated by official archive/page",
+      "location": "BDA format-book version compatibility chart",
+      "license_or_access": "Official PDF reachable via BDA site; copyright/usage terms apply",
+      "used_for": [
+        "M1"
+      ],
+      "limits": "Lists format book families/versions; does not expose BDMV/HDMV/IGS/PGS requirements."
+    },
+    {
+      "id": "ITU-H222-2025",
+      "title": "ITU-T H.222.0 v10 (04/2025), current edition",
+      "url": "https://www.itu.int/rec/T-REC-H.222.0-202504-I",
+      "download": "https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-202504-I%21%21PDF-E&lang=e&type=items",
+      "classification": "normative international recommendation; official freely downloadable PDF",
+      "version": "v10 (04/2025), in force as of 2026-11-02",
+      "location": "2014 PDF table of contents checked directly: clause 2.4.3.2 Transport stream packet layer, 2.4.3.3 semantics, 2.4.3.4 adaptation field, 2.4.3.6 PES packet, 2.4.3.7 PES semantics; 2.4.4 PSI. The 2025 v10 text was not accessible anonymously and its detailed clause numbering was not independently checked.",
+      "license_or_access": "Official record available; anonymous download attempt returned TIES login HTML. PDF access requires TIES credentials in this environment. H.222.0 (10/2014) was independently downloaded (3,127,517 bytes, SHA-256 6167a8b567ba3094854a7d3e4d8d64657bee19bb6622f3283e956623971e108a) and is superseded; its clauses 2.4.3.2–2.4.3.7 cover TS packet/adaptation/PES syntax, 2.4.4 PSI. Clause 2.6 is descriptors.",
+      "used_for": [
+        "M2",
+        "M3",
+        "M5"
+      ],
+      "limits": "Current v10 text not checked anonymously. The superseded 2014 edition only supports applicable foundational syntax comparison, never a claim of v10 compliance. General MPEG-2 Systems TS/PES only; not Blu-ray 192-byte M2TS outer packet, BDMV, IG/PG PID allocation, IGS or PGS rules.",
+      "reproducible_command": "curl --fail --location --retry 3 'https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items' --output H.222.0-2014.pdf && file H.222.0-2014.pdf && shasum -a 256 H.222.0-2014.pdf"
+    },
+    {
+      "id": "LIBBLURAY-1.5.0",
+      "title": "VideoLAN libbluray upstream source",
+      "url": "https://code.videolan.org/videolan/libbluray",
+      "classification": "open reference implementation; not normative",
+      "version": "release tag 1.5.0; tag object d468a3ac8bf4d9c04739962c44d365debbea54a1; peeled commit d75c88e54c893e5cbf4c61d356477655eb435769",
+      "location": {
+        "M1": [
+          "src/libbluray/bdnav/index_parse.c",
+          "src/libbluray/hdmv/mobj_parse.c",
+          "src/libbluray/bdnav/mpls_parse.c",
+          "src/libbluray/bdnav/clpi_parse.c",
+          "src/libbluray/bdnav/sound_parse.c"
+        ],
+        "M2": [
+          "src/libbluray/decoders/m2ts_demux.c",
+          "src/libbluray/decoders/m2ts_filter.c",
+          "src/libbluray/decoders/pes_buffer.c",
+          "src/libbluray/decoders/ig_decode.c",
+          "src/libbluray/decoders/graphics_processor.c",
+          "src/libbluray/decoders/rle.c",
+          "src/libbluray/decoders/graphics_controller.c"
+        ],
+        "M3": [
+          "src/libbluray/hdmv/hdmv_insn.h",
+          "src/libbluray/hdmv/hdmv_vm.c",
+          "src/libbluray/hdmv/mobj_parse.c",
+          "src/libbluray/hdmv/mobj_print.c",
+          "src/libbluray/register.c",
+          "src/libbluray/register.h",
+          "src/libbluray/player_settings.h",
+          "src/libbluray/bdnav/navigation.c",
+          "src/libbluray/bdnav/uo_mask.c"
+        ],
+        "M5": [
+          "src/libbluray/decoders/pg_decode.c",
+          "src/libbluray/decoders/graphics_processor.c",
+          "src/libbluray/decoders/rle.c"
+        ]
+      },
+      "license_or_access": "COPYING at this revision is GNU LGPL 2.1; verify headers and dependencies before reuse or distribution.",
+      "used_for": [
+        "M0",
+        "M1",
+        "M2",
+        "M3",
+        "M5",
+        "M6"
+      ],
+      "limits": "Reference behavior is limited to this revision and its tested scope; it does not prove BDA conformance or complete support.",
+      "reproducible_command": "git clone https://code.videolan.org/videolan/libbluray.git && cd libbluray && git checkout --detach d75c88e54c893e5cbf4c61d356477655eb435769 && git rev-parse HEAD",
+      "source_urls": {
+        "M1": [
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/index_parse.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/hdmv/mobj_parse.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/mpls_parse.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/clpi_parse.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/sound_parse.c"
+        ],
+        "M2": [
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/m2ts_demux.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/m2ts_filter.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/pes_buffer.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/ig_decode.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/graphics_processor.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/rle.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/graphics_controller.c"
+        ],
+        "M3": [
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/hdmv/hdmv_insn.h",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/hdmv/hdmv_vm.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/hdmv/mobj_parse.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/hdmv/mobj_print.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/register.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/register.h",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/player_settings.h",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/navigation.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/uo_mask.c"
+        ],
+        "M5": [
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/pg_decode.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/graphics_processor.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/rle.c"
+        ]
+      }
+    },
+    {
+      "id": "IGSTOOLS-2019",
+      "title": "SAPikachu/igstools",
+      "url": "https://github.com/SAPikachu/igstools",
+      "classification": "open IGS parser/export reference implementation; not normative",
+      "version": "master HEAD checked 2026-11-02; commit 34a133150ca8b52237284da4d47d93911bcd4954 (2019-10-30)",
+      "location": [
+        "igstools/ts_reader.py",
+        "igstools/parser.py",
+        "igstools/model.py",
+        "igstools/export.py",
+        "igstools/exportjson.py"
+      ],
+      "license_or_access": "Repository contains GPL-3.0 and LGPL-3.0 license texts; check file-level provenance/headers and packaging terms before reuse. Public source via GitHub.",
+      "used_for": [
+        "M2",
+        "M6"
+      ],
+      "limits": "Old Python utility; README notes parser/decoder ported from libav patches, slow performance and known issues. Its exported images are not sufficient as sole independent golden.",
+      "reproducible_command": "git clone https://github.com/SAPikachu/igstools.git && cd igstools && git checkout --detach 34a133150ca8b52237284da4d47d93911bcd4954 && git rev-parse HEAD",
+      "source_urls": [
+        "https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/ts_reader.py",
+        "https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/parser.py",
+        "https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/model.py",
+        "https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/export.py",
+        "https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/exportjson.py"
+      ]
+    },
+    {
+      "id": "LIBHDMV-2026-03",
+      "title": "liminal-hq/libhdmv",
+      "url": "https://github.com/liminal-hq/libhdmv",
+      "classification": "open Rust reference implementation; not normative",
+      "version": "main HEAD checked 2026-11-02; commit ec0e5b27d2852ca6b008719f66aa3324c0b43f28; authored 2026-03-24",
+      "location": {
+        "M1": [
+          "crates/bdmv-parse/src/mpls.rs",
+          "crates/bdmv-parse/src/clpi.rs"
+        ],
+        "M2": [
+          "crates/igs/src/decode.rs",
+          "crates/igs/src/types.rs",
+          "crates/pgs/src/decode.rs",
+          "crates/pgs/src/palette.rs",
+          "crates/pgs/src/rle.rs"
+        ],
+        "M3": [
+          "crates/hdmv-insn/src/decode.rs",
+          "crates/hdmv-insn/src/disasm.rs",
+          "crates/hdmv-insn/src/opcodes.rs",
+          "crates/hdmv-vm/src/registers.rs",
+          "crates/hdmv-vm/src/session.rs",
+          "crates/hdmv-vm/src/event.rs"
+        ],
+        "M4": [
+          "crates/hdmv-scene/src/input.rs",
+          "crates/hdmv-scene/src/scene.rs",
+          "crates/hdmv-render/src/compositor.rs"
+        ]
+      },
+      "license_or_access": "Repository LICENSE declares Apache-2.0; public GitHub source.",
+      "used_for": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6"
+      ],
+      "limits": "README calls project Alpha. It is another implementation suitable for cross-check only; language/repository differences do not establish independent provenance, so inspect code and algorithm lineage. Does not implement media playback; out of scope includes BD-J/AACS/BD+ and A/V codec decoding.",
+      "reproducible_command": "git clone https://github.com/liminal-hq/libhdmv.git && cd libhdmv && git checkout --detach ec0e5b27d2852ca6b008719f66aa3324c0b43f28 && git rev-parse HEAD",
+      "source_urls": {
+        "M1": [
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/bdmv-parse/src/mpls.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/bdmv-parse/src/clpi.rs"
+        ],
+        "M2": [
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/igs/src/decode.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/igs/src/types.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/pgs/src/decode.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/pgs/src/palette.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/pgs/src/rle.rs"
+        ],
+        "M3": [
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-insn/src/decode.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-insn/src/disasm.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-insn/src/opcodes.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-vm/src/registers.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-vm/src/session.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-vm/src/event.rs"
+        ],
+        "M4": [
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-scene/src/input.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-scene/src/scene.rs",
+          "https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/hdmv-render/src/compositor.rs"
+        ]
+      }
+    },
+    {
+      "id": "BDEDIT",
+      "title": "BDedit product site",
+      "url": "https://bdedit.pel.hu/",
+      "classification": "closed-source authoring/inspection utility; not normative and not a source reference",
+      "version": "site reachable 2026-11-02; no source revision pinned",
+      "location": "Product/download information and links from vendor site",
+      "license_or_access": "Proprietary; obtain software and terms from vendor distribution; no source located",
+      "used_for": [
+        "M2",
+        "M6"
+      ],
+      "limits": "May assist manual inspection/extraction only; output may be wrong and is not an independent sole golden."
+    },
+    {
+      "id": "JSON-SCHEMA-2020-12",
+      "title": "JSON Schema Draft 2020-12",
+      "url": "https://json-schema.org/draft/2020-12",
+      "classification": "normative schema specification",
+      "version": "2020-12",
+      "location": "Core specification and Validation specification",
+      "license_or_access": "Public spec site; check original repository terms for copied material",
+      "used_for": [
+        "M0",
+        "M4",
+        "M6"
+      ],
+      "limits": "Does not establish domain-specific semantic invariants or JS numeric precision."
+    },
+    {
+      "id": "JSON-SCHEMA-LICENSE",
+      "title": "JSON Schema specification repository license",
+      "url": "https://github.com/json-schema-org/json-schema-spec/blob/main/LICENSE",
+      "classification": "upstream license notice",
+      "version": "main as checked 2026-11-02",
+      "location": "LICENSE",
+      "license_or_access": "See upstream license",
+      "used_for": [
+        "M0"
+      ],
+      "limits": "Verify current terms before redistributing upstream schema texts."
+    },
+    {
+      "id": "NODE-RELEASES",
+      "title": "Node.js release schedule and previous releases",
+      "url": "https://nodejs.org/en/about/previous-releases",
+      "classification": "official runtime release status",
+      "version": "rolling page checked 2026-11-02",
+      "location": "Active LTS and maintenance columns",
+      "license_or_access": "Official documentation",
+      "used_for": [
+        "M0",
+        "M6"
+      ],
+      "limits": "Choose and pin exact supported LTS at implementation start; page itself is not a version lock."
+    },
+    {
+      "id": "PNPM-INSTALL",
+      "title": "pnpm installation documentation",
+      "url": "https://pnpm.io/installation",
+      "classification": "official package manager documentation",
+      "version": "rolling page checked 2026-11-02",
+      "location": "Corepack / package manager setup",
+      "license_or_access": "Official docs",
+      "used_for": [
+        "M0"
+      ],
+      "limits": "Record exact packageManager value and lockfile; instructions can change."
+    },
+    {
+      "id": "VITEST-CONFIG",
+      "title": "Vitest configuration reference",
+      "url": "https://vitest.dev/config/",
+      "classification": "official tool documentation",
+      "version": "rolling page checked 2026-11-02",
+      "location": "Configuration reference",
+      "license_or_access": "Official docs",
+      "used_for": [
+        "M0",
+        "M6"
+      ],
+      "limits": "Test runner configuration, not protocol conformance evidence."
+    },
+    {
+      "id": "ECMA-167",
+      "title": "ECMA-167 Volume and File Structure for Write Once and Rewritable Media",
+      "url": "https://ecma-international.org/publications-and-standards/standards/ecma-167/",
+      "classification": "normative general file-system standard",
+      "version": "edition exposed by ECMA page; verify chosen edition before recording a claim",
+      "location": "Publications and downloads on official ECMA page",
+      "license_or_access": "Optional public background only; ECMA page exposes standard editions. Terms at download page.",
+      "used_for": [
+        "M1"
+      ],
+      "limits": "Optional file-system background for future image/container work, not required for the initial read-only BDMV directory parser. Does not specify BDMV directory-level semantics or HDMV."
+    },
+    {
+      "id": "WHATWG-URL-FILE",
+      "title": "WHATWG URL and HTML origin standards",
+      "url": "https://url.spec.whatwg.org/#file-scheme",
+      "classification": "living web platform standards",
+      "version": "living standards checked 2026-11-02",
+      "location": "URL file scheme; HTML origin model https://html.spec.whatwg.org/multipage/origin.html#origin",
+      "license_or_access": "WHATWG standards; text licensed per standard site terms",
+      "used_for": [
+        "M4",
+        "M6"
+      ],
+      "limits": "Does not guarantee identical file URL permissions across browsers/OS. Test actual target matrix."
+    },
+    {
+      "id": "MDN-FILE-CORS",
+      "title": "MDN CORS: Reason: CORS request not HTTP",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS/Errors/CORSRequestNotHttp",
+      "classification": "web platform implementation guide",
+      "version": "page checked 2026-11-02",
+      "location": "file:// origin and CORS discussion",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M4",
+        "M6"
+      ],
+      "limits": "Not normative; illustrates browser behavior. Validate package launch in target builds."
+    },
+    {
+      "id": "MDN-AUTOPLAY",
+      "title": "MDN autoplay and HTMLMediaElement.play()",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/autoplay",
+      "classification": "web platform API guide",
+      "version": "page checked 2026-11-02",
+      "location": "autoplay policy; play() API https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M4",
+        "M5",
+        "M6"
+      ],
+      "limits": "Policy and codec support vary per browser/platform; runtime tests remain mandatory."
+    },
+    {
+      "id": "MDN-MEDIA",
+      "title": "MDN HTMLMediaElement reference",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement",
+      "classification": "web platform API reference",
+      "version": "page checked 2026-11-02",
+      "location": "Media events, seeking, ready state, error surfaces",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M5",
+        "M6"
+      ],
+      "limits": "Browser codec support differs; documentation does not prove target codec behavior."
+    },
+    {
+      "id": "FFMPEG-DOCS",
+      "title": "FFmpeg CLI and ffprobe documentation",
+      "url": "https://ffmpeg.org/ffmpeg.html",
+      "classification": "official tool documentation",
+      "version": "rolling docs checked 2026-11-02",
+      "location": "ffmpeg `-map`, `-progress`; ffprobe https://ffmpeg.org/ffprobe.html `-show_streams`, `-show_format`, `-show_versions`",
+      "license_or_access": "FFmpeg is LGPL 2.1+ by default; GPL components/configurations and external codec terms may alter obligations; inspect the actual build",
+      "used_for": [
+        "M5",
+        "M6"
+      ],
+      "limits": "Do not infer codec availability, exact behavior, or redistribution rights from web docs; pin and audit chosen build."
+    },
+    {
+      "id": "FFMPEG-RELEASES",
+      "title": "FFmpeg downloads and upstream repository",
+      "url": "https://ffmpeg.org/download.html",
+      "classification": "official release/source acquisition",
+      "version": "rolling release page checked 2026-11-02",
+      "location": "Source repository https://git.ffmpeg.org/ffmpeg.git",
+      "license_or_access": "Choose a release and review build configuration / license",
+      "used_for": [
+        "M5",
+        "M6"
+      ],
+      "limits": "This source index deliberately does not select or pin the project's executable build."
+    },
+    {
+      "id": "MDN-BIGINT",
+      "title": "MDN BigInt",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt",
+      "classification": "JavaScript language API reference",
+      "version": "page checked 2026-11-02",
+      "location": "Arbitrary-precision integer semantics and JSON serialization caveat",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M0"
+      ],
+      "limits": "Use decimal strings at JSON boundaries; BigInt is not directly JSON-serializable by default."
+    },
+    {
+      "id": "MDN-DATAVIEW",
+      "title": "MDN DataView",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView",
+      "classification": "JavaScript web API reference",
+      "version": "page checked 2026-11-02",
+      "location": "Explicit-endian integer getters / bounds behavior",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M0",
+        "M1",
+        "M2",
+        "M3"
+      ],
+      "limits": "Project BinaryCursor must still define failure cursor semantics, overflow bounds, source offsets and typed errors."
+    },
+    {
+      "id": "NODE-API",
+      "title": "Node.js API references: fs, path, crypto, child_process",
+      "url": "https://nodejs.org/api/",
+      "classification": "official runtime API documentation",
+      "version": "rolling docs checked 2026-11-02",
+      "location": "File system https://nodejs.org/api/fs.html; paths https://nodejs.org/api/path.html; crypto https://nodejs.org/api/crypto.html; process spawn https://nodejs.org/api/child_process.html",
+      "license_or_access": "Official docs",
+      "used_for": [
+        "M0",
+        "M1",
+        "M5",
+        "M6"
+      ],
+      "limits": "Pin runtime version; Node path/realpath behavior differs by platform and needs platform tests."
+    },
+    {
+      "id": "ESBUILD-API",
+      "title": "esbuild API: IIFE bundles and script output",
+      "url": "https://esbuild.github.io/api/#format-iife",
+      "classification": "official bundler documentation",
+      "version": "rolling page checked 2026-11-02",
+      "location": "format=iife, target, splitting restrictions, legal comments",
+      "license_or_access": "Official docs; esbuild MIT license",
+      "used_for": [
+        "M0",
+        "M4"
+      ],
+      "limits": "Bundle output alone does not guarantee file:// safety; inspect generated resources and test classic scripts."
+    },
+    {
+      "id": "WHATWG-HTML-SCRIPT",
+      "title": "WHATWG HTML script element and embedded script parsing",
+      "url": "https://html.spec.whatwg.org/multipage/scripting.html#the-script-element",
+      "classification": "living web platform standard",
+      "version": "living standard checked 2026-11-02",
+      "location": "Script element, data blocks, script element restrictions and parsing",
+      "license_or_access": "WHATWG standard text terms",
+      "used_for": [
+        "M4",
+        "M6"
+      ],
+      "limits": "Still requires safe serialization for script raw-text context; schema validation is not an XSS defense."
+    },
+    {
+      "id": "MDN-CANVAS",
+      "title": "MDN Canvas API",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API",
+      "classification": "web platform API guide",
+      "version": "page checked 2026-11-02",
+      "location": "Canvas rendering model, drawing and image data",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M4"
+      ],
+      "limits": "Coordinate/DPR behavior and pixel output need local tests across device scale factors."
+    },
+    {
+      "id": "MDN-DPR",
+      "title": "MDN Window.devicePixelRatio",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio",
+      "classification": "web platform API reference",
+      "version": "page checked 2026-11-02",
+      "location": "DPR and backing-store sizing considerations",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M4"
+      ],
+      "limits": "Browser/OS zoom and display changes require runtime validation."
+    },
+    {
+      "id": "MDN-POINTER",
+      "title": "MDN Pointer events",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events",
+      "classification": "web platform API guide",
+      "version": "page checked 2026-11-02",
+      "location": "Unified mouse/touch/pen input and pointer capture",
+      "license_or_access": "MDN content license applies",
+      "used_for": [
+        "M4"
+      ],
+      "limits": "Project must preserve its explicit navigation adjacency and UO-mask rules; Pointer Events do not define menu semantics."
+    },
+    {
+      "id": "FFMPEG-FORMATS",
+      "title": "FFmpeg formats and MOV/MP4 muxer options",
+      "url": "https://ffmpeg.org/ffmpeg-formats.html",
+      "classification": "official tool documentation",
+      "version": "rolling docs checked 2026-11-02",
+      "location": "MOV/MP4 muxer `movflags=+faststart`; concat demuxer, timestamp and muxer options",
+      "license_or_access": "Official docs",
+      "used_for": [
+        "M5"
+      ],
+      "limits": "Available options vary by build; verify with the pinned binary’s `-h muxer=mp4` / `-demuxers`."
+    },
+    {
+      "id": "FFMPEG-SEEK",
+      "title": "FFmpeg seeking and time-base documentation",
+      "url": "https://ffmpeg.org/ffmpeg.html#Main-options",
+      "classification": "official tool documentation",
+      "version": "rolling docs checked 2026-11-02",
+      "location": "`-ss`, `-accurate_seek`, timestamp and input/output options; codec timebase in ffmpeg-codecs docs",
+      "license_or_access": "Official docs",
+      "used_for": [
+        "M5"
+      ],
+      "limits": "CLI seek behavior depends on demuxer and keyframes; final timeline mapping and frame error must be measured."
+    },
+    {
+      "id": "PNG-SPEC",
+      "title": "PNG Specification, Third Edition",
+      "url": "https://www.w3.org/TR/png-3/",
+      "classification": "W3C Recommendation / normative image format specification",
+      "version": "Third Edition; W3C page checked 2026-11-02",
+      "location": "PNG chunks, sample depth, alpha and color-space metadata",
+      "license_or_access": "W3C document license",
+      "used_for": [
+        "M2",
+        "M4",
+        "M5",
+        "M6"
+      ],
+      "limits": "Defines file encoding, not Blu-ray YCbCr palette conversion / rounding. Keep codec conversion golden separate."
+    },
+    {
+      "id": "ITU-BT709",
+      "title": "ITU-R BT.709-6 parameter values for HDTV standards",
+      "url": "https://www.itu.int/rec/R-REC-BT.709/en",
+      "classification": "official recommendation record",
+      "version": "BT.709-6 (06/2015) publication record; verify current edition/access before normative claim",
+      "location": "HDTV color primaries, transfer characteristics and matrix metadata",
+      "license_or_access": "ITU record accessible; full text access subject to ITU publication terms",
+      "used_for": [
+        "M2",
+        "M5"
+      ],
+      "limits": "Not an IGS-specific YCbCr conversion rule; use only where source colorimetry selects it."
+    },
+    {
+      "id": "PLAYWRIGHT-DOCS",
+      "title": "Playwright browser automation documentation",
+      "url": "https://playwright.dev/docs/browsers",
+      "classification": "official test automation documentation",
+      "version": "rolling docs checked 2026-11-02",
+      "location": "browser channels, screenshots https://playwright.dev/docs/screenshots, browser installation and project configuration",
+      "license_or_access": "Playwright Apache-2.0; bundled browsers subject to vendor licenses",
+      "used_for": [
+        "M6"
+      ],
+      "limits": "Playwright WebKit is not Safari; bundled Chromium is not the full branded Chrome or Edge. Use as supplementary automation only; required actual OS/browser matrix remains manual/native evidence."
+    },
+    {
+      "id": "WPT",
+      "title": "web-platform-tests (WPT)",
+      "url": "https://github.com/web-platform-tests/wpt",
+      "classification": "community conformance test suite for web platform standards",
+      "version": "main rolling; pin commit if importing any fixture",
+      "location": "html/, media/, and file-system or file URL related tests",
+      "license_or_access": "Repository generally uses BSD-3-Clause; verify per test/assets metadata before reuse",
+      "used_for": [
+        "M4",
+        "M5",
+        "M6"
+      ],
+      "limits": "Not a BDMV conformance suite and not a substitute for app-specific file:// packaging/browser evidence."
+    }
+  ]
+}

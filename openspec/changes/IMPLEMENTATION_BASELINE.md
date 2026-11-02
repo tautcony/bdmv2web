@@ -2,6 +2,8 @@
 
 本文件固定跨 change 的交接约定，补充根目录架构文档。能力行为以各 change 的 `specs/*/spec.md` 为准，实现选择见 `design.md`，顺序见 [DEPENDENCIES.md](DEPENDENCIES.md)。全文描述拟实施契约，不代表已有代码或已通过产品验收。
 
+按阶段使用的标准、工具文档、固定 revision 源码路径和获取方式见 [开发参考索引](../../docs/references/README.md)。
+
 ## 1. 模块所有权与交接物
 
 | Change | 拥有模块 | 必须交给下游的产物 |
