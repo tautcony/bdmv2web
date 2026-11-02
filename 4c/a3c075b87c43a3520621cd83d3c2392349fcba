@@ -1,0 +1,25 @@
+docs/igs-support.md
+  s_3a3ffd5e9a879b::t_b4f3bcf3f4d659 15-17
+packages/igs/test/real-igs.test.ts
+  s_3a3ffd5e9a879b::t_b4f3bcf3f4d659 1-25
+test-data/real-igs/LICENSE
+  s_3a3ffd5e9a879b::t_187349798a851d 1-21
+test-data/real-igs/README.md
+  s_3a3ffd5e9a879b::t_b4f3bcf3f4d659 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4ca3c075b87c43a3520621cd83d3c2392349fcba",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
