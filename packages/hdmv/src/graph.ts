@@ -1,0 +1,51 @@
+import type { MovieObject, MovieInstruction, SourceLocation } from "@bdmv-web/bdmv-parser";
+import { decodeInstruction, type RawCommand } from "./decode.js";
+import type { VmProgram } from "./vm.js";
+
+export interface NavigationGraphNode { id: string; kind: "object" | "command"; objectId: number; commandIndex?: number; source: SourceLocation | null; status: "known" | "unknown"; }
+export interface NavigationGraphEdge { from: string; to: string | null; kind: "sequence" | "conditional" | "jump" | "call" | "resume" | "play" | "unknown"; condition: string | null; source: SourceLocation; resolution: "resolved" | "unresolved"; }
+export interface NavigationGraph { nodes: NavigationGraphNode[]; edges: NavigationGraphEdge[]; explored: number; complete: boolean; diagnostics: string[]; }
+export interface GraphOptions { maxStates?: number; }
+const UNKNOWN_SOURCE: SourceLocation = { path: "<unknown-command>", origin: "primary", offset: "0" };
+
+export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, appendedPrograms: VmProgram[] = [], options: GraphOptions = {}): NavigationGraph {
+  const all = [...objects, ...appendedPrograms]; const nodes: NavigationGraphNode[] = []; const edges: NavigationGraphEdge[] = []; const diagnostics: string[] = [];
+  const byId = new Map<number, MovieObject | VmProgram>(); for (const p of all) byId.set(p.id, p);
+  const maxStates = Math.max(0, options.maxStates ?? 50_000); let explored = 0; let complete = true;
+  for (const p of all) {
+    const program = p as MovieObject | VmProgram; const objectSource = "source" in program ? program.source : null;
+    nodes.push({ id: `object:${p.id}`, kind: "object", objectId: p.id, source: objectSource, status: "known" });
+    for (let index = 0; index < program.instructions.length; index++) {
+      if (explored >= maxStates) {
+        complete = false; diagnostics.push("VM_EXECUTION_LIMIT: graph state budget exhausted; unexplored states remain unknown");
+        edges.push({ from: `object:${p.id}`, to: null, kind: "unknown", condition: `commands from ${index} onward not explored`, source: objectSource ?? UNKNOWN_SOURCE, resolution: "unresolved" });
+        break;
+      }
+      explored++;
+      const row = program.instructions[index]!; let d;
+      try { d = decodeInstruction(row as MovieInstruction | RawCommand | Uint8Array | string); } catch { diagnostics.push(`decode-failed:${p.id}:${index}`); }
+      const id = `command:${p.id}:${index}`; const source = d?.source ?? (typeof row === "object" && !(row instanceof Uint8Array) && "source" in row ? row.source : UNKNOWN_SOURCE);
+      nodes.push({ id, kind: "command", objectId: p.id, commandIndex: index, source: source ?? null, status: d?.opcode ? "known" : "unknown" });
+      if (d?.opcode === "GOTO") {
+        const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : null; const known = target !== null && target < program.instructions.length;
+        edges.push({ from: id, to: known ? `command:${p.id}:${target}` : null, kind: "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
+      } else if (d?.opcode === "JUMP_OBJECT" || d?.opcode === "CALL_OBJECT") {
+        const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : null; const known = target !== null && byId.has(target);
+        edges.push({ from: id, to: known ? `object:${target}` : null, kind: d.opcode === "CALL_OBJECT" ? "call" : "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
+        if (!known) diagnostics.push(`dynamic-or-missing-target:${p.id}:${index}`);
+      } else if (["PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM", "LINK_PI", "LINK_MK", "JUMP_TITLE", "CALL_TITLE"].includes(d?.opcode ?? "")) {
+        edges.push({ from: id, to: null, kind: "play", condition: null, source, resolution: "unresolved" });
+      } else if (d?.opcode === "RESUME") {
+        edges.push({ from: id, to: null, kind: "resume", condition: "depends on dynamic call/resume context", source, resolution: "unresolved" });
+      } else if (["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(d?.opcode ?? "")) {
+        edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "conditional", condition: `${d!.opcode} predicate true; next command`, source, resolution: "unresolved" });
+        edges.push({ from: id, to: `command:${p.id}:${index + 2}`, kind: "conditional", condition: `${d!.opcode} predicate false; skip next command`, source, resolution: "unresolved" });
+      }
+      const terminatesFlow = ["GOTO", "BREAK", "JUMP_OBJECT", "JUMP_TITLE", "CALL_OBJECT", "CALL_TITLE", "RESUME", "PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM", "LINK_PI", "LINK_MK", "TERMINATE_PL"].includes(d?.opcode ?? "");
+      if (!terminatesFlow && index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: null, source, resolution: "resolved" });
+      if (!d?.opcode) edges.push({ from: id, to: null, kind: "unknown", condition: "unknown encoding; execution faults", source, resolution: "unresolved" });
+    }
+    if (!complete) break;
+  }
+  return { nodes, edges, explored, complete, diagnostics };
+}
