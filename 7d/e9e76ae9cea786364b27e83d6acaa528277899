@@ -1,0 +1,37 @@
+packages/runtime-web/src/linear-playback.test.ts
+  s_3a3ffd5e9a879b::t_7886040541b19a 1-2,4-5,7,9-17,26-82,85-100,102-115,117-135,137-140,142-143,145-151
+  s_3a3ffd5e9a879b::t_86160a6d6eefad 6,8,18-25,116,141
+  s_3a3ffd5e9a879b::t_ab3ea0ce0556ba 136
+  s_3a3ffd5e9a879b::t_d3cf43236fb48a 101
+  s_3a3ffd5e9a879b::t_36faab1b313ab7 144
+  s_3a3ffd5e9a879b::t_b1cd686f3abb43 3
+  s_3a3ffd5e9a879b::t_f4367ec94140aa 83-84
+packages/runtime-web/src/index.ts
+  s_3a3ffd5e9a879b::t_02bb92b7148f98 5-6
+packages/runtime-web/src/media-clock.test.ts
+  s_3a3ffd5e9a879b::t_2e0366a5bfce1a 1-78,80-82,86-91
+  s_3a3ffd5e9a879b::t_85d9f2dfdfeffc 79,83-85
+packages/runtime-web/src/linear-playback.ts
+  s_3a3ffd5e9a879b::t_6b4771ecd97a8b 1-53,55-56,58-78,81-82,88-104,106-147,149-193,200,205-206,212,214-247,249-255,257-261,263-274
+  s_3a3ffd5e9a879b::t_3b526934a5292e 54,57,79-80,83-87,105,148,194,201,204,207-208,213,248,256,262
+  s_3a3ffd5e9a879b::t_ff21f9f94dc5db 195-199,202-203,209-211
+packages/runtime-web/src/media-clock.ts
+  s_3a3ffd5e9a879b::t_90f8874a43bfae 1-167,175-191
+  s_3a3ffd5e9a879b::t_6494b3512e7633 168-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7de9e76ae9cea786364b27e83d6acaa528277899",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
