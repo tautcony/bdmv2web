@@ -1,0 +1,97 @@
+packages/test-fixtures/src/bdmv.ts
+  s_3a3ffd5e9a879b::t_bfac801f284fd5 103,105,108,110-112
+  s_3a3ffd5e9a879b::t_01cc744b6291a2 100-102,104,106-107,109,113-115
+packages/igs/test/extraction.test.ts
+  s_3a3ffd5e9a879b::t_caf4dd34bdd25a 127
+  s_3a3ffd5e9a879b::t_bc2776030dd811 388-394
+  s_3a3ffd5e9a879b::t_5a841d96923579 45-59
+  s_3a3ffd5e9a879b::t_baaf9528f21a00 162,166-167,172
+  s_3a3ffd5e9a879b::t_1dc8fce7e66525 149-155,174-184
+  s_3a3ffd5e9a879b::t_38ee63c3ee7c82 111-119
+  s_3a3ffd5e9a879b::t_4276c3d8094163 130-138
+  s_3a3ffd5e9a879b::t_99ab3e9af679c8 203-206,209-213
+  s_3a3ffd5e9a879b::t_451c3ad033a9cc 7,10,12,88,156-161,163-165,168-171,173,185-201,214
+  s_3a3ffd5e9a879b::t_5c0bd9721dbc1a 91-96
+  s_3a3ffd5e9a879b::t_ba9c08d884aaf5 90,97-110,120-125
+  s_3a3ffd5e9a879b::t_29793e73e19971 5,60-68
+  s_3a3ffd5e9a879b::t_c9af5e87aa1420 11,69-87
+  s_3a3ffd5e9a879b::t_94257761f85f69 207-208
+  s_3a3ffd5e9a879b::t_726e2482b88596 89
+  s_3a3ffd5e9a879b::t_9cda50e91133d8 202
+  s_3a3ffd5e9a879b::t_2f38c6d2a59010 215
+  s_3a3ffd5e9a879b::t_42b634cc0cfafd 395
+packages/igs/test/tamako-real-smoke.test.ts
+  s_3a3ffd5e9a879b::t_7ab4edfdcff02f 15-16,18-22
+  s_3a3ffd5e9a879b::t_a53daf36ce1213 34,38
+  s_3a3ffd5e9a879b::t_deb3ca33b006b0 1-14,23-28,30-33,35,39-40
+  s_3a3ffd5e9a879b::t_ecdf705eb2d009 29,36-37
+  s_3a3ffd5e9a879b::t_d2b81204126998 17
+packages/igs/src/extract.ts
+  s_3a3ffd5e9a879b::t_a8e26b5474c24b 103-108,120
+packages/test-fixtures/golden-manifest.json
+  s_3a3ffd5e9a879b::t_a0ab167471e466 68-75
+  s_3a3ffd5e9a879b::t_abfbfb18405dde 67
+docs/igs-support.md
+  s_3a3ffd5e9a879b::t_1c1ddfb072b828 12
+  s_3a3ffd5e9a879b::t_349d4350cbb5c7 3,23-24
+  s_3a3ffd5e9a879b::t_d2b81204126998 22
+packages/igs/src/igs.ts
+  s_3a3ffd5e9a879b::t_f3865e8797393e 79,102,145,150,162,315-316
+  s_3a3ffd5e9a879b::t_3ac31818f1fc35 147,151,184-190
+  s_3a3ffd5e9a879b::t_1d72aa0f03c6b0 13,17,72-77,86-88,91-97,103,111,113-123,131-133,136,139,142-143,148,152,154
+  s_3a3ffd5e9a879b::t_83abad885e6927 78,80-83,112,166,170-171
+  s_3a3ffd5e9a879b::t_5cd347dad1cb56 124-126,263
+  s_3a3ffd5e9a879b::t_7c760f496f3097 169
+  s_3a3ffd5e9a879b::t_8622fb55d9808b 167-168,198-199
+  s_3a3ffd5e9a879b::t_d7c1f7eb814be1 259-261,266-283
+  s_3a3ffd5e9a879b::t_57a751798322dc 134,258,262,264-265
+  s_3a3ffd5e9a879b::t_f5d41f5e266ef9 284-285
+packages/igs/test/fixtures.ts
+  s_3a3ffd5e9a879b::t_c93c21b74b9dc5 36
+  s_3a3ffd5e9a879b::t_5e2d65c1960daf 33-34,47,55,60,62
+  s_3a3ffd5e9a879b::t_7a16bca4a2e3c5 58-59
+  s_3a3ffd5e9a879b::t_b0319e84789234 63
+  s_3a3ffd5e9a879b::t_d5659fc5255be8 42
+  s_3a3ffd5e9a879b::t_a87631482491f1 57
+  s_3a3ffd5e9a879b::t_e29273cec3f78a 37-40,56,68-76
+docs/references/stages/M2-igs-scenes.md
+  s_3a3ffd5e9a879b::t_2b3f40b74d800f 16,18-30,32-58,60-61
+  s_3a3ffd5e9a879b::t_349d4350cbb5c7 15,17
+  s_3a3ffd5e9a879b::t_f54d3627079c8a 31,59
+  s_3a3ffd5e9a879b::t_065cd73852c8ef 8
+  s_3a3ffd5e9a879b::t_2ab547e74e3216 14
+packages/igs/test/m1-m2-m3.integration.test.ts
+  s_3a3ffd5e9a879b::t_82962410998327 7,21-22,42-43,49-54,56-66
+  s_3a3ffd5e9a879b::t_2a27a26a7281f0 33-34,38,47
+  s_3a3ffd5e9a879b::t_8713cb51ca9699 9,55,75-82
+  s_3a3ffd5e9a879b::t_8b23874081e58c 1-6,8,10-20,23-32,35-37,39-41,44-46,48,67-74
+packages/igs/package.json
+  s_3a3ffd5e9a879b::t_8b23874081e58c 16-19
+packages/igs/src/png.ts
+  s_3a3ffd5e9a879b::t_f4cda2070807b6 36-39
+openspec/changes/extract-igs-scenes/tasks.md
+  s_3a3ffd5e9a879b::t_5507e5a0189419 29-32
+  s_3a3ffd5e9a879b::t_6ca3afa9d3da65 23
+  s_3a3ffd5e9a879b::t_081fe712724175 24
+  s_3a3ffd5e9a879b::t_c81238a68fa648 17
+  s_3a3ffd5e9a879b::t_8debc75325170a 26,28,33-35
+  s_3a3ffd5e9a879b::t_f66f55394aec74 25
+packages/igs/src/types.ts
+  s_3a3ffd5e9a879b::t_6b603311096ec8 62,77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2fd227ad4f9bc09536cd345bda6d557592e01cad",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
