@@ -49,3 +49,4 @@ export function simulatedBridge<TAction, TEvent>(action: ActionEnvelope<TAction>
 }
 
 export * from "./bdmv.js";
+export * from "./menu-runtime.js";

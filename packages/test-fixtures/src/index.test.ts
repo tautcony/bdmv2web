@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BinaryCursor, parseDiscIR, type ActionEnvelope } from "@bdmv-web/core";
-import { buildCursorSample, damagedDanglingReference, damagedUnknownVersion, loadGolden, minimalHdmvGolden, mixedBdjGolden, simulatedBridge } from "./index.js";
+import { buildCursorSample, damagedDanglingReference, damagedUnknownVersion, loadGolden, menuInteractionFixture, minimalHdmvGolden, mixedBdjGolden, simulatedBridge } from "./index.js";
 
 describe("shared contract fixtures", () => {
   it("loads independently authored minimal and mixed navigation golden JSON", () => {
@@ -22,5 +22,14 @@ describe("shared contract fixtures", () => {
     const bytes = buildCursorSample(); const cursor = new BinaryCursor(bytes, 100);
     expect(cursor.u16be()).toBe(0x0102); expect(cursor.u32be()).toBe(0x03040506);
     const child = cursor.subview(4); expect(child.u32be()).toBe(0x0708090a); expect(child.sourceOffset).toBe(110);
+  });
+  it("publishes the same synthetic M4/M5 menu interaction with unverified media/browser cases called out", () => {
+    expect(menuInteractionFixture.id).toBe("m4-m5-menu-interaction-v1");
+    expect(menuInteractionFixture.steps).toEqual([
+      { input: "right", selectedButtonId: 2 },
+      { input: "activate", actionType: "LINK_PLAY_ITEM", actionPayload: { playItem: 3 } },
+    ]);
+    expect(menuInteractionFixture.verification.notVerified).toContain("direct file:// launch");
+    expect(menuInteractionFixture.verification.notVerified).toContain("real disc rendering and media timeline");
   });
 });

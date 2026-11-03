@@ -1,0 +1,10 @@
+{
+  "name": "@bdmv-web/runtime-web",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run src" },
+  "dependencies": { "@bdmv-web/bdmv-parser": "workspace:*", "@bdmv-web/hdmv": "workspace:*", "@bdmv-web/igs": "workspace:*" },
+  "devDependencies": { "@bdmv-web/test-fixtures": "workspace:*" }
+}

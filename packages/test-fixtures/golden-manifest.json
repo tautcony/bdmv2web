@@ -144,6 +144,15 @@
       "source": "project-authored synthetic fixture",
       "license": "MIT project license",
       "status": "synthetic parser coverage; protocol remains unverified"
+    },
+    {
+      "id": "m4-m5-menu-interaction-v1",
+      "kind": "synthetic menu scene and input sequence",
+      "builder": "src/menu-runtime.ts:menuInteractionFixture",
+      "expectedBasis": "Fixed default focus, explicit right neighbor, BOG membership, and hand-encoded LINK_PI 3 button action; browser/file:// and media timeline behavior are not established.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "shared M4/M5 interaction contract; browser and media behavior not verified"
     }
   ]
 }
