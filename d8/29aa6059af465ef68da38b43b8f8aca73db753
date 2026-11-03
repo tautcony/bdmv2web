@@ -1,0 +1,47 @@
+packages/package-builder/src/index.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 124
+scripts/compare-igstools-reference.py
+  s_f1e09a61530d1a::t_8e9fd096f0d111 2-3,5-11,29-43
+  s_f1e09a61530d1a::t_a96fff819f9624 1,4,12-28,44
+docs/igs-support.md
+  s_f1e09a61530d1a::t_eec19482eb314d 3,24,29,31-32,36
+docs/evidence/tamako-00005-igstools-comparison.json
+  s_f1e09a61530d1a::t_23d92bdf0d9e7a 2-8
+  s_f1e09a61530d1a::t_8e9fd096f0d111 1,9-6234
+apps/cli/src/index.test.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 176
+openspec/changes/extract-igs-scenes/tasks.md
+  s_f1e09a61530d1a::t_eec19482eb314d 19
+packages/igs/src/png.ts
+  s_f1e09a61530d1a::t_dbbec8ec81ce16 40,59,62-63
+  s_f1e09a61530d1a::t_eec19482eb314d 45
+packages/igs/src/types.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 132
+packages/igs/test/extraction.test.ts
+  s_f1e09a61530d1a::t_58c360f42ff38f 87
+  s_f1e09a61530d1a::t_eec19482eb314d 30,84-85
+packages/runtime-web/src/igs-adapter.test.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 34
+docs/references/stages/M2-igs-scenes.md
+  s_f1e09a61530d1a::t_23d92bdf0d9e7a 69
+  s_f1e09a61530d1a::t_e01603f7af5340 24,38,62-68,71
+  s_f1e09a61530d1a::t_eec19482eb314d 70
+apps/cli/src/index.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d829aa6059af465ef68da38b43b8f8aca73db753",
+  "prompts": {},
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
