@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { inflateSync } from "node:zlib";
 import { buildInputFileTable } from "@bdmv-web/bdmv-io";
+import { DEFAULT_LIMITS } from "@bdmv-web/core";
 import type { ParsedDisc } from "@bdmv-web/bdmv-parser";
 import { extractIgsFromChunks, extractIgsScenes } from "../src/extract.js";
+import { consumeSegment, createIgsState, parseSegments } from "../src/igs.js";
+import { renderSceneAssets } from "../src/png.js";
+import type { IgsSegment } from "../src/igs.js";
 import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "./fixtures.js";
 
 describe("synthetic IGS extraction", () => {
@@ -37,12 +42,100 @@ describe("synthetic IGS extraction", () => {
     expect(summaries[0]).toEqual({ scenes: 1, objects: 1, assets: 1, errors: [] });
   });
 
+  it("reassembles an IG segment whose header and body cross a PES boundary", async () => {
+    const segments = syntheticMenuSegments();
+    const splitAt = 17;
+    const bytes = concat(
+      patPacket(), pmtPacket(),
+      m2tsPacket(IG_PID, pesPacket(segments.slice(0, splitAt), 90_000n), { cc: 0, pusi: true }),
+      m2tsPacket(IG_PID, pesPacket(segments.slice(splitAt), 91_000n), { cc: 1, pusi: true }),
+    );
+    const result = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    expect(result.scenes).toHaveLength(1);
+    expect(result.scenes[0]?.complete).toBe(true);
+    expect(result.scenes[0]?.objects.map((object) => object.id)).toEqual([5]);
+    expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
+  });
+
+  it("renders a sparse palette's omitted index as transparent zero", async () => {
+    const result = await extractIgsFromChunks("00001", chunks(syntheticClip({ missingPaletteEntry: true }), 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    expect(result.scenes).toHaveLength(1);
+    expect(result.scenes[0]?.complete).toBe(true);
+    expect(result.assets).toHaveLength(1);
+    expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
+    const png = result.assets[0]!.pngBytes;
+    const idatLength = (png[33]! << 24) | (png[34]! << 16) | (png[35]! << 8) | png[36]!;
+    expect([...inflateSync(png.slice(41, 41 + idatLength))]).toEqual([0, 0, 0, 0, 0]);
+  });
+
+  it("maps one ODS through two palettes and preserves palette alpha in provisional PNG pixels", async () => {
+    const result = await extractIgsFromChunks("00001", chunks(syntheticClip(), 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    const scene = result.scenes[0]!;
+    scene.pages.push({ ...scene.pages[0]!, id: 2, paletteId: 1 });
+    scene.palettes.push({
+      ...scene.palettes[0]!, id: 1,
+      entries: new Map([[1, { y: 76, cr: 255, cb: 85, alpha: 173 }]]),
+    });
+
+    const rendered = renderSceneAssets(scene);
+    expect(rendered.assets).toHaveLength(2);
+    expect(rendered.assets.map((asset) => [asset.objectId, asset.objectVersion, asset.paletteId, asset.paletteVersion])).toEqual([[5, 0, 0, 0], [5, 0, 1, 0]]);
+    expect(rendered.assets.map((asset) => asset.colorConversion)).toEqual([
+      "unverified-bt601-limited-round-nearest",
+      "unverified-bt601-limited-round-nearest",
+    ]);
+    expect(rendered.assets.map(decodePngRgbaPixel)).toEqual([[255, 255, 255, 255], [255, 0, 0, 173]]);
+  });
+
+  it("preserves page-scoped button IDs and defaults, and diagnoses invalid explicit references", async () => {
+    const segments = syntheticMenuSegments({ twoPages: true, invalidReferences: true });
+    const splitAt = 160;
+    const bytes = concat(patPacket(), pmtPacket(),
+      m2tsPacket(IG_PID, pesPacket(segments.slice(0, splitAt), 90_000n), { cc: 0, pusi: true }),
+      m2tsPacket(IG_PID, pesPacket(segments.slice(splitAt), 91_000n), { cc: 1, pusi: true }));
+    const result = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    const scene = result.scenes[0]!;
+    expect(scene.pages.map((page) => ({
+      id: page.id,
+      defaultSelectedButtonId: page.defaultSelectedButtonId,
+      bogDefault: page.bogs[0]?.defaultButtonId,
+      buttonIds: page.buttons.map((button) => button.id),
+    }))).toEqual([
+      { id: 1, defaultSelectedButtonId: 2, bogDefault: 2, buttonIds: [1] },
+      { id: 2, defaultSelectedButtonId: 1, bogDefault: 1, buttonIds: [1] },
+    ]);
+    expect(scene.pages[0]?.scopeId).toBe(`${scene.id}:page:1`);
+    expect(scene.pages[1]?.scopeId).toBe(`${scene.id}:page:2`);
+    expect(scene.pages[0]?.buttons[0]?.scopeId).toBe(`${scene.id}:page:1:button:1`);
+    expect(scene.pages[1]?.buttons[0]?.scopeId).toBe(`${scene.id}:page:2:button:1`);
+    expect(scene.pages.map((page) => ({
+      autoAction: page.buttons[0]?.autoAction,
+      position: [page.buttons[0]?.x, page.buttons[0]?.y],
+      neighbors: page.buttons[0]?.neighbors,
+      visuals: [page.buttons[0]?.visuals.normal.startObjectId, page.buttons[0]?.visuals.selected.startObjectId, page.buttons[0]?.visuals.activated.startObjectId],
+    }))).toEqual([
+      { autoAction: true, position: [0, 0], neighbors: { up: 2, down: 0xffff, left: 0xffff, right: 0xffff }, visuals: [5, 5, 5] },
+      { autoAction: false, position: [0, 0], neighbors: { up: 0xffff, down: 0xffff, left: 0xffff, right: 0xffff }, visuals: [5, 5, 5] },
+    ]);
+    const invalidReferences = result.diagnostics.filter((item) => item.code === "IGS_INVALID_BUTTON_REFERENCE");
+    expect(invalidReferences.map((item) => item.details?.referenceKind)).toEqual(["page-default", "bog-0-default", "neighbor-up"]);
+    expect(invalidReferences.every((item) => item.affectedSceneIds.includes(scene.id))).toBe(true);
+    expect(scene.complete).toBe(false);
+  });
+
   it("keeps unknown effect semantics unverified and marks the page incomplete", async () => {
-    const bytes = syntheticClip({ effects: true });
+    const bytes = syntheticClip({ effects: true, richEffects: true, uiModelWithTimeouts: true, animated: true });
     const result = await extractIgsFromChunks("00001", chunks(bytes, 64), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
     expect(result.scenes).toHaveLength(1);
-    expect(result.scenes[0]?.complete).toBe(false);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "IGS_UNSUPPORTED_EFFECT", severity: "warning" }));
+    const scene = result.scenes[0]!;
+    expect(scene).toMatchObject({ streamModel: 0, uiModel: 1, compositionTimeout90k: "90000", selectionTimeout90k: "45000", userTimeoutDuration: 123, complete: false });
+    expect(scene.pages[0]?.animationFrameRateCode).toBe(1);
+    expect(scene.pages[0]?.buttons[0]?.visuals.normal).toMatchObject({ startObjectId: 5, endObjectId: 5, repeat: true });
+    expect(scene.pages[0]?.buttons[0]?.visuals.selected).toMatchObject({ startObjectId: 5, endObjectId: 5, repeat: true });
+    expect([...scene.pages[0]!.rawEffects.enter]).toEqual([1, 3, 0, 10, 0, 20, 0, 30, 0, 40, 1, 0, 0, 1, 1, 1, 0, 5, 3, 128, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6]);
+    expect([...scene.pages[0]!.rawEffects.exit]).toEqual([0, 1, 0, 0, 2, 2, 0]);
+    expect(scene.pages[0]?.rawEffects).toMatchObject({ enterEffectCount: 1, exitEffectCount: 1 });
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "IGS_UNSUPPORTED_EFFECT", severity: "warning", affectedSceneIds: [scene.id], details: { pageId: 1, enterCount: 1, exitCount: 1 } }));
     expect(result.status).toBe("partial");
   });
 
@@ -51,6 +144,73 @@ describe("synthetic IGS extraction", () => {
     const result = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
     expect(result.scenes).toHaveLength(0);
     expect(result.diagnostics.map((d) => d.code)).toContain("IGS_UNCOMPLETED_DISPLAY_SET");
+  });
+
+  it("does not commit an EOF Display Set with an unfinished ODS fragment", async () => {
+    const result = await extractIgsFromChunks("00001", chunks(syntheticClip({ includeEnd: false, incompleteObject: true }), 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    expect(result.scenes).toHaveLength(0);
+    expect(result.diagnostics.map((item) => item.code)).toContain("IGS_UNCOMPLETED_DISPLAY_SET");
+    expect(result.diagnostics.map((item) => item.code)).toContain("IGS_INVALID_SEGMENT");
+  });
+
+  it("keeps complete object versions attached to the Display Set and epoch that received them", () => {
+    const parsed = parseSegments(syntheticMenuSegments());
+    const ics = parsed.segments.find((segment) => segment.type === 0x18)!;
+    const palette = parsed.segments.find((segment) => segment.type === 0x14)!;
+    const originalObject = parsed.segments.find((segment) => segment.type === 0x15)!;
+    const state = createIgsState();
+    const feed = (segment: IgsSegment, timeDomain: number) => consumeSegment(state, segment, "00001", IG_PID, { raw: 0n, epoch: 0n, normalized: 0n, timeDomain }, 0n, 0n, segment.offset, DEFAULT_LIMITS);
+
+    feed(ics, 0); feed(palette, 0); feed(originalObject, 0); feed({ type: 0x80, data: new Uint8Array(), offset: 900n }, 0);
+    const newerIcs = { ...ics, offset: 1000n };
+    const newerPaletteData = palette.data.slice(); newerPaletteData[1] = 1;
+    const newerPalette = { ...palette, data: newerPaletteData, offset: 1100n };
+    const newerObjectData = originalObject.data.slice(); newerObjectData[2] = 1;
+    feed(newerIcs, 1); feed(newerPalette, 1); feed({ ...originalObject, data: newerObjectData, offset: 1200n }, 1); feed({ type: 0x80, data: new Uint8Array(), offset: 1300n }, 1);
+
+    expect(state.scenes.map((scene) => scene.objects.map((object) => object.version))).toEqual([[0], [1]]);
+    expect(state.scenes.map((scene) => scene.palettes.map((item) => item.version))).toEqual([[0], [1]]);
+    expect(state.objects.size).toBe(2);
+  });
+
+  it("discards an in-progress composition at an explicit time-domain boundary", () => {
+    const ics = parseSegments(syntheticMenuSegments()).segments.find((segment) => segment.type === 0x18)!;
+    const state = createIgsState();
+    const feed = (segment: IgsSegment, timeDomain: number) => consumeSegment(state, segment, "00001", IG_PID, { raw: 0n, epoch: 0n, normalized: 0n, timeDomain }, 0n, 0n, segment.offset);
+    feed(ics, 0);
+    feed({ type: 0x80, data: new Uint8Array(), offset: 900n }, 1);
+    expect(state.scenes).toHaveLength(0);
+    expect(state.current.size).toBe(0);
+    expect(state.diagnostics.map((item) => item.code)).toEqual(expect.arrayContaining(["IGS_TIME_DOMAIN_RESET", "IGS_ORPHAN_END"]));
+  });
+
+  it("reports a continuation without a first fragment and rejects aggregate active ODS bytes over budget", () => {
+    const state = createIgsState();
+    const src = { clipId: "00001", pid: IG_PID, packetOffset: 0n, pesOffset: 0n, segmentOffset: 0n, segmentFileOffset: 0n, pts90k: null, timeDomain: 0 };
+    const continuation: IgsSegment = { type: 0x15, offset: 0n, data: Uint8Array.of(0, 5, 0, 0x40, 1) };
+    consumeSegment(state, continuation, "00001", IG_PID, null, 0n, 0n, 0n);
+    expect(state.diagnostics.map((item) => item.code)).toContain("UNRESOLVED_OBJECT");
+    expect(state.pendingObjects.size).toBe(0);
+
+    const smallBudget = { ...DEFAULT_LIMITS, maxReassemblyBytes: 1 };
+    const firstFragment = (id: number): IgsSegment => ({ type: 0x15, offset: 0n, data: Uint8Array.of(0, id, 0, 0x80, 0, 0, 5, 0, 1, 0, 1, 1) });
+    consumeSegment(state, firstFragment(5), "00001", IG_PID, null, 0n, 0n, 0n, smallBudget);
+    consumeSegment(state, firstFragment(6), "00001", IG_PID, null, 0n, 0n, 0n, smallBudget);
+    expect(state.diagnostics.map((item) => item.code)).toContain("LIMIT_EXCEEDED");
+    expect(state.pendingObjects.size).toBe(1);
+  });
+
+  it("reassembles an ODS object split over consecutive segment deliveries", () => {
+    const state = createIgsState();
+    const sourcePts = { raw: 100n, epoch: 0n, normalized: 100n, timeDomain: 0 };
+    const original = parseSegments(syntheticMenuSegments()).segments.find((segment) => segment.type === 0x15)!;
+    const first = original.data.slice(0, 11); first[3] = 0x80;
+    const continuation = Uint8Array.of(original.data[0]!, original.data[1]!, original.data[2]!, 0x40, ...original.data.slice(11));
+    consumeSegment(state, { ...original, data: first }, "00001", IG_PID, sourcePts, 0n, 0n, 0n);
+    expect(state.pendingObjects.size).toBe(1);
+    consumeSegment(state, { ...original, data: continuation, offset: 20n }, "00001", IG_PID, sourcePts, 192n, 192n, 192n);
+    expect(state.pendingObjects.size).toBe(0);
+    expect([...state.objects.values()][0]).toMatchObject({ id: 5, version: 0, width: 1, height: 1, indices: Uint8Array.of(1) });
   });
 
   it.each([
@@ -224,4 +384,12 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   const result = new Uint8Array(parts.reduce((size, part) => size + part.length, 0)); let offset = 0;
   for (const part of parts) { result.set(part, offset); offset += part.length; }
   return result;
+}
+
+function decodePngRgbaPixel(asset: { pngBytes: Uint8Array }): number[] {
+  const png = asset.pngBytes;
+  const idatLength = (png[33]! * 0x1000000) + (png[34]! << 16) + (png[35]! << 8) + png[36]!;
+  const scanline = inflateSync(png.slice(41, 41 + idatLength));
+  if (scanline[0] !== 0) throw new Error(`Unsupported PNG filter ${scanline[0]}`);
+  return [...scanline.slice(1, 5)];
 }

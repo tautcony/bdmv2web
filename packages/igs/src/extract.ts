@@ -100,8 +100,12 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     if (packet.continuityError || packet.transportError || packet.discontinuity) {
       if (candidatePids.has(packet.pid) || wasKnownIgPid) {
         residuals.delete(packet.pid); streamBytes.delete(packet.pid); spans.delete(packet.pid);
-        if (state.current) diagnostics.push({ severity: "error", code: "IGS_STREAM_INVALIDATED", message: `PID ${packet.pid} transport damage discarded the active Display Set`, source: state.current.source, affectedSceneIds: [`${state.current.source.clipId}:${state.current.source.pid}:${state.current.source.packetOffset}`] });
-        state.current = null; state.pendingObjects.clear(); state.objects.clear(); state.palettes.clear();
+        const current = state.current.get(packet.pid);
+        if (current) diagnostics.push({ severity: "error", code: "IGS_STREAM_INVALIDATED", message: `PID ${packet.pid} transport damage discarded the active Display Set`, source: current.source, affectedSceneIds: [`${current.source.clipId}:${current.source.pid}:${current.source.packetOffset}`] });
+        state.current.delete(packet.pid);
+        for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(`${packet.pid}:`)) state.pendingObjects.delete(key);
+        for (const key of [...state.objects.keys()]) if (key.startsWith(`${packet.pid}:`)) state.objects.delete(key);
+        for (const key of [...state.palettes.keys()]) if (key.startsWith(`${packet.pid}:`)) state.palettes.delete(key);
       }
     }
     const pidType = psi.streamsByPid.get(packet.pid);
@@ -113,7 +117,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   reader.end();
   pes.end();
   for (const [pid, residual] of residuals) if (residual.length) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `PID ${pid} ended with ${residual.length} residual IG segment bytes`, source: source(clipId, pid, streamBytes.get(pid) ?? 0n), affectedSceneIds: [] });
-  if (state.current) diagnostics.push({ severity: "error", code: "IGS_UNCOMPLETED_DISPLAY_SET", message: "EOF before END segment; Display Set was not committed", source: state.current.source, affectedSceneIds: [] });
+  for (const current of state.current.values()) diagnostics.push({ severity: "error", code: "IGS_UNCOMPLETED_DISPLAY_SET", message: "EOF before END segment; Display Set was not committed", source: current.source, affectedSceneIds: [] });
   for (const pending of state.pendingObjects.values()) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `EOF with incomplete ODS object ${pending.id} version ${pending.version}`, source: pending.source, affectedSceneIds: [] });
   const pmtIgsCues = [...psi.streamsByPid].filter(([, type]) => type === 0x91).map(([pid]) => ({ pid, source: psi.streamSourcesByPid.get(pid) ?? null }));
   const streamPids = pmtIgsCues.map((cue) => cue.pid);

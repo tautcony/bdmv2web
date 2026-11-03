@@ -97,6 +97,22 @@ export function buildM1ClipInfoProgramAndCpi(): Uint8Array {
   return out;
 }
 
+/** CLPI declares the audio track plus one IGS PID cue for cross-stage fixture use. */
+export function buildM1ClipInfoWithIgsCue(): Uint8Array {
+  const original = buildM1ClipInfoProgramAndCpi();
+  const out = new Uint8Array(original.length + 8);
+  out.set(original.subarray(0, 86));
+  put32(out, 60, 26); // Include the additional 8-byte IGS stream record.
+  out[72] = 2;
+  put16(out, 82, 0x0120);
+  out[84] = 5;
+  out[85] = 0x91;
+  out.set([0x65, 0x6e, 0x67, 0], 86);
+  out.set(original.subarray(86), 94);
+  put32(out, 16, 94); // CPI moves after the longer ProgramInfo record.
+  return out;
+}
+
 export function buildM1SoundTwoRanges(): Uint8Array {
   const out = new Uint8Array(88); ascii(out, 0, "BCLK"); ascii(out, 4, "0100"); put32(out, 8, 80); put32(out, 40, 8); out[45] = 2;
   for (let i = 0; i < 2; i++) { const p = 46 + i * 10; out[p] = 0x11; out[p + 1] = 0x40; put32(out, p + 2, i * 4); put32(out, p + 6, 4); }

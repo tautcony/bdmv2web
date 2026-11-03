@@ -14,14 +14,22 @@
 ## 2. IG和图像
 
 - [ ] 2.1 登记ICS/PDS/ODS/Display Set字段与版本依据；验收：支持项有固定参考revision与独立字节样本，未核验项不标supported。
-- [ ] 2.2 实现跨PES段/分片和epoch/version缓存；验收：缺首末片/EOF/超预算不提交完整场景，新旧对象版本不混拼。
+- [x] 2.2 实现跨PES段/分片和epoch/version缓存；验收：缺首末片/EOF/超预算不提交完整场景，新旧对象版本不混拼。
 - [x] 2.3 实现有界RLE；验收：透明run/行结束黄金像素正确，越行/超图/异常尺寸在写入前拒绝。
 - [ ] 2.4 固定并实现YCbCrA转换/rounding/alpha及PNG输出；验收：独立色块/透明样本逐像素一致，同ODS双PDS有各自正确资产映射。
 
 ## 3. 场景与交接
 
-- [ ] 3.1 归一化composition/page/BOG/button邻接/区域/三态/自动动作；验收：双页fixture的作用域ID、默认按钮、非法引用诊断正确。
-- [ ] 3.2 保留动画/裁剪/窗口/进入退出效果/时间及pop-up属性；验收：时效黄金一致，未知效果有影响范围，不静默扁平化。
-- [ ] 3.3 保存按钮raw命令与sound引用并交M3同一decoder；验收：每条12字节源偏移正确，M4不需猜业务。
-- [ ] 3.4 接入extract的scene/PNG/manifest/源映射；验收：M4可消费，破损对象不填透明占位，源不变。
+- [x] 3.1 归一化composition/page/BOG/button邻接/区域/三态/自动动作；验收：双页fixture的作用域ID、默认按钮、非法引用诊断正确。
+- [x] 3.2 保留动画/裁剪/窗口/进入退出效果/时间及pop-up属性；验收：时效黄金一致，未知效果有影响范围，不静默扁平化。
+- [x] 3.3 保存按钮raw命令与sound引用并交M3同一decoder；验收：每条12字节源偏移正确，M4不需猜业务。
+- [x] 3.4 接入extract的scene/PNG/manifest/源映射；验收：M4可消费，破损对象不填透明占位，源不变。
 - [ ] 3.5 建立静态/分片/版本/透明/动画参考对照；验收：记录fixture ID、工具版本、时间/颜色规则；不为外部原盘素材生成哈希，缺独立参考时明确未验证而非勾选保真通过。
+
+## 场景验收拆分
+
+按静态页、按钮/BOG 作用域、对象版本与双 PDS、动画时间/未知效果、损坏或缺失资源、Tamako Clip `00005` 真实观察逐项记录的 expected/actual/result 与独立参考缺口，见 [M2 场景验收拆分](../../../docs/references/stages/M2-igs-scenes.md#menuscene-场景验收拆分)。该记录细化验收场景，不提升尚未验证的支持状态。
+
+## Workspace-local real stream evidence
+
+The user-provided Clip `00005` now runs through `packages/igs/test/tamako-real-smoke.test.ts` when present: CLPI PID `0x1400` produces one 1920×1080 scene with seven pages, 168 objects, and seven palettes. The scene remains incomplete because pages 2 and 3 use default button `65534`; Clip `00043` is declared but its STREAM is absent. This checks a real positive extraction path only and does not satisfy the independent pixel reference for 3.5. The test skips when the workspace-local input is absent; the source media is not hashed.

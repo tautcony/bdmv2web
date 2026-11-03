@@ -65,6 +65,15 @@
       "status": "synthetic parser coverage; protocol remains unverified"
     },
     {
+      "id": "m1-m2-m3-source-handoff",
+      "kind": "composite synthetic BDMV and M2TS input",
+      "builder": "packages/igs/test/m1-m2-m3.integration.test.ts",
+      "expectedBasis": "Composes project-authored INDX, MOBJ, MPLS and CLPI byte fixtures with a synthetic IGS clip. Expected entry, track, command and scene identities are asserted independently at each stage; this does not establish Blu-ray conformance.",
+      "source": "project-authored synthetic fixture",
+      "license": "MIT project license",
+      "status": "cross-stage source handoff coverage; protocol remains unverified"
+    },
+    {
       "id": "m1-empty-mpls",
       "kind": "synthetic MPLS bytes",
       "builder": "src/bdmv.ts:buildM1EmptyPlaylist",

@@ -59,6 +59,7 @@ export interface IgsPalette {
 
 export interface IgsButton {
   id: number;
+  scopeId?: string;
   x: number;
   y: number;
   autoAction: boolean;
@@ -73,6 +74,7 @@ export interface IgsButton {
 
 export interface IgsPage {
   id: number;
+  scopeId?: string;
   version: number;
   uoMask: bigint;
   defaultSelectedButtonId: number;

@@ -31,17 +31,14 @@ export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagno
         continue;
       }
       const rgba = new Uint8Array(object.indices.length * 4);
-      let missingIndex: number | null = null;
       for (let i = 0; i < object.indices.length; i++) {
         const index = object.indices[i]!; const entry = palette.entries.get(index);
-        if (!entry) { missingIndex = index; break; }
+        // Palette definitions may omit indices. The pinned libbluray PDS decoder
+        // starts its 256-entry table at zero before applying the sparse entries;
+        // in IGS the alpha component is direct, so an omitted entry is transparent.
+        if (!entry) continue;
         const [r, g, b] = ycbcrLimited601(entry.y, entry.cb, entry.cr);
         const offset = i * 4; rgba[offset] = r; rgba[offset + 1] = g; rgba[offset + 2] = b; rgba[offset + 3] = entry.alpha;
-      }
-      if (missingIndex !== null) {
-        scene.complete = false;
-        diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE_INDEX", message: `Palette ${palette.id}:${palette.version} has no entry ${missingIndex}`, source: object.source, affectedSceneIds: [scene.id] });
-        continue;
       }
       const pngBytes = encodeRgbaPng(object.width, object.height, rgba);
       const id = `igs-${scene.clipId}-${scene.pid}-${scene.compositionNumber}-p${page.id}-o${object.id}v${object.version}-pal${palette.id}v${palette.version}`;

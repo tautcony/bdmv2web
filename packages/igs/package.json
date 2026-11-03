@@ -13,5 +13,9 @@
     "@bdmv-web/bdmv-io": "workspace:*",
     "@bdmv-web/bdmv-parser": "workspace:*",
     "@bdmv-web/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@bdmv-web/hdmv": "workspace:*",
+    "@bdmv-web/test-fixtures": "workspace:*"
   }
 }

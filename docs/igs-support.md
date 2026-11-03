@@ -1,6 +1,6 @@
 # M2 IGS extraction support boundary
 
-This package implements a bounded first pass over synthetic 192-byte M2TS input. The output reports `support.status: "unverified"`; that is intentional. The repository has no Blu-ray normative syntax text available for IGS, and the committed Tamako sample contains metadata but no STREAM payload. It cannot validate menu pixels.
+This package implements a bounded first pass over synthetic 192-byte M2TS input and has a workspace-local smoke test for the user-provided Tamako IGS stream. The output reports `support.status: "unverified"`; that is intentional. The repository has no Blu-ray normative syntax text available for IGS, and the Tamako smoke checks parsed scene structure only. It does not validate menu pixels.
 
 M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can key paths relative to the BDMV root (`STREAM/...`) or include the `BDMV/` prefix. Extraction resolves between those names only through paths already present in the validated table.
 
@@ -9,6 +9,7 @@ M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can
 - M2TS framing, incremental reads, adaptation fields, per-PID payload continuity, duplicate suppression, PAT/PMT parsing, PES assembly, PTS decoding, 33-bit wrap extension, and explicit time-domain reset.
 - IG segment accumulation across PES payloads, complete ICS/PDS/ODS/END scenes, version-keyed palette/object caches, ODS continuation assembly, bounded object dimensions, and bounded indexed-pixel RLE output.
 - Raw 12-byte button command retention with absolute source byte offsets, basic page/BOG/button relationships, PNG byte encoding, and stable asset path mapping.
+- Sparse PDS palettes: palette indices omitted from the segment render as transparent zero. This follows the pinned libbluray 1.5.0 shared PDS decoder's zero-initialized 256-entry table; BDA normative text is not available here.
 - Diagnostics for malformed or incomplete packet/PES/segment/object state, PID disagreement, unsupported effects, and missing scene references.
 - A PSI continuity error discards the partial section. IG transport damage discards the active Display Set, residual segment bytes, pending ODS fragments, and cached object/palette definitions for that stream. A scene with damaged data, an unresolved object/palette, or an unfinished object sequence cannot retain `complete: true`.
 
@@ -18,7 +19,9 @@ The repository also includes one externally sourced 6,129-byte real ICS body in 
 
 ## Host-local real-stream smoke
 
-The user-provided Tamako disc was inspected read-only. Its parsed CLPI metadata declares PGS (`0x90`) streams but no IGS (`0x91`) streams. The smallest referenced test stream used for the extraction smoke was Playlist `00057` / Clip `00054`, 30,720 bytes. It produced zero IGS scenes and `IGS_PID_UNRESOLVED`, as expected for a clip with no IGS declaration. The stream stayed on the source volume; no STREAM data or source hash was copied into the repository. This is a real negative test for the no-IG path, not a menu-rendering test.
+The workspace-local, user-provided sample has a real positive IGS path: `CLIPINF/00005.clpi` declares PID `0x1400` (`0x91`), and `STREAM/00005.m2ts` is 8,957,952 bytes. Playlist `00003` has 999 main-path PlayItems that repeat Clip `00004` and references Clip `00005` through an IGS SubPath. Its audio declaration order is English PID `0x1100`, then Japanese PID `0x1101`. The optional `packages/igs/test/tamako-real-smoke.test.ts` parses that structure and stream when present; it skips when the user data is absent. The current parser extracts one 1920×1080 composition with seven pages, 168 objects and seven palettes. It emits graphic assets but keeps the scene incomplete and the package partial because pages 2 and 3 declare default button `65534`, whose runtime meaning is not established here. The same playlist also reaches Clip `00043`, whose CLPI declares IGS but whose STREAM file is not in this workspace, so extraction reports the missing source. No source media was modified, copied by the test, or hashed.
+
+Clip `00004` declares PGS (`0x90`) subtitle streams; that is not an IGS cue. The Clip `00054` no-IG case remains a separate real negative smoke. These real-stream checks verify transport/scene extraction paths only. They do not provide an independent pixel oracle or prove that the menu renders or switches language correctly.
 
 ## Unverified behavior
 

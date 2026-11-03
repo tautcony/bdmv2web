@@ -10,11 +10,11 @@ export interface IgsStreamState {
   pendingObjects: Map<string, { id: number; version: number; width: number; height: number; declaredLength: number; bytes: Uint8Array; source: IgsObject["source"]; last: boolean }>;
   scenes: IgsScene[];
   diagnostics: IgsDiagnostic[];
-  current: { ics: Uint8Array; source: IgsScene["source"]; pts: string | null; timeDomain: number; objects: IgsObject[]; palettes: IgsPalette[]; invalid: boolean } | null;
+  current: Map<number, { ics: Uint8Array; source: IgsScene["source"]; pts: string | null; timeDomain: number; objects: IgsObject[]; palettes: IgsPalette[]; invalid: boolean }>;
 }
 
 export function createIgsState(): IgsStreamState {
-  return { objects: new Map(), palettes: new Map(), pendingObjects: new Map(), scenes: [], diagnostics: [], current: null };
+  return { objects: new Map(), palettes: new Map(), pendingObjects: new Map(), scenes: [], diagnostics: [], current: new Map() };
 }
 
 export function parseSegments(input: Uint8Array, baseOffset = 0n, residual = new Uint8Array(), clipId = "", pid = 0, pts: PtsValue | null = null): SegmentParseResult {
@@ -69,21 +69,38 @@ export function decodeRle(data: Uint8Array, width: number, height: number, limit
 
 export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipId: string, pid: number, pts: PtsValue | null, packetOffset: bigint, pesOffset: bigint, segmentFileOffset: bigint, limits: Limits = DEFAULT_LIMITS): void {
   const src = source(clipId, pid, packetOffset, pesOffset, segment.offset, pts?.normalized.toString() ?? null, pts?.timeDomain ?? 0, segmentFileOffset);
+  let current = state.current.get(pid);
+  if (current && current.timeDomain !== src.timeDomain) {
+    const abandonedDomain = current.timeDomain;
+    state.diagnostics.push(error("IGS_TIME_DOMAIN_RESET", `Time domain changed from ${current.timeDomain} to ${src.timeDomain} before Display Set END; the active composition was discarded`, current.source, [sceneId(current.source)]));
+    state.current.delete(pid);
+    current = undefined;
+    for (const [key, pending] of state.pendingObjects) {
+      if (!key.startsWith(cachePrefix(pid, abandonedDomain))) continue;
+      state.diagnostics.push(error("IGS_INCOMPLETE_OBJECT", `Time-domain reset left ODS object ${pending.id} version ${pending.version} incomplete`, pending.source));
+      state.pendingObjects.delete(key);
+    }
+  }
   try {
     if (segment.type === 0x18) {
-      if (state.current) {
-        state.diagnostics.push(error("IGS_UNCOMPLETED_DISPLAY_SET", "New ICS arrived before prior Display Set reached END", state.current.source, [sceneId(state.current.source)]));
-        state.pendingObjects.clear();
+      if (current) {
+        state.diagnostics.push(error("IGS_UNCOMPLETED_DISPLAY_SET", "New ICS arrived before prior Display Set reached END", current.source, [sceneId(current.source)]));
+        for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, current.timeDomain))) state.pendingObjects.delete(key);
       }
       const parsed = parseIcs(segment.data, limits);
-      if (parsed.compositionState === 2) { state.objects.clear(); state.palettes.clear(); state.pendingObjects.clear(); }
-      state.current = { ics: segment.data.slice(), source: src, pts: pts?.normalized.toString() ?? null, timeDomain: pts?.timeDomain ?? 0, objects: [], palettes: [], invalid: false };
+      if (parsed.compositionState === 2) {
+        for (const key of [...state.objects.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.objects.delete(key);
+        for (const key of [...state.palettes.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.palettes.delete(key);
+        for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.pendingObjects.delete(key);
+      }
+      current = { ics: segment.data.slice(), source: src, pts: pts?.normalized.toString() ?? null, timeDomain: pts?.timeDomain ?? 0, objects: [], palettes: [], invalid: false };
+      state.current.set(pid, current);
       return;
     }
     if (segment.type === 0x14) {
       const palette = parsePalette(segment.data, src);
-      state.palettes.set(`${palette.id}:${palette.version}`, palette);
-      if (state.current) state.current.palettes.push(palette);
+      state.palettes.set(cacheKey(pid, src.timeDomain, palette.id, palette.version), palette);
+      if (current?.timeDomain === src.timeDomain) current.palettes.push(palette);
       return;
     }
     if (segment.type === 0x15) {
@@ -91,44 +108,50 @@ export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipI
       return;
     }
     if (segment.type === 0x80) {
-      if (!state.current) { state.diagnostics.push(error("IGS_ORPHAN_END", "END segment has no active ICS composition", src)); return; }
-      for (const pending of state.pendingObjects.values()) {
-        state.current.invalid = true;
-        state.diagnostics.push(error("IGS_INCOMPLETE_OBJECT", `END arrived with incomplete ODS object ${pending.id} version ${pending.version}`, pending.source, [sceneId(state.current.source)]));
-        for (const objectKey of state.objects.keys()) if (objectKey.startsWith(`${pending.id}:`)) state.objects.delete(objectKey);
-        state.current.objects = state.current.objects.filter((object) => object.id !== pending.id);
+      if (!current) { state.diagnostics.push(error("IGS_ORPHAN_END", "END segment has no active ICS composition", src)); return; }
+      for (const [pendingKey, pending] of state.pendingObjects) {
+        if (!pendingKey.startsWith(cachePrefix(pid, current.timeDomain))) continue;
+        current.invalid = true;
+        state.diagnostics.push(error("IGS_INCOMPLETE_OBJECT", `END arrived with incomplete ODS object ${pending.id} version ${pending.version}`, pending.source, [sceneId(current.source)]));
+        state.objects.delete(cacheKey(pid, current.timeDomain, pending.id, pending.version));
+        current.objects = current.objects.filter((object) => object.id !== pending.id || object.version !== pending.version);
       }
-      state.pendingObjects.clear();
-      const scene = parseIcs(state.current.ics, limits);
-      scene.id = `${clipId}:${pid}:${scene.compositionNumber}:${state.current.timeDomain}:${state.current.pts ?? "no-pts"}`;
-      scene.source = state.current.source; scene.clipId = clipId; scene.pid = pid; scene.pts90k = state.current.pts; scene.timeDomain = state.current.timeDomain;
-      scene.rawIcs = state.current.ics.slice();
+      for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, current.timeDomain))) state.pendingObjects.delete(key);
+      const scene = parseIcs(current.ics, limits);
+      scene.id = `${clipId}:${pid}:${scene.compositionNumber}:${current.timeDomain}:${current.pts ?? "no-pts"}`;
+      scene.source = current.source; scene.clipId = clipId; scene.pid = pid; scene.pts90k = current.pts; scene.timeDomain = current.timeDomain;
+      scene.rawIcs = current.ics.slice();
+      for (const page of scene.pages) {
+        page.scopeId = `${scene.id}:page:${page.id}`;
+        for (const button of page.buttons) button.scopeId = `${page.scopeId}:button:${button.id}`;
+      }
       for (const page of scene.pages) for (const button of page.buttons) for (const command of button.commands) {
         command.sourceOffset = (BigInt(scene.source.segmentFileOffset) + 3n + BigInt(command.sourceOffset)).toString();
       }
-      scene.objects = [...new Map([...state.current.objects, ...state.objects.values()].map((o) => [`${o.id}:${o.version}`, o])).values()];
-      scene.palettes = [...new Map([...state.current.palettes, ...state.palettes.values()].map((p) => [`${p.id}:${p.version}`, p])).values()];
-      scene.complete = !state.current.invalid;
+      scene.objects = [...new Map([...current.objects, ...[...state.objects.entries()].filter(([key]) => key.startsWith(cachePrefix(pid, current!.timeDomain))).map(([, object]) => object)].map((o) => [`${o.id}:${o.version}`, o])).values()];
+      scene.palettes = [...new Map([...current.palettes, ...[...state.palettes.entries()].filter(([key]) => key.startsWith(cachePrefix(pid, current!.timeDomain))).map(([, palette]) => palette)].map((p) => [`${p.id}:${p.version}`, p])).values()];
+      scene.complete = !current.invalid;
+      if (validateButtonReferences(scene, state.diagnostics)) scene.complete = false;
       state.scenes.push(scene);
-      state.current = null;
+      state.current.delete(pid);
       return;
     }
-    state.diagnostics.push({ severity: "warning", code: "IGS_UNSUPPORTED_SEGMENT", message: `Segment type 0x${segment.type.toString(16).padStart(2, "0")} is retained only as an unknown segment`, source: src, affectedSceneIds: state.current ? [sceneId(state.current.source)] : [] });
+    state.diagnostics.push({ severity: "warning", code: "IGS_UNSUPPORTED_SEGMENT", message: `Segment type 0x${segment.type.toString(16).padStart(2, "0")} is retained only as an unknown segment`, source: src, affectedSceneIds: current ? [sceneId(current.source)] : [] });
   } catch (e) {
     const err = e instanceof IgsError ? e : new IgsError("IGS_INVALID_SEGMENT", e instanceof Error ? e.message : String(e));
-    state.diagnostics.push(error(err.code, err.message, src, state.current ? [sceneId(state.current.source)] : []));
-    if (state.current) state.current.invalid = true;
+    state.diagnostics.push(error(err.code, err.message, src, current ? [sceneId(current.source)] : []));
+    if (current) current.invalid = true;
     if (segment.type === 0x15 && segment.data.length >= 3) {
-      const id = u16(segment.data, 0), key = `${id}:${segment.data[2]}`;
+      const id = u16(segment.data, 0), key = cacheKey(pid, src.timeDomain, id, segment.data[2]!);
       state.pendingObjects.delete(key);
-      for (const objectKey of state.objects.keys()) if (objectKey.startsWith(`${id}:`)) state.objects.delete(objectKey);
-      if (state.current) state.current.objects = state.current.objects.filter((object) => object.id !== id);
+      state.objects.delete(key);
+      if (current) current.objects = current.objects.filter((object) => object.id !== id || object.version !== segment.data[2]);
     } else if (segment.type === 0x14 && segment.data.length >= 2) {
-      const id = segment.data[0]!;
-      for (const paletteKey of state.palettes.keys()) if (paletteKey.startsWith(`${id}:`)) state.palettes.delete(paletteKey);
-      if (state.current) state.current.palettes = state.current.palettes.filter((palette) => palette.id !== id);
+      const id = segment.data[0]!, key = cacheKey(pid, src.timeDomain, id, segment.data[1]!);
+      state.palettes.delete(key);
+      if (current) current.palettes = current.palettes.filter((palette) => palette.id !== id || palette.version !== segment.data[1]);
     }
-    if (segment.type === 0x18) state.current = null;
+    if (segment.type === 0x18) state.current.delete(pid);
   }
 }
 
@@ -136,10 +159,16 @@ function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsO
   if (data.length < 4) throw new IgsError("IGS_INVALID_SEGMENT", "ODS is shorter than its object id, version and sequence descriptor");
   const id = u16(data, 0), version = data[2]!, flags = data[3]!;
   const first = !!(flags & 0x80), last = !!(flags & 0x40);
-  const key = `${id}:${version}`;
+  const key = cacheKey(src.pid, src.timeDomain, id, version);
   let pending = state.pendingObjects.get(key);
   let cursor = 4;
   if (first) {
+    if (pending) {
+      const current = state.current.get(src.pid);
+      if (current) current.invalid = true;
+      state.diagnostics.push(error("IGS_INCOMPLETE_OBJECT", `New first fragment replaced incomplete ODS object ${id} version ${version}`, pending.source, current ? [sceneId(current.source)] : []));
+      state.pendingObjects.delete(key);
+    }
     if (data.length < 10) throw new IgsError("IGS_INVALID_SEGMENT", "First ODS fragment has no length and dimensions");
     const declaredLength = u24(data, cursor); cursor += 3;
     const width = u16(data, cursor); const height = u16(data, cursor + 2); cursor += 4;
@@ -152,7 +181,13 @@ function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsO
     throw new IgsError("UNRESOLVED_OBJECT", `ODS continuation for object ${id} version ${version} has no first fragment`);
   }
   if (!pending) return;
-  pending.bytes = join(pending.bytes, data.subarray(cursor));
+  const fragment = data.subarray(cursor);
+  const activeBytes = [...state.pendingObjects.values()].reduce((sum, item) => sum + item.bytes.length, 0) - pending.bytes.length;
+  if (activeBytes + pending.bytes.length + fragment.length > limits.maxReassemblyBytes) {
+    state.pendingObjects.delete(key);
+    throw new IgsError("LIMIT_EXCEEDED", `Active ODS reassembly bytes exceed maxReassemblyBytes ${limits.maxReassemblyBytes}`);
+  }
+  pending.bytes = join(pending.bytes, fragment);
   pending.last ||= last;
   if (pending.bytes.length > limits.maxReassemblyBytes || pending.bytes.length > pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} fragment bytes exceed declared object length`);
   if (!pending.last) return;
@@ -160,7 +195,8 @@ function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsO
   const indices = decodeRle(pending.bytes, pending.width, pending.height, limits);
   const object: IgsObject = { id, version, width: pending.width, height: pending.height, indices, source: pending.source };
   state.objects.set(key, object);
-  if (state.current) state.current.objects.push(object);
+  const current = state.current.get(src.pid);
+  if (current?.timeDomain === src.timeDomain) current.objects.push(object);
   state.pendingObjects.delete(key);
 }
 
@@ -219,6 +255,34 @@ function parsePage(r: BitReader): IgsPage {
   return { id, version, uoMask, defaultSelectedButtonId, defaultActivatedButtonId, paletteId, buttons, bogs, animationFrameRateCode, rawEffects: { enter: enter.bytes, exit: exit.bytes, enterEffectCount: enter.effectCount, exitEffectCount: exit.effectCount } };
 }
 
+function validateButtonReferences(scene: IgsScene, diagnostics: IgsDiagnostic[]): boolean {
+  let invalid = false;
+  const report = (pageId: number, referencedButtonId: number, referenceKind: string, buttonId?: number) => {
+    invalid = true;
+    diagnostics.push({
+      ...error("IGS_INVALID_BUTTON_REFERENCE", `Page ${pageId} ${referenceKind} references button ${referencedButtonId}, which is invalid for that reference scope`, scene.source, [scene.id]),
+      details: { pageId, referencedButtonId, referenceKind, buttonId: buttonId ?? null },
+    });
+  };
+  for (const page of scene.pages) {
+    const buttonIds = new Set(page.buttons.map((button) => button.id));
+    for (const defaultId of [page.defaultSelectedButtonId, page.defaultActivatedButtonId]) {
+      if (defaultId !== 0xffff && !buttonIds.has(defaultId)) report(page.id, defaultId, "page-default");
+    }
+    for (const [bogIndex, bog] of page.bogs.entries()) {
+      const members = new Set(bog.buttonIds);
+      for (const memberId of bog.buttonIds) if (!buttonIds.has(memberId)) report(page.id, memberId, `bog-${bogIndex}-member`);
+      if (bog.defaultButtonId !== 0xffff && (!members.has(bog.defaultButtonId) || !buttonIds.has(bog.defaultButtonId))) report(page.id, bog.defaultButtonId, `bog-${bogIndex}-default`);
+    }
+    for (const button of page.buttons) {
+      for (const [direction, neighborId] of Object.entries(button.neighbors)) {
+        if (neighborId !== 0xffff && !buttonIds.has(neighborId)) report(page.id, neighborId, `neighbor-${direction}`, button.id);
+      }
+    }
+  }
+  return invalid;
+}
+
 function parseEffectSequence(r: BitReader): { bytes: Uint8Array; effectCount: number } {
   const start = r.position; const windows = r.u8(); r.skip(windows * 9); const effects = r.u8();
   for (let i = 0; i < effects; i++) { r.u24(); r.u8(); const objects = r.u8(); for (let j = 0; j < objects; j++) { r.u16(); r.u8(); const flags = r.u8(); r.u16(); r.u16(); if (flags & 0x80) r.skip(8); } }
@@ -248,3 +312,5 @@ function sceneId(src: IgsDiagnostic["source"]): string { return `${src?.clipId ?
 function u16(bytes: Uint8Array, pos: number): number { return (bytes[pos]! << 8) | bytes[pos + 1]!; }
 function u24(bytes: Uint8Array, pos: number): number { return (bytes[pos]! << 16) | (bytes[pos + 1]! << 8) | bytes[pos + 2]!; }
 function join(a: Uint8Array, b: Uint8Array): Uint8Array { const out = new Uint8Array(a.length + b.length); out.set(a); out.set(b, a.length); return out; }
+function cachePrefix(pid: number, timeDomain: number): string { return `${pid}:${timeDomain}:`; }
+function cacheKey(pid: number, timeDomain: number, id: number, version: number): string { return `${cachePrefix(pid, timeDomain)}${id}:${version}`; }
