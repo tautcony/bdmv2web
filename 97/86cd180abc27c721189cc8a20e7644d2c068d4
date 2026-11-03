@@ -1,0 +1,49 @@
+packages/bdmv-parser/src/parser.test.ts
+  s_3a3ffd5e9a879b::t_61ff039aeb1c8b 20,22,24-25
+  s_3a3ffd5e9a879b::t_03565c9be4c23e 21
+  s_3a3ffd5e9a879b::t_7140306271fcd6 7,19,23,26-41,52,182
+  s_3a3ffd5e9a879b::t_0dcad0ad8fa454 171-179
+  s_3a3ffd5e9a879b::t_409965b466d15a 48-50,286
+  s_3a3ffd5e9a879b::t_ed39be5f35331b 51
+  s_3a3ffd5e9a879b::t_ad651b2c2c9ec1 53
+  s_3a3ffd5e9a879b::t_bce86df4162652 180-181
+  s_3a3ffd5e9a879b::t_f0c76e1532d65e 183
+docs/protocol-support.md
+  s_3a3ffd5e9a879b::t_a0ab167471e466 25
+  s_3a3ffd5e9a879b::t_22e707feb033fa 27
+  s_3a3ffd5e9a879b::t_96ea84ee7551d7 26
+packages/bdmv-io/src/bdmv-candidate.ts
+  s_3a3ffd5e9a879b::t_96fa19b26bd7e5 1-21
+packages/bdmv-io/src/index.ts
+  s_3a3ffd5e9a879b::t_96fa19b26bd7e5 7,56-60
+packages/bdmv-parser/src/graph.ts
+  s_3a3ffd5e9a879b::t_6fd8d51190814f 32-34,42,51,56
+  s_3a3ffd5e9a879b::t_120483ddcd473e 40-41
+  s_3a3ffd5e9a879b::t_c5c9d7c28ea3db 49
+  s_3a3ffd5e9a879b::t_7140306271fcd6 1-31,35-39,43-48,50,52-55,57-67
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_3a3ffd5e9a879b::t_4d85584bbb73dc 18,32
+  s_3a3ffd5e9a879b::t_90bd5a98bea98c 9
+  s_3a3ffd5e9a879b::t_8896a45fffe2df 33-35
+  s_3a3ffd5e9a879b::t_94b29a21ef527d 24,27,36-37
+packages/bdmv-parser/src/index.ts
+  s_3a3ffd5e9a879b::t_7140306271fcd6 2,4
+packages/bdmv-io/src/index.test.ts
+  s_3a3ffd5e9a879b::t_96fa19b26bd7e5 6,13-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9786cd180abc27c721189cc8a20e7644d2c068d4",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
