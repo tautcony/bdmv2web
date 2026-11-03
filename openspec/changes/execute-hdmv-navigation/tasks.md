@@ -12,16 +12,16 @@
 
 ## 2. 执行语义
 
-- [ ] 2.1 实现GPR/PSR数量、uint32读写权限及系统更新入口；验收：边界索引/只读PSR/符号位/溢出符合参考。
-- [ ] 2.2 实现Compare下一条控制、算术和位运算；验收：逐条黄金含真/假、溢出/除零/移位等已支持语义。
+- [x] 2.1 实现GPR/PSR数量、uint32读写权限及系统更新入口；验收：边界索引/只读PSR/符号位/溢出符合参考。
+- [x] 2.2 实现Compare下一条控制、算术和位运算；验收：逐条黄金含真/假、溢出/除零/移位等已支持语义。
 - [ ] 2.3 实现PC、Jump/Call/Resume/Link与对象/标题导航；验收：栈和Resume保存范围逐步匹配参考，非法目标fault。
-- [ ] 2.4 实现PlayPL/PlayPLatPI/LinkPI/SetStream/SetButtonPage/PopupOff/Still及其它已声明系统指令；验收：每个支持项与Action/等待条件一一对应。
+- [x] 2.4 实现PlayPL/PlayPLatPI/LinkPI/SetStream/SetButtonPage/PopupOff/Still及其它已声明系统指令；验收：每个支持项与Action/等待条件一一对应。
 
 ## 3. 异步调度与分析
 
 - [x] 3.1 实现idle/running/suspended/stopped/faulted与continuation；验收：动作发出前统一分配新generation，模拟桥started/seeked/ended按各自等待条件恢复，合法新回信至多一次且旧回信拒绝。
 - [x] 3.2 处理错误/unavailable/重复/乱序/过期generation；验收：不挂死、不重执行旧命令，当前PC/寄存器不被污染。
-- [ ] 3.3 接入菜单用户事件与UO mask；验收：键盘/指针同规则，必要媒体系统事件不被屏蔽。
+- [x] 3.3 接入菜单用户事件与UO mask；验收：键盘/指针同规则，必要媒体系统事件不被屏蔽。
 - [x] 3.4 实现每轮指令/调用深度/队列/探索预算；验收：同步循环超限诊断VM_EXECUTION_LIMIT，等待输入的合法循环可继续。
 - [x] 3.5 输出含条件/来源的NavigationGraph并可追加按钮程序；验收：动态目标unknown、预算耗尽不判unreachable，M5可消费。
 
@@ -30,3 +30,9 @@
 - [x] 4.1 实现状态快照、寄存器delta、Action/Event与源指令trace；验收：相同profile/seed/输入语义结果一致。
 - [ ] 4.2 建立独立参考golden的Compare/Call/Resume/媒体恢复路径；验收：首分歧可定位，提交支持编码分母和未验证项。
 - [x] 4.3 以模拟桥向M4交付执行器、向M5交付图；验收：无DOM/视频依赖，按钮原始序列与对象同一执行器。
+
+## Current evidence gaps
+
+- 1.3 has explicit PlayerProfile defaults and PSR mappings based on pinned libbluray implementation behavior, but no BDA normative clause or independent player check. Keep the mappings `unverified` and this task open.
+- 2.3 implements object jump/call/resume and validates known title targets when M1 entries are supplied. `CALL_TITLE` continuation remains unsupported; object/title navigation has no independent reference trace. Keep the task open.
+- 4.2 has deterministic semantic traces and supported/unknown instruction accounting, but no independent golden paths for Compare/Call/Resume/media restoration. Do not treat the synthetic VM fixtures as independent reference evidence.

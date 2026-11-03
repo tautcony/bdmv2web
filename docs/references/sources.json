@@ -80,6 +80,8 @@
           "src/libbluray/register.c",
           "src/libbluray/register.h",
           "src/libbluray/player_settings.h",
+          "src/libbluray/bluray.c",
+          "src/util/strutl.c",
           "src/libbluray/bdnav/navigation.c",
           "src/libbluray/bdnav/uo_mask.c"
         ],
@@ -125,6 +127,8 @@
           "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/register.c",
           "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/register.h",
           "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/player_settings.h",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bluray.c",
+          "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/util/strutl.c",
           "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/navigation.c",
           "https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/bdnav/uo_mask.c"
         ],

@@ -1,4 +1,5 @@
-import type { MovieObject, MovieInstruction, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { PlayerProfile as CorePlayerProfile } from "@bdmv-web/core";
 import { decodeInstruction, type DecodedInstruction, type Operand, type RawCommand } from "./decode.js";
 import { RegisterFile, RegisterFault, type PlayerProfile, type RegisterRef } from "./registers.js";
 
@@ -12,13 +13,21 @@ export interface VmDiagnostic { code: string; message: string; source: SourceLoc
 export interface PlaybackContext { status: "idle" | "requested" | "playing" | "ended" | "error" | "unavailable"; playlist: number | null; playItem: number | null; presentationTime: number | null; pendingActionId: string | null; }
 export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; status: VmStatus; diagnostic?: VmDiagnostic; }
 export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
-export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; }
+export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
 export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
+export type ButtonCommandContext = "movie-object" | "ig-button";
+export type ButtonCommandResult = VmSnapshot & { buttonCommandTerminated: boolean };
+export type ButtonProgramResult = VmSnapshot & { actions: NavigationAction[]; terminated: boolean; buttonCommandTerminated: boolean; fault: VmDiagnostic | null };
 type Continuation = { action: NavigationAction; nextProgramId: number; nextPc: number; };
 const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
+const DEFAULT_PLAYER_PROFILE: Readonly<CorePlayerProfile> = Object.freeze({
+  menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng",
+  country: "US", region: "A", outputProfile: "portable",
+  videoProfiles: [], audioProfiles: [],
+});
 const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
-const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "started", PLAY_PLAYLIST_ITEM: "started", PLAY_PLAYLIST_MARK: "started", LINK_PLAY_ITEM: "seeked", LINK_PLAY_MARK: "seeked", PLAY_STOP: "ended", STILL_ON: "still-completed", TITLE_SEARCH: "started", TOP_MENU: "started", MENU_CALL: "started" };
+const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "ended", PLAY_PLAYLIST_ITEM: "ended", PLAY_PLAYLIST_MARK: "ended", TOP_MENU: "started", MENU_CALL: "started" };
 
 function textInstruction(d: DecodedInstruction): string { return `${d.opcode ?? "UNKNOWN"} ${d.operands.filter((x) => x !== null).map((x) => x.kind === "immediate" ? `#${x.value}` : `${x.kind}[${x.value}]`).join(",")}`.trim(); }
 
@@ -32,10 +41,12 @@ export class HdmvVm {
   private readonly programs = new Map<number, VmProgram>(); private readonly callStack: Array<{ programId: number; pc: number }> = [];
   private continuation: Continuation | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
   private readonly consumedResponses = new Set<string>(); private readonly eventQueue: VmEvent[] = []; private readonly actionQueue: NavigationAction[] = [];
-  private profile: PlayerProfile; private lastAction: NavigationAction | undefined;
+  private profile: PlayerProfile; private lastAction: NavigationAction | undefined; private resumeAfterPlaylistStop = false;
+  private readonly entries: VmOptions["entries"];
+  private readonly onTrace: VmOptions["onTrace"];
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
   constructor(programs: Array<VmProgram | MovieObject>, options: VmOptions = {}) {
-    this.opts = { ...DEFAULTS, ...options }; this.profile = options.profile ?? {}; this.registers = new RegisterFile(this.profile);
+    this.opts = { ...DEFAULTS, ...options }; this.entries = options.entries; this.onTrace = options.onTrace; this.profile = normalizeProfile(options.profile); this.registers = new RegisterFile(this.profile);
     for (const p of programs) this.addProgram(p as VmProgram);
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
@@ -45,50 +56,124 @@ export class HdmvVm {
     this.programs.set(p.id, { id: p.id, instructions: p.instructions, ...(p.resumeIntention !== undefined ? { resumeIntention: p.resumeIntention } : {}), ...(p.menuCallMask !== undefined ? { menuCallMask: p.menuCallMask } : {}), ...(p.titleSearchMask !== undefined ? { titleSearchMask: p.titleSearchMask } : {}) });
   }
   reset(programId = 0, profile: PlayerProfile = this.profile): void {
-    this.profile = profile; this.registers.reset(profile); this.programId = programId; this.pc = 0; this.status = "idle"; this.generation++;
-    this.callStack.length = 0; this.continuation = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined;
+    this.profile = normalizeProfile(profile); this.registers.reset(this.profile); this.programId = programId; this.pc = 0; this.status = "idle"; this.generation++;
+    this.callStack.length = 0; this.continuation = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
-    this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
+    this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
   /** Execute one selected button's command in the current VM register/object context. Ordinary commands leave PC unchanged; control-transfer commands use the current VM context. The button identity is not an object ID. */
-  executeButtonCommand(command: ButtonCommand, source?: SourceLocation): VmSnapshot {
-    if (this.status === "faulted" || this.status === "stopped" || this.status === "suspended") {
+  executeButtonCommand(command: ButtonCommand, source?: SourceLocation, context: ButtonCommandContext = "movie-object"): ButtonCommandResult {
+    const resumePendingPlaylist = this.status === "suspended" && context === "ig-button" && this.hasPlaylistContinuation() && this.isTerminatePlaylistCommand(command, source);
+    if (this.status === "faulted" || this.status === "stopped" || (this.status === "suspended" && !resumePendingPlaylist)) {
       const diagnostic = { code: this.status === "suspended" ? "HDMV_INPUT_WHILE_SUSPENDED" : "HDMV_EVENT_AFTER_TERMINAL", message: `Button command rejected while VM is ${this.status}`, source: source ?? null };
       this.record({ source: source ?? null, raw: null, decoded: null, registerDelta: EMPTY_DELTA, status: this.status, diagnostic });
-      return this.snapshot();
+      return { ...this.snapshot(), buttonCommandTerminated: false };
     }
+    if (resumePendingPlaylist) this.status = "running";
+    this.resumeAfterPlaylistStop = false;
     this.instructionsThisTurn = 0;
     const before = this.registers.snapshot(); const from = { programId: this.programId, pc: this.pc };
     let d: DecodedInstruction;
     try { d = decodeInstruction(command, source); }
     catch (error) {
       this.fail("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), source ?? null);
-      return this.snapshot();
+      return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     if (d.status === "invalid" || !d.opcode) {
       this.fail(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, from);
-      return this.snapshot();
+      return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     const program = this.programs.get(this.programId);
     if (!program) {
       this.fail("HDMV_INVALID_TARGET", `No program/object ${this.programId}`, d.source, d, before, from);
-      return this.snapshot();
+      return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     if (this.instructionsThisTurn >= this.opts.maxInstructionsPerTurn) {
       this.fail("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, d.source, d, before, from);
-      return this.snapshot();
+      return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     this.instructionsThisTurn++;
     if (this.status === "idle") this.status = "running";
-    try { this.execute(d, program); }
+    let buttonCommandTerminated = false;
+    try { buttonCommandTerminated = this.execute(d, program, context) === true; }
     catch (error) {
       this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, from);
-      return this.snapshot();
+      return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status });
     this.lastAction = undefined;
-    return this.snapshot();
+    if (this.resumeAfterPlaylistStop && this.status === "running") {
+      this.resumeAfterPlaylistStop = false;
+      return { ...this.runTurn(), buttonCommandTerminated };
+    }
+    return { ...this.snapshot(), buttonCommandTerminated };
+  }
+  /** Execute a button's complete command array with a sequence-local PC. */
+  executeButtonProgram(commands: ButtonCommand[], context: ButtonCommandContext = "movie-object"): ButtonProgramResult {
+    const firstAction = this.actions.length;
+    const resumePendingPlaylist = this.status === "suspended" && context === "ig-button" && this.hasPlaylistContinuation() && this.isSafeIgProgramDuringPlaylistWait(commands);
+    if (this.status === "faulted" || this.status === "stopped" || (this.status === "suspended" && !resumePendingPlaylist)) {
+      const diagnostic = { code: this.status === "suspended" ? "HDMV_INPUT_WHILE_SUSPENDED" : "HDMV_EVENT_AFTER_TERMINAL", message: `Button program rejected while VM is ${this.status}`, source: null };
+      this.record({ source: null, raw: null, decoded: null, registerDelta: EMPTY_DELTA, status: this.status, diagnostic });
+      return { ...this.snapshot(), actions: [], terminated: false, buttonCommandTerminated: false, fault: this.status === "faulted" ? this.diagnostic : null };
+    }
+
+    const ownerProgramId = this.programId; const ownerPc = this.pc;
+    const savedPlaylistContinuation = resumePendingPlaylist ? this.continuation : null;
+    if (resumePendingPlaylist) this.status = "running";
+    const program = this.programs.get(ownerProgramId) ?? { id: ownerProgramId, instructions: [] };
+    let pc = 0; let terminated = false; let buttonCommandTerminated = false;
+    this.resumeAfterPlaylistStop = false;
+    this.instructionsThisTurn = 0;
+    if (this.status === "idle") this.status = "running";
+    while (pc < commands.length && this.status === "running") {
+      if (this.instructionsThisTurn >= this.opts.maxInstructionsPerTurn) {
+        this.fail("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, null, undefined, undefined, { programId: ownerProgramId, pc });
+        break;
+      }
+      let d: DecodedInstruction;
+      try { d = decodeInstruction(commands[pc]!); }
+      catch (error) {
+        this.fail("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), null, undefined, undefined, { programId: ownerProgramId, pc });
+        break;
+      }
+      const instructionPc = pc; pc += 1; this.instructionsThisTurn++;
+      const before = this.registers.snapshot(); const [a, b] = d.operands;
+      if (d.status === "invalid" || !d.opcode) {
+        this.fail(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
+        break;
+      }
+      try {
+        if (d.opcode === "GOTO") {
+          const target = a ? this.value(a) : 0;
+          if (target > commands.length) throw new RegisterFault("HDMV_INVALID_PC", `Button PC ${target} is outside command sequence (${commands.length} commands)`);
+          pc = target;
+        } else if (["BC", "EQ", "NE", "GE", "GT", "LE", "LT"].includes(d.opcode)) {
+          const av = a ? this.value(a) : 0; const bv = b ? this.value(b) : 0;
+          if (comparisonSkips(d.opcode, av, bv)) pc += 1;
+        } else if (d.opcode === "BREAK") {
+          terminated = true;
+        } else {
+          buttonCommandTerminated = this.execute(d, program, context) === true;
+          if (buttonCommandTerminated) terminated = true;
+        }
+      } catch (error) {
+        this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
+        break;
+      }
+      this.record({ programId: ownerProgramId, pc: instructionPc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status });
+      this.lastAction = undefined;
+      if (terminated || this.status !== "running" || this.programId !== ownerProgramId || this.pc !== ownerPc) break;
+    }
+    if (!terminated && this.status === "running" && pc >= commands.length) terminated = true;
+    if (savedPlaylistContinuation && this.continuation === savedPlaylistContinuation && this.status === "running") this.status = "suspended";
+    if (this.resumeAfterPlaylistStop && this.status === "running") {
+      this.resumeAfterPlaylistStop = false;
+      this.runTurn();
+    }
+    const snapshot = this.snapshot();
+    return { ...snapshot, actions: this.actions.slice(firstAction), terminated, buttonCommandTerminated, fault: snapshot.status === "faulted" ? snapshot.diagnostic : null };
   }
   runTurn(): VmSnapshot {
     if (this.status === "faulted" || this.status === "stopped" || this.status === "suspended") return this.snapshot();
@@ -98,7 +183,14 @@ export class HdmvVm {
       const program = this.programs.get(this.programId);
       if (!program) { this.fail("HDMV_INVALID_TARGET", `No program/object ${this.programId}`, null); break; }
       const row = program.instructions[this.pc];
-      if (!row) { this.fail("HDMV_INVALID_PC", `PC ${this.pc} is outside object ${this.programId}`, program.instructions.at(-1) ? decodeInstruction(program.instructions.at(-1)!).source : null); break; }
+      if (!row) {
+        if (this.pc === program.instructions.length) {
+          this.status = "idle";
+          this.record({ source: null, raw: null, decoded: "PROGRAM_END", registerDelta: EMPTY_DELTA, status: this.status });
+          break;
+        }
+        this.fail("HDMV_INVALID_PC", `PC ${this.pc} is outside object ${this.programId}`, program.instructions.at(-1) ? decodeInstruction(program.instructions.at(-1)!).source : null); break;
+      }
       let d: DecodedInstruction;
       try { d = decodeInstruction(row); } catch (error) { this.fail("HDMV_INVALID_INSTRUCTION", String(error), null); break; }
       this.instructionsThisTurn++;
@@ -107,6 +199,7 @@ export class HdmvVm {
       try {
         this.execute(d, program);
       } catch (error) {
+        if (error instanceof RegisterFault && error.code === "HDMV_UNVERIFIED_OPCODE") this.pc = from.pc;
         this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, from); break;
       }
       this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status }); this.lastAction = undefined;
@@ -184,8 +277,10 @@ export class HdmvVm {
       return this.snapshot();
     }
   }
-  private execute(d: DecodedInstruction, program: VmProgram): void {
-    const op = d.opcode!; const [a, b] = d.operands; const av = a ? this.value(a) : 0; const bv = b ? this.value(b) : 0;
+  private execute(d: DecodedInstruction, program: VmProgram, context: ButtonCommandContext = "movie-object"): boolean | void {
+    const op = d.opcode!; const [a, b] = d.operands;
+    const av = a ? (op === "SET_BUTTON_PAGE" ? this.buttonPageValue(a, d.immOp1) : this.value(a)) : 0;
+    const bv = b ? (op === "SET_BUTTON_PAGE" ? this.buttonPageValue(b, d.immOp2) : this.value(b)) : 0;
     switch (op) {
       case "NOP": return;
       case "BREAK": this.status = "stopped"; return;
@@ -210,31 +305,190 @@ export class HdmvVm {
       case "BITSET": case "BITCLR": if (bv >= 32) throw new RegisterFault("HDMV_ILLEGAL_OPERAND", `Bit index ${bv} exceeds 31`); this.write(a!, op === "BITSET" ? av | (1 << bv) : av & ~(1 << bv)); return;
       case "SHL": case "SHR": if (bv >= 32) throw new RegisterFault("HDMV_ILLEGAL_OPERAND", `Shift count ${bv} exceeds 31`); this.write(a!, op === "SHL" ? av << bv : av >>> bv); return;
       case "JUMP_OBJECT": this.transfer(av, 0, false, d.source); return;
-      case "CALL_OBJECT": if (this.callStack.length >= this.opts.maxCallDepth) throw new RegisterFault("VM_CALL_DEPTH_LIMIT", `Call depth exceeds ${this.opts.maxCallDepth}`); this.validateTarget(av, 0); this.callStack.push({ programId: this.programId, pc: this.pc }); this.transfer(av, 0, false, d.source); return;
-      case "RESUME": { const frame = this.callStack.pop(); if (!frame) throw new RegisterFault("HDMV_RESUME_WITHOUT_CALL", "RESUME has no saved call context"); this.programId = frame.programId; this.pc = frame.pc; return; }
-      case "JUMP_TITLE": this.actionAndSuspend("TITLE_SEARCH", { title: av }, d.source); return;
+      case "CALL_OBJECT": {
+        this.validateTarget(av, 0);
+        if (this.opts.maxCallDepth < 1) throw new RegisterFault("VM_CALL_DEPTH_LIMIT", `Call depth exceeds ${this.opts.maxCallDepth}`);
+        this.saveCallPsrState();
+        // libbluray keeps one suspended object; a later CALL replaces that context.
+        this.callStack.splice(0, this.callStack.length, { programId: this.programId, pc: this.pc });
+        this.transfer(av, 0, false, d.source);
+        return;
+      }
+      case "RESUME": {
+        const frame = this.callStack.pop();
+        if (!frame) throw new RegisterFault("HDMV_RESUME_WITHOUT_CALL", "RESUME has no saved call context");
+        this.restoreCallPsrState(); this.programId = frame.programId; this.pc = frame.pc;
+        return;
+      }
+      case "JUMP_TITLE":
+        this.validateTitleTarget(av);
+        this.callStack.length = 0;
+        this.resetCallPsrBackup();
+        // The reference emits a title event and continues at the next command;
+        // this is an immediate external request, not a VM continuation wait.
+        this.emit("TITLE_SEARCH", { title: av }, d.source);
+        return;
       case "CALL_TITLE": throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "CALL_TITLE resume context is not implemented without independent semantic evidence");
-      case "PLAY_PL": this.actionAndSuspend("PLAY_PLAYLIST", { playlist: av }, d.source); return;
-      case "PLAY_PL_PI": this.actionAndSuspend("PLAY_PLAYLIST_ITEM", { playlist: av, playItem: bv }, d.source); return;
-      case "PLAY_PL_PM": this.actionAndSuspend("PLAY_PLAYLIST_MARK", { playlist: av, playMark: bv }, d.source); return;
-      case "LINK_PI": this.actionAndSuspend("LINK_PLAY_ITEM", { playItem: av }, d.source); return;
-      case "LINK_MK": this.actionAndSuspend("LINK_PLAY_MARK", { playMark: av }, d.source); return;
-      case "TERMINATE_PL": this.actionAndSuspend("PLAY_STOP", {}, d.source); return;
-      case "SET_STREAM": this.emit("SET_STREAM", { destinationRaw: a?.raw ?? 0, sourceRaw: b?.raw ?? 0, destinationImmediate: d.immOp1, sourceImmediate: d.immOp2 }, d.source); return;
-      case "SET_SEC_STREAM": this.emit("SET_SECONDARY_STREAM", { destinationRaw: a?.raw ?? 0, sourceRaw: b?.raw ?? 0, destinationImmediate: d.immOp1, sourceImmediate: d.immOp2 }, d.source); return;
-      case "SET_NV_TIMER": this.emit("SET_NV_TIMER", { object: av, timeout: bv }, d.source); return;
-      case "SET_BUTTON_PAGE": this.emit("SET_BUTTON_PAGE", { destinationRaw: a?.raw ?? 0, sourceRaw: b?.raw ?? 0, destinationImmediate: d.immOp1, sourceImmediate: d.immOp2 }, d.source); return;
-      case "ENABLE_BUTTON": this.emit("ENABLE_BUTTON", { button: av }, d.source); return;
-      case "DISABLE_BUTTON": this.emit("DISABLE_BUTTON", { button: av }, d.source); return;
-      case "POPUP_OFF": this.emit("POPUP_OFF", {}, d.source); return;
-      case "STILL_ON": this.actionAndSuspend("STILL_ON", {}, d.source); return;
-      case "STILL_OFF": this.emit("STILL_OFF", {}, d.source); return;
+      case "PLAY_PL": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST", { playlist: av }, d.source); return;
+      case "PLAY_PL_PI": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST_ITEM", { playlist: av, playItem: bv }, d.source); return;
+      case "PLAY_PL_PM": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST_MARK", { playlist: av, playMark: bv }, d.source); return;
+      case "LINK_PI": if (context !== "ig-button") return; this.emit("LINK_PLAY_ITEM", { playItem: av }, d.source); return;
+      case "LINK_MK": if (context !== "ig-button") return; this.emit("LINK_PLAY_MARK", { playMark: av }, d.source); return;
+      case "TERMINATE_PL": {
+        if (context !== "ig-button") return;
+        if (this.hasPlaylistContinuation()) this.resumeMovieObjectAfterPlaylistStop(d.source);
+        else this.emit("PLAY_STOP", {}, d.source);
+        return true;
+      }
+      case "SET_STREAM": {
+        const destination = this.streamOperand(a, d.immOp1); const source = this.streamOperand(b, d.immOp2);
+        const primaryAudioStream = destination & 0x80000000 ? (destination >>> 16) & 0x0fff : null;
+        const interactiveGraphicsStream = source & 0x80000000 ? (source >>> 16) & 0xff : null;
+        const angle = source & 0x8000 ? source & 0xff : null;
+        if (primaryAudioStream !== null) this.registers.systemWrite(1, primaryAudioStream);
+        if (interactiveGraphicsStream !== null) this.registers.systemWrite(0, interactiveGraphicsStream);
+        if (angle !== null) this.registers.systemWrite(3, angle);
+        const currentPg = this.registers.read({ kind: "psr", index: 2 });
+        const pgSubtitleStream = destination & 0x8000 ? destination & 0x0fff : null;
+        const pgSubtitleDisplay = (destination & 0x4000) !== 0;
+        const nextPg = ((pgSubtitleDisplay ? 0x80000000 : 0) | (currentPg & 0x7fffffff & (pgSubtitleStream === null ? 0xffffffff : 0xfffff000)) | (pgSubtitleStream ?? 0)) >>> 0;
+        this.registers.systemWrite(2, nextPg);
+        this.emit("SET_STREAM", {
+          destinationRaw: a?.raw ?? 0, sourceRaw: b?.raw ?? 0,
+          destinationImmediate: d.immOp1, sourceImmediate: d.immOp2,
+          destinationValue: destination, sourceValue: source,
+          primaryAudioStream, interactiveGraphicsStream, angle, pgSubtitleStream, pgSubtitleDisplay,
+        }, d.source);
+        return;
+      }
+      case "SET_SEC_STREAM": {
+        const destination = this.streamOperand(a, d.immOp1); const source = this.streamOperand(b, d.immOp2);
+        let psr14 = this.registers.read({ kind: "psr", index: 14 });
+        const secondaryVideoStream = destination & 0x80000000 ? destination & 0xff : null;
+        const secondaryVideoSize = destination & 0x00800000 ? (destination >>> 16) & 0x0f : null;
+        const secondaryAudioStream = source & 0x80000000 ? (source >>> 16) & 0xff : null;
+        if (secondaryVideoStream !== null) psr14 = (secondaryVideoStream << 8) | (psr14 & 0xffff00ff);
+        if (secondaryVideoSize !== null) psr14 = (secondaryVideoSize << 24) | (psr14 & 0xf0ffffff);
+        if (secondaryAudioStream !== null) psr14 = secondaryAudioStream | (psr14 & 0xffffff00);
+        psr14 = (((destination >>> 30) & 1) << 31) | (psr14 & 0x7fffffff);
+        psr14 = (((source >>> 30) & 1) << 30) | (psr14 & 0xbfffffff);
+        this.registers.systemWrite(14, psr14 >>> 0);
+        let psr2 = this.registers.read({ kind: "psr", index: 2 });
+        const pipPgStream = source & 0x8000 ? source & 0x0fff : null;
+        if (pipPgStream !== null) psr2 = (pipPgStream << 16) | (psr2 & 0xf000ffff);
+        const textSubtitleFlags = (source >>> 13) & 3;
+        psr2 = (textSubtitleFlags << 30) | (psr2 & 0x3fffffff);
+        this.registers.systemWrite(2, psr2 >>> 0);
+        this.emit("SET_SECONDARY_STREAM", {
+          destinationRaw: a?.raw ?? 0, sourceRaw: b?.raw ?? 0,
+          destinationImmediate: d.immOp1, sourceImmediate: d.immOp2,
+          destinationValue: destination, sourceValue: source,
+          secondaryVideoStream, secondaryVideoSize, secondaryAudioStream,
+          displayVideo: (destination & 0x40000000) !== 0,
+          displayAudio: (source & 0x40000000) !== 0,
+          pipPgStream, textSubtitleFlags,
+        }, d.source);
+        return;
+      }
+      case "SET_NV_TIMER": throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "SET_NV_TIMER has no implemented timer service");
+      case "SET_BUTTON_PAGE": return this.setButtonPage(av, bv, d.source, context);
+      case "ENABLE_BUTTON": if (context === "ig-button") this.emit("ENABLE_BUTTON", { button: av }, d.source); return;
+      case "DISABLE_BUTTON": if (context === "ig-button") this.emit("DISABLE_BUTTON", { button: av }, d.source); return;
+      case "POPUP_OFF": if (context === "ig-button") this.emit("POPUP_OFF", {}, d.source); return;
+      case "STILL_ON": if (context === "ig-button") this.emit("STILL_ON", {}, d.source); return;
+      case "STILL_OFF": if (context === "ig-button") this.emit("STILL_OFF", {}, d.source); return;
       default: throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `${op} is decoded but is outside the executable subset`);
     }
   }
   private value(op: Operand): number { return op.kind === "immediate" || op.kind === "encoded" ? op.value >>> 0 : this.registers.read({ kind: op.kind, index: op.value }); }
+  private streamOperand(op: Operand | null, immediate: boolean): number {
+    if (!op) return 0;
+    if (immediate) return op.raw >>> 0;
+    // libbluray's SET_STREAM operand encodes two GPR indices and four preserved flag nibbles.
+    const encoded = op.raw >>> 0;
+    const flags = encoded & 0xf000f000;
+    const lowRegister = encoded & 0x0fff;
+    const highRegister = (encoded >>> 16) & 0x0fff;
+    const lowValue = this.registers.read({ kind: "gpr", index: lowRegister }) & 0x0fff;
+    const highValue = this.registers.read({ kind: "gpr", index: highRegister }) & 0x0fff;
+    return (flags | lowValue | (highValue << 16)) >>> 0;
+  }
+  private buttonPageValue(op: Operand, immediate: boolean): number {
+    if (immediate) return op.raw >>> 0;
+    const flags = op.raw & 0xc0000000;
+    const value = this.registers.read({ kind: "gpr", index: op.raw & 0x00000fff }) & 0x3fffffff;
+    return (flags | value) >>> 0;
+  }
+  private setButtonPage(destination: number, source: number, location: SourceLocation, context: ButtonCommandContext): boolean {
+    if (context === "ig-button") {
+      const packed = ((source & 0xc0000000) | ((destination & 0x80000000) >>> 2) | ((source & 0xff) << 16) | (destination & 0xffff)) >>> 0;
+      this.emit("SET_BUTTON_PAGE", { packed }, location);
+      return true;
+    }
+    if (destination & 0x80000000) this.registers.systemWrite(10, destination & 0xffff);
+    if (source & 0x80000000) this.registers.systemWrite(11, source & 0xff);
+    return false;
+  }
+  private hasPlaylistContinuation(): boolean {
+    const action = this.continuation?.action;
+    return action?.waitFor === "ended" && (action.type === "PLAY_PLAYLIST" || action.type === "PLAY_PLAYLIST_ITEM" || action.type === "PLAY_PLAYLIST_MARK");
+  }
+  private isTerminatePlaylistCommand(command: ButtonCommand, source?: SourceLocation): boolean {
+    try { return decodeInstruction(command, source).opcode === "TERMINATE_PL"; }
+    catch { return false; }
+  }
+  private isSafeIgProgramDuringPlaylistWait(commands: ButtonCommand[]): boolean {
+    if (commands.length === 0) return false;
+    for (const command of commands) {
+      try {
+        const decoded = decodeInstruction(command);
+        if (decoded.status === "invalid" || !decoded.opcode || ["JUMP_OBJECT", "JUMP_TITLE", "CALL_OBJECT", "CALL_TITLE", "RESUME"].includes(decoded.opcode)) return false;
+      } catch { return false; }
+    }
+    return true;
+  }
+  private resumeMovieObjectAfterPlaylistStop(source: SourceLocation): void {
+    const pending = this.continuation;
+    if (!pending || !this.hasPlaylistContinuation()) throw new RegisterFault("HDMV_INVALID_CONTINUATION", "PLAY_STOP has no playlist continuation to resume");
+    // The old playlist completion must not later resume the same MovieObject twice.
+    this.removeAction(pending.action.id);
+    const responseKey = `${pending.action.generation}:${pending.action.id}`;
+    this.consumedResponses.add(responseKey);
+    this.emit("PLAY_STOP", {}, source);
+    this.continuation = null;
+    this.programId = pending.nextProgramId; this.pc = pending.nextPc;
+    this.playback.status = "ended"; this.playback.pendingActionId = null;
+    this.status = "running"; this.resumeAfterPlaylistStop = true;
+  }
   private write(op: Operand, value: number): void { const ref = op.kind === "immediate" ? null : { kind: op.kind, index: op.value } as RegisterRef; if (!ref) throw new RegisterFault("HDMV_ILLEGAL_OPERAND", "Cannot write to an immediate operand"); this.registers.write(ref, value >>> 0); }
   private skipIf(skip: boolean): void { if (skip) this.pc++; }
+  private saveCallPsrState(): void {
+    for (let offset = 0; offset < 5; offset += 1) this.registers.systemWrite(36 + offset, this.registers.read({ kind: "psr", index: 4 + offset }));
+    for (let offset = 0; offset < 3; offset += 1) this.registers.systemWrite(42 + offset, this.registers.read({ kind: "psr", index: 10 + offset }));
+  }
+  private restoreCallPsrState(): void {
+    for (let offset = 0; offset < 5; offset += 1) this.registers.systemWrite(4 + offset, this.registers.read({ kind: "psr", index: 36 + offset }));
+    for (let offset = 0; offset < 3; offset += 1) this.registers.systemWrite(10 + offset, this.registers.read({ kind: "psr", index: 42 + offset }));
+    this.resetCallPsrBackup();
+  }
+  private resetCallPsrBackup(): void {
+    const backupDefaults = [0xffff, 0xffff, 0, 0, 0, 0xffff, 0, 0xff];
+    const backupIndices = [36, 37, 38, 39, 40, 42, 43, 44];
+    backupIndices.forEach((index, offset) => this.registers.systemWrite(index, backupDefaults[offset]!));
+  }
+  private validateTitleTarget(title: number): void {
+    if (!this.entries) return; // Preserve the unresolved title-table case.
+    const firstPlay = this.entries.find((entry) => entry.kind === "firstPlay")?.target;
+    const topMenu = this.entries.find((entry) => entry.kind === "topMenu")?.target;
+    const titleCount = this.entries.filter((entry) => entry.kind === "title").length;
+    const specialEntryAvailable = (target: typeof firstPlay): boolean => target?.objectType === "HDMV" && typeof target.target === "number" && target.target !== 0xffff;
+    const valid = title === 0
+      ? specialEntryAvailable(topMenu)
+      : title === 0xffff
+        ? specialEntryAvailable(firstPlay)
+        : title > 0 && title <= titleCount;
+    if (!valid) throw new RegisterFault("HDMV_INVALID_TARGET", `Title target ${title} is not present in the supplied ParsedDisc entries`);
+  }
   private transfer(programId: number, pc: number, call: boolean, source: SourceLocation | null): void {
     this.validateTarget(programId, pc);
     const target = this.programs.get(programId)!;
@@ -243,7 +497,7 @@ export class HdmvVm {
   }
   private validateTarget(programId: number, pc: number): void {
     const target = this.programs.get(programId); if (!target) throw new RegisterFault("HDMV_INVALID_TARGET", `Target object ${programId} does not exist`);
-    if (!Number.isInteger(pc) || pc < 0 || pc >= target.instructions.length) throw new RegisterFault("HDMV_INVALID_PC", `Target PC ${pc} is invalid for object ${programId}`);
+    if (!Number.isInteger(pc) || pc < 0 || pc > target.instructions.length) throw new RegisterFault("HDMV_INVALID_PC", `Target PC ${pc} is invalid for object ${programId}`);
   }
   private actionAndSuspend(type: ActionType, payload: Record<string, number | string | boolean | null>, source: SourceLocation): void {
     const action = this.emit(type, payload, source); const waitFor = WAIT_BY_ACTION[type];
@@ -261,11 +515,13 @@ export class HdmvVm {
   private fail(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: ReturnType<RegisterFile["snapshot"]>, location?: { programId: number; pc: number }): void {
     if (this.continuation) this.removeAction(this.continuation.action.id);
     this.continuation = null; this.playback.pendingActionId = null;
-    const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = "faulted";
+    const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
-    this.trace.push({ sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) });
+    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
+    this.trace.push(trace);
+    try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }
 }
 function delta(before: ReturnType<RegisterFile["snapshot"]>, after: ReturnType<RegisterFile["snapshot"]>): TraceEntry["registerDelta"] {
@@ -273,9 +529,32 @@ function delta(before: ReturnType<RegisterFile["snapshot"]>, after: ReturnType<R
   before.gpr.forEach((v, i) => { if (v !== after.gpr[i]) gpr[i] = after.gpr[i]!; }); before.psr.forEach((v, i) => { if (v !== after.psr[i]) psr[i] = after.psr[i]!; }); return { gpr, psr };
 }
 function eventMatches(wait: WaitFor | undefined, event: MediaEventType): boolean { return wait === "started" ? event === "MEDIA_STARTED" : wait === "seeked" ? event === "MEDIA_SEEKED" : wait === "ended" ? event === "MEDIA_ENDED" : wait === "still-completed" ? event === "STILL_COMPLETED" : false; }
+function comparisonSkips(opcode: string, a: number, b: number): boolean {
+  switch (opcode) {
+    case "BC": return (a & ~b) !== 0;
+    case "EQ": return a !== b;
+    case "NE": return a === b;
+    case "GE": return a < b;
+    case "GT": return a <= b;
+    case "LE": return a > b;
+    case "LT": return a >= b;
+    default: return false;
+  }
+}
 function stableProfile(profile: PlayerProfile): string {
   const normalized: Record<string, unknown> = Object.fromEntries(Object.entries(profile).filter(([key]) => key !== "capabilityValues").sort(([a], [b]) => a.localeCompare(b)));
   if (profile.capabilityValues) normalized.capabilityValues = Object.fromEntries(Object.entries(profile.capabilityValues).sort(([a], [b]) => Number(a) - Number(b)));
   return JSON.stringify(normalized);
+}
+
+function normalizeProfile(profile: PlayerProfile | undefined): PlayerProfile {
+  const defaults: CorePlayerProfile = DEFAULT_PLAYER_PROFILE;
+  return {
+    ...defaults,
+    ...profile,
+    videoProfiles: [...(profile?.videoProfiles ?? defaults.videoProfiles)],
+    audioProfiles: [...(profile?.audioProfiles ?? defaults.audioProfiles)],
+    ...(profile?.capabilityValues ? { capabilityValues: { ...profile.capabilityValues } } : {}),
+  };
 }
 
