@@ -4,6 +4,7 @@ import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, s
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { Limits } from "@bdmv-web/core";
 import { ContractError, DEFAULT_LIMITS } from "@bdmv-web/core";
+import { selectBdmvChild } from "./bdmv-candidate.js";
 
 function within(root: string, target: string): boolean {
   const rel = relative(root, target);
@@ -52,11 +53,11 @@ export async function discoverBdmvInput(inputPath: string): Promise<{ root: stri
   let root = canonical;
   if (basename(canonical).toLocaleLowerCase("en-US") !== "bdmv") {
     const children = await readdir(canonical, { withFileTypes: true });
-    if (children.some((entry) => entry.isSymbolicLink() && entry.name.toLocaleLowerCase("en-US") === "bdmv")) throw new ContractError("SYMLINK_REJECTED", inputPath, "BDMV root symlinks are not accepted");
-    const candidates = children.filter((entry) => entry.isDirectory() && entry.name.toLocaleLowerCase("en-US") === "bdmv");
-    if (candidates.length === 0) throw new ContractError("BDMV_ROOT_NOT_FOUND", inputPath, "Input must be a BDMV root or its direct parent");
-    if (candidates.length > 1) throw new ContractError("BDMV_ROOT_AMBIGUOUS", inputPath, "More than one case-variant BDMV root was found");
-    root = await realpath(resolve(canonical, candidates[0]!.name));
+    const candidate = selectBdmvChild(children.map((entry) => ({
+      name: entry.name,
+      kind: entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "other",
+    })), inputPath);
+    root = await realpath(resolve(canonical, candidate));
   }
   const paths: string[] = [];
   const walk = async (dir: string): Promise<void> => {

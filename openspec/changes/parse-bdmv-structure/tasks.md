@@ -6,7 +6,7 @@
 
 ## 1. 发现及协议基线
 
-- [ ] 1.1 实现BDMV自身/直接父目录发现；验收：中文/空格、大小写候选、歧义和symlink负例符合规格。
+- [x] 1.1 实现BDMV自身/直接父目录发现；验收：中文/空格、大小写候选、歧义和symlink负例符合规格。
 - [x] 1.2 按 design 的主备表实现整文件回退；验收：有效主、缺失主、损坏主、未知版本、双有效冲突、双无效逐行有测试及实际来源。
 - [ ] 1.3 登记index/MOBJ/MPLS/CLPI/sound支持版本、字段依据与固定参考revision；验收：每种supported格式都有独立字节fixture，未知版本不误报支持。
 
@@ -15,21 +15,23 @@
 - [x] 2.1 实现index入口/标题/访问属性；验收：First Play/Top Menu/HDMV/BD-J各自目标及索引正确，混合入口不丢失。
 - [x] 2.2 实现MOBJ容器、对象属性、12字节raw命令与精确源偏移；验收：两记录golden一致，截断/异常count不补零。
 - [x] 2.3 实现MPLS PlayItem/IN-OUT/Mark/STN/UO mask；验收：两PlayItem章节及单位正确，非法Mark可定位。
-- [ ] 2.4 保留SubPath/角度/连接属性及支持状态；验收：高级播放标记完整交给M5，不能在归一化中消失。
+- [x] 2.4 保留SubPath/角度/连接属性及支持状态；验收：高级播放标记完整交给M5，不能在归一化中消失。
 - [x] 2.5 实现CLPI ProgramInfo/CPI/EP映射及PID/语言/编码；验收：时间与SPN黄金数据一致，段越界安全失败。
 - [x] 2.6 实现sound条目/编码/采样信息及有界样本范围；验收：多条声音和截断负例，未输出假WAV。
 
 ## 3. 图与CLI交接
 
-- [ ] 3.1 建立类型化引用图、missing/unresolved与全部声明；验收：缺STREAM/CLPI/对象、PID冲突、循环和未解码命令边可追踪且遍历有界。
+- [x] 3.1 建立类型化引用图、missing/unresolved与全部声明；验收：缺STREAM/CLPI/对象、PID冲突、循环和未解码命令边可追踪且遍历有界。
 - [x] 3.2 接入inspect JSON/文件输出与支持预测；验收：stdout可解析，计数不删BD-J，analysisStage=structural。
 - [x] 3.3 接入extract结构产物/raw源映射/manifest；验收：输出事务完成且源文件字节不变，未接IG阶段明确声明；不生成源目录哈希。
-- [ ] 3.4 提供M2/M3消费ParsedDisc的集成fixture；验收：入口/轨道/raw命令来源一致，结构成功不宣称全路径已验证。
+- [x] 3.4 提供M2/M3消费ParsedDisc的集成fixture；验收：入口/轨道/raw命令来源一致，结构成功不宣称全路径已验证。
 
 ## Remaining evidence gaps
 
-- 1.1 remains open because this case-insensitive workspace filesystem cannot create two case-variant BDMV directories; its test exercises the ambiguity branch only when the filesystem permits it.
 - 1.3 remains open because no field-level BDA normative source is available. Candidate versions and all format rows remain `unverified` in `docs/protocol-support.md`.
-- 2.4 retains angle/SubPath/SubPlayItem declarations, but M5 handoff and advanced playback evidence are not available in this stage.
-- 3.1 has typed nodes/edges, separate missing clip/CLPI/BDJO nodes, sound declarations, and unresolved raw-command edges, but bounded cycle traversal evidence is incomplete.
-- 3.4 remains open because M2/M3 consumer packages are not part of this change; no cross-stage integration fixture can be exercised yet.
+- 2.4 now has a media-plan handoff test that preserves PlayItem codec/STC/connection/UO/still/angle markers and SubPath/SubPlayItem codec/STC/sync markers. Advanced playback remains partial/unsupported; this verifies retention, not normative semantics or playback.
+
+## Completed evidence notes
+
+- 3.1 now has a cycle-safe bounded traversal API with explicit unresolved edges, missing targets, and an unvisited frontier; synthetic cycle and node-budget cases are covered in `packages/bdmv-parser/src/parser.test.ts`.
+- 3.4 uses `m1-m2-m3-source-handoff` in `packages/igs/test/m1-m2-m3.integration.test.ts`; the fixture checks First Play to MovieObject source, MPLS/CLPI audio PID and coding match, raw command source through M3 graph, M2 IGS extraction, and structural-only partial status.

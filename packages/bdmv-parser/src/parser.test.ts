@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildM1ClipInfoProgramAndCpi, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAudioPid, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv-web/test-fixtures";
-import { discoverBdmvRoot, parseBdmv } from "./index.js";
+import { discoverBdmvRoot, parseBdmv, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
 
 async function temp(): Promise<string> { return mkdtemp(join(tmpdir(), "bdmv m1 中文 ")); }
 async function write(path: string, bytes: Uint8Array): Promise<void> { await mkdir(join(path, ".."), { recursive: true }); await writeFile(path, bytes); }
@@ -16,9 +16,38 @@ async function skeleton(parent: string, index = buildM1Index()): Promise<string>
 }
 
 describe("M1 BDMV discovery and structure", () => {
+  it("traverses resolved graph cycles once and reports unresolved and missing targets", () => {
+    const node = (id: string, state: GraphNode["state"] = "present"): GraphNode => ({ id, type: "entry", state, source: null });
+    const edge = (from: string, to: string, resolution: GraphEdge["resolution"]): GraphEdge => ({ from, to, kind: "reference", resolution, source: { path: "BDMV/index.bdmv", origin: "primary", offset: "0" } });
+    const result = traverseGraph({ nodes: [node("a"), node("b"), node("missingNode", "missing")], edges: [edge("a", "b", "resolved"), edge("b", "a", "resolved"), edge("b", "command:0:0", "unresolved"), edge("b", "missing", "resolved"), edge("b", "missingNode", "missing")] }, ["a"]);
+    expect(result.visited).toEqual(["a", "b"]);
+    expect(result.unresolvedEdges.map((item) => item.to)).toEqual(["command:0:0", "missing", "missingNode"]);
+    expect(result.missingNodes).toEqual(["missing", "missingNode"]);
+    expect(result.frontier).toEqual([]);
+    expect(result.complete).toBe(false);
+  });
+
+  it("stops at the node budget and returns an explicit unvisited frontier", () => {
+    const node = (id: string): GraphNode => ({ id, type: "entry", state: "present", source: null });
+    const source = { path: "BDMV/index.bdmv", origin: "primary" as const, offset: "0" };
+    const result = traverseGraph({ nodes: [node("a"), node("b"), node("c")], edges: [
+      { from: "a", to: "b", kind: "reference", resolution: "resolved", source },
+      { from: "b", to: "c", kind: "reference", resolution: "resolved", source },
+    ] }, ["a"], 2);
+    expect(result.visited).toEqual(["a", "b"]);
+    expect(result.frontier).toEqual(["c"]);
+    expect(result.complete).toBe(false);
+  });
+
   it("finds a direct BDMV root and its direct parent, preserving case and Unicode paths", async () => {
     const parent = await temp(); const root = await skeleton(parent);
     try { expect(await discoverBdmvRoot(root)).toBe(root); expect(await discoverBdmvRoot(parent)).toBe(root); const disc = await parseBdmv(parent); expect(disc.root).toBe(root); expect(disc.entries[0]?.target.target).toBe(0); }
+    finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("preserves the actual casing of a direct mixed-case BDMV directory", async () => {
+    const parent = await temp(); const root = join(parent, "bDmV"); await mkdir(root);
+    try { expect(await discoverBdmvRoot(root)).toBe(await realpath(root)); expect(await discoverBdmvRoot(parent)).toBe(await realpath(root)); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -139,6 +168,19 @@ describe("M1 BDMV discovery and structure", () => {
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
+  it.each([
+    ["MOBJ", "MovieObject.bdmv", () => buildM1MovieObject()],
+    ["MPLS", "PLAYLIST/00001.mpls", () => buildM1EmptyPlaylist()],
+    ["CLPI", "CLIPINF/00001.clpi", () => buildM1EmptyClipInfo()],
+    ["sound", "AUXDATA/sound.bdmv", () => buildM1Sound()],
+  ] as const)("rejects an unknown primary %s version", async (_name, relativePath, build) => {
+    const parent = await temp(); const root = await skeleton(parent);
+    const bytes = build(); bytes.set(new TextEncoder().encode("9999"), 4);
+    const file = join(root, relativePath); await mkdir(dirname(file), { recursive: true }); await writeFile(file, bytes);
+    try { await expect(parseBdmv(root)).rejects.toThrow("BDMV_UNSUPPORTED_VERSION"); }
+    finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("parses backup-only playlists and CLPI files and preserves backup provenance", async () => {
     const parent = await temp(); const root = await skeleton(parent); const backup = join(root, "BACKUP"); await mkdir(join(backup, "PLAYLIST"), { recursive: true }); await mkdir(join(backup, "CLIPINF"), { recursive: true });
     await writeFile(join(backup, "PLAYLIST", "00001.mpls"), buildM1EmptyPlaylist()); await writeFile(join(backup, "CLIPINF", "00001.clpi"), buildM1EmptyClipInfo());
@@ -241,7 +283,7 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("rejects symlinks anywhere in the scanned BDMV tree and a symlink root", async () => {
     const parent = await temp(); const root = await skeleton(parent); const outside = join(parent, "outside"); await mkdir(outside); await symlink(outside, join(root, "STREAM", "escape"));
-    try { await expect(parseBdmv(root)).rejects.toThrow("SYMLINK_REJECTED"); await rm(join(root, "STREAM", "escape")); const linkRoot = join(parent, "LinkedBDMV"); await symlink(root, linkRoot); await expect(discoverBdmvRoot(linkRoot)).rejects.toThrow("SYMLINK_REJECTED"); }
+    try { await expect(parseBdmv(root)).rejects.toThrow("SYMLINK_REJECTED"); await rm(join(root, "STREAM", "escape")); const linkRoot = join(parent, "LinkedBDMV"); await symlink(root, linkRoot); await expect(discoverBdmvRoot(linkRoot)).rejects.toThrow("SYMLINK_REJECTED"); await rm(linkRoot); const candidateParent = join(parent, "candidate parent"); await mkdir(candidateParent); await symlink(root, join(candidateParent, "BDMV")); await expect(discoverBdmvRoot(candidateParent)).rejects.toThrow("SYMLINK_REJECTED"); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 

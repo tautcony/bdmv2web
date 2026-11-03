@@ -3,12 +3,26 @@ import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertByteLimit, assertDisjointRoots, assetIdFromSha256, beginOutputTransaction, buildInputFileTable, hashFile, payloadFingerprint, readFileChunks, resolveFileReference, resolveInputFile } from "./index.js";
+import { selectBdmvChild } from "./bdmv-candidate.js";
 
 const roots: string[] = [];
 async function temp(name: string) { const path = await mkdtemp(join(tmpdir(), name)); roots.push(path); return path; }
 afterEach(async () => { await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true }))); });
 
 describe("bounded stream I/O and path isolation", () => {
+  it("rejects multiple case-variant BDMV directories deterministically", () => {
+    expect(() => selectBdmvChild([
+      { name: "BDMV", kind: "directory" },
+      { name: "bdmv", kind: "directory" },
+    ], "/disc")).toThrow("BDMV_ROOT_AMBIGUOUS");
+  });
+
+  it("rejects a case-variant BDMV symlink candidate", () => {
+    expect(() => selectBdmvChild([
+      { name: "bDmV", kind: "symlink" },
+    ], "/disc")).toThrow("SYMLINK_REJECTED");
+  });
+
   it("streams files in bounded chunks and rejects an oversized configured window before opening", async () => {
     const root = await temp("bdmv io "); const file = join(root, "中文 name.bin"); await writeFile(file, new Uint8Array(12));
     const chunks: number[] = []; for await (const chunk of readFileChunks(file, { maxReadWindowBytes: 4 } as never, 4)) chunks.push(chunk.length);
