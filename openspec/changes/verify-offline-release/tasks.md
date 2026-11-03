@@ -8,12 +8,15 @@
 
 - [x] 1.1 实现validate的schema/引用/manifest/大小/hash与payloadFingerprint重算；验收：无原碟/FFmpeg可验证，指纹缺失/格式错误/不匹配、启动文件`index.html`缺失或未列入manifest、字节篡改和缺必需资产均失败。
 - [x] 1.2 解析HTML/CSS/数据/JS资源入口并统一URL/realpath检查；验收：远程/协议相对/file原盘/编码逃逸/外symlink均定位，合法中文/百分号路径和说明链接不误报。
+- [ ] 1.2a 更新资源与影片目标审计；仅允许经过验证的源 BDMV STREAM 内 M2TS 作为外部交接目标，其他外部运行资源、路径逃逸和外部 symlink 仍拒绝。
 - [x] 1.3 限制data MIME并检查嵌套依赖和bundle禁用入口；验收：HTML/SVG执行载荷与远程嵌套拒绝，已生成PNG data允许。
 - [x] 1.4 生成dependency-audit及checks[]；验收：每项有pass/fail/not-verified和具体字段/证据，不盲信旧status。
 
 ## 2. 完整度与覆盖
 
 - [x] 2.1 以共享决策表实现failed/partial/complete和strict退出码；验收：menu-only、混合/纯BD-J、unknown opcode、缺媒体、缺证据逐行测试。
+  - 历史完成记录：对应旧的模式与状态规则；新产品边界须按下项重新验收。
+- [ ] 2.1a 更新共享决策表和 strict 退出码；覆盖统一产物、系统交接不可用/未验证、混合/纯 BD-J、unknown opcode、缺源文件和缺证据。
 - [x] 2.2 实现acknowledged错误和降级记录；验收：不删除原严重性/影响，strict策略变化不提升能力状态。
 - [x] 2.3 实现入口/指令/媒体/测试的分母和未知计数；验收：零分母N/A、探索超限unknown，不能报虚假100%。
 
@@ -27,6 +30,6 @@
 ## 4. 浏览器与发布
 
 - [x] 4.1 锁定 V1 macOS Google Chrome 实际版本并执行断网 `file://`；验收：无后台/原碟，记录 macOS build、Chrome 完整版本、console/资源/有声结果，缺席不假通过。跨系统和其它浏览器不作为 V1 门槛。实测记录见 [M6 验收证据](../../../docs/references/stages/M6-release-verification.md#v1-chrome-file-验收-2026-11-03)。
-- [ ] 4.2 完成A–J场景适用路径的双击/移动目录/中文空格/DPI/播放策略恢复证据；验收：每项expected/actual/result及制品hash可复查。
+- [ ] 4.2 按新边界完成适用的 A–J 场景及系统默认播放器交接证据；涵盖双击、移动、中文空格、DPI、源缺失和播放策略恢复，记录 expected/actual/result、版本及生成制品 hash。
 - [x] 4.3 实现证据与payload/profile/mode/矩阵绑定和失效；验收：换bundle/媒体/profile不能复用旧截图过门槛。
 - [x] 4.4 生成最终compatibility/audit/manifest/发布摘要和README；验收：只有全部门槛满足可complete，失败/未验证列具体缺口，完整包无开发/参考工具依赖。

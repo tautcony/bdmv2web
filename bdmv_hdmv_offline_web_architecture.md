@@ -1,3 +1,5 @@
+> 范围更新：本文保留原架构设计记录。影片播放已调整为由系统默认程序打开实际 M2TS，且交付模式合并；现行要求以 [OpenSpec 实施基线](openspec/changes/IMPLEMENTATION_BASELINE.md) 及 M4–M6 active change 为准。
+
 # BDMV HDMV 菜单提取与离线 HTML 复现工具——详细技术设计方案
 
 > 文档版本：v1.0（2026-11-02）  

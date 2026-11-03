@@ -2,70 +2,38 @@
 
 ## Context
 
-依赖 M0–M4，对应架构 §8、§11.3、§12、§15。M1 图仅是结构，M3/M2 提供命令边，M5 负责可达闭包。共同决策见 [实施基线](../IMPLEMENTATION_BASELINE.md)。
-
-## Goals / Non-Goals
-
-**Goals:** 可达媒体计划、FFmpeg/FFprobe、MP4/音轨变体/普通 PGS、双向时间映射、播放反馈与 standalone-full。
-
-**Non-Goals:** 浏览器转码、原盘按需加载、默认 MSE/fetch、多角度/PiP/无缝分支/HDR 的无证据支持。未支持不等于可删引用。
+M1 提供结构及 PlayItem 与 Clip 引用，M2/M3 提供菜单和导航。M5 将影片动作映射到实际 M2TS 并交给系统处理；不再创建浏览器中的完整影片播放器。共享约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。
 
 ## Decisions
 
-### 1. Analyze 在转码前完成
+### 单一产物
 
-合并全部入口、对象命令、按钮命令、播放列表/SubPath/轨道引用。静态闭包与 VM 有界探索结合；条件分支取并集。动态目标不确定时纳入可证明候选全集；无法有界确定则报告 unresolved，不能仅导出本次输入走到的路径。预算耗尽标 unknown。保留不可达声明供诊断，include-unreachable 不改变导航语义。
+`convert INPUT --out DIR` 生成同一种离线菜单包，不再提供 menu-only / standalone-full 两种产品模式。菜单运行资产自包含；影片使用用户可访问的原始 M2TS，不转码、不默认复制大文件。报告和 README 必须说明影片对源文件及系统文件关联的依赖。包移动后菜单仍可运行，影片引用需仍有效或由用户重新关联；不能声称包在移走原碟后仍可播放影片。旧模式参数与旧包的迁移策略应明确实现并测试，不静默改变其含义。
 
-输出 media-plan.json：每个媒体需求的入口/边来源、PlayItem/Clip/PID/IN/OUT、轨道/变体、输出策略、预计体积/时长、限制及可达性状态。缺 STREAM、未知 codec、角度/辅助视频/无缝要求在转码前说明影响。检查磁盘及 maxOutputBytes；估算不是保证，写入中继续监测，超限安全 abort。
+### 输出位置和源路径配置
 
-### 2. 转码策略与进程生命周期
+发现输入的 BDMV 目录后，HTML 输出目录与该 BDMV 目录并排。例如 `影片/BDMV/` 对应 `影片/BDMV-menu/`。用户可通过 `--out` 指定同级输出目录名称或路径；默认输出为同级 `BDMV-menu`，不允许输出进入 BDMV 或覆盖已有目录。输入是 BDMV 自身还是其直接父目录，均以发现的 BDMV 为基准。
 
-对支持的线性单路径优先预合成 MP4，保留每个 PlayItem 映射；动态分支按可独立播放节点输出并记录切换，不承诺无缝。循环菜单背景生成有限本地媒体，由逻辑循环映射驱动，不无限复制输出。
+产物包含可编辑的独立配置文件，声明指向 BDMV 的路径；默认使用相对 HTML 输出目录的 `../BDMV`，以实际目录名生成。允许用户调整为相对路径或绝对本地路径；相对路径始终以 HTML 输出目录为基准，不以当前工作目录为基准。浏览器及可能需要的本地启动接入必须使用同一配置，并在重新加载后生效。浏览器 `file://` 限制下配置格式和加载方式应经验证，不能假设可 fetch 本地 JSON；README 须给出可编辑示例及重载方式。
 
-仅转换阶段以参数数组 spawn FFprobe/FFmpeg，shell=false；启动前检查可执行程序/版本/编码器，记录版本及精确参数。默认 SDR H.264/AAC、+faststart、初始 CRF18，不放大，明确像素格式/帧率/比例。不能直接以 DTS/TrueHD/VC-1/M2TS 充当唯一播放资源。HDR 未有经验证 tone mapping 方案即 unsupported。
+目录整体移动时相对配置仍指向同级 BDMV；仅移动 HTML 时可修改配置重新定位。配置路径解析为用户指定的 BDMV 根后，仍只允许打开该根 `STREAM` 下已解析的 M2TS，不允许片段引用逃逸。配置错误或目标缺失时提示配置位置及问题；变更配置后相关路径及交接证据须重新验证，不得沿用旧证据。
 
-每个 job 写 staging，捕捉退出码/stderr/超时/取消/空间不足；成功后 ffprobe 检查流/时长/索引/解码，才登记资产。缓存键含源内容 hash、裁剪、轨道、profile、工具版本/参数；不复用半成品。源文件名由已验证文件表提供，不能拼进 shell。
+### 影片映射
 
-### 3. MediaTimelineMap
+保守合并入口、对象及按钮导航边，保留 Playlist、PlayItem、Clip、源路径和 IN/OUT 等来源信息。条件分支取并集；动态目标无法确定时保留 unknown。播放动作只能打开已解析且实际存在的 M2TS，不靠文件排序猜测。对多个 PlayItem、重复 Clip、分支或非零 IN/OUT，单独打开某个文件不等同于播放整个 Playlist；展示实际交接范围和限制，无法确定目标时提供可见诊断，不声称等价播放。
 
-每条映射至少含 playlistId/playItemId/clipId/variantId、sourceIn90k/sourceOut90k、playlistStart90k/playlistEnd90k、assetId、mediaStart90k/mediaEnd90k、timestampEpoch/sourceTimebase。区间为半开 [in,out)，最后结束为独立事件；同一 Clip 被多次引用保留独立映射行。45k→90k 乘2，PTS 回绕/discontinuity 不能简单拼加到同一域。
+### 系统交接与能力边界
 
-对无重采样速率变化的区间：
+以用户触发的播放动作为入口，将经过验证的本地文件交给目标环境中实际可行的系统打开机制，由操作系统使用默认关联程序。直接 file:// 页面是否可以做到必须在目标 macOS Chrome 环境实测；若浏览器策略不允许，需设计并验证明确的本地启动接入及其安装/运行和安全边界，不能假设网页具备直接调用系统程序的权限，也不能悄悄要求后台服务。若无法完成接入，提供可复制或手动打开的文件路径及清晰提示，记为未完成/partial。
 
-`playlistTime = playlistStart + (sourceTime - sourceIn)`
+播放请求、交接成功（仅当机制能证实）、不可用和失败必须区分。不能把用户点击、链接导航或启动请求成功当作播放器已播放；没有可靠回传时不能生成 MEDIA_STARTED、MEDIA_ENDED 或虚构自动返回。VM 等待应明确解除或转入可恢复状态，避免挂死；浏览器菜单在返回焦点后仍可操作。真实的播放、暂停、章节、音轨、字幕、播放完成和播放器关闭由外部程序负责，本系统不承诺能控制或获知这些状态。
 
-`mediaTime = mediaStart + (playlistTime - playlistStart)`
+### 安全与资源
 
-若转码造成边界偏移，用实际测量的修正项记录，不能只按总时长比例估算。运行时在区间内 bigint 相减后转 currentTime 秒；逆向用实际媒体时间定位映射行。seek 在 loadedmetadata 后设置时间，seeked 且目标可解码后提交领域事件/PSR，不提前声称成功。
+输入只读。路径以已解析的可信 BDMV 文件表为来源，验证目标存在、为预期 STREAM 下的 M2TS 且不通过路径穿越或符号链接逃逸；路径中中文、空格、`#`、`%` 均须正确处理。若需本地接入，使用参数数组或等效安全 API，不拼接 shell 命令。用户选定的源 M2TS 是显式允许的外部文件引用，与菜单资源的包内引用分开审计；不得把任意外部路径或网络依赖当成允许的影片引用。
 
-验证样例：PI0 源 [900000,1080000)、播放列表 [0,180000)；PI1 源 [450000,720000)、播放列表 [180000,450000)。线性输出章节 225000 对应 2.5 秒、PI1、源 495000；边界 180000 属 PI1。误差单独记录；章节 seek 的最大误差以目标视频一帧为验收上限，不以 timeupdate 频率推算。
-
-### 4. PlaybackBridge 与调度
-
-PLAY_PLAYLIST/LinkPI/章节/STOP/STILL/RESUME 经同一动作队列；媒体控制器把 loaded/started/seeked/playitem/time/ended/error 转为领域事件，携 actionId/generation，不直接操作 VM PC。实际 PSR 更新由 VM 支持表控制。
-
-主时钟是 video.currentTime + TimelineMap；暂停冻结媒体域动画，seek/回退重建当时 composition/页面/PG/按钮/效果，不重放已过去的导航副作用。仍帧区分有限/无限等待，有限 still 使用显式可暂停逻辑时钟。loop 维护循环次数与源时间映射，不能把播放结束误作正片结束。
-
-替换 src、seek、轨道切换、复位前由导航调度器分配新 generation，VM 等待记录与媒体桥共同采用，桥不二次递增；取消旧监听/Promise/定时任务，晚到回信不改当前状态。MEDIA_ERROR/unavailable 解除对应等待并报告。Pop-up 叠在同一媒体上下文，不另开脱离 VM 的视频播放器。
-
-### 5. 轨道及 PGS
-
-为受支持主音轨输出可切换本地变体，记录逻辑轨道 ID/PID 到 asset 的映射。切换前保存逻辑播放时间/暂停状态，在目标变体 metadata/seek 成功后反馈并同步 PSR；失败回退或 fault 并报告，不先更新 UI 假装成功。不依赖 audioTracks 的跨浏览器支持。
-
-M5 实施普通 PGS 解复用/对象与调色板解码及时间层，复用有证据的公共图像原语但不将 PG 当 IG。字幕 on/off/选择与 PSR 同步，seek 后重建，独立于 IG z-order。不 OCR 为 WebVTT。强制字幕、TextST、复杂混合效果及无缝音轨要求未验证时明确 partial；不能把被按钮可达的轨道随意排除。
-
-### 6. 完整包集成
-
-standalone-full 复用 M4 package-builder，填充媒体/字幕资产和 TimelineMap；所有播放引用包内闭合。缺少可选但有功能影响的能力为 partial；缺必需资产/包不可启动为 failed。功能通过后仍须 M6 实际浏览器证据才能 complete，不因 FFmpeg 返回 0 自动成功。
+菜单背景视频、菜单音轨、WAV 和 IGS 仍属于网页菜单资源；动态背景和菜单音轨继续在转换阶段使用 FFmpeg 生成 MP4/M4A 并用 FFprobe 检验，再随包交付，运行时不依赖 FFmpeg。其既有转换/播放流程保留，不因此引入网页正片转码或控制要求。系统关联程序与源 M2TS 是影片功能的运行前提，离线包审计须报告其可用性是否已验证，不将外部文件纳入生成资产哈希或当作包内资源。
 
 ## Verification / Exit Criteria
 
-两 PlayItem/重复 Clip/章节边界/非零 PTS/回绕/多音轨/PG/背景循环 fixture；独立验证上述映射数值、逐帧边界、seek 与暂停/返回/pop-up。错误编码器、取消/磁盘不足/坏缓存及源路径特殊字符有负例。file:// 从菜单到正片、章节、切轨、字幕、pop-up、结束返回闭环；旧回调不能污染新代次。提交 ffprobe、媒体质量及离线证据。
-
-## Risks / Trade-offs
-
-预合成和轨道变体会增加体积，用内容去重/计划估算缓解，不以漏打包降低体积。普通原生媒体切换不保证无缝，要求无缝的路径按支持缺口处理。
-
-## Migration Plan
-
-用 M4 的模拟桥回归先锁导航，再替换真实桥。输出仍用 schema 版本控制，不能暗改旧时间表解释。
+验证单 Clip 映射、多个 PlayItem/重复 Clip、未知目标、缺失文件、特殊路径、路径逃逸及系统打开失败；核对交接的实际文件。目标环境记录 OS/Chrome/默认播放器版本、用户动作、实际被打开文件、观察结果和制品证据；同时验证断网、菜单包移动和外部源可用/不可用。独立播放器行为只记录观察，不能作为浏览器同步能力的承诺。

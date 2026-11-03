@@ -2,7 +2,7 @@
 
 ## Purpose
 
-生成 file:// 兼容的菜单交互包并如实声明预览边界。
+生成 file:// 兼容的统一菜单交互包，并如实声明外部影片依赖。
 
 ## ADDED Requirements
 
@@ -77,19 +77,14 @@
 - **WHEN** 按钮引用不存在或未支持编码的音效
 - **THEN** 显示诊断及受影响按钮，不静默替换或声称音效保真
 
-### Requirement: 菜单预览的限制
+### Requirement: 影片交接的限制
 
-系统 SHALL menu-only 的 UI/README/报告始终为 partial；缺失媒体动作回 unavailable 并结束等待。
+系统 SHALL 在统一产物的 UI/README/报告说明源 M2TS 和系统默认程序依赖；缺失媒体动作回 unavailable 并结束等待。
 
-#### Scenario: 预览点击播放
+#### Scenario: 影片交接不可用
 
-- **WHEN** 在 menu-only 激活未打包播放动作
-- **THEN** 显示 unavailable，VM 不挂死，不声称完整播放
-
-#### Scenario: 严格预览
-
-- **WHEN** 显式以 --strict 生成可启动 menu-only 包
-- **THEN** 状态仍 partial，退出码2；审阅包有明确标识
+- **WHEN** 用户激活影片动作而系统交接不可用
+- **THEN** 显示 unavailable，VM 不挂死，状态按实际缺口判定
 
 ### Requirement: 播放策略恢复
 

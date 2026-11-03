@@ -8,11 +8,11 @@
 
 ### Requirement: 资源与离线审计
 
-系统 SHALL 独立验证 schema/引用/资产hash/URL边界/依赖；不读取原碟，不盲信既有 status。
+系统 SHALL 独立验证 schema、包内引用、生成资产 hash、URL 边界和依赖，不盲信既有 status；由可编辑配置指向、已声明且受约束的源 M2TS 与包内菜单资源分开检查；配置变化使相关交接证据失效。
 
 #### Scenario: 远程或越界
 
-- **WHEN** 运行引用含协议相对URL、原盘fileURL、编码目录逃逸或外部symlink
+- **WHEN** 菜单运行资源含远程或协议相对 URL、未经授权的外部 file URL、编码目录逃逸或外部 symlink
 - **THEN** validate --offline 报具体引用与规范化目标，状态failed
 
 #### Scenario: 资产被篡改
@@ -28,7 +28,7 @@
 #### Scenario: 包独立验证
 
 - **WHEN** 原始BDMV和FFmpeg均不可用但包完整
-- **THEN** 仍能校验manifest/资源/引用/已有证据，不要求安装转换工具
+- **THEN** 仍能校验包内 manifest/资源/引用及已有证据，并将外部 M2TS 可用性和系统交接记为未验证，不要求安装转换工具
 
 ### Requirement: 完成度与严格模式
 
@@ -51,8 +51,8 @@
 
 #### Scenario: 所有门槛满足
 
-- **WHEN** standalone-full的资源/支持/对照及 V1 macOS Chrome 场景全部通过
-- **THEN** 才可complete，strict退出0；menu-only即便其它通过仍partial
+- **WHEN** 统一产物的菜单资源、声明范围内的系统交接、支持/对照及 V1 macOS Chrome 场景全部通过
+- **THEN** 才可 complete，strict 退出 0；外部播放器能力和未证明的 Playlist 语义不得冒充已验证
 
 ### Requirement: 覆盖统计与未知项
 
@@ -79,8 +79,8 @@
 
 #### Scenario: 图层比较
 
-- **WHEN** 同时间/分辨率/颜色规则比较IG和转码视频
-- **THEN** IG纯图形按独立RGBA golden比较，视频质量另计，不混合编码误差
+- **WHEN** 同时间/分辨率/颜色规则比较 IG 和菜单背景视频
+- **THEN** IG 图形按同类工具对同一测试案例生成的参考逐元素比较尺寸与 RGBA，覆盖各按钮状态引用的图像；菜单背景视频质量另计
 
 #### Scenario: V1 Chrome 证据缺席
 
@@ -94,12 +94,12 @@
 
 ### Requirement: 直接打开与便携性
 
-系统 SHALL 在 V1 macOS Google Chrome 环境中，于无网络/后台/原碟条件下直接 `file://` 验证 A–J 适用场景及媒体实播。跨系统和其它浏览器不属于 V1 发布门槛。
+系统 SHALL 在 V1 macOS Google Chrome 环境中断网直接 `file://` 验证菜单，并在源 M2TS 可用且满足已声明接入条件时验证系统默认程序交接。跨系统和其它浏览器不属于 V1 发布门槛。
 
 #### Scenario: 移动断网播放
 
 - **WHEN** 整目录复制到含中文/空格的新路径并直接打开
-- **THEN** 记录脚本/图形/声音/章节/菜单返回的实际结果及版本，不能以HTTP测试代替
+- **THEN** 记录脚本/图形/菜单声音及系统打开实际 M2TS 的结果和版本；源不可用时记录缺口，不能以 HTTP 测试代替
 
 #### Scenario: 播放被拒后的恢复
 

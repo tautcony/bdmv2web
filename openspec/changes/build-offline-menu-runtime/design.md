@@ -2,7 +2,7 @@
 
 ## Context
 
-依赖 M0–M3，对应架构 §6.3、§9、§11。共同契约见 [实施基线](../IMPLEMENTATION_BASELINE.md)。M4 交付 menu-only，真实背景/影片与时间表由 M5 接入；M4 不因没有影片而阻止菜单调试。
+依赖 M0–M3，对应架构 §6.3、§9、§11。共同契约见 [实施基线](../IMPLEMENTATION_BASELINE.md)。M4 交付统一产物的菜单运行时；M5 将影片动作交给系统默认程序，菜单调试不依赖影片接入。
 
 ## Goals / Non-Goals
 
@@ -34,13 +34,13 @@ M4 的 PreviewPlaybackBridge 对未打包播放动作回送带 actionId 的 unav
 
 ### 4. 时间与异步生命周期
 
-M4 提供 EventScheduler 接口和可注入逻辑时钟：静态预览动画按逻辑时间，暂停/页面更换取消旧任务；M5 接入媒体映射。所有回调携 generation，页面/媒体变更只取消对应作用域任务。异步资源加载错误不重入 VM。动画结束与页面效果完成进入同一序列队列。
+M4 提供 EventScheduler 接口和可注入逻辑时钟：静态预览动画按逻辑时间，暂停/页面更换取消旧任务；M5 接入外部文件交接，不依赖影片播放时钟。所有回调携 generation，页面/媒体变更只取消对应作用域任务。异步资源加载错误不重入 VM。动画结束与页面效果完成进入同一序列队列。
 
 ### 5. 开始手势及模式声明
 
 play Promise 捕捉 NotAllowedError，显示可重试开始按钮，用户手势后只重试仍有效动作，不再次执行整条按钮指令序列。NotSupportedError/资源错误为能力或资产失败，不能伪装成自动播放限制。
 
-menu-only 包 UI、README、compatibility.json 均标 partial；影片操作 unavailable。缺真实动态背景可以显示明确预览底层，不能把纯图形预览宣称视频保真。无网络/原碟/后台要求同时适用于预览包。
+统一包的 UI、README 和报告说明影片依赖实际 M2TS 与系统关联程序；未接入或不可用时反馈 unavailable，状态按实际缺口判定。菜单资源离线且包内自包含；影片源文件可在包外。缺真实动态背景时不得宣称视频保真。
 
 ## Verification / Exit Criteria
 

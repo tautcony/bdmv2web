@@ -27,6 +27,8 @@
 - [x] 3.2 实现PreviewPlaybackBridge unavailable反馈；验收：点击影片操作可见提示且结束VM等待，不伪造正常ended。
 - [x] 3.3 实现NotAllowedError用户手势恢复及NotSupportedError分流；验收：只重试仍有效动作，不重放整段VM副作用。
 - [x] 3.4 接入menu-only convert、目录/报告/README及strict退出；验收：始终partial，显式strict退出2，无外部和原碟引用。
+  - 历史完成记录：对应旧的模式与状态规则；新产品边界须按下项重新验收。
+- [ ] 3.4a 将既有 menu-only 产物迁移为统一 convert 产物；报告说明源 M2TS 外部依赖，strict 根据实际状态判定。旧实现不等于新验收已通过。
 
 > Completion gap for 3.1: browser keyboard activation is covered end-to-end through `MenuController`, the HDMV VM action bridge, and packaged button sound using a synthetic M3 fixture. No independently generated reference navigation trace for this menu-input path is present, so the synthetic trace cannot satisfy the stated reference-trace acceptance; keep this task unchecked pending that evidence.
 

@@ -34,11 +34,11 @@ flowchart TD
 | `parse-bdmv-structure` | M1 | core | 入口、结构和引用图；BD-J 标记不支持 |
 | `extract-igs-scenes` | M2 | core、结构 | TS/PES、IGS、场景与无损图形 |
 | `execute-hdmv-navigation` | M3 | core、结构 | 指令、寄存器、状态机与 trace；可与 M2 并行 |
-| `build-offline-menu-runtime` | M4 | core、结构、IGS、VM | 无服务菜单和明确为 partial 的 menu-only |
-| `export-playable-media` | M5 | core、结构、IGS、VM、菜单运行时 | 可达媒体、时间轴、播放反馈与 standalone-full |
+| `build-offline-menu-runtime` | M4 | core、结构、IGS、VM | 无服务菜单及可替换的影片动作桥 |
+| `export-playable-media` | M5 | core、结构、IGS、VM、菜单运行时 | 可达 M2TS 映射和系统默认程序交接 |
 | `verify-offline-release` | M6 | 上述全部 | 完整度判定、对照证据、V1 Chrome 证据与发布门槛 |
 
-推荐顺序为 M0 → M1 →（M2 ∥ M3）→ M4 → M5 → M6。每项测试与诊断随对应 change 交付；M6 负责跨模块及发布验收，并不替代前置模块的测试。M4 的 menu-only 不能算作完整播放交付；M5 的功能也须经 M6 在 V1 macOS Chrome 上的实际 `file://` 验证后才能宣布 complete。
+推荐顺序为 M0 → M1 →（M2 ∥ M3）→ M4 → M5 → M6。每项测试与诊断随对应 change 交付；M6 负责跨模块及发布验收，并不替代前置模块的测试。统一产物的影片交接须经 M6 在 V1 macOS Chrome 上的实际 `file://` 和系统关联程序验证后才能宣布 complete。
 
 这组 change 不包含未来 M7 的 BD-J 执行。可达但不支持的 BD-J、操作码、媒体或效果必须保留诊断；strict 下不得标记为完整成功。浏览器版本、轨道/字幕支持范围等按架构文档在实施与验收时以证据锁定，无法支持或尚未验证时明确报告，不能假定通过。
 
@@ -51,8 +51,8 @@ flowchart TD
 | M0 契约交接 | 最小 IR/schema、时间/诊断/事件、Cursor/路径/事务正反例、工具链与 fixture | M1 实现；M2–M5 可编写消费方与模拟测试 |
 | M1 结构交接 | ParsedDisc、原始命令/源偏移、轨道/引用图与 BACKUP 测试 | M2 流/IG 与 M3 VM 正式并行实施 |
 | M2/M3 行为交接 | 场景/PNG/按钮原始命令；统一 decoder、VM/trace/导航边 | M4 菜单集成及 M5 媒体计划开发 |
-| M4 预览交接 | 断网直接打开、真实菜单交互、unavailable 不挂死、partial 标识 | M5 替换媒体桥并验证完整播放链路 |
-| M5 媒体交接 | 媒体闭包、TimelineMap、真实影片/轨道/PG/返回与旧事件隔离 | M6 完整发布验收；不得提前宣称 complete |
+| M4 预览交接 | 断网直接打开、真实菜单交互、unavailable 不挂死 | M5 替换媒体桥并验证完整播放链路 |
+| M5 媒体交接 | 目标 M2TS 映射、系统打开交接、失败处理与真实环境证据 | M6 完整发布验收；不得提前宣称 complete |
 | M6 发布门槛 | V1 macOS Chrome、A–J 适用场景、独立参考与制品hash证据全部通过 | 才能发布 complete 包；Chrome 环境或其它要求缺席仍为未验证 |
 
-M1 结构图并非完整导航图：M3 提供 MovieObject 边，M2 的按钮命令再交同一 M3 分析器补边，M5 计算保守媒体闭包。M3 使用合成按钮单测，不反向依赖 M2。sound 在 M1 解析、M4 输出 WAV；普通 PGS 在 M5 实施。M6 的模板与回归框架可提前建立，不必等全部业务完成才开始准备。
+M1 结构图并非完整导航图：M3 提供 MovieObject 边，M2 的按钮命令再交同一 M3 分析器补边，M5 计算保守媒体闭包。M3 使用合成按钮单测，不反向依赖 M2。sound 在 M1 解析、M4 输出 WAV；影片字幕由外部播放器负责。M6 的模板与回归框架可提前建立，不必等全部业务完成才开始准备。

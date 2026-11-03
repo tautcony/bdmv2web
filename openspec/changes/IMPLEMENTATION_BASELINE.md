@@ -13,10 +13,10 @@
 | M2 IGS | m2ts-demux、igs-decoder、场景归一化 | Display Set、MenuScene、PNG、对象/调色板映射、按钮原始命令 |
 | M3 VM | navigation-hdmv、导航边分析 | 解码命令、执行器、操作码支持矩阵、NavigationGraph、trace |
 | M4 runtime | runtime-web、package-builder、音效输出、convert 菜单管线 | classic bundle、portable 菜单包、交互桥、WAV、资产清单 |
-| M5 media | media-export、媒体闭包/时间表、媒体控制器 | 媒体计划、MP4/音轨变体/PGS 图层、时间映射、standalone-full |
+| M5 media | 影片目标映射、系统播放器接入 | 可达 M2TS 映射、系统打开接入与外部依赖诊断 |
 | M6 assurance | test-runner、validate/compare、发布汇总 | 离线审计、状态决策、golden 对照、浏览器证据 |
 
-M1 只建立容器结构和明确声明的引用，不声称已得到完整控制流。M3 补 MovieObject 导航边；M2 交出按钮命令后，由同一个 M3 解码器补按钮边；M5 合并并计算媒体闭包。M3 单测使用合成按钮命令，不依赖 M2 完成，避免依赖环。sound 在 M1 解析、M4 转 WAV；PGS 在 M5 实施，不以 M2 的 IGS 解析替代字幕。
+M1 只建立容器结构和明确声明的引用，不声称已得到完整控制流。M3 补 MovieObject 导航边；M2 交出按钮命令后，由同一个 M3 解码器补按钮边；M5 合并并计算媒体闭包。M3 单测使用合成按钮命令，不依赖 M2 完成，避免依赖环。sound 在 M1 解析、M4 转 WAV；影片字幕由系统关联的外部播放器负责。
 
 ## 2. 共享数据和事件
 
@@ -56,14 +56,13 @@ interface EventEnvelope<T> {
 | --- | --- | --- |
 | inspect INPUT --format json --out FILE | 结构、入口、诊断、支持预测 | 不把预测写成最终完成度 |
 | extract INPUT --out DIR | 结构/原始命令，M2 接入后含 IG/PNG | 明确已完成与未完成阶段，不生成播放器 |
-| convert INPUT --out DIR | 完整离线包 | standalone-full、portable、strict 开启 |
-| convert INPUT --mode menu-only --out DIR | 菜单预览包 | strict 缺省关闭，状态始终 partial |
+| convert INPUT [--out DIR] | 统一离线菜单包，影片交给系统默认程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 指定同级目标；strict 开启 |
 | validate DIR --offline [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
 | compare INPUT DIR --trace FILE | 指定输入序列的参考比较 | 开发命令，可用原碟和参考工具 |
 
 `--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
 
-输入只读。realpath 检查后拒绝输入与输出/缓存重叠及 symlink 逃逸。目标已存在时首期拒绝覆盖；在同父目录 staging，校验后 rename 到不存在的目标。中断/失败清理临时媒体，诊断写独立报告；不能留下貌似 complete 的目录。strict 的 partial 可保留审阅包，但必须显著标识且不能替代旧包。
+HTML 包含可编辑的 BDMV 路径配置，默认以 HTML 输出目录为基准相对指向同级 BDMV；支持改为相对或绝对本地路径，重新加载后由菜单与系统接入一致使用。输入只读。realpath 检查后拒绝输入与输出/缓存重叠及 symlink 逃逸。经验证的源 BDMV STREAM 中 M2TS 是影片交接的明确外部依赖，不属于包内生成资产；菜单运行资源仍须包内闭合。目标已存在时首期拒绝覆盖；在同父目录 staging，校验后 rename 到不存在的目标。中断/失败清理临时媒体，诊断写独立报告；不能留下貌似 complete 的目录。strict 的 partial 可保留审阅包，但必须显著标识且不能替代旧包。
 
 ## 4. 状态统一判定
 
@@ -71,11 +70,11 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/payloadFin
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |
-| 关键入口/解析损坏、不能启动、离线边界违规、必需资产缺失或被篡改 | failed | 非零，不发布新正式包 |
-| 可启动但有 BD-J、可达不支持能力、可达性未证明、验证缺失/失败，或 menu-only | partial | 退出 2，可保留审阅包 |
-| standalone-full；资源/行为闭环，声明矩阵及对照证据全部通过，无阻断诊断 | complete | 退出 0 |
+| 关键入口/解析损坏、不能启动、离线边界违规、必需包内资产缺失或被篡改 | failed | 非零，不发布新正式包 |
+| 可启动但有 BD-J、可达不支持能力、影片交接或可达性未证明、验证缺失/失败 | partial | 退出 2，可保留审阅包 |
+| 统一产物在声明范围内资源/菜单/影片交接闭环，矩阵及对照证据通过，无阻断诊断 | complete | 退出 0 |
 
-任意 fatal 或安全检查失败一律 failed；未认可的 error 至少阻止 complete。不可达损坏实体仍保留诊断，只有证明不影响任何入口/可达路径并记录非阻断理由，才可作为已认可的诊断。确认 Error、缩小分母、删除入口、关闭 strict 均不能提升完整度。无有效 HDMV 入口的纯 BD-J 碟片在首期为 failed。M5 的功能跑通不自动代表 M6 发布证明完成；缺浏览器证据为 partial。
+任意 fatal 或安全检查失败一律 failed；未认可的 error 至少阻止 complete。不可达损坏实体仍保留诊断，只有证明不影响任何入口/可达路径并记录非阻断理由，才可作为已认可的诊断。确认 Error、缩小分母、删除入口、关闭 strict 均不能提升完整度。无有效 HDMV 入口的纯 BD-J 碟片在首期为 failed。M5 的功能跑通不自动代表 M6 发布证明完成；缺浏览器或外部播放器交接证据为 partial。
 
 ## 5. 本轮固定的首期产品选择
 
@@ -85,13 +84,13 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/payloadFin
 | --- | --- | --- |
 | 工具链 | Node LTS、pnpm、TS、Vitest、classic IIFE ES2020 | M0 选择精确版本、lockfile、干净构建 |
 | 浏览器 | V1 只要求 macOS Google Chrome | M0 建表，M4/M5 冒烟，M6 记录实际 macOS build 与 Chrome 完整版本，并直接测试 `file://`；此项缺席即未验证。跨系统和其它浏览器不作为 V1 门槛 |
-| 媒体 | SDR H.264/AAC MP4、WAV、无损 PNG；不增加 WebM/HDR profile | M5 具体编码参数、ffprobe、M6 实播 |
-| 质量 | 保真优先，H.264 初始 CRF 18；不放大，保留可表达帧率/比例 | M5 锁定像素格式/level、质量证据；HDR 未验证 tone mapping 则 unsupported |
-| 多音轨 | 主音频轨本地变体，切换按逻辑时间恢复 | M5 PSR 闭环；需要无缝切音语义的路径明确 partial |
-| 字幕 | M5 实施普通 PGS 位图时间层与选择/off，不 OCR | 强制字幕、TextST、未验证混合效果明确 unsupported |
-| 高级播放 | 无缝分支、多角度、PiP/辅助视频、非常规流切换在专项证明前 unsupported | M1 检出、M5 分析影响、M6 禁止误报 complete |
+| 媒体 | 菜单动态背景和音轨转换时使用 FFmpeg 生成本地 MP4/M4A 并用 FFprobe 检验；音效为 WAV。正片打开原始 M2TS，由系统关联程序播放 | 菜单运行时不依赖 FFmpeg；M5 验证交接，M6 记录源文件和外部程序依赖 |
+| 质量 | 菜单图形与背景按实际资源及支持范围报告 | M2/M4 验证菜单视觉和音效 |
+| 影片音轨 | 外部播放器负责 | 不承诺网页控制或状态同步 |
+| 影片字幕 | 外部播放器负责 | 不承诺网页渲染、选择或状态同步 |
+| 高级播放 | 单个 M2TS 的外部播放不等价于 Playlist 编排 | M1/M5 保留多 PlayItem、分支、时间范围及能力限制 |
 | PlayerProfile | 语言/地区/输出能力显式配置，默认不依赖 localStorage | M0 schema；M3 锁定标准 PSR 映射，写入 trace/可达性分析 |
-| 预算 | 先计划后转码；全碟默认无体积硬上限，可配 maxOutputBytes；内存/执行预算必须有限 | M0 limits；M2/M3/M5 在分配/执行前检查 |
+| 预算 | 菜单生成须预检输出并受有限内存/执行预算约束；正片不默认复制或转码 | M0 limits；M2/M3/M5 在分配/执行前检查 |
 
 浏览器精确版本、协议 bit-field 不从示意图推定。它们分别是环境锁定和协议证据任务，必须在对应任务完成时提交，不留到发布前笼统“后续确认”。
 
@@ -105,4 +104,4 @@ Limits 的工程初值为：maxReadWindowBytes=8 MiB、maxSegmentBytes=16 MiB、
 
 fixture 统一在 packages/test-fixtures 登记构建器、字节来源、manifest、golden JSON/像素/trace、生成命令和许可。expected 来自已核验字段或独立参考，不由待测实现重新生成后直接作为基准。完整商业碟片不入库，本地参考素材以受控标识/hash 登记。
 
-M0–M3 可先用合成样本开发；M2/M3 宣称保真和 M6 发布需要独立参考证据。M4 使用模拟媒体桥，M5 换为本地视频桥，同一导航输入应保持相同导航状态。
+M0–M3 可先用合成样本开发；M2/M3 宣称保真和 M6 发布需要独立参考证据。M4 使用模拟媒体桥，M5 接入系统文件打开；没有外部播放回传时不得伪造播放或结束事件。

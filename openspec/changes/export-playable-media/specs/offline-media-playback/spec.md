@@ -2,115 +2,110 @@
 
 ## Purpose
 
-导出可达媒体并闭合时间、轨道、字幕与导航反馈。
+从离线菜单将实际 M2TS 交给操作系统的默认关联程序，并准确报告交接边界。
 
 ## ADDED Requirements
 
-### Requirement: 可达媒体导出
+### Requirement: 保守映射影片文件
 
-系统 SHALL 为 standalone-full 保守计算所有入口和按钮分支所需媒体，先生成计划，路径不确定不得缩小为单次运行路径。
+系统 SHALL 将可达影片动作映射到实际 M2TS，保留播放列表、PlayItem、源路径及时间范围；不可确定时保留诊断。
 
-#### Scenario: 条件分支并集
+#### Scenario: 条件分支
 
-- **WHEN** 同一按钮依 GPR 可播放两个 Playlist
-- **THEN** 两条可能路径均纳入媒体计划并保留来源
+- **WHEN** 按钮根据状态可能进入不同播放列表
+- **THEN** 保留各候选目标及其来源，不以单次执行路径代表全部可能
 
-#### Scenario: 无法解析动态分支
+#### Scenario: 多 PlayItem 或部分片段
 
-- **WHEN** 候选目标或探索状态无法有界确定
-- **THEN** 保留 unknown 和诊断，禁止完整承诺，不静默漏包
+- **WHEN** 播放列表包含多个 PlayItem、重复 Clip 或非零 IN/OUT
+- **THEN** 说明实际交接的文件和范围限制，不声称打开单个文件等于完成整个播放列表
 
-#### Scenario: 多 PlayItem
+#### Scenario: 无法确定或文件缺失
 
-- **WHEN** 路径含多个 PlayItem 或重复 Clip
-- **THEN** 生成本地可播放片段/合成文件及逐项映射，不引用原 M2TS
+- **WHEN** 无法确定对应文件或源 M2TS 不存在
+- **THEN** 不猜测其他文件，显示具体诊断并使导航等待可恢复
 
-### Requirement: 转码与资源事务
+### Requirement: 交给系统默认程序
 
-系统 SHALL 只在转换阶段安全调用 FFprobe/FFmpeg，按明确 profile 输出并校验媒体，支持预算/取消/失败清理。
+系统 SHALL 在用户触发影片动作时，通过目标环境实际支持并经验证的接入方式请求操作系统打开对应 M2TS，由系统默认关联程序处理。
 
-#### Scenario: 特殊源文件名
+#### Scenario: 成功交接
 
-- **WHEN** 文件路径含空格及 shell 特殊字符
-- **THEN** 以参数数组调用，不执行 shell 拼接，记录工具版本/参数
+- **WHEN** 目标文件存在且系统接入可用
+- **THEN** 请求打开正确的实际 M2TS，并区分请求已发起与可证实的系统交接结果
 
-#### Scenario: 进程或磁盘失败
+#### Scenario: 浏览器限制或无关联
 
-- **WHEN** FFmpeg 非零退出、取消或空间不足
-- **THEN** 输出 MEDIA_EXPORT_FAILED，临时文件不登记为资产，不覆盖源/旧包
+- **WHEN** 浏览器限制直接打开、系统无关联程序或打开失败
+- **THEN** 显示原因和可操作的手动打开路径，不伪报播放成功；未实现自动交接时状态不得为 complete
 
-#### Scenario: 成功进程但坏输出
+#### Scenario: 未知外部播放状态
 
-- **WHEN** FFmpeg 返回0而 ffprobe 检查失败
-- **THEN** 仍判该 job 失败，不以退出码0当媒体可播放证据
+- **WHEN** 交接机制不能获知播放进度或结束
+- **THEN** 不伪造播放开始、结束或自动返回事件，菜单仍可恢复操作
 
-### Requirement: 统一时间与反馈
+### Requirement: 单一离线菜单产物
 
-系统 SHALL 显式双向映射源时间、Playlist 时间和输出时间，按半开区间归属 PlayItem，并在实际媒体成功后反馈。
+系统 SHALL 提供统一的 convert 产物，不将 menu-only 与 standalone-full 作为不同交付模式；菜单资源自包含，影片显式依赖源 M2TS 和系统关联程序。
 
-#### Scenario: 跨项章节数值
+#### Scenario: 移动菜单包
 
-- **WHEN** PI0播放[0,180000)，PI1源[450000,720000)且播放[180000,450000)，seek章节225000
-- **THEN** 定位PI1源495000；线性输出为2.5秒，seek完成后才反馈成功，误差不超过目标视频一帧
+- **WHEN** 断网后移动产物并保留或重新关联源 M2TS
+- **THEN** 菜单正常运行，影片交接使用有效的源路径；若源文件不可用则显示诊断
 
-#### Scenario: 边界归属
+#### Scenario: 播放器职责
 
-- **WHEN** 目标时间恰好为180000的 PlayItem 边界
-- **THEN** 归属后一个 PlayItem，不重复触发前项结束副作用
+- **WHEN** 外部程序打开影片
+- **THEN** 播放、章节、音轨、字幕及停止由该程序负责，网页不承诺对其控制、同步或结束回调
 
-#### Scenario: 45k和回绕
+### Requirement: 受限本地引用
 
-- **WHEN** 来源含45k IN/OUT及带epoch的PTS
-- **THEN** 先精确归一化，再按映射定位，不把单位或不连续域混用
+系统 SHALL 仅允许经验证的 BDMV STREAM 内实际 M2TS 作为外部影片目标，安全处理本地路径并与包内运行资源审计分开。
 
-### Requirement: 媒体能力与不支持项
+#### Scenario: 特殊路径
 
-系统 SHALL 为支持的主音轨提供本地变体，为普通 PGS 提供位图层/选择/off；高级能力未验证时报告影响。
+- **WHEN** 源路径包含中文、空格、# 或 %
+- **THEN** 交接到正确文件，且不将路径当作 shell 代码执行
 
-#### Scenario: 音轨切换
+#### Scenario: 路径逃逸
 
-- **WHEN** 从一个受支持音轨切到另一个
-- **THEN** 按逻辑时间/暂停状态恢复，实际切换成功后 PSR 与 UI 同步，不依赖 audioTracks
+- **WHEN** 目标通过遍历或符号链接指向授权源目录外
+- **THEN** 拒绝交接并报告来源和原因
 
-#### Scenario: PGS 开关与seek
+### Requirement: 菜单背景媒体生成
 
-- **WHEN** 选择普通 PGS 后暂停/seek/关闭字幕
-- **THEN** 图形字幕随映射时间重建并按选择隐藏，IG 菜单层不受误清除，不 OCR
+系统 SHALL 在需要动态菜单背景或菜单音轨时，保留转换阶段使用 FFmpeg 生成浏览器可播放的包内媒体，并使用 FFprobe 检查输出；该要求不适用于外部播放器打开的正片。
 
-#### Scenario: 高级能力
+#### Scenario: 动态背景与菜单音轨
 
-- **WHEN** 可达分支要求无缝分支、强制字幕、TextST、角度或PiP等未支持能力
-- **THEN** 列出路径和降级，不因关闭 strict 变成 complete
+- **WHEN** 菜单引用受支持的动态背景和音轨
+- **THEN** 将其转换为本地可播放资源并随菜单打包，校验结果后才登记资产
 
-### Requirement: 动态交互同步
+#### Scenario: 转换或校验失败
 
-系统 SHALL 以媒体时间和映射重建菜单/动画/PG/still/pop-up，并通过相关动作/代次过滤旧异步回调。
+- **WHEN** FFmpeg 失败或 FFprobe 验证输出失败
+- **THEN** 报告菜单媒体生成失败，不把未验证或半成品登记为有效资产
 
-#### Scenario: 媒体切换后旧回调
+### Requirement: 并排输出与可配置源路径
 
-- **WHEN** seek或切换src后旧Promise/ended回调到达
-- **THEN** 丢弃旧代次且trace可追踪，当前VM/场景不变化
+系统 SHALL 将 HTML 输出目录放在发现的 BDMV 目录旁，并生成可编辑配置，允许用户调整所指向的 BDMV 目录。
 
-#### Scenario: 暂停及回退
+#### Scenario: 默认输出与输入形式
 
-- **WHEN** 暂停后回退 seek 到旧 composition 有效时间
-- **THEN** 重建对应图形/按钮/字幕，暂停媒体域动画，不重放历史导航副作用
+- **WHEN** 用户指定 BDMV 目录或其直接父目录进行转换
+- **THEN** 在发现的 BDMV 目录同级生成默认 HTML 目录，配置默认指向同级 BDMV，且不修改源文件
 
-#### Scenario: pop-up和结束返回
+#### Scenario: 目录共同移动
 
-- **WHEN** 播放中打开/关闭pop-up并到达正常结束
-- **THEN** 保持同一播放上下文，按VM规则处理结束/返回，不出现独立旁路播放器
+- **WHEN** HTML 目录与 BDMV 目录一起移动且保持并排
+- **THEN** 相对于 HTML 目录解析的默认路径仍指向该 BDMV，无须修改配置
 
-### Requirement: 完整包集成
+#### Scenario: 修改源目录配置
 
-系统 SHALL 将所有计划中的必需资产和时间表写入包内，复用 M4 启动/输入桥并等待 M6 证据判定最终状态。
+- **WHEN** 用户将配置改为其他相对或绝对本地 BDMV 路径并重新加载
+- **THEN** 影片交接按更新后的路径解析，菜单和接入程序使用一致的路径；目标无效时显示可定位的诊断
 
-#### Scenario: 完整离线链路
+#### Scenario: 输出冲突
 
-- **WHEN** 从菜单播放正片、seek、切轨、字幕、pop-up并返回
-- **THEN** 所有受支持步骤由包内资源完成，VM/PSR/时间一致
-
-#### Scenario: 尚无浏览器证据
-
-- **WHEN** 媒体和导航本地自测通过但必测矩阵缺席
-- **THEN** 报告 partial/pending verification，不自动标 complete
+- **WHEN** 指定的输出目录不与 BDMV 并排，或者输出目录已存在
+- **THEN** 明确拒绝并说明原因，不覆盖源目录或既有产物

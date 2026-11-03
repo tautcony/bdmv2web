@@ -8,7 +8,7 @@
 
 **Goals:** M2TS/TS/PES、跨包 IG 分段、ICS/PDS/ODS、无损 RGBA/PNG、页面/BOG/按钮/动画/效果及来源。
 
-**Non-Goals:** PGS 字幕、视频解码、VM 执行、OCR、浏览器输入；PGS 归 M5，按钮命令交 M3。
+**Non-Goals:** PGS 字幕、视频解码、VM 执行、OCR、浏览器输入；影片字幕由外部播放器负责，按钮命令交 M3。
 
 ## Decisions
 
@@ -55,7 +55,7 @@ extract 增加 scenes.json、assets/graphics/*.png、源映射及诊断；复用
 
 ## Verification / Exit Criteria
 
-逐层 fixture 覆盖读取块/TS/PES/segment 边界、adaptation-only、重复包、丢包、PTS 回绕/discontinuity、EOF 残片。场景 fixture 覆盖两页/BOG/邻接/自动动作、三态动画、同对象双 palette、透明/裁剪、版本更换。PNG 纯图层逐像素比对；参考帧记录工具版本/时间域/颜色规则。损坏 RLE/缺片/超尺寸不产生有效 scene。M4 可直接加载 scene fixture，M3 能消费其原始按钮命令。
+逐层 fixture 覆盖读取块/TS/PES/segment 边界、adaptation-only、重复包、丢包、PTS 回绕/discontinuity、EOF 残片。场景 fixture 覆盖两页/BOG/邻接/自动动作、三态动画、同对象双 palette、透明/裁剪、版本更换。以同类工具处理同一现有测试案例并保存输出作为参考（包括可用的 Tamako Clip `00005`），逐一匹配按钮各状态所引用的图像对象、对象版本、调色板版本及动画帧，比较元素尺寸和 RGBA 像素；不以整页合成或按钮交互作为元素保真验收前提。记录工具版本、输入与导出方法、可比较范围及未支持项；参考结果不得由本项目生成。损坏 RLE/缺片/超尺寸不产生有效 scene。M4 可直接加载 scene fixture，M3 能消费其原始按钮命令。
 
 ## Risks / Trade-offs
 

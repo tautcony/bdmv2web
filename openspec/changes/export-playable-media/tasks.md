@@ -1,5 +1,7 @@
 # Tasks
 
+> 范围调整记录：以下原任务和完成证据按原样保留，用于追踪已完成工作；其中涉及正片的浏览器播放、正片转码和完整播放包要求由当前范围替代；菜单背景和菜单音轨的 FFmpeg 转码、FFprobe 检验及其完成记录仍然适用。既有勾选不代表新的系统播放器接入已完成。当前实施任务见文末。
+
 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
 
 共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。文中命令/文件是目标交付物，当前未实现。
@@ -44,3 +46,29 @@
 - 3.3 keeps an active linear media element across a `MENU_CALL` and cancels stale wait listeners/timers on replacement. The VM/browser pop-up path is not integrated as an actual overlay, so this task remains open.
 - 3.5 has SUP segment, palette, object-fragment, PCS crop, RLE bitmap and 90 kHz timeline primitives. Tests use synthetic bytes only; independent pixel golden, player rendering, subtitle PSR closure and real seek evidence are missing.
 - 4.1/4.2 require the standalone-full package path and user-connected macOS Chrome file:// run. V1 remains Chrome-only; no cross-browser/system matrix is required.
+
+
+## 当前范围：系统播放器接入
+
+本清单按新的系统播放器接入边界重写。旧任务的勾选和验证仅证明当时的组件行为，不能转移为新需求的完成证据；既有转码、时间轴、PGS 和浏览器影片桥代码暂不因本变更自动删除。
+
+## 5. 单一产物与目标映射
+
+- [ ] 5.1 将 `convert INPUT --out DIR` 接入统一菜单产物；移除产品模式分支，明确旧 `--mode` 参数及旧包的迁移和诊断，并更新 CLI、manifest、README 与状态测试。
+- [ ] 5.4 默认在发现的 BDMV 同级生成 HTML 目录，`--out` 指定同级目标；为 BDMV 自身与父目录输入、路径冲突及既有目录添加验证。
+- [ ] 5.5 生成可编辑 BDMV 路径配置，默认相对 HTML 目录指向同级 BDMV；支持相对和绝对路径、重新加载、菜单与本地接入一致消费，验证共同移动和单独迁移后的重新配置。
+- [ ] 5.2 复用结构和导航信息映射可达影片动作至实际 M2TS；保留 Playlist/PlayItem/Clip、IN/OUT、来源和分支，未知目标不猜测。
+- [ ] 5.3 验证多 PlayItem、重复 Clip、非零 IN/OUT 与缺失源文件；展示实际打开范围，不承诺完整 Playlist 语义。
+
+## 6. 系统播放器接入
+
+- [ ] 6.1 在目标 macOS Chrome 的直接 file:// 环境验证可行交接机制；如需本地接入，设计其安装、调用、安全边界及失败回退，不假定网页可直接调用系统程序。
+- [ ] 6.2 由用户动作请求系统默认关联程序打开实际 M2TS；验证中文、空格、#、% 路径、无关联、用户取消及启动失败。
+- [ ] 6.3 安全校验 BDMV STREAM 来源、文件存在及路径/符号链接边界；若调用本地进程使用安全参数传递。
+- [ ] 6.4 区分请求、可证实交接、不可用与失败；无播放状态回传时不伪造 started/ended，解除 VM 等待并保持菜单可操作。
+
+## 7. 集成与验证
+
+- [ ] 7.1 更新包审计及发布报告：显式区分包内菜单资源和允许的源 M2TS，报告外部源/系统关联的验证状态。
+- [ ] 7.2 实测断网、移动包、源有效/缺失及真实菜单动作；记录 OS、Chrome、默认程序、实际打开文件和观察结果。
+- [ ] 7.3 回归菜单背景、音效、导航及不可用提示；不要求浏览器实现正片、字幕、章节、外部播放器返回或同步。
