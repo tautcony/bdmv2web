@@ -1,0 +1,119 @@
+packages/test-runner/src/browser-evidence.test.ts
+  s_3a3ffd5e9a879b::t_78ff2632cc670d 1,3-60,62-71,90-96
+  s_3a3ffd5e9a879b::t_4b62b1e62df663 2,77-87
+  s_3a3ffd5e9a879b::t_f1a8194e10c67c 61
+  s_3a3ffd5e9a879b::t_abd5e5c466a517 72-76,88-89
+packages/test-runner/src/index.test.ts
+  s_3a3ffd5e9a879b::t_dd23e512e05c72 12,46-59
+  s_3a3ffd5e9a879b::t_2a61a9fe1f3fb4 99,101,107
+  s_3a3ffd5e9a879b::t_0b78f484a19ad9 221-230
+  s_3a3ffd5e9a879b::t_39bbea330b6d02 274
+  s_3a3ffd5e9a879b::t_d6e2524768f485 2,73-98,100,102-106,108-110,231
+  s_3a3ffd5e9a879b::t_ff0b0de57e7dca 18,265-266,275
+  s_3a3ffd5e9a879b::t_b1505587a478a3 111
+  s_3a3ffd5e9a879b::t_cce7cd5ca38d61 232
+packages/test-runner/src/report.ts
+  s_3a3ffd5e9a879b::t_dd23e512e05c72 44
+  s_3a3ffd5e9a879b::t_f14584480cfb7d 4,61-89,91-92,94,96-97
+  s_3a3ffd5e9a879b::t_1b1715c5f83fb0 11,16-18
+  s_3a3ffd5e9a879b::t_9be2b9d0c64830 90,93,95
+packages/test-runner/src/compare.test.ts
+  s_3a3ffd5e9a879b::t_9be2b9d0c64830 44-53
+  s_3a3ffd5e9a879b::t_2b85923900bb85 1-43,54-57
+packages/test-runner/src/browser-evidence.ts
+  s_3a3ffd5e9a879b::t_bb8c2d2f6f1dc6 128
+  s_3a3ffd5e9a879b::t_87f618c6ce5a90 92-93,122-127,129-130,134
+  s_3a3ffd5e9a879b::t_12da26db054803 1-91,94-121,131-133,135-142,152-181
+  s_3a3ffd5e9a879b::t_1357c76cbe4bcd 143-151
+packages/test-runner/src/release-summary.test.ts
+  s_3a3ffd5e9a879b::t_d81d1af315e79f 1-82
+packages/test-runner/src/coverage.test.ts
+  s_3a3ffd5e9a879b::t_6a38bb2d8e706d 1-39
+packages/test-runner/src/index.ts
+  s_3a3ffd5e9a879b::t_ae41875519d676 6
+  s_3a3ffd5e9a879b::t_427489e93e7e48 7
+openspec/changes/verify-offline-release/tasks.md
+  s_3a3ffd5e9a879b::t_4de3191042a1b5 5,32
+  s_3a3ffd5e9a879b::t_1e2a500c096441 18
+  s_3a3ffd5e9a879b::t_a1b68f4a9d6c76 29
+  s_3a3ffd5e9a879b::t_eca06bcf963b97 12
+  s_3a3ffd5e9a879b::t_807ec128ea4325 9-10
+  s_3a3ffd5e9a879b::t_f77410cc207cba 31
+  s_3a3ffd5e9a879b::t_f5904e129275bd 23-24
+  s_3a3ffd5e9a879b::t_b3fd332275646d 11
+  s_3a3ffd5e9a879b::t_369658559263f0 22
+  s_3a3ffd5e9a879b::t_4b985addd3846e 16-17
+  s_3a3ffd5e9a879b::t_fbff0d64db06f1 25
+packages/test-runner/src/compare.ts
+  s_3a3ffd5e9a879b::t_e5b823ec969ea1 38-45
+apps/cli/src/index.ts
+  s_3a3ffd5e9a879b::t_c803ede652ae71 216-220
+  s_3a3ffd5e9a879b::t_356b7fecc51ee0 58,63-71,73-76,78-96,103-123
+  s_3a3ffd5e9a879b::t_76ec65eed91a58 72
+  s_3a3ffd5e9a879b::t_e717e2b121a638 265-269,275-278,287,335,339,341
+  s_3a3ffd5e9a879b::t_137ccef244e6bd 183
+  s_3a3ffd5e9a879b::t_5a8db3f7a2e62e 10,257,260,262,279-284,286,288-292,294-301,304,317-322,325-326,328-329,342-361
+  s_3a3ffd5e9a879b::t_c33d991efa1b64 9,130-143,214-215,224-225,230
+  s_3a3ffd5e9a879b::t_bb5d9893ae84cd 161-164
+  s_3a3ffd5e9a879b::t_7dd49549b8e648 201-205
+  s_3a3ffd5e9a879b::t_476866b515ff74 270-274,305-316
+  s_3a3ffd5e9a879b::t_fde142ab32a8f0 5,7-8,126,168-169,187-195,213,227-229,231,244,247-252,368
+  s_3a3ffd5e9a879b::t_88e88a7585a821 6,27,127-129,145-156,158-160,165-167,197-200,207,209-212,226
+  s_3a3ffd5e9a879b::t_9099fee706797d 258-259,261,263-264,334
+  s_3a3ffd5e9a879b::t_b320352317f373 2
+  s_3a3ffd5e9a879b::t_88fde9ffe48154 221-223,233
+  s_3a3ffd5e9a879b::t_156cfa1dc69fa3 124,253-256,327,330-333,336-337,340,362-363,369
+  s_3a3ffd5e9a879b::t_a0129e4d688a26 4,234-243
+  s_3a3ffd5e9a879b::t_25e966539ceb2f 144,157,170-182,184-186,196,232,245-246
+  s_3a3ffd5e9a879b::t_f5c7bdf5a0ef03 285,293,302-303,323-324
+  s_3a3ffd5e9a879b::t_84580975e82144 338
+  s_3a3ffd5e9a879b::t_b2892e117b1c09 206,208
+  s_3a3ffd5e9a879b::t_50130e9c5fce89 125
+packages/test-runner/src/release-summary.ts
+  s_3a3ffd5e9a879b::t_baf03ef1faef36 1-98,101-162
+  s_3a3ffd5e9a879b::t_427489e93e7e48 99-100
+apps/cli/src/index.test.ts
+  s_3a3ffd5e9a879b::t_4d9f7bb9661507 240,243,245-246,250
+  s_3a3ffd5e9a879b::t_0a3f2882b991c9 229,244
+  s_3a3ffd5e9a879b::t_2cf42f6eb13bec 9,159,189
+  s_3a3ffd5e9a879b::t_17f2a678a05a83 103-105
+  s_3a3ffd5e9a879b::t_5486b91993a1fd 167
+  s_3a3ffd5e9a879b::t_c47e83a31a0ecf 154,182
+  s_3a3ffd5e9a879b::t_dd23e512e05c72 237-238,241-242,247-249
+  s_3a3ffd5e9a879b::t_f95d22ead14bac 283
+  s_3a3ffd5e9a879b::t_69786bb81c98f5 13-14,17,20-26,29
+  s_3a3ffd5e9a879b::t_66919b170c3d75 8,132-153,155-158,160-166,168-181,183-188,190-205
+  s_3a3ffd5e9a879b::t_bcb5efbee85271 3,109,206-221,223-228,230-235,257-268,272-274
+  s_3a3ffd5e9a879b::t_e717e2b121a638 239,251-256
+  s_3a3ffd5e9a879b::t_71f0fadd7ff298 222
+  s_3a3ffd5e9a879b::t_7eedd542e1d1f7 39-63,65-87,89-100,102,106-108
+  s_3a3ffd5e9a879b::t_270c691bef8c86 4,64,88,101
+  s_3a3ffd5e9a879b::t_ec8a7ed27b13ea 275-282,284-296
+  s_3a3ffd5e9a879b::t_602873544d358e 236,269-271
+  s_3a3ffd5e9a879b::t_b3347e581de91b 110
+packages/test-runner/src/coverage.ts
+  s_3a3ffd5e9a879b::t_5be44ecde96a91 107
+  s_3a3ffd5e9a879b::t_e9e8be8cd1cb5e 9-18,27-33,57-70,94-100,105-106,108
+  s_3a3ffd5e9a879b::t_bee803ae51f6a3 19-26,41
+  s_3a3ffd5e9a879b::t_bfdff33a8c5b1b 109
+apps/cli/package.json
+  s_3a3ffd5e9a879b::t_156cfa1dc69fa3 11
+pnpm-lock.yaml
+  s_3a3ffd5e9a879b::t_bad3b70159111e 38-49,89-91,104-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1c5c4c5968413076f2f78924235fd835e1c001df",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
