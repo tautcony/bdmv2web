@@ -83,10 +83,10 @@ describe("conservative M1/M3 media closure", () => {
     expect(closure.unknown.some((item) => item.code === "MEDIA_NAVIGATION_INCOMPLETE")).toBe(true);
   });
 
-  it("does not infer a playlist target from the current M3 play edge contract", () => {
+  it("widens when a statically named playlist is absent from the structure", () => {
     const graph = buildNavigationGraph([{ id: 0, instructions: [m3Fixtures.playPlaylist42] }]);
     const closure = computeMediaClosure(discFixture(), graph);
-    expect(graph.edges).toContainEqual(expect.objectContaining({ kind: "play", to: null, resolution: "unresolved" }));
+    expect(graph.edges).toContainEqual(expect.objectContaining({ kind: "play", to: "playlist:00042", resolution: "resolved" }));
     expect(closure.playlistIds).toEqual(["playlist:00001", "playlist:00002"]);
     expect(closure.complete).toBe(false);
     expect(closure.unknown.some((item) => item.code === "MEDIA_PLAY_TARGET_UNKNOWN")).toBe(true);

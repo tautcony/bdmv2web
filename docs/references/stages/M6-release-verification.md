@@ -45,3 +45,15 @@ M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IM
 ### `CALL_TITLE` 后菜单返回复验
 
 在同一 Chrome DevTools Offline 会话中，使用 `/tmp/tamako-vm-return-smoke.7NYj3t/index.html` 临时合成包，在 Special Features 页首个按钮的命令前插入 `CALL_TITLE`。键盘进入该页并确认后，状态栏显示 `CALL_TITLE resume context is not implemented without independent semantic evidence`；按左键触发该页 Back 按钮的自动动作后，截图确认画面返回首页，状态栏仍保留诊断。Console 显示 `[bdmv-web:vm]` trace（合并计数 171），无 error/warn；本地背景视频仍为 `readyState=4`、`paused=false`。此复验只改临时合成包，没有改原盘或 `test-data/**`。
+
+## 外部 M2TS 替身接入检查 — 2026-11-03
+
+- 用户提供 `STREAM/00006.m2ts` 作为正片替身，并确认其与 `00004.m2ts` 内容相同；`cmp` 逐字节比较一致。没有对源素材生成 hash。
+- `extract` 生成的 `external-media-targets.json` 将 Playlist `00004` 和 `00042` 映射到存在的 `STREAM/00006.m2ts`；每个 Playlist 含一个 PlayItem，源 IN/OUT 分别为 `1048560` / `432669750`（90 kHz）。Mark 1 对应源时间 `17647642`；独立测试 `external-real-smoke.test.ts` 验证这两个 Playlist 和 Mark 映射。
+- 盘片声明的片段时长约 4795.791 秒，替身文件的 ffprobe 时长约 109.234 秒。这是已知替身条件，不能用于验证原正片的时长、末尾或章节 seek；文件存在不代表内容和原碟片段一致。
+- macOS 27.2 build 26B123 的默认关联为 IINA 1.4.4 (168)。通过系统 `open` 打开实际替身后，IINA 窗口显示 `00006.m2ts`，界面观察到画面及 `00:13 / 01:49` 播放进度。该观察验证操作系统文件关联及替身视频解码，不证明声音、章节或菜单按钮交接。
+- 当前导航分析对这两个 Playlist 的路线为 `conservative-fallback`：相关标题和播放列表通过 GPR 动态确定。菜单到系统打开的统一桥尚未接入，因此没有执行端到端的菜单按钮 → 默认播放器路径；结果仍为 partial。
+
+### 主菜单到系统播放器 — 后续实测
+
+2026-11-03 在 macOS Chrome `file://` 中运行带本地桥的生成菜单：保留 First Play 在首个媒体请求之前的寄存器初始化、进入 Top Menu，激活主菜单影片按钮。VM 解析动态标题并请求 Playlist `00042`；桥请求系统打开 `STREAM/00006.m2ts`，IINA 窗口显示该路径和进行中的画面。测试中以临时菜单包和手工传入桥会话 URL 验证；原始替身不是正片。系统播放器的章节定位、实际正片、多 PlayItem 自动切换及桥的完整安全审计不在此通过范围内。

@@ -4,6 +4,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": { ".": "./dist/index.js", "./external-targets": "./dist/external-targets.js" },
   "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run src" },
   "dependencies": { "@bdmv-web/bdmv-parser": "workspace:*", "@bdmv-web/hdmv": "workspace:*" },
   "devDependencies": { "@types/node": "24.10.0" }

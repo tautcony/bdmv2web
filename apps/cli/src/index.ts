@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { link, lstat, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import { assertDisjointRoots, beginOutputTransaction, hashFile, resolveInputFile } from "@bdmv-web/bdmv-io";
 import { ContractError, parseDiscIR, type DiscIR } from "@bdmv-web/core";
 import { parseBdmv, type ParsedDisc } from "@bdmv-web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv-web/igs";
+import { buildNavigationGraph, HdmvVm } from "@bdmv-web/hdmv";
+import { computeMediaClosure, createExternalMediaTargets } from "@bdmv-web/media-export";
 import { buildMenuPackage } from "@bdmv-web/package-builder";
 import { adaptIgsScene } from "@bdmv-web/runtime-web";
 import { auditOutputPackage, createDependencyAuditReport, createReleaseSummary, summarizeDeliveryCoverage } from "@bdmv-web/test-runner";
@@ -48,6 +50,15 @@ async function inspect(): Promise<void> {
   catch (error) { await rm(temp, { force: true }); throw error; }
 }
 
+function buildExternalTargets(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
+  const programs = scenes.flatMap((scene) => scene.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length).map((button) => ({ scene, button }))));
+  const graphs = programs.map(({ scene, button }, id) => buildNavigationGraph([{ id, instructions: button.commands.map((command) => {
+    const bytes = Buffer.from(command.bytes); const words: [number, number, number] = [bytes.readUInt32BE(0), bytes.readUInt32BE(4), bytes.readUInt32BE(8)];
+    return { bytes: bytes.toString("hex"), words, source: { path: `BDMV/STREAM/${scene.clipId}.m2ts`, origin: "primary" as const, offset: command.sourceOffset } };
+  }) }]));
+  return createExternalMediaTargets(disc, computeMediaClosure(disc, buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries }), graphs));
+}
+
 async function extract(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "extract requires an input path");
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "extract requires --out DIR");
@@ -56,6 +67,8 @@ async function extract(): Promise<void> {
   const transaction = await beginOutputTransaction(roots.output);
   try {
     const igs = await extractIgsScenes(disc);
+    const externalTargets = buildExternalTargets(disc, igs.scenes);
+    await writeFile(resolve(transaction.stagingPath, "external-media-targets.json"), `${JSON.stringify(externalTargets, null, 2)}\n`, { flag: "wx" });
     const commandTable = disc.movieObjects.flatMap((object) => object.instructions.map((instruction, instructionIndex) => ({ movieObjectId: object.id, instructionIndex, words: instruction.words, bytes: instruction.bytes, source: instruction.source })));
     const raw = `${JSON.stringify(commandTable, null, 2)}\n`;
     const rawPath = resolve(transaction.stagingPath, "raw-commands.json");
@@ -80,6 +93,7 @@ async function extract(): Promise<void> {
     await writeFile(resolve(transaction.stagingPath, "source-map.json"), sourceMapJson, { flag: "wx" });
     const generatedFiles = [
       await generatedFileRecord(transaction.stagingPath, "parsed-disc.json", "parsed-disc"),
+      await generatedFileRecord(transaction.stagingPath, "external-media-targets.json", "external-media-targets"),
       await generatedFileRecord(transaction.stagingPath, "raw-commands.json", "raw-command-table"),
       await generatedFileRecord(transaction.stagingPath, "scenes.json", "igs-scenes"),
       await generatedFileRecord(transaction.stagingPath, "igs-diagnostics.json", "igs-diagnostics"),
@@ -167,10 +181,28 @@ function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; cl
   return parseDiscIR({ schemaVersion: "1.0", entries, programs, menus, playlists, mediaAssets: [], diagnostics });
 }
 
-async function menuLoopMediaInput(disc: ParsedDisc): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; outTime45k: number; repeatCount: number; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
-  const playlist = disc.playlists.find((item) => item.id === "00003");
-  const first = playlist?.playItems[0];
-  if (!playlist || !first || playlist.playItems.some((item) => item.clipId !== first.clipId || item.inTime45k !== first.inTime45k || item.outTime45k !== first.outTime45k || item.multiAngle)) return null;
+function findTopMenuPlaylist(disc: ParsedDisc): ParsedDisc["playlists"][number] | undefined {
+  const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV");
+  if (typeof firstPlay?.target.target !== "number") return undefined;
+  const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries });
+  vm.reset(firstPlay.target.target);
+  const startup = vm.runTurn();
+  if (startup.waiting) vm.releaseExternalPlayback(startup.waiting);
+  vm.drainActions();
+  const topMenu = vm.selectTitle(0);
+  const playlistNumber = topMenu.waiting?.type === "PLAY_PLAYLIST" ? topMenu.waiting.payload.playlist : undefined;
+  return disc.playlists.find((item) => Number(item.id) === playlistNumber);
+}
+
+async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; outTime45k: number; repeatCount: number; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
+  const first = playlist?.playItems.at(-1);
+  if (!playlist || !first || first.multiAngle) return null;
+  let repeatCount = 0;
+  for (const item of [...playlist.playItems].reverse()) {
+    if (item.clipId !== first.clipId || item.inTime45k !== first.inTime45k || item.outTime45k !== first.outTime45k || item.multiAngle) break;
+    repeatCount++;
+  }
+  if (repeatCount < 2) return null;
   const video = first.streams.find((stream) => stream.pid !== null && stream.codingType === 0x1b && stream.streamType === 1);
   const audioCodingTypes = new Set([0x03, 0x04, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0xa1, 0xa2]);
   const audioStreams = first.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType !== null && audioCodingTypes.has(stream.codingType) && stream.language !== null);
@@ -179,7 +211,7 @@ async function menuLoopMediaInput(disc: ParsedDisc): Promise<{ sourcePath: strin
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
   return {
     sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: first.index, clipId: first.clipId,
-    inTime45k: first.inTime45k, outTime45k: first.outTime45k, repeatCount: playlist.playItems.length, videoPid: video.pid,
+    inTime45k: first.inTime45k, outTime45k: first.outTime45k, repeatCount, videoPid: video.pid,
     audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
   };
 }
@@ -187,13 +219,13 @@ async function menuLoopMediaInput(disc: ParsedDisc): Promise<{ sourcePath: strin
 async function convert(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "convert requires a BDMV input path");
   const mode = optionValue("--mode") ?? "standalone-full";
-  if (mode !== "menu-only") fail("CLI_UNSUPPORTED_MODE", "convert currently supports only --mode menu-only");
-  const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "convert --mode menu-only requires --out DIR");
-
+  if (mode !== "menu-only" && mode !== "standalone-full") fail("CLI_UNSUPPORTED_MODE", "Unsupported convert mode");
   const disc = await parseBdmv(input);
+  const out = optionValue("--out") ?? resolve(dirname(disc.root), "BDMV-menu");
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const extraction = await extractIgsScenes(disc);
-  const menuMedia = await menuLoopMediaInput(disc);
+  const menuPlaylist = findTopMenuPlaylist(disc);
+  const menuMedia = await menuLoopMediaInput(disc, menuPlaylist);
   const transaction = await beginOutputTransaction(roots.output);
   if (!extraction.scenes.length) {
     try {
@@ -211,7 +243,15 @@ async function convert(): Promise<void> {
     } catch (error) { await transaction.abort(); throw error; }
   }
 
-  const adapted = adaptIgsScene(extraction.scenes[0]!, extraction.assets);
+  const menuClipIds = new Set(menuPlaylist?.playItems.flatMap((item) => item.streams.flatMap((stream) => {
+    if (stream.codingType !== 0x91) return [];
+    if (stream.streamType === 1) return [item.clipId];
+    const clip = stream.streamType === 2 && stream.subPathId !== null && stream.subClipId !== null
+      ? menuPlaylist.subPaths[stream.subPathId]?.items[stream.subClipId] : undefined;
+    return clip ? [clip.clipId] : [];
+  })) ?? []);
+  const menuScene = extraction.scenes.find((item) => menuClipIds.has(item.clipId)) ?? extraction.scenes[0]!;
+  const adapted = adaptIgsScene(menuScene, extraction.assets);
   const scene = adapted.scene;
   const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
     id,
@@ -221,6 +261,8 @@ async function convert(): Promise<void> {
   const menuEntry = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number")
     ?? disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
   const vmInitialProgramId = typeof menuEntry?.target.target === "number" ? menuEntry.target.target : undefined;
+  const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
+  const vmFirstPlayProgramId = typeof firstPlay?.target.target === "number" ? firstPlay.target.target : undefined;
   const referenced = referencedAssetIds(scene);
   const graphics = extraction.assets.filter((asset) => referenced.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
   const title = optionValue("--title") ?? basename(dirname(disc.root));
@@ -229,7 +271,7 @@ async function convert(): Promise<void> {
     ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
     ...adapted.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
   ];
-  if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "Playlist 00003 does not declare a single repeated clip loop with supported video and primary-audio streams." });
+  if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "No supported repeated menu clip with video and primary-audio streams was found." });
   if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands." });
   let soundBytes: Uint8Array | null = null;
   const soundPath = disc.sounds[0]?.source.path;
@@ -243,7 +285,7 @@ async function convert(): Promise<void> {
   }
   try {
     const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null);
-    await buildMenuPackage({ outputDirectory: transaction.stagingPath, title, ir, scene, vmPrograms, ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }), graphics, soundEntries: disc.sounds, soundBytes, ...(menuMedia ? { menuLoopMedia: menuMedia } : {}), diagnostics });
+    await buildMenuPackage({ outputDirectory: transaction.stagingPath, title, ir, scene, vmPrograms, vmEntries: disc.entries, externalTargets: buildExternalTargets(disc, extraction.scenes), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root, ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }), ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }), graphics, soundEntries: disc.sounds, soundBytes, ...(menuMedia ? { menuLoopMedia: menuMedia } : {}), diagnostics });
     await transaction.commit();
     process.stdout.write(`${JSON.stringify({ status: "partial", mode: "menu-only", output: roots.output })}\n`);
     if (strictDefault()) process.exitCode = 2;

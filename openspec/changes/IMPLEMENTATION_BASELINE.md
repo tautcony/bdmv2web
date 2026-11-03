@@ -56,13 +56,13 @@ interface EventEnvelope<T> {
 | --- | --- | --- |
 | inspect INPUT --format json --out FILE | 结构、入口、诊断、支持预测 | 不把预测写成最终完成度 |
 | extract INPUT --out DIR | 结构/原始命令，M2 接入后含 IG/PNG | 明确已完成与未完成阶段，不生成播放器 |
-| convert INPUT [--out DIR] | 统一离线菜单包，影片交给系统默认程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 指定同级目标；strict 开启 |
+| convert INPUT [--out DIR] | 统一离线菜单包，影片交给系统默认程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 可指定不重叠的其他目标；strict 开启 |
 | validate DIR --offline [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
 | compare INPUT DIR --trace FILE | 指定输入序列的参考比较 | 开发命令，可用原碟和参考工具 |
 
 `--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
 
-HTML 包含可编辑的 BDMV 路径配置，默认以 HTML 输出目录为基准相对指向同级 BDMV；支持改为相对或绝对本地路径，重新加载后由菜单与系统接入一致使用。输入只读。realpath 检查后拒绝输入与输出/缓存重叠及 symlink 逃逸。经验证的源 BDMV STREAM 中 M2TS 是影片交接的明确外部依赖，不属于包内生成资产；菜单运行资源仍须包内闭合。目标已存在时首期拒绝覆盖；在同父目录 staging，校验后 rename 到不存在的目标。中断/失败清理临时媒体，诊断写独立报告；不能留下貌似 complete 的目录。strict 的 partial 可保留审阅包，但必须显著标识且不能替代旧包。
+macOS 使用 `start-menu.command` 启动受会话令牌保护的 127.0.0.1 本地播放桥并打开 `file://` 菜单；桥依赖 Node.js，明确告知用户并随终端关闭。HTML 包含可编辑的 BDMV 路径配置，同级输出默认相对指向 BDMV，其他输出默认使用 BDMV 绝对路径；支持改为相对或绝对路径，重新加载后由菜单与系统接入一致使用。输入只读。realpath 检查后拒绝输入与输出/缓存重叠及 symlink 逃逸。经验证的源 BDMV STREAM 中 M2TS 是影片交接的明确外部依赖，不属于包内生成资产；菜单运行资源仍须包内闭合。目标已存在时首期拒绝覆盖；在输出目标同父目录 staging，校验后 rename 到不存在的目标。中断/失败清理临时媒体，诊断写独立报告；不能留下貌似 complete 的目录。strict 的 partial 可保留审阅包，但必须显著标识且不能替代旧包。
 
 ## 4. 状态统一判定
 

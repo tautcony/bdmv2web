@@ -134,7 +134,7 @@ describe("menu package primitives", () => {
         { bytes: m3Fixtures.move5.bytes, sourceOffset: "128", source: commandSource },
         { bytes: m3Fixtures.playPlaylist42.bytes, sourceOffset: "140", source: { ...commandSource, offset: "140" } },
       ];
-      await buildMenuPackage({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
+      await buildMenuPackage({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmEntries: [{ id: "title:0", kind: "title", source: commandSource, target: { objectType: "HDMV", playbackType: 0, target: 0, source: commandSource } }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
       const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");
       expect(html.indexOf('<video id="menu-background"')).toBeLessThan(html.indexOf('<canvas id="menu-canvas"'));
       const style = await readFile(resolve(outputDirectory, "runtime/style.css"), "utf8");
@@ -156,6 +156,7 @@ describe("menu package primitives", () => {
       expect(app).toContain("Images decoded"); expect(app).toContain("Unsupported DiscIR schema version"); expect(app).toContain("MEDIA_UNAVAILABLE");
       const data = await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"); expect(data).not.toContain("</script>");
       expect(data).toContain('"inputConfig":{"escapeMapping":"popup"}');
+      expect(data).toContain('"vmEntries":[{"id":"title:0"');
       const report = JSON.parse(await readFile(resolve(outputDirectory, "compatibility.json"), "utf8"));
       expect(report.status).toBe("partial"); expect(report.coverage.igs).toBe("unverified");
       expect(await readFile(resolve(outputDirectory, "README.md"), "utf8")).toContain("bdmv-web validate <package-directory> --offline");

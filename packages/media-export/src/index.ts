@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates, MediaBudgetError } from "./budget.js";
 
 export * from "./closure.js";
+export * from "./external-targets.js";
 export * from "./media-plan.js";
 export * from "./timeline.js";
 export * from "./seek.js";

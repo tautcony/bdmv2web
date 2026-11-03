@@ -1,11 +1,11 @@
-import type { MovieObject, MovieInstruction, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
 import { decodeInstruction, type RawCommand } from "./decode.js";
 import type { VmProgram } from "./vm.js";
 
 export interface NavigationGraphNode { id: string; kind: "object" | "command"; objectId: number; commandIndex?: number; source: SourceLocation | null; status: "known" | "unknown"; }
 export interface NavigationGraphEdge { from: string; to: string | null; kind: "sequence" | "conditional" | "jump" | "call" | "resume" | "play" | "unknown"; condition: string | null; source: SourceLocation; resolution: "resolved" | "unresolved"; }
 export interface NavigationGraph { nodes: NavigationGraphNode[]; edges: NavigationGraphEdge[]; explored: number; complete: boolean; diagnostics: string[]; }
-export interface GraphOptions { maxStates?: number; }
+export interface GraphOptions { maxStates?: number; entries?: ParsedDisc["entries"]; }
 const UNKNOWN_SOURCE: SourceLocation = { path: "<unknown-command>", origin: "primary", offset: "0" };
 
 export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, appendedPrograms: VmProgram[] = [], options: GraphOptions = {}): NavigationGraph {
@@ -25,7 +25,12 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
       const row = program.instructions[index]!; let d;
       try { d = decodeInstruction(row as MovieInstruction | RawCommand | Uint8Array | string); } catch { diagnostics.push(`decode-failed:${p.id}:${index}`); }
       const id = `command:${p.id}:${index}`; const source = d?.source ?? (typeof row === "object" && !(row instanceof Uint8Array) && "source" in row ? row.source : UNKNOWN_SOURCE);
-      nodes.push({ id, kind: "command", objectId: p.id, commandIndex: index, source: source ?? null, status: d?.opcode ? "known" : "unknown" });
+      nodes.push({ id, kind: "command", objectId: p.id, commandIndex: index, source: source ?? null, status: d?.opcode && d.status !== "invalid" ? "known" : "unknown" });
+      if (d?.status === "invalid") {
+        diagnostics.push(`invalid-command:${p.id}:${index}`);
+        edges.push({ from: id, to: null, kind: "unknown", condition: "invalid encoding; execution faults", source, resolution: "unresolved" });
+        continue;
+      }
       if (d?.opcode === "GOTO") {
         const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : null; const known = target !== null && target < program.instructions.length;
         edges.push({ from: id, to: known ? `command:${p.id}:${target}` : null, kind: "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
@@ -33,7 +38,21 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
         const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : null; const known = target !== null && byId.has(target);
         edges.push({ from: id, to: known ? `object:${target}` : null, kind: d.opcode === "CALL_OBJECT" ? "call" : "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
         if (!known) diagnostics.push(`dynamic-or-missing-target:${p.id}:${index}`);
-      } else if (["PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM", "LINK_PI", "LINK_MK", "JUMP_TITLE", "CALL_TITLE"].includes(d?.opcode ?? "")) {
+      } else if (["PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"].includes(d?.opcode ?? "")) {
+        const operand = d!.operands[0];
+        const target = operand?.kind === "immediate" && operand.value <= 99999 ? `playlist:${String(operand.value).padStart(5, "0")}` : null;
+        edges.push({ from: id, to: target, kind: "play", condition: null, source, resolution: target === null ? "unresolved" : "resolved" });
+        if (index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: "after playlist returns", source, resolution: "resolved" });
+      } else if (d?.opcode === "JUMP_TITLE" || d?.opcode === "CALL_TITLE") {
+        const operand = d.operands[0]; const title = operand?.kind === "immediate" ? operand.value : null;
+        const entries = options.entries;
+        const entry = title === 0 ? entries?.find((item) => item.kind === "topMenu")
+          : title === 0xffff ? entries?.find((item) => item.kind === "firstPlay")
+            : title !== null && title > 0 ? entries?.filter((item) => item.kind === "title")[title - 1] : undefined;
+        const target = entry?.target.objectType === "HDMV" && typeof entry.target.target === "number" && byId.has(entry.target.target) ? entry.target.target : null;
+        edges.push({ from: id, to: target === null ? null : `object:${target}`, kind: d.opcode === "CALL_TITLE" ? "call" : "jump", condition: null, source, resolution: target === null ? "unresolved" : "resolved" });
+        if (d.opcode === "CALL_TITLE" && index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: "after title resumes", source, resolution: "resolved" });
+      } else if (["LINK_PI", "LINK_MK"].includes(d?.opcode ?? "")) {
         edges.push({ from: id, to: null, kind: "play", condition: null, source, resolution: "unresolved" });
       } else if (d?.opcode === "RESUME") {
         edges.push({ from: id, to: null, kind: "resume", condition: "depends on dynamic call/resume context", source, resolution: "unresolved" });

@@ -26,6 +26,8 @@ export interface MenuPage {
 export interface MenuScene { width: number; height: number; compositionTimeout90k?: string | null; selectionTimeout90k?: string | null; pages: MenuPage[] }
 export interface RuntimeVmPort {
   handleEvent(event: VmEvent): unknown;
+  beginMenuAction?(): void;
+  recoverMenuAction?(): boolean;
   executeButtonProgram?(commands: RawCommand[], context?: ButtonCommandContext): ButtonProgramResult;
   executeButtonCommand?(command: string | Uint8Array, source?: SourceLocation, context?: ButtonCommandContext): { status?: string; diagnostic?: { message?: string } | null; buttonCommandTerminated?: boolean };
 }
@@ -208,6 +210,7 @@ export class MenuController {
     if (kind === "popup" || kind === "topMenu") {
       const permission = kind === "popup" ? "popup" : "topMenu";
       if (this.page.allowedActions?.[permission] === false || !this.isUoAllowed(kind === "popup" ? 24 : 0)) return;
+      this.vm.beginMenuAction?.();
       if (kind === "popup") { this.hooks.popup?.(); this.vm.handleEvent({ type: "POPUP_MENU", channel: "keyboard" }); }
       else { this.hooks.topMenu?.(); this.vm.handleEvent({ type: "TOP_MENU", channel: "keyboard" }); }
       this.hooks.dispatchActions?.();
@@ -217,6 +220,7 @@ export class MenuController {
     if (this.page.allowedActions?.activate === false || !this.isUoAllowed(19)) return;
     const button = this.button; if (!this.isUsable(button)) return;
     const activatedPageId = this.page.id;
+    this.vm.beginMenuAction?.();
     this.activatedButtonId = button.id; const state = button.states.selected;
     if (state?.soundId !== undefined && state.soundId !== 0xff) this.hooks.playSound?.(state.soundId, button.id);
     if (this.vm.executeButtonProgram) {
@@ -226,10 +230,11 @@ export class MenuController {
           return { bytes: decoded.bytes, words: decoded.words, source: decoded.source };
         });
         const result = this.vm.executeButtonProgram(commands, "ig-button");
-        if (result.fault?.message) this.hooks.diagnostic?.(result.fault.message);
-        else if (result.diagnostic?.message) this.hooks.diagnostic?.(result.diagnostic.message);
-        this.hooks.dispatchActions?.();
+        if (result.fault?.message) { this.hooks.diagnostic?.(result.fault.message); this.vm.recoverMenuAction?.(); }
+        else if (result.diagnostic?.message) { this.hooks.diagnostic?.(result.diagnostic.message); this.vm.recoverMenuAction?.(); }
+        else this.hooks.dispatchActions?.();
       } catch (error) {
+        this.vm.recoverMenuAction?.();
         this.hooks.diagnostic?.(error instanceof Error ? error.message : String(error));
       }
       this.hooks.activateButton?.(activatedPageId, button);
@@ -237,7 +242,8 @@ export class MenuController {
       for (const command of button.commands) {
         const result = this.vm.executeButtonCommand(command.bytes, command.source, "ig-button");
         if (result.diagnostic?.message) this.hooks.diagnostic?.(result.diagnostic.message);
-        this.hooks.dispatchActions?.();
+        if (result.status === "faulted" || result.diagnostic?.message) this.vm.recoverMenuAction?.();
+        else this.hooks.dispatchActions?.();
         if (result.buttonCommandTerminated || result.status === "faulted" || result.status === "suspended" || result.status === "stopped") break;
       }
       this.hooks.activateButton?.(activatedPageId, button);
@@ -385,6 +391,7 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
 }
 
 export interface MenuLoopMediaPackage {
+  playlist: number;
   background: { path: string; loop: true };
   /** Each entry is one source audio lane. Same-language lanes remain distinct. */
   audioTracks: Array<{ streamNumber: number; psrStreamNumber?: number; path: string; language: string; pid?: number; variantId?: string }>;
@@ -429,7 +436,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       return;
     }
     if (action.type !== "PLAY_PLAYLIST") return;
-    if (action.payload?.playlist !== 3) {
+    if (action.payload?.playlist !== this.media.playlist) {
       this.report(`Playback unavailable in menu-only preview (PLAY_PLAYLIST ${String(action.payload?.playlist)}).`);
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
       return;

@@ -34,5 +34,5 @@
 ## Current evidence gaps
 
 - 1.3 has explicit PlayerProfile defaults and PSR mappings based on pinned libbluray implementation behavior, but no BDA normative clause or independent player check. Keep the mappings `unverified` and this task open.
-- 2.3 implements object jump/call/resume and validates known title targets when M1 entries are supplied. `CALL_TITLE` continuation remains unsupported; object/title navigation has no independent reference trace. Keep the task open.
+- 2.3 implements object jump/call/resume and validates known title targets when M1 entries are supplied. `CALL_TITLE` now resolves MovieObject-context HDMV entries and restores the caller and saved PSRs, following pinned libbluray. IG-button calls during playlist playback retain their continuation; BD-J title targets and independent reference traces remain open. Keep the task open.
 - 4.2 has deterministic semantic traces and supported/unknown instruction accounting, but no independent golden paths for Compare/Call/Resume/media restoration. Do not treat the synthetic VM fixtures as independent reference evidence.

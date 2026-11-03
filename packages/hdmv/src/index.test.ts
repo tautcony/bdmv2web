@@ -418,8 +418,23 @@ describe("M3 HDMV fixtures", () => {
     expect(noMetadata.actions[0]?.payload).toEqual({ title: 77 });
     expect(noMetadata.actions[0]).not.toHaveProperty("waitFor");
 
-    const unverifiedCall = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21830000, 1)] }], { entries });
-    expect(unverifiedCall.runTurn().diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
+    const callTitle = rawCommand(0x21830000, 1);
+    const callEntries = entries.map((entry) => entry.kind === "title" ? { ...entry, target: { ...entry.target, target: 1 } } : entry);
+    const called = new HdmvVm([
+      { id: 0, instructions: [callTitle, m3Fixtures.move5, m3Fixtures.break] },
+      { id: 1, instructions: [m3Fixtures.add7, m3Fixtures.resume] },
+    ], { entries: callEntries });
+    called.registers.systemWrite(4, 12);
+    const resumed = called.runTurn();
+    expect(resumed).toMatchObject({ status: "stopped", programId: 0, registers: { gpr: expect.arrayContaining([5]), psr: expect.arrayContaining([12]) } });
+    expect(resumed.registers.psr[4]).toBe(12);
+    expect(called.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))?.registerDelta.psr[4]).toBe(1);
+    expect(called.trace.some((entry) => entry.decoded?.startsWith("RESUME") && entry.programId === 1)).toBe(true);
+    const badCallTitle = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21830000, 2)] }], { entries });
+    expect(badCallTitle.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
+    expect(badCallTitle.snapshot().callStack).toEqual([]);
+    const missingTable = new HdmvVm([{ id: 0, instructions: [callTitle] }]);
+    expect(missingTable.runTurn().diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
   });
   it("allows a jump to an existing empty object and ignores Link commands in MovieObjects", () => {
     const emptyTarget = new HdmvVm([{ id: 0, instructions: [m3Fixtures.jumpObject1] }, { id: 1, instructions: [] }]);
@@ -690,6 +705,29 @@ describe("M3 HDMV fixtures", () => {
     const dynamicJump = { ...raw, words, bytes: words.map((x) => x.toString(16).padStart(8, "0")).join("") };
     const dynamic = buildNavigationGraph([{ id: 0, instructions: [dynamicJump] }]);
     expect(dynamic.edges.some((x) => x.kind === "jump" && x.resolution === "unresolved")).toBe(true);
+  });
+  it("resolves immediate playlist targets and retains the continuation after playback", () => {
+    const graph = buildNavigationGraph([{ id: 0, instructions: [rawCommand(0x22800000, 1), rawCommand(0x42c10000, 2, 1), m3Fixtures.break] }]);
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "command:0:0", kind: "play", to: "playlist:00001", resolution: "resolved" }),
+      expect.objectContaining({ from: "command:0:0", kind: "sequence", to: "command:0:1", resolution: "resolved" }),
+      expect.objectContaining({ from: "command:0:1", kind: "play", to: "playlist:00002", resolution: "resolved" }),
+    ]));
+    const dynamic = buildNavigationGraph([{ id: 0, instructions: [rawCommand(0x22000000, 0)] }]);
+    expect(dynamic.edges).toContainEqual(expect.objectContaining({ kind: "play", to: null, resolution: "unresolved" }));
+  });
+  it("connects static HDMV title entries while retaining unresolved dynamic or BD-J targets", () => {
+    const source = m3Fixtures.move5.source;
+    const entries = [{ id: "title:0", kind: "title" as const, source, target: { objectType: "HDMV" as const, playbackType: 0, target: 1, source } }];
+    const graph = buildNavigationGraph([{ id: 0, instructions: [rawCommand(0x21830000, 1), m3Fixtures.break] }, { id: 1, instructions: [m3Fixtures.resume] }], [], { entries });
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "command:0:0", kind: "call", to: "object:1", resolution: "resolved" }),
+      expect.objectContaining({ from: "command:0:0", kind: "sequence", to: "command:0:1", resolution: "resolved" }),
+      expect.objectContaining({ from: "command:1:0", kind: "resume", to: null, resolution: "unresolved" }),
+    ]));
+    const bdj = entries.map((entry) => ({ ...entry, target: { ...entry.target, objectType: "BDJ" as const, target: "00001" } }));
+    const unresolved = buildNavigationGraph([{ id: 0, instructions: [rawCommand(0x21830000, 1)] }], [], { entries: bdj });
+    expect(unresolved.edges).toContainEqual(expect.objectContaining({ kind: "call", to: null, resolution: "unresolved" }));
   });
   it("adds button-like programs to the same graph analyzer and marks budget exhaustion unknown", () => {
     const object = { id: 0, instructions: [m3Fixtures.jumpObject1], resumeIntention: false, menuCallMask: false, titleSearchMask: false, source: m3Fixtures.move5.source };

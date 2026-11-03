@@ -1,7 +1,5 @@
-# Tamako Love Story BD structural sample
+# Tamako Love Story BD workspace-local sample
 
-User-provided, metadata-only sample for real-disc structural parser checks.
+User-provided local sample for structural, IGS, menu-background and external-target checks. It contains BDMV metadata and a subset of STREAM files. `00004.m2ts` supplies the menu background, `00005.m2ts` supplies IGS, and `00006.m2ts` is a user-provided copy of `00004.m2ts` used as a feature-film stand-in. The stand-in does not contain the film and its duration does not match the original playlist. Some referenced streams, including `00043.m2ts`, are absent.
 
-The sample contains the primary and backup `index.bdmv` and `MovieObject.bdmv`, `PLAYLIST/00001.mpls` with its backup, and the matching primary and backup `CLIPINF/00002.clpi`. A subset of additional backup CLPI files was copied during the initial metadata-only enumeration and is retained in this sample.
-
-No `STREAM` files, M2TS/SSIF payloads, or video were copied. The parser will report omitted stream and unrelated metadata references as missing; this sample does not test transport-stream, IGS, or video playback behavior. No source-file hashes are recorded.
+The STREAM files are local test material and are not committed. No source-file hashes are recorded. See the [M6 verification record](../../docs/references/stages/M6-release-verification.md) for the scope and outcome of the stand-in test.

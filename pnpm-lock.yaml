@@ -35,9 +35,15 @@ importers:
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bdmv-web/hdmv':
+        specifier: workspace:*
+        version: link:../../packages/hdmv
       '@bdmv-web/igs':
         specifier: workspace:*
         version: link:../../packages/igs
+      '@bdmv-web/media-export':
+        specifier: workspace:*
+        version: link:../../packages/media-export
       '@bdmv-web/package-builder':
         specifier: workspace:*
         version: link:../../packages/package-builder
@@ -165,6 +171,9 @@ importers:
       '@bdmv-web/igs':
         specifier: workspace:*
         version: link:../igs
+      '@bdmv-web/media-export':
+        specifier: workspace:*
+        version: link:../media-export
     devDependencies:
       '@bdmv-web/test-fixtures':
         specifier: workspace:*

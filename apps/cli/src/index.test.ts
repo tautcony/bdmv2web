@@ -17,11 +17,9 @@ describe("menu-only convert CLI", () => {
     expect(result.stderr.toString()).toContain("CLI_MISSING_INPUT");
     expect(result.stdout.toString()).toBe("");
   });
-  it("accepts only the menu-only mode and requires an output directory", () => {
-    const unsupported = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--mode", "standalone-full", "--format", "json"]);
+  it("rejects unsupported mode names", () => {
+    const unsupported = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--mode", "invalid", "--format", "json"]);
     expect(unsupported.status).toBe(1); expect(JSON.parse(unsupported.stderr.toString()).code).toBe("CLI_UNSUPPORTED_MODE");
-    const missingOutput = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--mode", "menu-only", "--format", "json"]);
-    expect(missingOutput.status).toBe(1); expect(JSON.parse(missingOutput.stderr.toString()).code).toBe("CLI_MISSING_OUTPUT");
   });
   it("does not create an output when conversion arguments are invalid", async () => {
     const dir = await mkdtemp(join(tmpdir(), "bdmv cli ")); const target = join(dir, "package");
@@ -69,11 +67,11 @@ describe("M4 menu-only convert output", () => {
         const assetManifest = JSON.parse(await readFile(join(output, "asset-manifest.json"), "utf8"));
         const readme = await readFile(join(output, "README.md"), "utf8");
         const html = await readFile(join(output, "index.html"), "utf8");
-        expect(compatibility).toMatchObject({ mode: "menu-only", status: "partial", externalDependencies: [] });
+        expect(compatibility).toMatchObject({ mode: "menu-only", status: "partial", externalDependencies: ["Node.js local playback bridge", "configured BDMV STREAM files", "system M2TS player"] });
         expect(manifest).toMatchObject({ mode: "menu-only", status: "partial" });
         expect(assetManifest.schemaVersion).toBe("1.0");
         expect(readme).toMatch(/menu-only preview.*always \*\*partial\*\*/s);
-        expect(readme).toContain("Open index.html in Chrome while offline.");
+        expect(readme).toContain("Run start-menu.command");
         const localReferences = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!);
         expect(localReferences.length).toBeGreaterThan(0);
         for (const path of localReferences) {
@@ -86,9 +84,39 @@ describe("M4 menu-only convert output", () => {
           readFile(join(output, "compatibility.json")), readFile(join(output, "asset-manifest.json")), readFile(join(output, "manifest.json")),
         ])).map((bytes) => bytes.toString("utf8")).join("\n");
         expect(packageText).not.toContain(await realpath(disc));
-        expect(packageText).not.toContain("BDMV/STREAM/00001.m2ts");
-        expect(packageText).not.toMatch(/https?:\/\//i);
+        expect(JSON.parse(await readFile(join(output, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
+        expect(packageText).toContain("STREAM/00001.m2ts");
+        expect(packageText).toContain("http://127.0.0.1:");
       }
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("defaults to a sibling BDMV-menu output with a configurable BDMV path", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv default menu ")); const disc = await makeMenuDisc(parent);
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--no-strict"]);
+      expect(result.status).toBe(0);
+      const output = join(parent, "BDMV-menu");
+      expect(JSON.parse(result.stdout.toString()).output).toBe(await realpath(output));
+      expect(JSON.parse(await readFile(join(output, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
+      const parentOutput = join(parent, "parent-input-menu");
+      const parentResult = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", parent, "--out", parentOutput, "--no-strict"]);
+      expect(parentResult.status).toBe(0);
+      expect(JSON.parse(await readFile(join(parentOutput, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
+      await access(join(output, "start-menu.command"));
+      const verify = () => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", output, "--offline", "--format", "json"]);
+      const initialAudit = verify(); expect(initialAudit.status).toBe(0);
+      const checks = JSON.parse(initialAudit.stdout.toString()).checks as Array<{ checkId: string; result: string }>;
+      expect(checks.filter((item) => item.result === "fail")).toEqual([]);
+      expect(checks).toContainEqual(expect.objectContaining({ checkId: "BUNDLE_LOCAL_PLAYER_BRIDGE", result: "not-verified" }));
+      await writeFile(join(output, "bdmv-config.json"), JSON.stringify({ bdmvPath: "../moved BDMV" }));
+      const changedAudit = verify(); expect(changedAudit.status).toBe(0);
+      expect(JSON.parse(changedAudit.stdout.toString()).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified", evidence: { changed: true } }));
+      const other = join(parent, "other"); await mkdir(other);
+      const externalOutput = join(other, "menu");
+      const separate = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", externalOutput, "--no-strict"]);
+      expect(separate.status).toBe(0);
+      expect(JSON.parse(await readFile(join(externalOutput, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: await realpath(disc) });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -120,7 +148,7 @@ describe("M1 structural CLI", () => {
   });
   it("extracts only structural artifacts through the output transaction and preserves source bytes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv extract ")); const root = await makeDisc(parent); const target = join(parent, "out");
-    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", root, "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).status).toBe("partial"); const disc = JSON.parse(await readFile(join(target, "parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); expect(disc).not.toHaveProperty("sourceFingerprint"); const commands = JSON.parse(await readFile(join(target, "raw-commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.status).toBe("partial"); expect(manifest).not.toHaveProperty("sourceFingerprint"); expect(manifest.files[1]).toMatchObject({ path: "raw-commands.json", kind: "raw-command-table" }); expect(manifest.files[1].sha256).toMatch(/^[a-f0-9]{64}$/); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
+    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", root, "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).status).toBe("partial"); const disc = JSON.parse(await readFile(join(target, "parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); expect(disc).not.toHaveProperty("sourceFingerprint"); const commands = JSON.parse(await readFile(join(target, "raw-commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.status).toBe("partial"); expect(manifest).not.toHaveProperty("sourceFingerprint"); expect(manifest.files.find((file: { path: string }) => file.path === "raw-commands.json")).toMatchObject({ kind: "raw-command-table", sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }); expect(manifest.files.find((file: { path: string }) => file.path === "external-media-targets.json")).toMatchObject({ kind: "external-media-targets" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("does not overwrite an existing inspect output target", async () => {

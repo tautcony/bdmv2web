@@ -23,6 +23,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
   const elements = new Map<string, ReturnType<typeof element>>();
   const audioUrls: string[] = [];
   const mediaPlayCalls: string[] = [];
+  const imageUrls: string[] = [];
   const mediaPlayErrors = [...(options.mediaPlayErrors ?? [])];
   const windowEvents = new Map<string, Array<(...args: unknown[]) => unknown>>();
   const element = (id: string) => {
@@ -61,7 +62,10 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
     listenerCount(type: string) { return windowEvents.get(type)?.length ?? 0; },
   };
   class FakeImage {
-    src = "";
+    onload: (() => void) | null = null; onerror: (() => void) | null = null;
+    private url = "";
+    set src(value: string) { this.url = value; imageUrls.push(value); if (value.startsWith("http://127.0.0.1:")) queueMicrotask(() => this.onload?.()); }
+    get src() { return this.url; }
     decode() { return options.imageFailure ? Promise.reject(new Error("fixture decode failure")) : Promise.resolve(); }
   }
   class FakeAudio {
@@ -74,7 +78,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
   vi.stubGlobal("Audio", FakeAudio);
   vi.stubGlobal("__BDMV_MENU_DATA__", options.data);
   vi.stubGlobal("__BDMV_MENU_ASSETS__", options.assetBatches ?? []);
-  return { elements, audioUrls, mediaPlayCalls, fakeWindow };
+  return { elements, audioUrls, imageUrls, mediaPlayCalls, fakeWindow };
 }
 
 async function launch(data: Record<string, unknown>, options: { assetBatches?: unknown[][]; imageFailure?: boolean; mediaPlayErrors?: string[] } = {}) {
@@ -160,6 +164,27 @@ describe("offline browser boot", () => {
     expect(host.elements.get("runtime-status")?.textContent).toBe("Playback unavailable in menu-only preview (LINK_PLAY_ITEM).");
   });
 
+  it("routes a dynamic title to an external playlist and releases the VM wait", async () => {
+    vi.stubGlobal("location", { hash: `#bridgePort=12345&bridgeToken=${"a".repeat(48)}` });
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: [] }, { id: 8, instructions: ["228000000000002a00000000"] }],
+      vmEntries: [{ id: "title:0", kind: "title", target: { objectType: "HDMV", playbackType: 0, target: 8, source }, source }],
+      externalTargets: { playlists: [{ id: "00042", items: [{ index: 0, clipId: "00006", streamPath: "STREAM/00006.m2ts", present: true, sourceIn90k: "0", sourceOut90k: "90000" }], marks: [] }], complete: true, unknown: [] },
+      scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        commands: [{ bytes: "218100000000000100000000" }],
+      }] }] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await Promise.resolve();
+    expect(host.imageUrls).toContain(`http://127.0.0.1:12345/open?token=${"a".repeat(48)}&clip=00006`);
+    expect(host.elements.get("runtime-status")?.textContent).toContain("System player requested for STREAM/00006.m2ts");
+  });
+
   it("writes one concise summary for a complete VM command sequence", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const data = packageData({
@@ -186,7 +211,7 @@ describe("offline browser boot", () => {
   it("retries blocked menu media from the gesture without rerunning the initial VM action", async () => {
     const host = await launch(packageData({
       vmPrograms: [{ id: 7, instructions: ["228000000000000300000000"] }],
-      media: { background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" }] },
+      media: { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" }] },
     }), { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]], mediaPlayErrors: ["NotAllowedError"] });
     const start = host.elements.get("start-menu")!;
 
@@ -204,7 +229,7 @@ describe("offline browser boot", () => {
   it("shows an unsupported media diagnostic without offering an autoplay retry", async () => {
     const host = await launch(packageData({
       vmPrograms: [{ id: 7, instructions: ["228000000000000300000000"] }],
-      media: { background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" }] },
+      media: { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" }] },
     }), { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]], mediaPlayErrors: ["NotSupportedError"] });
     const start = host.elements.get("start-menu")!;
 

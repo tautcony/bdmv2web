@@ -85,6 +85,21 @@ describe("M2TS packet and PES reconstruction", () => {
     expect(complete[0]?.payloadOffset).toBe(22n);
   });
 
+  it("uses decode time to detect discontinuities when an IGS composition PTS is ahead", () => {
+    const assembler = new PesAssembler("clip");
+    const original = pesPacket(Uint8Array.of(1), 54_000_000n);
+    const withDts = new Uint8Array(original.length + 5);
+    withDts.set(original.subarray(0, 14)); withDts[7] = 0xc0; withDts[8] = 10;
+    withDts.set(encodeTimestampForFixture(52_373_402n, 1), 14); withDts.set(original.subarray(14), 19);
+    const length = ((withDts[4]! << 8) | withDts[5]!) + 5; withDts[4] = length >> 8; withDts[5] = length & 255;
+    const packet = (payload: Uint8Array) => ({ packetOffset: 0n, payloadOffset: 4, pid: IG_PID, payloadUnitStart: true, continuityCounter: 0, hasPayload: true, discontinuity: false, transportError: false, continuityError: false, payload });
+    const composition = assembler.push(packet(withDts))[0]!;
+    const palette = assembler.push(packet(pesPacket(Uint8Array.of(2), 52_373_402n)))[0]!;
+    expect(composition.pts?.raw).toBe(54_000_000n);
+    expect(palette.pts?.timeDomain).toBe(composition.pts?.timeDomain);
+    expect(assembler.diagnostics).not.toContainEqual(expect.objectContaining({ code: "PTS_TIME_DOMAIN_RESET" }));
+  });
+
   it("does not join PES bytes across an explicit TS discontinuity", () => {
     const assembler = new PesAssembler("clip");
     const damaged = { packetOffset: 0n, payloadOffset: 4, pid: IG_PID, payloadUnitStart: true, continuityCounter: 0, hasPayload: true, discontinuity: false, transportError: false, continuityError: false, payload: pesPacket(Uint8Array.of(1, 2, 3), 10n).subarray(0, 12) };

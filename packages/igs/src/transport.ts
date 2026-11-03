@@ -300,21 +300,21 @@ export class PesAssembler {
     if (flags === 2 || flags === 3) {
       const raw = decodeTimestamp(bytes.subarray(9, 14));
       if (raw === null) this.diagnostics.push({ severity: "error", code: "PES_INVALID_TIMESTAMP", message: `PID ${pid} PTS marker bits are invalid`, source: source(this.clipId, pid, current.start), affectedSceneIds: [] });
-      else pts = this.unwrap(pid, raw, current.start);
       if (flags === 3) dtsRaw = decodeTimestamp(bytes.subarray(14, 19));
+      if (raw !== null) pts = this.unwrap(pid, raw, current.start, dtsRaw ?? raw);
     }
     return { pid, packetOffset: current.start, pesOffset: current.pesOffset, payloadOffset: current.pesOffset + BigInt(payloadStart), pts, dtsRaw, payload: bytes.slice(payloadStart), timeDomain: pts?.timeDomain ?? this.clocks.get(pid)?.domain ?? 0 };
   }
 
-  private unwrap(pid: number, raw: bigint, at: bigint): PtsValue {
+  private unwrap(pid: number, raw: bigint, at: bigint, clock: bigint): PtsValue {
     let state = this.clocks.get(pid);
-    if (!state) state = { lastRaw: raw, epoch: 0n, domain: 0, explicitDiscontinuity: false };
-    else if (state.explicitDiscontinuity) { state = { lastRaw: raw, epoch: 0n, domain: state.domain, explicitDiscontinuity: false }; }
-    else if (raw < state.lastRaw && state.lastRaw - raw > MAX_PTS / 2n) state = { ...state, epoch: state.epoch + 1n, lastRaw: raw };
-    else if (raw < state.lastRaw && state.lastRaw - raw > 90_000n) {
-      state = { lastRaw: raw, epoch: 0n, domain: state.domain + 1, explicitDiscontinuity: false };
+    if (!state) state = { lastRaw: clock, epoch: 0n, domain: 0, explicitDiscontinuity: false };
+    else if (state.explicitDiscontinuity) { state = { lastRaw: clock, epoch: 0n, domain: state.domain, explicitDiscontinuity: false }; }
+    else if (clock < state.lastRaw && state.lastRaw - clock > MAX_PTS / 2n) state = { ...state, epoch: state.epoch + 1n, lastRaw: clock };
+    else if (clock < state.lastRaw && state.lastRaw - clock > 90_000n) {
+      state = { lastRaw: clock, epoch: 0n, domain: state.domain + 1, explicitDiscontinuity: false };
       this.diagnostics.push({ severity: "warning", code: "PTS_TIME_DOMAIN_RESET", message: `PID ${pid} PTS moved backwards without a near-wrap transition; starting a new inferred time domain`, source: source(this.clipId, pid, at), affectedSceneIds: [] });
-    } else state = { ...state, lastRaw: raw };
+    } else state = { ...state, lastRaw: clock };
     this.clocks.set(pid, state);
     return { raw, epoch: state.epoch, normalized: state.epoch * MAX_PTS + raw, timeDomain: state.domain };
   }

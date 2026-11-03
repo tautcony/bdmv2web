@@ -20,6 +20,12 @@ export type ButtonCommandContext = "movie-object" | "ig-button";
 export type ButtonCommandResult = VmSnapshot & { buttonCommandTerminated: boolean };
 export type ButtonProgramResult = VmSnapshot & { actions: NavigationAction[]; terminated: boolean; buttonCommandTerminated: boolean; fault: VmDiagnostic | null };
 type Continuation = { action: NavigationAction; nextProgramId: number; nextPc: number; };
+type MenuCheckpoint = {
+  programId: number; pc: number; status: VmStatus; registers: ReturnType<RegisterFile["snapshot"]>;
+  callStack: Array<{ programId: number; pc: number }>; continuation: Continuation | null;
+  suspendedPlaylistContinuation: Continuation | null; playback: PlaybackContext; queuedActionIds: Set<string>;
+  diagnostic: VmDiagnostic | null; firstAction: number;
+};
 const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
 const DEFAULT_PLAYER_PROFILE: Readonly<CorePlayerProfile> = Object.freeze({
   menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng",
@@ -39,7 +45,7 @@ export class HdmvVm {
   status: VmStatus = "idle";
   programId = 0; pc = 0; generation = 0; instructionsThisTurn = 0; diagnostic: VmDiagnostic | null = null;
   private readonly programs = new Map<number, VmProgram>(); private readonly callStack: Array<{ programId: number; pc: number }> = [];
-  private continuation: Continuation | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
+  private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
   private readonly consumedResponses = new Set<string>(); private readonly eventQueue: VmEvent[] = []; private readonly actionQueue: NavigationAction[] = [];
   private profile: PlayerProfile; private lastAction: NavigationAction | undefined; private resumeAfterPlaylistStop = false;
   private readonly entries: VmOptions["entries"];
@@ -57,11 +63,39 @@ export class HdmvVm {
   }
   reset(programId = 0, profile: PlayerProfile = this.profile): void {
     this.profile = normalizeProfile(profile); this.registers.reset(this.profile); this.programId = programId; this.pc = 0; this.status = "idle"; this.generation++;
-    this.callStack.length = 0; this.continuation = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
+    this.callStack.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.menuCheckpoint = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
+  /** Capture the live menu context before a user action can transfer control to a feature. */
+  beginMenuAction(): void {
+    if (this.status === "faulted" || this.status === "stopped") return;
+    this.menuCheckpoint = {
+      programId: this.programId, pc: this.pc, status: this.status, registers: this.registers.snapshot(),
+      callStack: this.callStack.map((frame) => ({ ...frame })), continuation: this.continuation,
+      suspendedPlaylistContinuation: this.suspendedPlaylistContinuation, playback: { ...this.playback },
+      queuedActionIds: new Set(this.actionQueue.map((action) => action.id)), diagnostic: this.diagnostic,
+      firstAction: this.actions.length,
+    };
+    this.diagnostic = null;
+  }
+  /** Restore the menu without fabricating an external player's completion event. */
+  recoverMenuAction(action?: NavigationAction): boolean {
+    const saved = this.menuCheckpoint;
+    if (!saved || (action && !this.actions.slice(saved.firstAction).some((candidate) => candidate.id === action.id))) return false;
+    this.registers.gpr.set(saved.registers.gpr); this.registers.psr.set(saved.registers.psr);
+    this.programId = saved.programId; this.pc = saved.pc; this.status = saved.status;
+    this.callStack.splice(0, this.callStack.length, ...saved.callStack.map((frame) => ({ ...frame })));
+    this.continuation = saved.continuation; this.suspendedPlaylistContinuation = saved.suspendedPlaylistContinuation;
+    this.playback = { ...saved.playback }; this.diagnostic = saved.diagnostic; this.resumeAfterPlaylistStop = false; this.lastAction = undefined;
+    if (saved.continuation) this.consumedResponses.delete(`${saved.continuation.action.generation}:${saved.continuation.action.id}`);
+    const retained = this.actionQueue.filter((queued) => saved.queuedActionIds.has(queued.id));
+    this.actionQueue.splice(0, this.actionQueue.length, ...retained);
+    this.menuCheckpoint = null;
+    this.record({ source: null, raw: null, decoded: "MENU_ACTION_RECOVERED", registerDelta: EMPTY_DELTA, status: this.status });
+    return true;
+  }
   /** Execute one selected button's command in the current VM register/object context. Ordinary commands leave PC unchanged; control-transfer commands use the current VM context. The button identity is not an object ID. */
   executeButtonCommand(command: ButtonCommand, source?: SourceLocation, context: ButtonCommandContext = "movie-object"): ButtonCommandResult {
     const resumePendingPlaylist = this.status === "suspended" && context === "ig-button" && this.hasPlaylistContinuation() && this.isTerminatePlaylistCommand(command, source);
@@ -168,6 +202,7 @@ export class HdmvVm {
     }
     if (!terminated && this.status === "running" && pc >= commands.length) terminated = true;
     if (savedPlaylistContinuation && this.continuation === savedPlaylistContinuation && this.status === "running") this.status = "suspended";
+    if ((!savedPlaylistContinuation || this.continuation !== savedPlaylistContinuation) && this.status === "running" && (this.programId !== ownerProgramId || this.pc !== ownerPc)) this.runTurn();
     if (this.resumeAfterPlaylistStop && this.status === "running") {
       this.resumeAfterPlaylistStop = false;
       this.runTurn();
@@ -207,6 +242,41 @@ export class HdmvVm {
     }
     return this.snapshot();
   }
+  /** Resolve a title-search action using the disc index without inventing a media-ended event. */
+  selectTitle(title: number): VmSnapshot {
+    try {
+      if (!this.entries) throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "Title navigation requires the disc title table");
+      this.validateTitleTarget(title);
+      const entry = title === 0 ? this.entries.find((item) => item.kind === "topMenu")
+        : title === 0xffff ? this.entries.find((item) => item.kind === "firstPlay")
+          : this.entries.filter((item) => item.kind === "title")[title - 1];
+      if (!entry || entry.target.objectType !== "HDMV" || typeof entry.target.target !== "number") throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `Title ${title} is not a resolved HDMV object`);
+      this.validateTarget(entry.target.target, 0);
+      if (this.continuation) {
+        const action = this.continuation.action;
+        this.consumedResponses.add(`${action.generation}:${action.id}`);
+        this.removeAction(action.id);
+      }
+      this.continuation = null;
+      this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
+      this.registers.systemWrite(4, title);
+      this.programId = entry.target.target; this.pc = 0; this.status = "running";
+      return this.runTurn();
+    } catch (error) {
+      this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), null);
+      return this.snapshot();
+    }
+  }
+  /** Stop waiting for an external player whose playback state is not observable. */
+  releaseExternalPlayback(action: NavigationAction): void {
+    if (!this.continuation || this.continuation.action.id !== action.id || this.continuation.action.generation !== action.generation) return;
+    this.consumedResponses.add(`${action.generation}:${action.id}`);
+    this.removeAction(action.id); this.continuation = null;
+    if (this.recoverMenuAction(action)) return;
+    this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
+    this.status = "idle";
+    this.record({ source: action.source, raw: null, decoded: "EXTERNAL_PLAYER_HANDOFF", registerDelta: EMPTY_DELTA, status: this.status });
+  }
   enqueueEvent(event: VmEvent): void {
     if (this.eventQueue.length >= this.opts.maxQueueDepth) { this.fail("VM_QUEUE_LIMIT", `Event queue exceeds ${this.opts.maxQueueDepth}`, null); return; }
     this.eventQueue.push(event);
@@ -234,7 +304,8 @@ export class HdmvVm {
       this.consumedResponses.add(eventKey); this.removeAction(pending.action.id);
       this.playback.status = event.type === "MEDIA_ERROR" ? "error" : "unavailable"; this.playback.pendingActionId = null;
       this.continuation = null; this.status = "stopped"; this.diagnostic = { code: event.type === "MEDIA_ERROR" ? "HDMV_MEDIA_ERROR" : "HDMV_MEDIA_UNAVAILABLE", message: `Action ${pending.action.id} failed: ${event.type}`, source: pending.action.source }; this.diagnostics.push(this.diagnostic);
-      this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: this.diagnostic }); return this.snapshot();
+      this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: this.diagnostic });
+      this.recoverMenuAction(pending.action); return this.snapshot();
     }
     if (!eventMatches(pending.action.waitFor, event.type)) { this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: { code: "HDMV_EVENT_NOT_READY", message: `Waiting for ${pending.action.waitFor}; received ${event.type}`, source: pending.action.source } }); return this.snapshot(); }
     this.consumedResponses.add(eventKey); this.removeAction(pending.action.id);
@@ -318,17 +389,37 @@ export class HdmvVm {
         const frame = this.callStack.pop();
         if (!frame) throw new RegisterFault("HDMV_RESUME_WITHOUT_CALL", "RESUME has no saved call context");
         this.restoreCallPsrState(); this.programId = frame.programId; this.pc = frame.pc;
+        if (this.suspendedPlaylistContinuation) {
+          this.continuation = this.suspendedPlaylistContinuation; this.suspendedPlaylistContinuation = null; this.status = "suspended";
+        }
         return;
       }
       case "JUMP_TITLE":
         this.validateTitleTarget(av);
         this.callStack.length = 0;
+        this.suspendedPlaylistContinuation = null;
         this.resetCallPsrBackup();
         // The reference emits a title event and continues at the next command;
         // this is an immediate external request, not a VM continuation wait.
         this.emit("TITLE_SEARCH", { title: av }, d.source);
         return;
-      case "CALL_TITLE": throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "CALL_TITLE resume context is not implemented without independent semantic evidence");
+      case "CALL_TITLE": {
+        if (!this.entries) throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "CALL_TITLE requires a known HDMV title table");
+        this.validateTitleTarget(av);
+        const entry = av === 0 ? this.entries.find((item) => item.kind === "topMenu")
+          : av === 0xffff ? this.entries.find((item) => item.kind === "firstPlay")
+            : this.entries.filter((item) => item.kind === "title")[av - 1];
+        if (!entry || entry.target.objectType !== "HDMV" || typeof entry.target.target !== "number") throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `CALL_TITLE target ${av} is not a resolved HDMV object`);
+        this.validateTarget(entry.target.target, 0);
+        if (this.opts.maxCallDepth < 1) throw new RegisterFault("VM_CALL_DEPTH_LIMIT", `Call depth exceeds ${this.opts.maxCallDepth}`);
+        this.saveCallPsrState();
+        this.suspendedPlaylistContinuation = context === "ig-button" && this.hasPlaylistContinuation() ? this.continuation : null;
+        if (this.suspendedPlaylistContinuation) this.continuation = null;
+        this.callStack.splice(0, this.callStack.length, { programId: this.programId, pc: this.pc });
+        this.registers.systemWrite(4, av);
+        this.transfer(entry.target.target, 0, false, d.source);
+        return;
+      }
       case "PLAY_PL": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST", { playlist: av }, d.source); return;
       case "PLAY_PL_PI": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST_ITEM", { playlist: av, playItem: bv }, d.source); return;
       case "PLAY_PL_PM": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST_MARK", { playlist: av, playMark: bv }, d.source); return;
@@ -442,7 +533,7 @@ export class HdmvVm {
     for (const command of commands) {
       try {
         const decoded = decodeInstruction(command);
-        if (decoded.status === "invalid" || !decoded.opcode || ["JUMP_OBJECT", "JUMP_TITLE", "CALL_OBJECT", "CALL_TITLE", "RESUME"].includes(decoded.opcode)) return false;
+        if (decoded.status === "invalid" || !decoded.opcode || ["JUMP_OBJECT", "CALL_OBJECT"].includes(decoded.opcode)) return false;
       } catch { return false; }
     }
     return true;

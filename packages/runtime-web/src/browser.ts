@@ -1,8 +1,9 @@
-import { HdmvVm, type TraceEntry, type VmProgram } from "@bdmv-web/hdmv";
+import { HdmvVm, type TraceEntry, type VmOptions, type VmProgram } from "@bdmv-web/hdmv";
 import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuButton, type MenuInputConfig, type MenuLoopMediaPackage, type MenuScene, type PlaybackBridge } from "./index.js";
+import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv-web/media-export/external-targets";
 import type { SerializedMenuState, SerializedScene } from "./igs-adapter.js";
 
-interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; vmPrograms?: VmProgram[]; vmInitialProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
+interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; }
 
@@ -78,7 +79,7 @@ async function boot(): Promise<void> {
     const audio = document.getElementById("menu-audio") as HTMLAudioElement | null;
     if (!status || !start || !canvas) throw new Error("The menu page is missing required runtime elements.");
     const viewport = new CanvasViewport(scene.width, scene.height);
-    const vm = new HdmvVm(data.vmPrograms ?? [], { onTrace: vmConsoleLogger() });
+    const vm = new HdmvVm(data.vmPrograms ?? [], { onTrace: vmConsoleLogger(), ...(data.vmEntries ? { entries: data.vmEntries } : {}) });
     if (data.vmInitialProgramId !== undefined) {
       if (!Number.isSafeInteger(data.vmInitialProgramId) || !(data.vmPrograms ?? []).some((program) => program.id === data.vmInitialProgramId)) throw new Error(`Invalid initial MovieObject ${String(data.vmInitialProgramId)}.`);
       vm.reset(data.vmInitialProgramId);
@@ -93,7 +94,9 @@ async function boot(): Promise<void> {
       : new PreviewPlaybackBridge(vm, (message) => { status.textContent = message; });
     let controller: MenuController | null = null;
     const pendingActions: Array<ReturnType<HdmvVm["drainActions"]>[number]> = [];
+    let externalRequestSequence = 0;
     const dispatchActions = () => {
+      const requestSequence = ++externalRequestSequence;
       pendingActions.push(...vm.drainActions());
       if (!controller) return { menuPlaylistRequested: false, completion: Promise.resolve() };
       const mediaActions: Promise<void>[] = [];
@@ -104,8 +107,28 @@ async function boot(): Promise<void> {
           const packed = action.payload.packed;
           if (typeof packed === "number") controller.applySetButtonPage(packed);
           else status.textContent = "VM emitted SET_BUTTON_PAGE without its packed operand.";
+        } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number" && data.vmEntries) {
+          const selected = vm.selectTitle(action.payload.title);
+          if (selected.diagnostic) {
+            status.textContent = selected.diagnostic.message;
+            if (vm.recoverMenuAction()) { pendingActions.length = 0; continue; }
+          }
+          pendingActions.push(...vm.drainActions());
+        } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist && data.media)) {
+          const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
+          if (result.status === "unavailable") { status.textContent = result.message; vm.releaseExternalPlayback(action); continue; }
+          const params = new URLSearchParams(location.hash.slice(1)); const port = params.get("bridgePort"); const token = params.get("bridgeToken");
+          if (!port || !token || !/^\d{1,5}$/.test(port) || !/^[0-9a-f]{48}$/.test(token)) {
+            status.textContent = `Open ${result.item.streamPath} manually, or launch start-menu.command to use the system player.`;
+            vm.releaseExternalPlayback(action); continue;
+          }
+          const image = new Image();
+          image.onload = () => { if (requestSequence === externalRequestSequence) status.textContent = `System player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`; };
+          image.onerror = () => { if (requestSequence === externalRequestSequence) status.textContent = `Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`; };
+          image.src = `http://127.0.0.1:${port}/open?token=${token}&clip=${encodeURIComponent(result.item.clipId)}`;
+          vm.releaseExternalPlayback(action);
         } else {
-          if (action.type === "PLAY_PLAYLIST" && action.payload.playlist === 3) menuPlaylistRequested = true;
+          if (action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist) menuPlaylistRequested = true;
           mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
         }
       }
@@ -137,7 +160,14 @@ async function boot(): Promise<void> {
       let menuMediaStarted: boolean | undefined;
       let pending = { menuPlaylistRequested: false, completion: Promise.resolve() };
       if (data.vmInitialProgramId !== undefined && data.media && video && audio) {
-        vm.runTurn();
+        if (data.vmFirstPlayProgramId !== undefined && data.vmEntries?.some((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV")) {
+          vm.reset(data.vmFirstPlayProgramId);
+          const initial = vm.runTurn();
+          if (initial.status === "faulted") { status.textContent = initial.diagnostic?.message ?? "First Play initialization failed."; return; }
+          if (initial.waiting) vm.releaseExternalPlayback(initial.waiting);
+          vm.drainActions();
+          vm.selectTitle(0);
+        } else vm.runTurn();
         pending = dispatchActions();
       }
       if (!pending.menuPlaylistRequested && playbackBridge.startMenuBackground && !["faulted", "stopped"].includes(vm.snapshot().status)) {
@@ -146,7 +176,9 @@ async function boot(): Promise<void> {
       } else {
         await pending.completion;
       }
-      if (["faulted", "stopped", "suspended"].includes(vm.snapshot().status)) return;
+      if (retryMedia) return;
+      const vmStatus = vm.snapshot().status;
+      if (vmStatus === "faulted" || vmStatus === "stopped" || (vmStatus === "suspended" && !pending.menuPlaylistRequested)) return;
       if (menuMediaStarted !== false) status.textContent = "Menu preview ready. Use arrow keys and Enter, or select a visible button.";
       controller!.start();
       void dispatchActions().completion;

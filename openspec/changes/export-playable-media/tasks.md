@@ -55,7 +55,7 @@
 ## 5. 单一产物与目标映射
 
 - [ ] 5.1 将 `convert INPUT --out DIR` 接入统一菜单产物；移除产品模式分支，明确旧 `--mode` 参数及旧包的迁移和诊断，并更新 CLI、manifest、README 与状态测试。
-- [ ] 5.4 默认在发现的 BDMV 同级生成 HTML 目录，`--out` 指定同级目标；为 BDMV 自身与父目录输入、路径冲突及既有目录添加验证。
+- [x] 5.4 默认在发现的 BDMV 同级生成 HTML 目录，`--out` 可指定不重叠的其他目标；为 BDMV 自身与父目录输入、路径冲突及既有目录添加验证。
 - [ ] 5.5 生成可编辑 BDMV 路径配置，默认相对 HTML 目录指向同级 BDMV；支持相对和绝对路径、重新加载、菜单与本地接入一致消费，验证共同移动和单独迁移后的重新配置。
 - [ ] 5.2 复用结构和导航信息映射可达影片动作至实际 M2TS；保留 Playlist/PlayItem/Clip、IN/OUT、来源和分支，未知目标不猜测。
 - [ ] 5.3 验证多 PlayItem、重复 Clip、非零 IN/OUT 与缺失源文件；展示实际打开范围，不承诺完整 Playlist 语义。
@@ -72,3 +72,13 @@
 - [ ] 7.1 更新包审计及发布报告：显式区分包内菜单资源和允许的源 M2TS，报告外部源/系统关联的验证状态。
 - [ ] 7.2 实测断网、移动包、源有效/缺失及真实菜单动作；记录 OS、Chrome、默认程序、实际打开文件和观察结果。
 - [ ] 7.3 回归菜单背景、音效、导航及不可用提示；不要求浏览器实现正片、字幕、章节、外部播放器返回或同步。
+
+
+## 2026-11-03 implementation evidence
+
+- 5.2/5.3: `extract` now emits `external-media-targets.json` from structural, MovieObject, and IGS button graphs. Known immediate playlist and HDMV title operands and later MovieObject continuation are represented; unresolved paths conservatively widen the set. A source target resolver retains each PlayItem occurrence, half-open 90 kHz bounds, and mark offsets; it reports missing or invalid targets and does not claim the system player will enforce ranges or continue automatically.
+- Remaining: integrate the mapping with the unified menu conversion and system-player bridge, verify actual opening and presentation of range limitations, and test an available real feature stream. The existing Tamako input has no such feature stream. Therefore 5.2 and 5.3 stay open.
+
+- Reference: pinned libbluray 1.5.0 `src/libbluray/hdmv/hdmv_vm.c` `_play_at` and `src/libbluray/bluray.c` `_process_hdmv_vm_event`, PSR8 and clip interval handling; the system default player is not assumed to implement the same playlist timeline.
+
+- 本地 Chrome 实测：主菜单影片按钮经动态标题进入 Playlist 00042，再由仅监听 127.0.0.1 的 Node 桥调用系统默认 IINA 打开用户提供的 `00006.m2ts` 替身；证据范围见 M6 记录。桥的完整安全审计、多片段连续播放和章节定位仍未完成。
