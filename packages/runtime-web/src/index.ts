@@ -2,6 +2,8 @@ import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult,
 import type { SourceLocation } from "@bdmv-web/bdmv-parser";
 export { adaptIgsScene } from "./igs-adapter.js";
 export type { IgsAdapterDiagnostic, IgsSceneAdapterResult, SerializedMenuButton, SerializedMenuPage, SerializedMenuState, SerializedScene } from "./igs-adapter.js";
+export { LinearPlaybackBridge } from "./linear-playback.js";
+export type { LinearPlaybackAsset, LinearPlaybackHooks, LinearPlaybackMedia, LinearTimelineMapPort, LinearTimelinePosition } from "./linear-playback.js";
 export interface Bounds { x: number; y: number; width: number; height: number }
 export interface ButtonState { bounds: Bounds; image?: CanvasImageSource; soundId?: number; startObjectId?: number; endObjectId?: number; repeat?: boolean }
 export interface MenuButton {
