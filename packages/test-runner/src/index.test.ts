@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,11 +9,13 @@ import {
   compareIgRgbaFrames,
   compareVmTraces,
   computePayloadFingerprint,
+  createDependencyAuditReport,
   decideDelivery,
   inspectRuntimeUrl,
   isCoverageReportComplete,
   summarizeCoverage,
   validateCompareInput,
+  videoQualityNote,
 } from "./index.js";
 
 const roots: string[] = [];
@@ -41,6 +43,20 @@ async function packageRoot(payload: Record<string, string | Uint8Array>, extra: 
 }
 
 describe("offline package audit", () => {
+  it("builds a dependency audit from concrete checks and leaves an empty audit unverified", () => {
+    const base = { schemaVersion: "1.0" as const, packageRoot: "/package", manifestPath: "manifest.json", payloadFingerprint: "fingerprint", discoveredPayloadFiles: [] };
+    expect(createDependencyAuditReport({ ...base, checks: [
+      { checkId: "OFFLINE_URL_LOCAL", result: "pass", message: "Local asset resolves", path: "index.html", evidence: { target: "assets/menu.png" } },
+    ] })).toMatchObject({ status: "pass", checks: [{ path: "index.html", evidence: { target: "assets/menu.png" } }] });
+    expect(createDependencyAuditReport({ ...base, checks: [
+      { checkId: "BUNDLE_NETWORK_API", result: "fail", message: "Network API found", path: "app.js", evidence: { expression: "fetch(...)" } },
+    ] })).toMatchObject({ status: "fail", checks: [{ result: "fail", path: "app.js", evidence: { expression: "fetch(...)" } }] });
+    expect(createDependencyAuditReport({ ...base, checks: [
+      { checkId: "BUNDLE_DYNAMIC_ACCESS", result: "not-verified", message: "Computed access", path: "app.js", evidence: { expression: "window[key]" } },
+    ] })).toMatchObject({ status: "not-verified", checks: [{ result: "not-verified", evidence: { expression: "window[key]" } }] });
+    expect(createDependencyAuditReport({ ...base, checks: [] })).toMatchObject({ status: "not-verified", checks: [] });
+  });
+
   it("recomputes stable payload fingerprints from listed runtime bytes", async () => {
     const imageName = "assets/海报 %图.png";
     const html = `<img src="assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png"><script src="app.js"></script>`;
@@ -52,6 +68,21 @@ describe("offline package audit", () => {
     expect(result.checks.find((check) => check.checkId === "PAYLOAD_FINGERPRINT")?.result).toBe("pass");
     expect(result.payloadFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(result.checks.some((check) => check.checkId === "OFFLINE_EXTERNAL_URL")).toBe(false);
+  });
+
+  it("audits HTML, CSS, JSON, and JS URLs while allowing encoded Unicode paths and README links", async () => {
+    const imageName = "assets/海报 %图.png";
+    const root = await packageRoot({
+      "index.html": `<img src="assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png"><link rel="stylesheet" href="style.css"><script src="app.js"></script><script type="application/json" src="runtime.json"></script>`,
+      "style.css": `.poster { background-image: url("assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png"); }`,
+      "runtime.json": JSON.stringify({ poster: { relativePath: imageName } }),
+      "app.js": `const image = new Image(); image.src = "assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png";`,
+      [imageName]: pngSignature,
+      "README.md": "See https://example.test/docs for package notes.",
+    });
+    const result = await auditOutputPackage(root);
+    expect(result.checks.filter((check) => check.checkId === "OFFLINE_URL_LOCAL").length).toBeGreaterThanOrEqual(5);
+    expect(result.checks.some((check) => check.checkId === "OFFLINE_EXTERNAL_URL" || check.checkId === "OFFLINE_URL_ESCAPE")).toBe(false);
   });
 
   it("matches the M0 path-plus-SHA256 fingerprint fixed vector", () => {
@@ -157,6 +188,18 @@ describe("delivery status and coverage", () => {
     expect(decideDelivery({ ...base, checks: [{ checkId: "HASH", result: "fail", message: "mismatch" }] }, true)).toMatchObject({ status: "failed", exitCode: 1 });
   });
 
+  it.each([
+    ["menu-only", { ...base, mode: "menu-only" as const }, false, "partial", 0],
+    ["strict menu-only", { ...base, mode: "menu-only" as const }, true, "partial", 2],
+    ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, true, "partial", 2],
+    ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, true, "failed", 1],
+    ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, true, "partial", 2],
+    ["missing required media", { ...base, hasMissingRequiredAsset: true }, false, "failed", 1],
+    ["missing required evidence", { ...base, requiredEvidenceComplete: false }, true, "partial", 2],
+  ])("applies delivery policy to %s", (_label, input, strict, status, exitCode) => {
+    expect(decideDelivery(input, strict)).toMatchObject({ status, strict, exitCode });
+  });
+
   it("does not turn zero/unknown denominators or missing evidence into 100 percent", () => {
     expect(summarizeCoverage({ total: 0, reason: "No media paths" })).toMatchObject({ status: "N/A", percent: null, complete: false });
     expect(summarizeCoverage({ passed: 8 })).toMatchObject({ status: "N/A", percent: null, complete: false });
@@ -189,6 +232,8 @@ describe("reference comparison primitives", () => {
     expect(compareVmTraces(base, [{ ...base[0]!, sessionId: "b", wallClockMs: 900 }])).toEqual({ equal: true, count: 1 });
     const diff = compareVmTraces(base, [{ ...base[0]!, registers: { PSR1: 4 }, source: { path: "BDMV/MovieObject.bdmv", instructionIndex: 3 } }]);
     expect(diff).toMatchObject({ equal: false, index: 0, differingFields: ["/registers/PSR1", "/source/instructionIndex"] });
+    const controlDiff = compareVmTraces([{ pc: 2, stack: [{ programId: 1, returnPc: 4 }], action: { type: "PLAY_PL", playlistId: 3 }, source: { path: "MovieObject.bdmv", offset: "24" } }], [{ pc: 3, stack: [{ programId: 1, returnPc: 5 }], action: { type: "PLAY_PL", playlistId: 4 }, source: { path: "MovieObject.bdmv", offset: "36" } }]);
+    expect(controlDiff).toMatchObject({ equal: false, differingFields: ["/action/playlistId", "/pc", "/source/offset", "/stack/0/returnPc"] });
   });
 
   it("compares IG RGBA exactly, including alpha, and separates mismatched frame metadata", () => {
@@ -196,5 +241,7 @@ describe("reference comparison primitives", () => {
     expect(compareIgRgbaFrames(reference, { ...reference, pixels: new Uint8Array([1, 2, 3, 255]) })).toMatchObject({ status: "pass", equalPixels: 1, totalPixels: 1 });
     expect(compareIgRgbaFrames(reference, { ...reference, pixels: new Uint8Array([1, 2, 3, 0]) })).toMatchObject({ status: "fail", firstDifference: { x: 0, y: 0, channel: "a", expected: 255, actual: 0 } });
     expect(compareIgRgbaFrames(reference, { ...reference, timestamp90k: "9001" })).toMatchObject({ status: "not-verified", reason: expect.stringContaining("metadata differ") });
+    expect(compareIgRgbaFrames({ width: 2, height: 1, timestamp90k: "9000", colorSpace: "BT.709", pixels: new Uint8Array([0, 0, 0, 255, 10, 20, 30, 255]) }, { width: 2, height: 1, timestamp90k: "9000", colorSpace: "BT.709", pixels: new Uint8Array([0, 0, 0, 255, 10, 20, 40, 255]) })).toMatchObject({ status: "fail", equalPixels: 1, totalPixels: 2, firstDifference: { x: 1, y: 0, channel: "b", expected: 30, actual: 40 } });
+    expect(videoQualityNote()).toMatchObject({ category: "video-quality", status: "not-verified" });
   });
 });

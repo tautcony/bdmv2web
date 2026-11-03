@@ -6,6 +6,31 @@ export interface CoverageCounts {
   unknown?: number;
   reason?: string;
   evidenceComplete?: boolean;
+  /** A bounded exploration stopped before the reachable population was known. */
+  explorationBudgetExceeded?: boolean;
+}
+
+/**
+ * Coverage inputs use passed for supported/resolved/exported/verified items,
+ * failed for unsupported/invalid/missing/failed items, and unknown for items
+ * that could not be classified. `total` is the category population, not the
+ * number of items visited so far.
+ */
+/** `passed` means counted as a usable declared/reachable entry. */
+export type EntryCoverageCounts = CoverageCounts;
+/** `passed` means the instruction is supported; unresolved encodings are unknown. */
+export type InstructionCoverageCounts = CoverageCounts;
+/** `passed` means required media was exported; missing required media is failed. */
+export type MediaCoverageCounts = CoverageCounts;
+/** `passed` means a required test was verified; unrun/unverified tests are unknown. */
+export type TestCoverageCounts = CoverageCounts;
+
+/** Named M6 populations; callers must provide every category explicitly. */
+export interface DeliveryCoverageInput {
+  entries: EntryCoverageCounts;
+  instructions: InstructionCoverageCounts;
+  media: MediaCoverageCounts;
+  tests: TestCoverageCounts;
 }
 
 export interface CoverageSummary {
@@ -13,6 +38,7 @@ export interface CoverageSummary {
   denominator: number | null;
   passed: number;
   failed: number;
+  /** At budget exhaustion this is a lower bound; the denominator is null. */
   unknown: number;
   percent: number | null;
   complete: boolean;
@@ -28,7 +54,20 @@ function count(value: number | undefined): number {
 export function summarizeCoverage(input: CoverageCounts): CoverageSummary {
   const passed = count(input.passed);
   const failed = count(input.failed);
-  const unknown = count(input.unknown);
+  const reportedUnknown = count(input.unknown);
+  if (input.explorationBudgetExceeded) {
+    return {
+      status: "N/A",
+      denominator: null,
+      passed,
+      failed,
+      unknown: Math.max(reportedUnknown, 1),
+      percent: null,
+      complete: false,
+      reason: input.reason ?? "Exploration budget was exhausted before the category population was known.",
+    };
+  }
+  const unknown = reportedUnknown;
   if (input.total === undefined || input.total === 0) {
     return { status: "N/A", denominator: input.total ?? null, passed, failed, unknown, percent: null, complete: false, reason: input.reason ?? (input.total === 0 ? "The category has no applicable items." : "The population denominator is unknown.") };
   }
@@ -52,8 +91,20 @@ export function summarizeCoverage(input: CoverageCounts): CoverageSummary {
 
 export type CoverageReport = Record<string, CoverageSummary>;
 
+export interface DeliveryCoverageReport extends CoverageReport {
+  entries: CoverageSummary;
+  instructions: CoverageSummary;
+  media: CoverageSummary;
+  tests: CoverageSummary;
+}
+
 export function summarizeCoverageReport(input: Record<string, CoverageCounts>): CoverageReport {
   return Object.fromEntries(Object.entries(input).map(([name, counts]) => [name, summarizeCoverage(counts)]));
+}
+
+/** Adapt the four named M6 populations to the common coverage report shape. */
+export function summarizeDeliveryCoverage(input: DeliveryCoverageInput): DeliveryCoverageReport {
+  return summarizeCoverageReport({ entries: input.entries, instructions: input.instructions, media: input.media, tests: input.tests }) as DeliveryCoverageReport;
 }
 
 export function isCoverageReportComplete(report: CoverageReport): boolean {

@@ -35,6 +35,14 @@ function canonical(value: unknown): unknown {
 
 function fieldDiff(reference: unknown, actual: unknown, prefix = ""): string[] {
   if (JSON.stringify(canonical(reference)) === JSON.stringify(canonical(actual))) return [];
+  if (Array.isArray(reference) && Array.isArray(actual)) {
+    const length = Math.max(reference.length, actual.length);
+    return Array.from({ length }, (_, index) => index).flatMap((index) =>
+      index >= reference.length || index >= actual.length
+        ? [`${prefix}/${index}`]
+        : fieldDiff(reference[index], actual[index], `${prefix}/${index}`),
+    );
+  }
   if (typeof reference !== "object" || reference === null || typeof actual !== "object" || actual === null || Array.isArray(reference) || Array.isArray(actual)) return [prefix || "/"];
   const a = reference as Record<string, unknown>;
   const b = actual as Record<string, unknown>;

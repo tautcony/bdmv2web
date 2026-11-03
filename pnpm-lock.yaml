@@ -35,6 +35,18 @@ importers:
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@bdmv-web/igs':
+        specifier: workspace:*
+        version: link:../../packages/igs
+      '@bdmv-web/package-builder':
+        specifier: workspace:*
+        version: link:../../packages/package-builder
+      '@bdmv-web/runtime-web':
+        specifier: workspace:*
+        version: link:../../packages/runtime-web
+      '@bdmv-web/test-runner':
+        specifier: workspace:*
+        version: link:../../packages/test-runner
     devDependencies:
       '@bdmv-web/test-fixtures':
         specifier: workspace:*
@@ -74,6 +86,9 @@ importers:
       '@bdmv-web/bdmv-parser':
         specifier: workspace:*
         version: link:../bdmv-parser
+      '@bdmv-web/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/igs:
     dependencies:
@@ -86,6 +101,53 @@ importers:
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@bdmv-web/hdmv':
+        specifier: workspace:*
+        version: link:../hdmv
+      '@bdmv-web/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
+
+  packages/media-export:
+    dependencies:
+      '@bdmv-web/bdmv-parser':
+        specifier: workspace:*
+        version: link:../bdmv-parser
+      '@bdmv-web/hdmv':
+        specifier: workspace:*
+        version: link:../hdmv
+
+  packages/package-builder:
+    dependencies:
+      '@bdmv-web/core':
+        specifier: workspace:*
+        version: link:../core
+      '@bdmv-web/hdmv':
+        specifier: workspace:*
+        version: link:../hdmv
+      '@bdmv-web/media-export':
+        specifier: workspace:*
+        version: link:../media-export
+      esbuild:
+        specifier: 0.25.12
+        version: 0.25.12
+
+  packages/runtime-web:
+    dependencies:
+      '@bdmv-web/bdmv-parser':
+        specifier: workspace:*
+        version: link:../bdmv-parser
+      '@bdmv-web/hdmv':
+        specifier: workspace:*
+        version: link:../hdmv
+      '@bdmv-web/igs':
+        specifier: workspace:*
+        version: link:../igs
+    devDependencies:
+      '@bdmv-web/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
 
   packages/test-fixtures:
     dependencies:

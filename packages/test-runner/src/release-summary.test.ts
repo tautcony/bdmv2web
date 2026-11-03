@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+import { createReleaseSummary } from "./release-summary.js";
+import { summarizeDeliveryCoverage } from "./coverage.js";
+import type { AuditCheck, OfflinePackageAudit } from "./types.js";
+import type { DependencyAuditReport } from "./report.js";
+
+const payloadFingerprint = "a".repeat(64);
+const pass = (checkId: string, evidence?: AuditCheck["evidence"]): AuditCheck => ({ checkId, result: "pass", message: `${checkId} passed.`, ...(evidence ? { evidence } : {}) });
+
+function audit(checks: AuditCheck[] = [pass("PACKAGE_VALID")]): OfflinePackageAudit {
+  return { schemaVersion: "1.0", packageRoot: "/output", manifestPath: "/output/manifest.json", checks, payloadFingerprint, discoveredPayloadFiles: [] };
+}
+
+function dependencyAudit(checks: AuditCheck[] = [pass("OFFLINE_DEPENDENCIES_VALID")], status: DependencyAuditReport["status"] = "pass"): DependencyAuditReport {
+  return { schemaVersion: "1.0", payloadFingerprint, status, externalReferences: [], checks };
+}
+
+const completeCoverage = summarizeDeliveryCoverage({
+  entries: { total: 1, passed: 1, failed: 0, unknown: 0, evidenceComplete: true },
+  instructions: { total: 1, passed: 1, failed: 0, unknown: 0, evidenceComplete: true },
+  media: { total: 1, passed: 1, failed: 0, unknown: 0, evidenceComplete: true },
+  tests: { total: 1, passed: 1, failed: 0, unknown: 0, evidenceComplete: true },
+});
+
+const completeDecisionFacts = {
+  declaredEntryCount: 1,
+  hdmvEntryCount: 1,
+  hasUnresolvedReachability: false,
+  hasUnsupportedReachableCapability: false,
+  hasMissingRequiredAsset: false,
+};
+
+describe("release summary aggregation", () => {
+  it("recomputes status and lists missing browser, reference, dependency, and coverage evidence as actionable gaps", () => {
+    const summary = createReleaseSummary({
+      audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([], "pass"), coverage: null,
+      browserEvidence: [], referenceEvidence: [], decisionFacts: completeDecisionFacts, reportedStatus: "complete",
+    });
+
+    expect(summary.release.status).toBe("partial");
+    expect(summary.release.gaps.map((gap) => gap.checkId)).toEqual(expect.arrayContaining([
+      "DEPENDENCY_AUDIT_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS",
+      "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED",
+    ]));
+    expect(summary.release.gaps.every((gap) => gap.result === "not-verified" && gap.action.length > 0)).toBe(true);
+    expect(summary.compatibility.status).toBe("partial");
+  });
+
+  it("keeps menu-only partial even when every independent fact passes", () => {
+    const summary = createReleaseSummary({
+      audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
+      browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })], referenceEvidence: [pass("REFERENCE_COMPARISON")],
+      decisionFacts: completeDecisionFacts,
+    });
+
+    expect(summary.release.status).toBe("partial");
+    expect(summary.release.reasons).toContain("menu-only output is always partial.");
+  });
+
+  it("allows complete only from current passing tool facts and ignores persisted component statuses", () => {
+    const summary = createReleaseSummary({
+      audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
+      coverage: completeCoverage, browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })],
+      referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts, reportedStatus: "failed",
+    });
+
+    expect(summary.release.status).toBe("complete");
+    expect(summary.dependencyAudit.status).toBe("pass");
+    expect(summary.release.gaps).toEqual([]);
+  });
+
+  it("invalidates passing browser evidence bound to another payload", () => {
+    const summary = createReleaseSummary({
+      audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
+      browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint: "b".repeat(64) })],
+      referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
+    });
+
+    expect(summary.release.status).toBe("partial");
+    expect(summary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "BROWSER_EVIDENCE", result: "not-verified" }));
+  });
+});
