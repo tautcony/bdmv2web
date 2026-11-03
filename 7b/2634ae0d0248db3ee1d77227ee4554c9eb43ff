@@ -1,0 +1,41 @@
+apps/cli/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+packages/media-export/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+packages/media-export/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 8-9
+packages/package-builder/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 8-9
+packages/package-builder/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+packages/test-runner/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 15-16
+packages/bdmv-io/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 8-9
+packages/igs/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 18
+packages/bdmv-parser/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 17
+packages/test-runner/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+apps/cli/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 12
+pnpm-lock.yaml
+  s_3a3ffd5e9a879b::t_97753199fdb839 54-56,63-66,80-82,121-123,133-136,152-155,179-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7b2634ae0d0248db3ee1d77227ee4554c9eb43ff",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
