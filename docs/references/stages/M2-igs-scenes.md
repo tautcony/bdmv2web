@@ -21,7 +21,7 @@
 
 - **Fixture / evidence / source:** `packages/igs/test/extraction.test.ts`，`synthetic IGS extraction > reassembles a complete menu scene with page, BOG, button, object, palette and PNG source mapping`；由 `packages/igs/test/fixtures.ts::syntheticClip()` 生成 TS/PES/ICS/PDS/ODS 输入。
 - **Expected:** 一个已闭合 Display Set；scene 有来源、PTS、分辨率、page 与资源引用；未通过真实参考验证时，颜色规则仍标未验证。
-- **Actual:** 测试断言一个完整的合成 scene（composition 7、PTS 90000、page 1、默认选择 button 1、palette 0、一个 1×1 object 5、一个 PNG asset）；来源指向 Clip `00001` / PID `0x120` / packet offset `384`。导出色彩规则为 `unverified-bt601-limited-round-nearest`，support 为 `unverified`。
+- **Actual:** 测试断言一个完整的合成 scene（composition 7、PTS 90000、page 1、默认选择 button 1、palette 0、一个 1×1 object 5、一个 PNG asset）；来源指向 Clip `00001` / PID `0x120` / packet offset `384`。当时导出色彩规则为 `unverified-bt601-limited-round-nearest`，support 为 `unverified`。
 - **Result:** 合成结构与来源映射断言通过。没有真实菜单页的独立图像 golden，不能据此声称像素保真。
 
 ### M2-SYN-BUTTON-BOG-02 — 多页按钮与 BOG 作用域
@@ -35,7 +35,7 @@
 
 - **Fixture / evidence / source:** `packages/igs/test/extraction.test.ts` 两项：`keeps complete object versions attached to the Display Set and epoch that received them`；`maps one ODS through two palettes and preserves palette alpha in provisional PNG pixels`。
 - **Expected:** 不同版本不混拼；同一图像资源使用不同 palette 时，palette/version 映射可追踪，透明度按输入保留。
-- **Actual:** 第一项直接向状态机馈入合成 ICS/PDS/ODS，并用两个 time domain 断言 scene 分别绑定 object/palette version 0 和 1。第二项先解析合成 scene，再在内存中添加 page 2 和 palette 1；渲染得到 object 5/version 0 与 palette 0/1 的两个 asset，解码像素分别为 `[255,255,255,255]`、`[255,0,0,173]`。色彩转换标签仍是未验证的 provisional BT.601 limited/rne。
+- **Actual:** 第一项直接向状态机馈入合成 ICS/PDS/ODS，并用两个 time domain 断言 scene 分别绑定 object/palette version 0 和 1。第二项先解析合成 scene，再在内存中添加 page 2 和 palette 1；渲染得到 object 5/version 0 与 palette 0/1 的两个 asset，解码像素分别为 `[255,255,255,255]`、`[255,0,0,173]`。当时色彩转换标签为未验证的 provisional BT.601 limited/rne；现已调整为 BT.709，见下方逐元素对照记录。
 - **Result:** 版本隔离与两个 palette 输入的渲染行为通过合成断言。双 PDS 像素样本是程序构造且非独立 golden；测试没有证明真实 M2TS 中先后到达的两个 PDS 对应这些颜色。
 
 ### M2-SYN-TIME-EFFECT-04 — 动画字段、超时与效果
@@ -59,3 +59,13 @@
 - **Actual:** CLPI 声明 IGS PID `0x1400`；菜单 playlist `00003` 有 999 个 play item，主项只引用 Clip `00004`，SubPath 含 Clip `00005`。Clip `00005` 得到一个 `1920×1080` scene，7 pages、168 objects、7 palettes，存在对应 PNG assets。当前阶段记录观察到 page 2 和 3 的默认按钮均为 `65534`；smoke 自动断言的是两条 `IGS_INVALID_BUTTON_REFERENCE`，没有断言具体 page/button ID。extract 为 `partial`、support 为 `unverified`。CLPI `00043` 也声明 IGS，但 workspace 缺少匹配 `STREAM/00043.m2ts`，报告 `BDMV_MISSING_STREAM`。
 - **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。真实 smoke 不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材，本记录不添加内容 hash。
 - **独立参考缺口:** 仍需独立像素 golden（明确 fixture、参考工具/版本、palette 与颜色转换规则、时间/裁剪预期）。libbluray 与 igstools 可能共享来源，不能不加分析地当成两份独立参考。此缺口不由本次 smoke、PNG 可打开或合成像素断言关闭。
+
+
+## 2026-11-03 — Tamako 00005 逐元素同类工具对照
+
+- **输入：** workspace-local `test-data/tamako-love-story-bd/BDMV/STREAM/00005.m2ts`（IG PID 0x1400）；不记录原盘素材 hash。
+- **参考工具：** `SAPikachu/igstools` 0.9.3，固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python 3.15.0、pypng 0.20220715.0、Pillow 13.0.0。工具解码器源自 libav patches，属于实现对照，不能等同规范。
+- **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
+- **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项结果见 [comparison.json](../../evidence/tamako-00005-igstools-comparison.json)。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
+- **更正：** 初次强制 BT.601 与旧实现完全一致只说明实现使用同一矩阵，不足以证明色彩正确。固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）；现在实现改为 BT.709，当前案例的转换及元素比对已确认可用；色彩规范正文未取得。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据，不把分辨率当作规范证明。
+- **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/compare-igstools-reference.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。

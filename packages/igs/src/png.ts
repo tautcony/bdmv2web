@@ -37,12 +37,12 @@ export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagno
         // starts its 256-entry table at zero before applying the sparse entries;
         // in IGS the alpha component is direct, so an omitted entry is transparent.
         if (!entry) continue;
-        const [r, g, b] = ycbcrLimited601(entry.y, entry.cb, entry.cr);
+        const [r, g, b] = ycbcrLimited709(entry.y, entry.cb, entry.cr);
         const offset = i * 4; rgba[offset] = r; rgba[offset + 1] = g; rgba[offset + 2] = b; rgba[offset + 3] = entry.alpha;
       }
       const pngBytes = encodeRgbaPng(object.width, object.height, rgba);
       const id = `igs-${scene.clipId}-${scene.pid}-${scene.compositionNumber}-p${page.id}-o${object.id}v${object.version}-pal${palette.id}v${palette.version}`;
-      assets.push({ id, relativePath: `assets/graphics/${safe(id)}.png`, mimeType: "image/png", width: object.width, height: object.height, pngBytes, objectId: object.id, objectVersion: object.version, paletteId: palette.id, paletteVersion: palette.version, source: object.source, colorConversion: "unverified-bt601-limited-round-nearest" });
+      assets.push({ id, relativePath: `assets/graphics/${safe(id)}.png`, mimeType: "image/png", width: object.width, height: object.height, pngBytes, objectId: object.id, objectVersion: object.version, paletteId: palette.id, paletteVersion: palette.version, source: object.source, colorConversion: "bt709-limited-round-nearest" });
     }
   }
   return { assets, diagnostics };
@@ -56,11 +56,11 @@ export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): 
   return concat(SIGNATURE, chunk("IHDR", ihdr), chunk("IDAT", new Uint8Array(deflateSync(scanlines))), chunk("IEND", new Uint8Array()));
 }
 
-function ycbcrLimited601(y: number, cb: number, cr: number): [number, number, number] {
-  // This implementation rule is intentionally classified unverified until the IGS colorimetry is established.
+function ycbcrLimited709(y: number, cb: number, cr: number): [number, number, number] {
   const yy = (y - 16) * (255 / 219); const u = (cb - 128) * (255 / 224); const v = (cr - 128) * (255 / 224);
   const clamp = (n: number) => Math.max(0, Math.min(255, Math.floor(n + 0.5)));
-  return [clamp(yy + 1.402 * v), clamp(yy - 0.344136 * u - 0.714136 * v), clamp(yy + 1.772 * u)];
+  const kr = 0.2126; const kb = 0.0722; const kg = 1 - kr - kb;
+  return [clamp(yy + 2 * (1 - kr) * v), clamp(yy - 2 * (1 - kb) * kb / kg * u - 2 * (1 - kr) * kr / kg * v), clamp(yy + 2 * (1 - kb) * u)];
 }
 
 function chunk(type: string, data: Uint8Array): Uint8Array {

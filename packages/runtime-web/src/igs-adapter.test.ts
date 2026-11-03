@@ -31,7 +31,7 @@ function fixture(): { scene: IgsScene; assets: IgsAsset[] } {
   const assets: IgsAsset[] = [21, 22, 23].map((objectId) => ({
     id: `igs-00001-24-7-p2-o${objectId}v1-pal3v4`, relativePath: `assets/${objectId}.png`, mimeType: "image/png",
     width: 30 + objectId, height: 40 + objectId, pngBytes: new Uint8Array(), objectId, objectVersion: 1,
-    paletteId: 3, paletteVersion: 4, source, colorConversion: "unverified-bt601-limited-round-nearest",
+    paletteId: 3, paletteVersion: 4, source, colorConversion: "bt709-limited-round-nearest",
   }));
   return { scene, assets };
 }

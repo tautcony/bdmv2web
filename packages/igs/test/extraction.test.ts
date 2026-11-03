@@ -27,7 +27,7 @@ describe("synthetic IGS extraction", () => {
     expect([...scene.objects[0]!.indices]).toEqual([1]);
     expect(result.assets).toHaveLength(1);
     expect([...result.assets[0]!.pngBytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
-    expect(result.assets[0]).toMatchObject({ objectId: 5, paletteId: 0, colorConversion: "unverified-bt601-limited-round-nearest", relativePath: expect.stringMatching(/^assets\/graphics\//) });
+    expect(result.assets[0]).toMatchObject({ objectId: 5, paletteId: 0, colorConversion: "bt709-limited-round-nearest", relativePath: expect.stringMatching(/^assets\/graphics\//) });
     expect(scene.source).toMatchObject({ clipId: "00001", pid: IG_PID, packetOffset: "384", pts90k: "90000" });
     expect(result.support.status).toBe("unverified");
   });
@@ -81,10 +81,10 @@ describe("synthetic IGS extraction", () => {
     expect(rendered.assets).toHaveLength(2);
     expect(rendered.assets.map((asset) => [asset.objectId, asset.objectVersion, asset.paletteId, asset.paletteVersion])).toEqual([[5, 0, 0, 0], [5, 0, 1, 0]]);
     expect(rendered.assets.map((asset) => asset.colorConversion)).toEqual([
-      "unverified-bt601-limited-round-nearest",
-      "unverified-bt601-limited-round-nearest",
+      "bt709-limited-round-nearest",
+      "bt709-limited-round-nearest",
     ]);
-    expect(rendered.assets.map(decodePngRgbaPixel)).toEqual([[255, 255, 255, 255], [255, 0, 0, 173]]);
+    expect(rendered.assets.map(decodePngRgbaPixel)).toEqual([[255, 255, 255, 255], [255, 11, 0, 173]]);
   });
 
   it("preserves page-scoped button IDs and defaults, and diagnoses invalid explicit references", async () => {

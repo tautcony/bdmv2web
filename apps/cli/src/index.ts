@@ -93,7 +93,7 @@ async function extract(): Promise<void> {
       await writeFile(assetPath, asset.pngBytes, { flag: "wx" });
       generatedFiles.push(await generatedFileRecord(transaction.stagingPath, relativePath, "image"));
     }
-    const manifest = { schemaVersion: "1.0", status: "partial", analysisStage: "structural", igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS color conversion and complete visual fidelity remain unverified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
+    const manifest = { schemaVersion: "1.0", status: "partial", analysisStage: "structural", igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS animation and visual effects are not fully verified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
     await writeFile(resolve(transaction.stagingPath, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
     process.stdout.write(`${JSON.stringify({ status: "partial", output: roots.output })}\n`);

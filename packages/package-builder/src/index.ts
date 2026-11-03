@@ -121,7 +121,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     return { ...file, byteLength: String(bytes.byteLength), sha256: createHash("sha256").update(bytes).digest("hex") };
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: "partial", files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [exportedMedia ? "Menu background is a partial single-clip loop; complete HDMV playlist navigation and PGS are unsupported" : "Menu-only preview; media playback unavailable", "IGS color conversion remains unverified", "Direct file:// browser acceptance remains unverified"] };
+  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: "partial", files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [exportedMedia ? "Menu background is a partial single-clip loop; complete HDMV playlist navigation and PGS are unsupported" : "Menu-only preview; media playback unavailable", "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 

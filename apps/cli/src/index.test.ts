@@ -173,7 +173,7 @@ describe("IGS extract CLI", () => {
       expect(mappings.assets[0]).toMatchObject({ objectId: 5, paletteId: 0, source: { path: "BDMV/STREAM/00001.m2ts", byteOffset: expect.any(String) } });
       const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8"));
       expect(manifest).toMatchObject({ status: "partial", igs: { support: { status: "unverified" } } });
-      expect(manifest.limitations).toContain("IGS color conversion and complete visual fidelity remain unverified");
+      expect(manifest.limitations).toContain("IGS animation and visual effects are not fully verified");
       expect(manifest.files.map((file: any) => file.path)).toEqual(expect.arrayContaining(["scenes.json", "igs-diagnostics.json", "source-map.json", mappings.assets[0].path]));
       for (const file of manifest.files) {
         expect(file.sha256).toMatch(/^[a-f0-9]{64}$/);

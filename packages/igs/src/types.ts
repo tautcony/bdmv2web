@@ -129,7 +129,7 @@ export interface IgsAsset {
   paletteId: number;
   paletteVersion: number;
   source: IgsSource;
-  colorConversion: "unverified-bt601-limited-round-nearest";
+  colorConversion: "bt709-limited-round-nearest";
 }
 
 export interface IgsOptions { limits?: Limits; chunkSize?: number; }
