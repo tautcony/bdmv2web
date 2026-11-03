@@ -1,0 +1,106 @@
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_3a3ffd5e9a879b::t_99d165cbed6433 15
+  s_3a3ffd5e9a879b::t_1fe56e662f8128 16
+  s_3a3ffd5e9a879b::t_250effa8713b5a 24
+  s_3a3ffd5e9a879b::t_5507e5a0189419 33-38
+  s_3a3ffd5e9a879b::t_40334402b0a94f 18
+packages/hdmv/package.json
+  s_3a3ffd5e9a879b::t_be1328cd4c72d4 8
+docs/hdmv-support.md
+  s_3a3ffd5e9a879b::t_6815cdf536db9e 120
+  s_3a3ffd5e9a879b::t_033897aa1b218c 76
+  s_3a3ffd5e9a879b::t_c451d38e89da93 112
+  s_3a3ffd5e9a879b::t_54d42e05432b99 90
+  s_3a3ffd5e9a879b::t_55e22920ab3213 92-93
+  s_3a3ffd5e9a879b::t_6604dc3d5e2547 94-96
+  s_3a3ffd5e9a879b::t_d9e81de4dc51fd 44,66,75,83-85,98
+  s_3a3ffd5e9a879b::t_ac714af303ddb4 42
+  s_3a3ffd5e9a879b::t_45697db7d99e91 106-107,110-111
+  s_3a3ffd5e9a879b::t_7793c9de7600f4 41,43,45,97
+  s_3a3ffd5e9a879b::t_cae28150b161fc 46-51,74,77-82,88
+  s_3a3ffd5e9a879b::t_ed827b914b5650 104-105,114
+  s_3a3ffd5e9a879b::t_e7cc08d8778cea 89
+  s_3a3ffd5e9a879b::t_fc690c63d896c3 91
+  s_3a3ffd5e9a879b::t_2fb60f458fb39b 113
+packages/hdmv/src/index.test.ts
+  s_3a3ffd5e9a879b::t_fc5660b1022ef6 58,71,74-87,89-91,93,191,432,435-440,544,548,550-554,556
+  s_3a3ffd5e9a879b::t_eecdc818c7cb6c 61,542
+  s_3a3ffd5e9a879b::t_0c0a7bc7e156bc 98
+  s_3a3ffd5e9a879b::t_754b7c480f53fe 339-349,352-379,425-426,429,431,647
+  s_3a3ffd5e9a879b::t_b837b1ccb08241 289-295,299-300
+  s_3a3ffd5e9a879b::t_8f40dfed8a191e 584-601
+  s_3a3ffd5e9a879b::t_c6c521198b54dc 49-57,59,62,103-126
+  s_3a3ffd5e9a879b::t_a29ef285b625f2 60,268-269,543,545-547
+  s_3a3ffd5e9a879b::t_597a4d593a4922 94-97,100-102,195-205,207-212,215-223,225-230,232-241
+  s_3a3ffd5e9a879b::t_73adf3e553817e 667-683
+  s_3a3ffd5e9a879b::t_76cef917fd4ecc 609-613
+  s_3a3ffd5e9a879b::t_03a38f555e03f7 559-575
+  s_3a3ffd5e9a879b::t_0ae762e384b60c 402-408,412-414
+  s_3a3ffd5e9a879b::t_e307b0d76a165f 194,206,224,424,430
+  s_3a3ffd5e9a879b::t_e50d95ad992182 128
+  s_3a3ffd5e9a879b::t_91acb8451706dd 380-401,409-411,415-422
+  s_3a3ffd5e9a879b::t_8f42c9a48df5e2 35,38
+  s_3a3ffd5e9a879b::t_ee1d00d03fe44e 301
+  s_3a3ffd5e9a879b::t_d13fa0121ea85b 243-267,270-279
+  s_3a3ffd5e9a879b::t_26a5dc8425bd5f 427-428,646
+  s_3a3ffd5e9a879b::t_54c73c1225590e 39,178,242,280,331,423,494,558,602-608,614-636,684
+  s_3a3ffd5e9a879b::t_c121583bd514be 127,129-136,138-177
+  s_3a3ffd5e9a879b::t_549ba604b4734a 88,92,350-351,505,555,649-650,653-654,656,658,660
+  s_3a3ffd5e9a879b::t_245fd9c4366a84 472-478,481-492
+  s_3a3ffd5e9a879b::t_e99d331e5652d5 63-70,72-73
+  s_3a3ffd5e9a879b::t_073bb93582e419 557
+  s_3a3ffd5e9a879b::t_6826240209ddb7 4-7,287-288,296-298,302-330
+  s_3a3ffd5e9a879b::t_3548c8c7edd377 137
+  s_3a3ffd5e9a879b::t_d59ab36aee3718 179-184
+  s_3a3ffd5e9a879b::t_39f3567f5322c9 99,213-214,231
+  s_3a3ffd5e9a879b::t_d37f32a6240ea4 25-34,36-37
+  s_3a3ffd5e9a879b::t_9dcab7a9d877f8 493
+packages/hdmv/src/registers.ts
+  s_3a3ffd5e9a879b::t_33cc6aee43d203 40,49
+  s_3a3ffd5e9a879b::t_64c23ac8f2da30 11-15,17-28,33,42-48,50,84-96,101-105
+  s_3a3ffd5e9a879b::t_a3a98c11d64cdb 1-2,16
+  s_3a3ffd5e9a879b::t_f75fd1ce98e0c1 97-100
+  s_3a3ffd5e9a879b::t_a448cd09dcbf5d 5-10,54-56,69-74,77-78,81-82
+  s_3a3ffd5e9a879b::t_79133fbfa356ae 83
+docs/references/sources.json
+  s_3a3ffd5e9a879b::t_88df9efd686d60 83-84,130-131
+packages/hdmv/src/vm.ts
+  s_3a3ffd5e9a879b::t_3cea7c1e5e89c1 1,30,45,323-330,472-474,478-490
+  s_3a3ffd5e9a879b::t_4f2acbda083a8f 2,24-28
+  s_3a3ffd5e9a879b::t_9c2d13d58cc5a6 524
+  s_3a3ffd5e9a879b::t_286b40b7c5315c 94
+  s_3a3ffd5e9a879b::t_2cd540b12618bb 351-355,360,364-393
+  s_3a3ffd5e9a879b::t_ce13ef3196d516 186-193
+  s_3a3ffd5e9a879b::t_61f6a38860b2b3 308-322,465-471,475-477,491,500
+  s_3a3ffd5e9a879b::t_5d4e132a0ac75a 175-176
+  s_3a3ffd5e9a879b::t_e7f46c20658314 557
+  s_3a3ffd5e9a879b::t_9629f603008658 67-68,73-74,106-109,115-116,123-124,127,170-174
+  s_3a3ffd5e9a879b::t_b083812abe4c08 337-342,431-461
+  s_3a3ffd5e9a879b::t_0ab3b9defda599 21,111-114,117-122,125-126,128-169
+  s_3a3ffd5e9a879b::t_b2cfc2b4324a31 16,46,49,202,518,522-523
+  s_3a3ffd5e9a879b::t_abc12bb46c1ab7 532-543,559
+  s_3a3ffd5e9a879b::t_058e7430df901a 59,62,550-556,558
+  s_3a3ffd5e9a879b::t_6839a262f2e1b0 343-350,356-359,361-363,404-415
+  s_3a3ffd5e9a879b::t_1f08a533d8dd37 19-20,66,71,81,85,90,98-99,102,110,280-283,394,416-430,462
+  s_3a3ffd5e9a879b::t_74249c68cdbfca 44,60
+  s_3a3ffd5e9a879b::t_663d927f80e6b6 332-336,395-399
+  s_3a3ffd5e9a879b::t_3457df0b8e1e35 560
+docs/references/stages/M3-hdmv-navigation.md
+  s_3a3ffd5e9a879b::t_7154d203d2f68a 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb74e26bd83ffd246343c1410615ca9a9ef935b1",
+  "prompts": {},
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
