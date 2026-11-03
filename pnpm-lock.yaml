@@ -51,12 +51,19 @@ importers:
       '@bdmv-web/test-fixtures':
         specifier: workspace:*
         version: link:../../packages/test-fixtures
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/bdmv-io:
     dependencies:
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/bdmv-parser:
     dependencies:
@@ -70,6 +77,9 @@ importers:
       '@bdmv-web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/core:
     dependencies:
@@ -108,6 +118,9 @@ importers:
       '@bdmv-web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/media-export:
     dependencies:
@@ -117,6 +130,10 @@ importers:
       '@bdmv-web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/package-builder:
     dependencies:
@@ -132,6 +149,10 @@ importers:
       esbuild:
         specifier: 0.25.12
         version: 0.25.12
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/runtime-web:
     dependencies:
@@ -155,7 +176,11 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/test-runner: {}
+  packages/test-runner:
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
 packages:
 

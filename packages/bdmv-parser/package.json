@@ -14,6 +14,7 @@
     "@bdmv-web/core": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "24.10.0",
     "@bdmv-web/test-fixtures": "workspace:*"
   }
 }

@@ -9,5 +9,5 @@
     "test": "vitest run"
   },
   "dependencies": { "@bdmv-web/bdmv-io": "workspace:*", "@bdmv-web/bdmv-parser": "workspace:*", "@bdmv-web/core": "workspace:*", "@bdmv-web/igs": "workspace:*", "@bdmv-web/package-builder": "workspace:*", "@bdmv-web/runtime-web": "workspace:*", "@bdmv-web/test-runner": "workspace:*" },
-  "devDependencies": { "@bdmv-web/test-fixtures": "workspace:*" }
+  "devDependencies": { "@bdmv-web/test-fixtures": "workspace:*", "@types/node": "24.10.0" }
 }
