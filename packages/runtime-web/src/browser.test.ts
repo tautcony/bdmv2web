@@ -28,8 +28,16 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
   const windowEvents = new Map<string, Array<(...args: unknown[]) => unknown>>();
   const element = (id: string) => {
     const events = new Map<string, Array<(...args: unknown[]) => unknown>>();
+    const classes = new Set<string>();
     return {
       textContent: "", role: "", hidden: true, disabled: false,
+      classes,
+      classList: {
+        add: (name: string) => { classes.add(name); },
+        remove: (name: string) => { classes.delete(name); },
+        toggle: (name: string, force?: boolean) => { const next = force ?? !classes.has(name); if (next) classes.add(name); else classes.delete(name); return next; },
+        contains: (name: string) => classes.has(name),
+      },
       addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
         const handlers = events.get(type) ?? [];
         handlers.push(listener as unknown as (...args: unknown[]) => unknown); events.set(type, handlers);
@@ -132,6 +140,7 @@ describe("offline browser boot", () => {
       const start = host.elements.get("start-menu")!;
       expect(host.elements.get("disc-title")?.textContent).toBe("Boot test");
       expect(host.elements.get("runtime-status")?.textContent).toContain("Images decoded");
+      expect(host.elements.get("runtime-status")?.classes.has("is-visible")).toBe(true);
       expect(start.hidden).toBe(false);
       expect(host.fakeWindow.listenerCount("keydown")).toBe(0);
 
@@ -238,6 +247,43 @@ describe("offline browser boot", () => {
     expect(host.elements.get("runtime-status")?.textContent).toMatch(/format is not supported/i);
     expect(start.hidden).toBe(true);
     expect(host.mediaPlayCalls).toEqual(["menu-background", "menu-audio"]);
+  });
+
+  it("fades ordinary status toasts out but keeps a fatal one visible until the next update", async () => {
+    vi.resetModules();
+    const { createStatusToast } = await import("./browser.js");
+    vi.useFakeTimers();
+    try {
+      const classes = new Set<string>();
+      const host = {
+        textContent: "",
+        classList: {
+          add: (name: string) => void classes.add(name),
+          remove: (name: string) => void classes.delete(name),
+          toggle: (name: string, force?: boolean) => { const next = force ?? !classes.has(name); if (next) classes.add(name); else classes.delete(name); return next; },
+        },
+      };
+      const toast = createStatusToast(host, 1000);
+
+      toast("Images decoded.");
+      expect(host.textContent).toBe("Images decoded.");
+      expect(classes.has("is-visible")).toBe(true);
+      vi.advanceTimersByTime(999);
+      expect(classes.has("is-visible")).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(classes.has("is-visible")).toBe(false);
+
+      toast("Menu preview could not start.", { persist: true });
+      expect(classes.has("is-visible")).toBe(true);
+      expect(classes.has("is-error")).toBe(true);
+      vi.advanceTimersByTime(60_000);
+      expect(classes.has("is-visible")).toBe(true);
+
+      toast("Menu preview ready.");
+      expect(classes.has("is-error")).toBe(false);
+      vi.advanceTimersByTime(1000);
+      expect(classes.has("is-visible")).toBe(false);
+    } finally { vi.useRealTimers(); }
   });
 
   it("applies the packaged player profile to the menu VM registers instead of falling back to defaults", async () => {

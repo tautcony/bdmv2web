@@ -191,6 +191,14 @@ describe("menu package primitives", () => {
       expect(manifest.payloadFingerprint).toBe(fingerprint.digest("hex")); expect(report.payloadFingerprint).toBe(manifest.payloadFingerprint);
       expect(data).toContain(m3Fixtures.move5.bytes); expect(data).toContain(m3Fixtures.playPlaylist42.bytes); expect(data).toContain('"id":0'); expect(data).toContain('"vmInitialProgramId":0');
       expect(html).toContain('style="aspect-ratio:1920 / 1080"');
+      // The exported page keeps no chrome of its own: the title lives in the header and
+      // the stage fills the viewport, letterboxing the scene instead of shrinking to it.
+      expect(html).not.toContain("<h1"); expect(html).not.toContain("disc-title");
+      expect(html).toContain('<p id="runtime-status" role="status" aria-live="polite"');
+      expect(style).toMatch(/#menu-stage\{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;/);
+      expect(style).toContain("object-fit:contain");
+      expect(style).toMatch(/#runtime-status\{[^}]*position:fixed[^}]*opacity:0/);
+      expect(style).toMatch(/#runtime-status\.is-visible\{opacity:1/);
     } finally { if (!preserveOutput) await rm(parent, { recursive: true, force: true }); }
   });
 });

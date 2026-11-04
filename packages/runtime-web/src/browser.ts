@@ -15,9 +15,37 @@ export function createMenuVm(data: PackageData, onTrace?: (entry: TraceEntry) =>
   return new HdmvVm(data.vmPrograms ?? [], { ...(onTrace ? { onTrace } : {}), ...(data.vmEntries ? { entries: data.vmEntries } : {}), ...(data.profile ? { profile: data.profile } : {}) });
 }
 
+export interface StatusToastOptions { persist?: boolean }
+type StatusToastHost = { textContent: string | null; classList?: { add(name: string): void; remove(name: string): void; toggle(name: string, force?: boolean): unknown } };
+
+/** Render status updates as a translucent toast in the top-right corner. Ordinary
+ * updates fade out again; persistent (fatal) ones stay until the next update. */
+export function createStatusToast(host: StatusToastHost, timeoutMs = 4500): (message: string, options?: StatusToastOptions) => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return (message, options = {}) => {
+    host.textContent = message;
+    host.classList?.add("is-visible");
+    host.classList?.toggle("is-error", options.persist === true);
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+    if (options.persist) return;
+    timer = setTimeout(() => { timer = undefined; host.classList?.remove("is-visible"); }, timeoutMs);
+  };
+}
+
+let statusToast: ReturnType<typeof createStatusToast> | undefined;
+
+function showStatus(message: string, options?: StatusToastOptions): void {
+  const element = document.getElementById("runtime-status");
+  if (!element) return;
+  statusToast ??= createStatusToast(element);
+  statusToast(message, options);
+}
+
 function visibleError(error: unknown): void {
   const status = document.getElementById("runtime-status"); const detail = document.getElementById("runtime-diagnostics");
-  if (status) { status.textContent = "Menu preview could not start."; status.role = "alert"; }
+  if (status) status.role = "alert";
+  showStatus("Menu preview could not start.", { persist: true });
   if (detail) { detail.hidden = false; detail.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error); }
 }
 
@@ -95,11 +123,11 @@ async function boot(): Promise<void> {
     let retrySound: (() => void) | null = null;
     let retryMedia: (() => void) | null = null;
     const playbackBridge: PlaybackBridge = data.media && video && audio
-      ? new MenuLoopPlaybackBridge(vm, video, audio, data.media, (message) => { status.textContent = message; }, {
+      ? new MenuLoopPlaybackBridge(vm, video, audio, data.media, (message) => { showStatus(message); }, {
         offerRetry: (retry) => { retryMedia = retry; start.textContent = "Retry menu media"; start.hidden = false; start.disabled = false; },
         clearRetry: () => { retryMedia = null; if (!retrySound) start.hidden = true; },
       })
-      : new PreviewPlaybackBridge(vm, (message) => { status.textContent = message; });
+      : new PreviewPlaybackBridge(vm, (message) => { showStatus(message); });
     let controller: MenuController | null = null;
     const pendingActions: Array<ReturnType<HdmvVm["drainActions"]>[number]> = [];
     let externalRequestSequence = 0;
@@ -114,27 +142,27 @@ async function boot(): Promise<void> {
         if (action.type === "SET_BUTTON_PAGE") {
           const packed = action.payload.packed;
           if (typeof packed === "number") controller.applySetButtonPage(packed);
-          else status.textContent = "VM emitted SET_BUTTON_PAGE without its packed operand.";
+          else showStatus("VM emitted SET_BUTTON_PAGE without its packed operand.");
         } else if ((action.type === "ENABLE_BUTTON" || action.type === "DISABLE_BUTTON") && typeof action.payload.button === "number") {
           controller.setButtonEnabled(action.payload.button, action.type === "ENABLE_BUTTON");
         } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number" && data.vmEntries) {
           const selected = vm.selectTitle(action.payload.title);
           if (selected.diagnostic) {
-            status.textContent = selected.diagnostic.message;
+            showStatus(selected.diagnostic.message);
             if (vm.recoverMenuAction()) { controller.syncVmContext(); pendingActions.length = 0; continue; }
           }
           pendingActions.push(...vm.drainActions());
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist && data.media)) {
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
-          if (result.status === "unavailable") { status.textContent = result.message; vm.releaseExternalPlayback(action); continue; }
+          if (result.status === "unavailable") { showStatus(result.message); vm.releaseExternalPlayback(action); continue; }
           const params = new URLSearchParams(location.hash.slice(1)); const port = params.get("bridgePort"); const token = params.get("bridgeToken");
           if (!port || !token || !/^\d{1,5}$/.test(port) || !/^[0-9a-f]{48}$/.test(token)) {
-            status.textContent = `Open ${result.item.streamPath} manually, or launch start-menu.command to use the system player.`;
+            showStatus(`Open ${result.item.streamPath} manually, or launch start-menu.command to use the system player.`);
             vm.releaseExternalPlayback(action); continue;
           }
           const image = new Image();
-          image.onload = () => { if (requestSequence === externalRequestSequence) status.textContent = `System player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`; };
-          image.onerror = () => { if (requestSequence === externalRequestSequence) status.textContent = `Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`; };
+          image.onload = () => { if (requestSequence === externalRequestSequence) showStatus(`System player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`); };
+          image.onerror = () => { if (requestSequence === externalRequestSequence) showStatus(`Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`); };
           image.src = `http://127.0.0.1:${port}/open?token=${token}&clip=${encodeURIComponent(result.item.clipId)}`;
           vm.releaseExternalPlayback(action);
         } else {
@@ -147,7 +175,7 @@ async function boot(): Promise<void> {
     let inputStarted = false;
     const soundPlayer = new MenuSoundPlayer(data.sounds ?? {}, (url) => new Audio(url), {
       report: (kind, message) => {
-        status.textContent = message;
+        showStatus(message);
         if (kind === "blocked") { start.textContent = "Retry sound"; start.hidden = false; start.disabled = false; }
         else if (kind === "unsupported" || kind === "asset") { start.hidden = true; retrySound = null; }
       },
@@ -159,8 +187,8 @@ async function boot(): Promise<void> {
       const rect = canvas.getBoundingClientRect(); const context = canvas.getContext("2d");
       if (context) drawMenu(context, scene, controller, viewport, rect.width, rect.height, window.devicePixelRatio || 1);
     };
-    controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { status.textContent = message; }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
-    start.hidden = false; start.disabled = false; status.textContent = "Images decoded. Select Start menu preview to enable input.";
+    controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
+    start.hidden = false; start.disabled = false; showStatus("Images decoded. Select Start menu preview to enable input.");
     let removeKeyboard: (() => void) | undefined; let removePointer: (() => void) | undefined;
     start.addEventListener("click", async () => {
       if (retrySound) { const retry = retrySound; retrySound = null; start.disabled = true; start.hidden = true; retry(); return; }
@@ -173,7 +201,7 @@ async function boot(): Promise<void> {
         if (data.vmFirstPlayProgramId !== undefined && data.vmEntries?.some((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV")) {
           vm.reset(data.vmFirstPlayProgramId);
           const initial = vm.runTurn();
-          if (initial.status === "faulted") { status.textContent = initial.diagnostic?.message ?? "First Play initialization failed."; return; }
+          if (initial.status === "faulted") { showStatus(initial.diagnostic?.message ?? "First Play initialization failed."); return; }
           if (initial.waiting) vm.releaseExternalPlayback(initial.waiting);
           vm.drainActions();
           vm.selectTitle(0);
@@ -189,7 +217,7 @@ async function boot(): Promise<void> {
       if (retryMedia) return;
       const vmStatus = vm.snapshot().status;
       if (vmStatus === "faulted" || vmStatus === "stopped" || (vmStatus === "suspended" && !pending.menuPlaylistRequested)) return;
-      if (menuMediaStarted !== false) status.textContent = "Menu preview ready. Use arrow keys and Enter, or select a visible button.";
+      if (menuMediaStarted !== false) showStatus("Menu preview ready. Use arrow keys and Enter, or select a visible button.");
       controller!.start();
       void dispatchActions().completion;
       removeKeyboard = installKeyboardInput(window, controller!);

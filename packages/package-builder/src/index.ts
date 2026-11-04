@@ -36,11 +36,16 @@ export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: 
   return batches;
 }
 
+/** The stage fills the viewport and letterboxes the scene inside itself, so the
+ * header carries the title and the page keeps no chrome of its own. The inline
+ * aspect-ratio is only a fallback hint if the full-viewport sizing is disabled. */
 export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSize?: { width: number; height: number }): string {
   const safeTitle = escapeHtml(title);
   const assets = Array.from({ length: assetBatchCount }, (_, i) => `<script defer src="runtime/assets-data-${String(i).padStart(3, "0")}.js"></script>`).join("");
   const aspectRatio = sceneSize ? ` style="aspect-ratio:${sceneSize.width} / ${sceneSize.height}"` : "";
-  return `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeTitle}</title><link rel="stylesheet" href="runtime/style.css"><script defer src="runtime/disc-data.js"></script>${assets}<script defer src="runtime/app.bundle.js"></script></head><body><main><h1 id="disc-title"></h1><p id="runtime-status" role="status">Loading menu preview…</p><button id="start-menu" type="button" hidden>Start menu preview</button><div id="menu-stage"${aspectRatio}><video id="menu-background" aria-hidden="true" playsinline></video><audio id="menu-audio"></audio><canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas></div><pre id="runtime-diagnostics" hidden></pre></main></body></html>\n`;
+  const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${safeTitle}</title><link rel="stylesheet" href="runtime/style.css"><script defer src="runtime/disc-data.js"></script>${assets}<script defer src="runtime/app.bundle.js"></script>`;
+  const stage = `<div id="menu-stage"${aspectRatio}><video id="menu-background" aria-hidden="true" playsinline></video><audio id="menu-audio"></audio><canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas></div>`;
+  return `<!doctype html>\n<html lang="en"><head>${head}</head><body><main>${stage}<button id="start-menu" type="button" hidden>Start menu preview</button><p id="runtime-status" role="status" aria-live="polite" class="is-visible">Loading menu preview…</p><pre id="runtime-diagnostics" hidden></pre></main></body></html>\n`;
 }
 
 export function createDataScript(ir: unknown): string {
@@ -197,7 +202,22 @@ async function hashGeneratedPayload(root: string, files: Array<{ path: string; k
   return hash.digest("hex");
 }
 
-const MENU_STYLE = `:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#111;color:#eee}body{margin:0}main{max-width:1000px;margin:2rem auto;padding:0 1rem}h1{font-size:1.25rem}#runtime-status{min-height:1.5em}#start-menu{padding:.65rem 1rem;font:inherit}#menu-stage{position:relative;width:100%;height:auto;overflow:hidden;background:#000}#menu-background,#menu-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:fill}#menu-background{z-index:0}#menu-audio{display:none}#menu-canvas{z-index:1;background:transparent;touch-action:manipulation}pre{white-space:pre-wrap;color:#ffb4a9}`;
+const MENU_STYLE = `:root{color-scheme:dark;font:16px system-ui,-apple-system,"Segoe UI",sans-serif;background:#000;color:#eee}
+html,body{height:100%;margin:0;overflow:hidden;background:#000;overscroll-behavior:none;-webkit-text-size-adjust:100%}
+main{position:fixed;inset:0}
+#menu-stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:#000;cursor:default;-webkit-user-select:none;user-select:none}
+#menu-background,#menu-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
+#menu-background{z-index:0}
+#menu-audio{display:none}
+#menu-canvas{z-index:1;background:transparent;touch-action:manipulation}
+#runtime-status{position:fixed;top:max(1rem,env(safe-area-inset-top));right:max(1rem,env(safe-area-inset-right));z-index:30;box-sizing:border-box;max-width:min(30rem,calc(100vw - 2rem));margin:0;padding:.55rem .85rem;border-radius:.6rem;background:rgba(18,18,22,.55);color:#f4f4f6;font-size:.85rem;line-height:1.35;text-align:left;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transform:translateY(-.4rem);transition:opacity .4s ease,transform .4s ease;pointer-events:none}
+#runtime-status.is-visible{opacity:1;transform:translateY(0)}
+#runtime-status.is-error{background:rgba(96,20,26,.7);color:#ffe2df;border:1px solid rgba(255,140,130,.35)}
+#start-menu{position:fixed;left:50%;bottom:max(2rem,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;box-sizing:border-box;padding:.65rem 1.15rem;font:inherit;font-size:.95rem;color:#f4f4f6;background:rgba(18,18,22,.55);border:1px solid rgba(255,255,255,.22);border-radius:.6rem;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer}
+#start-menu:hover{background:rgba(32,32,38,.72)}
+#start-menu:focus-visible{outline:2px solid #7cc4ff;outline-offset:2px}
+#runtime-diagnostics{position:fixed;left:max(1rem,env(safe-area-inset-left));right:max(1rem,env(safe-area-inset-right));bottom:max(1rem,env(safe-area-inset-bottom));z-index:40;box-sizing:border-box;max-height:40vh;margin:0;padding:.75rem .9rem;border-radius:.6rem;overflow:auto;background:rgba(10,10,12,.75);color:#ffb4a9;font:.8rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+`;
 export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean): string {
   const playbackNote = backgroundLoops === true
     ? "The detected menu playlist uses a repeated single-clip background loop with its declared primary audio tracks."
