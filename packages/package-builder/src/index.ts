@@ -112,7 +112,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize)),
     writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, vmPrograms: input.vmPrograms ?? [], ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}) })),
     writeFile(resolve(runtimeDirectory, "style.css"), MENU_STYLE),
-    writeFile(resolve(output, "README.md"), createReadme(input.title, !!exportedMedia, !!input.externalTargets) + (input.externalTargets ? "\nThe launcher starts a local-only playback bridge. Close its terminal window to stop it. Node.js is required. The menu skips any First Play media while retaining initialization performed before it. The default system player opens the entire M2TS; playlist boundaries and chapter offsets are not enforced.\n" : "")),
+    writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets) + (input.externalTargets ? "\nThe launcher starts a local-only playback bridge. Close its terminal window to stop it. Node.js is required. The menu skips any First Play media while retaining initialization performed before it. The default system player opens the entire M2TS; playlist boundaries and chapter offsets are not enforced.\n" : "")),
     ...(input.externalTargets ? [
       writeFile(resolve(output, "bdmv-config.json"), `${JSON.stringify({ bdmvPath: input.bdmvPath ?? "../BDMV" }, null, 2)}\n`),
       writeFile(resolve(output, "external-targets.json"), `${JSON.stringify(input.externalTargets)}\n`),
@@ -134,7 +134,8 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     return { ...file, byteLength: String(bytes.byteLength), sha256: createHash("sha256").update(bytes).digest("hex") };
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: "partial", files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [input.externalTargets ? "Feature playback requires start-menu.command and the local player bridge; PlayItem ranges and chapters are not enforced" : exportedMedia ? "Menu background is a partial single-clip loop; complete HDMV playlist navigation and PGS are unsupported" : "Menu-only preview; media playback unavailable", "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
+  const menuMediaLimitation = input.externalTargets ? "Feature playback requires start-menu.command and the local player bridge; PlayItem ranges and chapters are not enforced" : exportedMedia ? exportedMedia.background.loop ? "Menu background is a partial single-clip loop; complete HDMV playlist navigation and PGS are unsupported" : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem; complete HDMV playlist navigation and PGS are unsupported" : "Menu-only preview; media playback unavailable";
+  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: "partial", files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
@@ -195,10 +196,12 @@ async function hashGeneratedPayload(root: string, files: Array<{ path: string; k
 }
 
 const MENU_STYLE = `:root{color-scheme:dark;font:16px system-ui,sans-serif;background:#111;color:#eee}body{margin:0}main{max-width:1000px;margin:2rem auto;padding:0 1rem}h1{font-size:1.25rem}#runtime-status{min-height:1.5em}#start-menu{padding:.65rem 1rem;font:inherit}#menu-stage{position:relative;width:100%;height:auto;overflow:hidden;background:#000}#menu-background,#menu-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:fill}#menu-background{z-index:0}#menu-audio{display:none}#menu-canvas{z-index:1;background:transparent;touch-action:manipulation}pre{white-space:pre-wrap;color:#ffb4a9}`;
-function createReadme(title: string, hasMenuLoopMedia: boolean, externalPlayback: boolean): string {
-  const playbackNote = hasMenuLoopMedia
+export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean): string {
+  const playbackNote = backgroundLoops === true
     ? "The detected menu playlist uses a repeated single-clip background loop with its declared primary audio tracks."
-    : "No menu background media was exported.";
+    : backgroundLoops === false
+      ? "The detected menu playlist holds the final video frame after its single PlayItem; its declared primary audio tracks end with the PlayItem."
+      : "No menu background media was exported.";
   return [
     `# ${title.replace(/[\r\n]/g, " ")}`,
     `This is a menu-only preview. Its compatibility status is always **partial**. ${playbackNote} Browser/file:// verification is not included in this package.`,

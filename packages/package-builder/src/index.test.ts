@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
+import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
 import { m3Fixtures } from "@bdmv-web/hdmv";
 
 const ir = {
@@ -17,6 +17,11 @@ const scene = { width: 1920, height: 1080, pages: [{ id: 0, defaultButtonId: 1, 
 const png1x1 = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=", "base64"));
 
 describe("menu package primitives", () => {
+  it("describes looped and infinite-still menu backgrounds accurately", () => {
+    expect(createReadme("Loop", true, false)).toContain("repeated single-clip background loop");
+    expect(createReadme("Still", false, false)).toContain("holds the final video frame after its single PlayItem");
+    expect(createReadme("No media", undefined, false)).toContain("No menu background media was exported");
+  });
   it("writes each audio variant with its explicit one-based PSR stream in runtime data and manifest metadata", () => {
     const audioTracks = [
       runtimeAudioTrackMetadata({ streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" }),
