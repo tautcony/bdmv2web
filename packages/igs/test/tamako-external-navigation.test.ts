@@ -6,7 +6,7 @@ import { parseBdmv } from "@bdmv-web/bdmv-parser";
 import { HdmvVm } from "@bdmv-web/hdmv";
 import { extractIgsScenes } from "../src/extract.js";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/tamako-love-story-bd/BDMV");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/bdmv/tamako-love-story-bd/BDMV");
 const available = await Promise.all(["00005", "00006"].map((id) => access(resolve(root, `STREAM/${id}.m2ts`)).then(() => true, () => false))).then((values) => values.every(Boolean));
 
 describe.skipIf(!available)("Tamako menu-to-feature navigation", () => {

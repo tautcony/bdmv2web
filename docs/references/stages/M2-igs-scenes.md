@@ -54,7 +54,7 @@
 
 ### M2-REAL-00005 — Tamako workspace-local 观察范围
 
-- **Fixture / evidence / source:** 用户提供的 `test-data/tamako-love-story-bd/BDMV/CLIPINF/00005.clpi` 与 `STREAM/00005.m2ts`；证据测试 `packages/igs/test/tamako-real-smoke.test.ts`（仅在本地 STREAM 存在时运行）。测试命令：`pnpm --filter @bdmv-web/igs exec vitest run test/tamako-real-smoke.test.ts`。本次运行结果：1 test passed。
+- **Fixture / evidence / source:** 用户提供的 `test-data/bdmv/tamako-love-story-bd/BDMV/CLIPINF/00005.clpi` 与 `STREAM/00005.m2ts`；证据测试 `packages/igs/test/tamako-real-smoke.test.ts`（仅在本地 STREAM 存在时运行）。测试命令：`pnpm --filter @bdmv-web/igs exec vitest run test/tamako-real-smoke.test.ts`。本次运行结果：1 test passed。
 - **Expected:** smoke 只检查结构提取事实和 partial/unverified 状态，不把合成预期或人工猜测填入真实 disc 观察。
 - **Actual:** CLPI 声明 IGS PID `0x1400`；菜单 playlist `00003` 有 999 个 play item，主项只引用 Clip `00004`，SubPath 含 Clip `00005`。Clip `00005` 得到一个 `1920×1080` scene，7 pages、168 objects、7 palettes，存在对应 PNG assets。当前阶段记录观察到 page 2 和 3 的默认按钮均为 `65534`；smoke 自动断言的是两条 `IGS_INVALID_BUTTON_REFERENCE`，没有断言具体 page/button ID。extract 为 `partial`、support 为 `unverified`。CLPI `00043` 也声明 IGS，但 workspace 缺少匹配 `STREAM/00043.m2ts`，报告 `BDMV_MISSING_STREAM`。
 - **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。真实 smoke 不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材，本记录不添加内容 hash。
@@ -63,7 +63,7 @@
 
 ## 2026-11-03 — Tamako 00005 逐元素同类工具对照
 
-- **输入：** workspace-local `test-data/tamako-love-story-bd/BDMV/STREAM/00005.m2ts`（IG PID 0x1400）；不记录原盘素材 hash。
+- **输入：** workspace-local `test-data/bdmv/tamako-love-story-bd/BDMV/STREAM/00005.m2ts`（IG PID 0x1400）；不记录原盘素材 hash。
 - **参考工具：** `SAPikachu/igstools` 0.9.3，固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python 3.15.0、pypng 0.20220715.0、Pillow 13.0.0。工具解码器源自 libav patches，属于实现对照，不能等同规范。
 - **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
 - **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项结果见 [comparison.json](../../evidence/tamako-00005-igstools-comparison.json)。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。

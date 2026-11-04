@@ -4,7 +4,7 @@ import { consumeSegment, createIgsState } from "../src/igs.js";
 
 describe("real IGS composition sample", () => {
   it("parses the externally sourced four-page ICS and its button commands", async () => {
-    const bytes = new Uint8Array(await readFile(new URL("../../../test-data/real-igs/ics-menu-disc14.bin", import.meta.url)));
+    const bytes = new Uint8Array(await readFile(new URL("../../../test-data/fixtures/igs-parser/ics-menu-disc14.bin", import.meta.url)));
     const state = createIgsState();
 
     consumeSegment(state, { type: 0x18, data: bytes, offset: 0n }, "real-sample", 0x1400, null, 0n, 0n, 0n);

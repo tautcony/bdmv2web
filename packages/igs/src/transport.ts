@@ -93,6 +93,9 @@ export class M2tsPacketReader {
     const payload = hasPayload ? p.slice(offset, 188) : new Uint8Array();
     let continuityError = false;
     if (transportError) this.diagnostics.push(diag("TS_TRANSPORT_ERROR", `PID ${pid} packet has transport_error_indicator`, packetOffset, pid));
+    // Null packets (PID 0x1fff) are stuffing and are excluded from per-PID
+    // continuity validation by MPEG-TS; their continuity counter is undefined.
+    if (pid === 0x1fff) return { packetOffset, payloadOffset: offset, pid, payloadUnitStart, continuityCounter, hasPayload, discontinuity, transportError, continuityError, payload };
     if (hasPayload && !transportError) {
       const previous = this.continuity.get(pid);
       if (discontinuity) this.continuity.delete(pid);

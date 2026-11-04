@@ -266,8 +266,14 @@ function validateButtonReferences(scene: IgsScene, diagnostics: IgsDiagnostic[])
   };
   for (const page of scene.pages) {
     const buttonIds = new Set(page.buttons.map((button) => button.id));
-    for (const defaultId of [page.defaultSelectedButtonId, page.defaultActivatedButtonId]) {
-      if (defaultId !== 0xffff && !buttonIds.has(defaultId)) report(page.id, defaultId, "page-default");
+    // default_selected_button_id_ref has only one sentinel: 0xffff means dynamic
+    // selection. For default_activated_button_id_ref, 0xfffe means activate the
+    // currently selected button at timeout and 0xffff means no auto-activation.
+    if (page.defaultSelectedButtonId !== 0xffff && !buttonIds.has(page.defaultSelectedButtonId)) {
+      report(page.id, page.defaultSelectedButtonId, "page-default-selected");
+    }
+    if (page.defaultActivatedButtonId !== 0xfffe && page.defaultActivatedButtonId !== 0xffff && !buttonIds.has(page.defaultActivatedButtonId)) {
+      report(page.id, page.defaultActivatedButtonId, "page-default-activated");
     }
     for (const [bogIndex, bog] of page.bogs.entries()) {
       const members = new Set(bog.buttonIds);

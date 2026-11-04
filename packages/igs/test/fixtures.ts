@@ -30,8 +30,8 @@ export function pmtPacket(streamPid = IG_PID, streamType = 0x91, cc = 0): Uint8A
   return m2tsPacket(PMT_PID, concat(Uint8Array.of(0), section), { cc, pusi: true });
 }
 
-export function syntheticMenuSegments(options: { effects?: boolean; richEffects?: boolean; uiModelWithTimeouts?: boolean; animated?: boolean; buttonCommand?: Uint8Array; twoPages?: boolean; includeEnd?: boolean; missingPalette?: boolean; missingObject?: boolean; malformedObject?: boolean; incompleteObject?: boolean; missingPaletteEntry?: boolean; invalidReferences?: boolean } = {}): Uint8Array {
-  const page = makePage(options.effects ?? false, 1, options.missingObject ?? false, options.invalidReferences ?? false, options.richEffects ?? false, options.animated ?? false, options.buttonCommand);
+export function syntheticMenuSegments(options: { effects?: boolean; richEffects?: boolean; uiModelWithTimeouts?: boolean; animated?: boolean; buttonCommand?: Uint8Array; twoPages?: boolean; includeEnd?: boolean; missingPalette?: boolean; missingObject?: boolean; malformedObject?: boolean; incompleteObject?: boolean; missingPaletteEntry?: boolean; invalidReferences?: boolean; defaultSelectedButtonId?: number; defaultActivatedButtonId?: number } = {}): Uint8Array {
+  const page = makePage(options.effects ?? false, 1, options.missingObject ?? false, options.invalidReferences ?? false, options.richEffects ?? false, options.animated ?? false, options.buttonCommand, options.defaultSelectedButtonId, options.defaultActivatedButtonId);
   const inter = concat(Uint8Array.of(0x80, 0, 0, 0, options.twoPages ? 2 : 1), page, ...(options.twoPages ? [makePage(false, 2, options.missingObject ?? false)] : []));
   const compositionData = options.uiModelWithTimeouts
     ? concat(Uint8Array.of(0x40), packBits([[0n, 7], [90_000n, 33], [0n, 7], [45_000n, 33]]), u24(123), Uint8Array.of(options.twoPages ? 2 : 1), page, ...(options.twoPages ? [makePage(false, 2, options.missingObject ?? false)] : []))
@@ -44,7 +44,7 @@ export function syntheticMenuSegments(options: { effects?: boolean; richEffects?
   return concat(segment(0x18, ics), segment(0x14, pds), segment(0x15, ods), ...(options.includeEnd === false ? [] : [segment(0x80, new Uint8Array())]));
 }
 
-export function syntheticClip(options: { pts?: bigint; effects?: boolean; richEffects?: boolean; uiModelWithTimeouts?: boolean; animated?: boolean; buttonCommand?: Uint8Array; twoPages?: boolean; includeEnd?: boolean; missingPalette?: boolean; missingObject?: boolean; malformedObject?: boolean; incompleteObject?: boolean; missingPaletteEntry?: boolean; invalidReferences?: boolean; streamPid?: number; streamType?: number } = {}): Uint8Array {
+export function syntheticClip(options: { pts?: bigint; effects?: boolean; richEffects?: boolean; uiModelWithTimeouts?: boolean; animated?: boolean; buttonCommand?: Uint8Array; twoPages?: boolean; includeEnd?: boolean; missingPalette?: boolean; missingObject?: boolean; malformedObject?: boolean; incompleteObject?: boolean; missingPaletteEntry?: boolean; invalidReferences?: boolean; streamPid?: number; streamType?: number; defaultSelectedButtonId?: number; defaultActivatedButtonId?: number } = {}): Uint8Array {
   const payload = pesPacket(syntheticMenuSegments(options), options.pts ?? 90_000n);
   if (payload.length > 184) throw new RangeError("synthetic menu fixture must fit in one PES TS packet");
   return concat(patPacket(), pmtPacket(options.streamPid ?? IG_PID, options.streamType ?? 0x91), m2tsPacket(options.streamPid ?? IG_PID, payload, { cc: 0, pusi: true }));
@@ -52,7 +52,7 @@ export function syntheticClip(options: { pts?: bigint; effects?: boolean; richEf
 
 export async function* chunks(data: Uint8Array, size: number): AsyncGenerator<Uint8Array> { for (let at = 0; at < data.length; at += size) yield data.subarray(at, Math.min(data.length, at + size)); }
 
-function makePage(effects: boolean, pageId: number, missingObject = false, invalidReferences = false, richEffects = false, animated = false, buttonCommand?: Uint8Array): Uint8Array {
+function makePage(effects: boolean, pageId: number, missingObject = false, invalidReferences = false, richEffects = false, animated = false, buttonCommand?: Uint8Array, defaultSelectedButtonId?: number, defaultActivatedButtonId?: number): Uint8Array {
   const effectWindow = concat(Uint8Array.of(3), u16(10), u16(20), u16(30), u16(40));
   const effectObject = concat(u16(5), Uint8Array.of(3, 0x80), u16(1), u16(2), u16(3), u16(4), u16(5), u16(6));
   const enter = effects ? (richEffects ? concat(Uint8Array.of(1), effectWindow, Uint8Array.of(1), Uint8Array.of(0, 0, 1, 1, 1), effectObject) : Uint8Array.of(0, 1, 0, 0, 1, 0, 0)) : Uint8Array.of(0, 0);
@@ -60,7 +60,7 @@ function makePage(effects: boolean, pageId: number, missingObject = false, inval
   const command = buttonCommand ?? Uint8Array.from({ length: 12 }, (_, i) => i + 1);
   const objectId = missingObject ? 9 : 5;
   const button = concat(u16(1), u16(0), Uint8Array.of(invalidReferences ? 0x80 : 0), u16(0), u16(0), u16(invalidReferences ? 2 : 0xffff), u16(0xffff), u16(0xffff), u16(0xffff), u16(objectId), u16(objectId), Uint8Array.of(animated ? 0x80 : 0), Uint8Array.of(6), u16(objectId), u16(objectId), Uint8Array.of(animated ? 0x80 : 0), Uint8Array.of(9), u16(objectId), u16(objectId), u16(1), command);
-  return concat(Uint8Array.of(pageId, 0), new Uint8Array(8), enter, exit, Uint8Array.of(1), u16(invalidReferences ? 2 : 1), u16(0xffff), Uint8Array.of(0, 1), u16(invalidReferences ? 2 : 1), Uint8Array.of(1), button);
+  return concat(Uint8Array.of(pageId, 0), new Uint8Array(8), enter, exit, Uint8Array.of(1), u16(defaultSelectedButtonId ?? (invalidReferences ? 2 : 1)), u16(defaultActivatedButtonId ?? 0xffff), Uint8Array.of(0, 1), u16(invalidReferences ? 2 : 1), Uint8Array.of(1), button);
 }
 
 function segment(type: number, body: Uint8Array): Uint8Array { return concat(Uint8Array.of(type, body.length >> 8, body.length & 255), body); }

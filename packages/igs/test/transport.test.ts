@@ -50,6 +50,15 @@ describe("M2TS packet and PES reconstruction", () => {
     expect(reader.diagnostics.map((d) => d.code)).toContain("TS_CONTINUITY_ERROR");
   });
 
+  it("does not report continuity errors for null PID stuffing packets", () => {
+    const reader = new M2tsPacketReader("clip");
+    const frames = [0, 0, 7, 3].map((cc) => m2tsPacket(0x1fff, Uint8Array.of(cc), { cc }));
+    const packets = frames.flatMap((frame) => reader.feed(frame));
+    expect(packets).toHaveLength(4);
+    expect(packets.every((packet) => packet.pid === 0x1fff && !packet.continuityError)).toBe(true);
+    expect(reader.diagnostics).toEqual([]);
+  });
+
   it("parses PTS and extends a 33-bit wrap into the next epoch", () => {
     const nearWrap = (1n << 33n) - 5n;
     const assembler = new PesAssembler("clip");

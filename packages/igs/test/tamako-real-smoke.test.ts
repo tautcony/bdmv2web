@@ -6,7 +6,7 @@ import { parseBdmv } from "@bdmv-web/bdmv-parser";
 import { extractIgsScenes } from "../src/extract.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const bdmvRoot = resolve(repositoryRoot, "test-data/tamako-love-story-bd/BDMV");
+const bdmvRoot = resolve(repositoryRoot, "test-data/bdmv/tamako-love-story-bd/BDMV");
 const realSampleAvailable = await access(resolve(bdmvRoot, "STREAM/00005.m2ts")).then(() => true, () => false);
 
 describe.skipIf(!realSampleAvailable)("Tamako real-stream smoke (workspace-local sample)", () => {
@@ -26,7 +26,7 @@ describe.skipIf(!realSampleAvailable)("Tamako real-stream smoke (workspace-local
 
     const extraction = await extractIgsScenes(disc);
     const scene = extraction.scenes.find((item) => item.clipId === "00005" && item.pid === 0x1400);
-    expect(scene).toMatchObject({ width: 1920, height: 1080, complete: false });
+    expect(scene).toMatchObject({ width: 1920, height: 1080, complete: true });
     expect(scene?.pages).toHaveLength(7);
     expect(scene?.objects).toHaveLength(168);
     expect(scene?.palettes).toHaveLength(7);
@@ -34,7 +34,10 @@ describe.skipIf(!realSampleAvailable)("Tamako real-stream smoke (workspace-local
     expect(extraction.status).toBe("partial");
     expect(extraction.support.status).toBe("unverified");
     expect(extraction.diagnostics.filter((item) => item.code === "IGS_INVALID_BUTTON_REFERENCE" && item.source?.clipId === "00005"))
-      .toHaveLength(2);
+      .toEqual([]);
+    expect(scene?.pages.filter((page) => page.id === 2 || page.id === 3).map((page) => ({
+      selected: page.defaultSelectedButtonId, activated: page.defaultActivatedButtonId,
+    }))).toEqual([{ selected: 0xffff, activated: 0xfffe }, { selected: 0xffff, activated: 0xfffe }]);
     expect(extraction.diagnostics.some((item) => item.code === "BDMV_MISSING_STREAM" && item.message.includes("Clip 00043"))).toBe(true);
   });
 });

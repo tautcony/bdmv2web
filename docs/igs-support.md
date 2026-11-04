@@ -15,7 +15,7 @@ M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can
 
 The synthetic fixture IDs are the Vitest cases in `packages/igs/test/transport.test.ts` and `packages/igs/test/extraction.test.ts`; all expected bytes are authored in `packages/igs/test/fixtures.ts`. They test parser mechanics only.
 
-The repository also includes one externally sourced 6,129-byte real ICS body in `test-data/real-igs/ics-menu-disc14.bin`, with its source and MIT notice alongside it. Its test parses one 1920×1080 composition with four pages and raw button commands. The test supplies a minimal segment wrapper and END marker; the sample does not include transport packets, palettes, object bitmaps, or decoded PNG output. It gives a real IGS-structure positive case, not an end-to-end disc or rendering validation.
+The repository also includes one externally sourced 6,129-byte ICS body in `test-data/fixtures/igs-parser/ics-menu-disc14.bin`, with its source and MIT notice alongside it. Its test wraps the body in a minimal segment and END marker, then parses a 1920×1080 composition with four pages and raw button commands. This is a real IGS-structure positive case, not an end-to-end disc or rendering validation.
 
 ## Host-local real-stream smoke
 

@@ -118,9 +118,24 @@ describe("synthetic IGS extraction", () => {
       { autoAction: false, position: [0, 0], neighbors: { up: 0xffff, down: 0xffff, left: 0xffff, right: 0xffff }, visuals: [5, 5, 5] },
     ]);
     const invalidReferences = result.diagnostics.filter((item) => item.code === "IGS_INVALID_BUTTON_REFERENCE");
-    expect(invalidReferences.map((item) => item.details?.referenceKind)).toEqual(["page-default", "bog-0-default", "neighbor-up"]);
+    expect(invalidReferences.map((item) => item.details?.referenceKind)).toEqual(["page-default-selected", "bog-0-default", "neighbor-up"]);
     expect(invalidReferences.every((item) => item.affectedSceneIds.includes(scene.id))).toBe(true);
     expect(scene.complete).toBe(false);
+  });
+
+  it("validates page selection and activation sentinels in their distinct scopes", async () => {
+    const extract = async (defaultSelectedButtonId: number, defaultActivatedButtonId: number) => {
+      const result = await extractIgsFromChunks("00001", chunks(syntheticClip({ defaultSelectedButtonId, defaultActivatedButtonId }), 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+      return result.diagnostics.filter((item) => item.code === "IGS_INVALID_BUTTON_REFERENCE").map((item) => item.details);
+    };
+
+    // FFFE only has special meaning for default activation: use the current focus.
+    expect(await extract(1, 0xfffe)).toEqual([]);
+    // FFFF means dynamic selection / no activation, while selected FFFE is not a sentinel.
+    expect(await extract(0xffff, 0xffff)).toEqual([]);
+    expect(await extract(0xfffe, 0xfffe)).toEqual([expect.objectContaining({ referencedButtonId: 0xfffe, referenceKind: "page-default-selected" })]);
+    // An explicit activation reference still has to name a button on the page.
+    expect(await extract(1, 2)).toEqual([expect.objectContaining({ referencedButtonId: 2, referenceKind: "page-default-activated" })]);
   });
 
   it("keeps unknown effect semantics unverified and marks the page incomplete", async () => {
