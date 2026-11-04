@@ -1,0 +1,26 @@
+packages/package-builder/src/index.test.ts
+  s_f1e09a61530d1a::t_b9118745873a1e 7,20-24
+packages/package-builder/src/index.ts
+  s_f1e09a61530d1a::t_524935e66652a1 115,137-138,199-200,202-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db27e0a164eb20f3abd4f0df0a7dc246b4a68040",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
