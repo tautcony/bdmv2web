@@ -1,0 +1,41 @@
+packages/hdmv/src/vm.ts
+  s_f1e09a61530d1a::t_fd5889fb987650 26-27,49,67,92-93,107,422-423,450,645
+  s_f1e09a61530d1a::t_ad2aa958a08e6b 275-277,443-445
+  s_f1e09a61530d1a::t_df1f58e4dd9079 264-268,279,286,455
+  s_f1e09a61530d1a::t_80b91bf26846f4 280,285,288,291,453-454,456-457
+  s_f1e09a61530d1a::t_0e11506c68c12f 431
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_f1e09a61530d1a::t_aa4b04398c6b10 17,38
+  s_f1e09a61530d1a::t_11451d9c82b5ec 39
+packages/hdmv/src/index.test.ts
+  s_f1e09a61530d1a::t_3806732f4dcc83 447
+  s_f1e09a61530d1a::t_4360d1fa32c5be 434-435
+  s_f1e09a61530d1a::t_faf6c2107b1869 449-450,452
+  s_f1e09a61530d1a::t_b9b63be8f4e418 445-446,448,451
+  s_f1e09a61530d1a::t_06f0a41c315af4 480-483
+  s_f1e09a61530d1a::t_bbd21545e8baf6 428-433,436,439-440,456-479,484-486
+  s_f1e09a61530d1a::t_01c990dd0dd341 487
+docs/hdmv-support.md
+  s_f1e09a61530d1a::t_aa4b04398c6b10 44,98,112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2bc184cf4229420918db6295a4e804e7d84c8d92",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
