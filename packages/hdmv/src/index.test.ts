@@ -436,6 +436,72 @@ describe("M3 HDMV fixtures", () => {
     const missingTable = new HdmvVm([{ id: 0, instructions: [callTitle] }]);
     expect(missingTable.runTurn().diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
   });
+  it("uses the selected IG button PSR when a button computes a title target", () => {
+    const source = m3Fixtures.move5.source;
+    const jumpViaSelectedButton = [
+      rawCommand(0x50000001, 12, 0x8000000a), // MOVE GPR12, PSR10
+      rawCommand(0x50400003, 12, 2), // ADD GPR12, #2
+      rawCommand(0x21010000, 12), // JUMP_TITLE GPR12
+      m3Fixtures.break,
+    ];
+    const entries = [
+      { id: "firstPlay:0", kind: "firstPlay" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source }, source },
+      { id: "topMenu:0", kind: "topMenu" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source }, source },
+      ...[1, 2].map((target, index) => ({ id: `title:${index}`, kind: "title" as const, target: { objectType: "HDMV" as const, playbackType: 0, target, accessType: 0, source }, source })),
+    ];
+    const uninitialized = new HdmvVm([{ id: 0, instructions: jumpViaSelectedButton }], { entries });
+    expect(uninitialized.runTurn()).toMatchObject({
+      status: "faulted",
+      diagnostic: { code: "HDMV_INVALID_TARGET", message: "Title target 65537 is not present in the supplied ParsedDisc entries" },
+    });
+
+    const vm = new HdmvVm([{ id: 0, instructions: jumpViaSelectedButton }], { entries });
+    vm.applyMenuContext(5, 0);
+    expect(vm.snapshot().registers.psr[10]).toBe(0);
+    expect(vm.snapshot().registers.psr[11]).toBe(5);
+    expect(vm.runTurn().status).toBe("stopped");
+    expect(vm.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 2 } });
+    expect(vm.trace.find((entry) => entry.decoded === "MENU_CONTEXT page=5 button=0")?.registerDelta.psr).toEqual({ 10: 0, 11: 5 });
+  });
+  it("passes the selected chapter button through GPR4095 to PLAY_PL_PM", () => {
+    const source = m3Fixtures.move5.source;
+    const entries = [
+      { id: "firstPlay:0", kind: "firstPlay" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source }, source },
+      { id: "topMenu:0", kind: "topMenu" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source }, source },
+      { id: "title:0", kind: "title" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 2, accessType: 0, source }, source },
+    ];
+    for (const buttonId of [0, 3, 7]) {
+      const vm = new HdmvVm([
+        { id: 0, instructions: [] },
+        { id: 1, instructions: [m3Fixtures.break] },
+        { id: 2, instructions: [rawCommand(0x42820000, 0, 0x00000fff)] },
+      ], { entries });
+      vm.applyMenuContext(4, buttonId);
+      const button = vm.executeButtonProgram([
+        rawCommand(0x50000001, 12, 0x8000000a), // MOVE GPR12, PSR10
+        rawCommand(0x50000001, 0x00000fff, 12), // MOVE GPR4095, GPR12
+        rawCommand(0x21810000, 1), // JUMP_TITLE #1
+      ], "ig-button");
+      expect(button.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
+      const selectedTitle = vm.selectTitle(1);
+      expect(selectedTitle.status).toBe("suspended");
+      expect(vm.actions.at(-1)).toMatchObject({ type: "PLAY_PLAYLIST_MARK", payload: { playlist: 0, playMark: buttonId } });
+      expect(vm.snapshot().registers.gpr[4095]).toBe(buttonId);
+    }
+
+    const uninitialized = new HdmvVm([
+      { id: 0, instructions: [] },
+      { id: 1, instructions: [m3Fixtures.break] },
+      { id: 2, instructions: [rawCommand(0x42820000, 0, 0x00000fff)] },
+    ], { entries });
+    uninitialized.executeButtonProgram([
+      rawCommand(0x50000001, 12, 0x8000000a),
+      rawCommand(0x50000001, 0x00000fff, 12),
+      rawCommand(0x21810000, 1),
+    ], "ig-button");
+    uninitialized.selectTitle(1);
+    expect(uninitialized.actions.at(-1)).toMatchObject({ type: "PLAY_PLAYLIST_MARK", payload: { playlist: 0, playMark: 0xffff } });
+  });
   it("allows a jump to an existing empty object and ignores Link commands in MovieObjects", () => {
     const emptyTarget = new HdmvVm([{ id: 0, instructions: [m3Fixtures.jumpObject1] }, { id: 1, instructions: [] }]);
     expect(emptyTarget.runTurn()).toMatchObject({ programId: 1, pc: 0, status: "idle" });

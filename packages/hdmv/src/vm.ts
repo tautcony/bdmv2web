@@ -68,6 +68,20 @@ export class HdmvVm {
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
+  /** Synchronize the active interactive-graphics page and focus into PSR11/PSR10. */
+  applyMenuContext(pageId: number, selectedButtonId: number | null): void {
+    if (!Number.isInteger(pageId) || pageId < 0 || pageId > 0xff) throw new RangeError("Menu page ID must be an 8-bit unsigned integer");
+    if (selectedButtonId !== null && (!Number.isInteger(selectedButtonId) || selectedButtonId < 0 || selectedButtonId > 0xffff)) {
+      throw new RangeError("Selected button ID must be a 16-bit unsigned integer or null");
+    }
+    const before = this.registers.snapshot();
+    this.registers.systemWrite(10, selectedButtonId ?? 0xffff);
+    this.registers.systemWrite(11, pageId);
+    this.record({
+      source: null, raw: null, decoded: `MENU_CONTEXT page=${pageId} button=${selectedButtonId ?? "none"}`,
+      registerDelta: delta(before, this.registers.snapshot()), status: this.status,
+    });
+  }
   /** Capture the live menu context before a user action can transfer control to a feature. */
   beginMenuAction(): void {
     if (this.status === "faulted" || this.status === "stopped") return;
