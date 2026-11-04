@@ -1,0 +1,37 @@
+packages/test-runner/src/release-summary.test.ts
+  s_f6582cfb1466be::t_da3b34b97068b7 72,79-80
+packages/test-runner/src/browser-evidence.ts
+  s_f6582cfb1466be::t_8b99907f009d2e 21
+  s_f6582cfb1466be::t_7b757c9423f66e 42,71,73-74,77,126,134,138
+packages/test-runner/src/release-summary.ts
+  s_f6582cfb1466be::t_3de67036cad745 67
+packages/test-runner/src/browser-evidence.test.ts
+  s_f6582cfb1466be::t_7b757c9423f66e 88,92
+packages/test-runner/src/package-audit.ts
+  s_f6582cfb1466be::t_3de67036cad745 1,323,337
+  s_f6582cfb1466be::t_8b99907f009d2e 33-34,37
+packages/test-runner/src/index.test.ts
+  s_f6582cfb1466be::t_8b99907f009d2e 116,133,138
+  s_f6582cfb1466be::t_da3b34b97068b7 59,67-68,111-115,117-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2346b7245cae674d71f5879de36f0ace47e16b23",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f6582cfb1466be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a441-35af-7062-8440-d647469f4acb",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
