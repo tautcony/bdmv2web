@@ -1,0 +1,37 @@
+packages/hdmv/src/fixtures/libbluray-1.5.0-source-derived-reference-golden.json
+  s_f1e09a61530d1a::t_c7eb8bbb734528 44,104
+  s_f1e09a61530d1a::t_054baf96477e6b 1-43,45-55,60-67,71,73-103,105-110,113-116
+  s_f1e09a61530d1a::t_dc671fc84c5d65 111-112
+  s_f1e09a61530d1a::t_7aba4b7e72f891 56-59,68-70,72
+docs/hdmv-support.md
+  s_f1e09a61530d1a::t_d02db7c6b3d35c 122
+packages/hdmv/src/reference-golden.test.ts
+  s_f1e09a61530d1a::t_fb49afb3d91aaf 70,76
+  s_f1e09a61530d1a::t_d7b15428b66ec7 26-28
+  s_f1e09a61530d1a::t_dc671fc84c5d65 16,71,77
+  s_f1e09a61530d1a::t_de7e938ff9ea15 18
+  s_f1e09a61530d1a::t_96fb8b0855e6e2 1-15,17,19-25,29-69,72-75,78-84
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_f1e09a61530d1a::t_d02db7c6b3d35c 31,36,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5809d0eb1734a83b08a6cad6a3d9d72207fefcd6",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
