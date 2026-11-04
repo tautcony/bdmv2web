@@ -1,0 +1,34 @@
+packages/hdmv/src/registers.ts
+  s_f1e09a61530d1a::t_c2f9353a9da8de 42-44
+  s_f1e09a61530d1a::t_4ebabd1af3bb1b 45-49,89
+packages/hdmv/src/index.test.ts
+  s_f1e09a61530d1a::t_5b57b76b8f5041 691-692,704,709-710,766,774,784,789
+  s_f1e09a61530d1a::t_2c02278a2beeb1 779-783,785-788,790-791
+  s_f1e09a61530d1a::t_a758f1bc143850 683-690,693,696,699-703,705-708
+  s_f1e09a61530d1a::t_b327fe59ab09f7 792
+docs/hdmv-support.md
+  s_f1e09a61530d1a::t_38d0958f1480a4 112
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_f1e09a61530d1a::t_38d0958f1480a4 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3c422ee14d3c86de29fb98ba41719759669a0e6f",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
