@@ -1,0 +1,116 @@
+{
+  "id": "libbluray-1.5.0-source-derived-reference-golden",
+  "kind": "source-derived reference golden",
+  "reference": {
+    "project": "VideoLAN libbluray",
+    "version": "1.5.0",
+    "commit": "d75c88e54c893e5cbf4c61d356477655eb435769",
+    "license": "LGPL-2.1",
+    "execution": "Expected checkpoints are derived from the pinned source functions below; this artifact was not produced by running libbluray."
+  },
+  "sources": [
+    {
+      "file": "src/libbluray/hdmv/hdmv_vm.c",
+      "lines": "1128-1143",
+      "symbols": ["INSN_GROUP_CMP"],
+      "derivation": "Compare increments the PC once more when its predicate requires skipping the next command."
+    },
+    {
+      "file": "src/libbluray/hdmv/hdmv_vm.c",
+      "lines": "472-548",
+      "symbols": ["_suspend_object", "_resume_object"],
+      "derivation": "Call saves the current object and next PC in the single suspended slot; Resume restores that object at saved PC + 1 and restores PSRs when requested."
+    },
+    {
+      "file": "src/libbluray/register.c",
+      "lines": "276-301,314-358",
+      "symbols": ["bd_psr_save_state", "bd_psr_restore_state"],
+      "derivation": "PSR4-8 and PSR10-12 are copied to PSR36-40 and PSR42-44; restore copies those ranges back and resets backup PSRs."
+    },
+    {
+      "file": "src/libbluray/hdmv/hdmv_vm.c",
+      "lines": "440-469,645-667",
+      "symbols": ["_suspend_for_play_pl", "_resume_from_play_pl", "_play_at"],
+      "derivation": "PLAY_PL emits a playlist event and saves the current object/PC; playlist completion resumes at saved PC + 1."
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "compare-eq-taken-and-not-taken",
+      "programs": [
+        {
+          "id": 0,
+          "instructions": [
+            "484002000000000000000007",
+            "504000010000000100000063",
+            "504000010000000200000002",
+            "000200000000000000000000"
+          ]
+        }
+      ],
+      "runs": [
+        {
+          "id": "equal",
+          "initialGpr": { "0": 7 },
+          "expectedTrace": [
+            { "programId": 0, "pc": 0, "decoded": "EQ gpr[0],#7", "status": "running" },
+            { "programId": 0, "pc": 1, "decoded": "MOVE gpr[1],#99", "status": "running" },
+            { "programId": 0, "pc": 2, "decoded": "MOVE gpr[2],#2", "status": "running" },
+            { "programId": 0, "pc": 3, "decoded": "BREAK", "status": "stopped" }
+          ],
+          "expectedGpr": { "0": 7, "1": 99, "2": 2 },
+          "expectedStatus": "stopped"
+        },
+        {
+          "id": "not-equal",
+          "initialGpr": { "0": 6 },
+          "expectedTrace": [
+            { "programId": 0, "pc": 0, "decoded": "EQ gpr[0],#7", "status": "running" },
+            { "programId": 0, "pc": 2, "decoded": "MOVE gpr[2],#2", "status": "running" },
+            { "programId": 0, "pc": 3, "decoded": "BREAK", "status": "stopped" }
+          ],
+          "expectedGpr": { "0": 6, "1": 0, "2": 2 },
+          "expectedStatus": "stopped"
+        }
+      ]
+    },
+    {
+      "id": "call-resume-restores-registers-and-next-pc",
+      "programs": [
+        { "id": 0, "instructions": ["218200000000000100000000", "504000030000000000000007", "000200000000000000000000"] },
+        { "id": 1, "instructions": ["504000030000000000000003", "010400000000000000000000"] }
+      ],
+      "initialPsr": { "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11, "12": 12 },
+      "expectedTrace": [
+        { "programId": 0, "pc": 0, "decoded": "CALL_OBJECT #1", "callStack": [{ "programId": 0, "pc": 1 }] },
+        { "programId": 1, "pc": 0, "decoded": "ADD gpr[0],#3" },
+        { "programId": 1, "pc": 1, "decoded": "RESUME", "callStack": [] },
+        { "programId": 0, "pc": 1, "decoded": "ADD gpr[0],#7" },
+        { "programId": 0, "pc": 2, "decoded": "BREAK", "status": "stopped" }
+      ],
+      "expectedPsr": { "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11, "12": 12, "36": 65535, "37": 65535, "38": 0, "39": 0, "40": 0, "42": 65535, "43": 0, "44": 255 },
+      "expectedGpr": { "0": 10 },
+      "expectedStatus": "stopped"
+    },
+    {
+      "id": "playlist-completion-restores-next-command",
+      "programs": [
+        { "id": 0, "instructions": ["228000000000002a00000000", "504000030000000000000001", "000200000000000000000000"] }
+      ],
+      "expectedBeforeCompletion": {
+        "programId": 0,
+        "pc": 1,
+        "status": "suspended",
+        "waiting": { "type": "PLAY_PLAYLIST", "payload": { "playlist": 42 }, "waitFor": "ended" }
+      },
+      "startedRemainsSuspended": true,
+      "expectedAfterCompletion": {
+        "programId": 0,
+        "pc": 3,
+        "status": "stopped",
+        "registers": { "gpr": { "0": 1 } },
+        "waiting": null
+      }
+    }
+  ]
+}

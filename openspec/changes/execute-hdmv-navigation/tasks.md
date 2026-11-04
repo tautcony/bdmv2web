@@ -28,12 +28,12 @@
 ## 4. Trace与交接
 
 - [x] 4.1 实现状态快照、寄存器delta、Action/Event与源指令trace；验收：相同profile/seed/输入语义结果一致。
-- [ ] 4.2 建立独立参考golden的Compare/Call/Resume/媒体恢复路径；验收：首分歧可定位，提交支持编码分母和未验证项。
+- [x] 4.2 建立独立参考golden的Compare/Call/Resume/媒体恢复路径；验收：首分歧可定位，提交支持编码分母和未验证项。
 - [x] 4.3 以模拟桥向M4交付执行器、向M5交付图；验收：无DOM/视频依赖，按钮原始序列与对象同一执行器。
 - [x] 4.4 建立HDMV多案例执行路径DFS覆盖；验收：从ParsedDisc entries实际运行HdmvVm，循环状态去重并受探索预算限制；所有已访问静态边均归类为实际执行、媒体不可用、unsupported或unresolved，报告覆盖/未解析边与预算状态；不能把BD-J、动态目标、缺少媒体或未执行条件分支算作完整覆盖，也不替代独立参考golden任务4.2。
 - [x] 4.5 提供离线MOBJ VM流程可视化器；验收：只读取BDMV结构并复用NavigationGraph，输出以 fenced `mermaid` block 包裹图表的 `.md`，呈现入口、MovieObject指令、条件/跳转/调用/返回上下文、媒体等待与unknown/unresolved目标；动态目标显式标unknown，静态潜在环路以红色class标注并列出涉及的MOBJ/PC，不要求M2TS。
 
-## Current evidence gaps
+## Evidence notes
 
 - 2.3 models `CALL_TITLE` as a suspended call plus external `TITLE_SEARCH`, and enters the resolved HDMV object only after title selection. It preserves and restores the caller, PSRs, and any IG playlist continuation. Wrong-title responses are ignored with a diagnostic; missing targets fault and BD-J remains unsupported.
-- 4.2 has deterministic semantic traces and supported/unknown instruction accounting. The source-derived reference golden is being prepared with expected-data provenance and lineage; synthetic fixtures are not treated as independent evidence.
+- 4.2 uses [`libbluray-1.5.0-source-derived-reference-golden.json`](../../../packages/hdmv/src/fixtures/libbluray-1.5.0-source-derived-reference-golden.json) with exact source locations and derivation for Compare, Call/Resume, and playlist completion checkpoints. The expected states are derived from pinned libbluray source and compared checkpoint by checkpoint; the artifact does not claim to be output from running libbluray. Actual libbluray runtime/player traces remain a separate evidence item.
