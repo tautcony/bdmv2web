@@ -1,0 +1,245 @@
+{
+  "case": "battle-royale-uhd",
+  "files": [
+    {
+      "path": "index.bdmv",
+      "bytes": 408
+    },
+    {
+      "path": "MovieObject.bdmv",
+      "bytes": 1502
+    },
+    {
+      "path": "PLAYLIST/00000.mpls",
+      "bytes": 574
+    },
+    {
+      "path": "PLAYLIST/00001.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00002.mpls",
+      "bytes": 330
+    },
+    {
+      "path": "PLAYLIST/00003.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00004.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00005.mpls",
+      "bytes": 232
+    },
+    {
+      "path": "PLAYLIST/00006.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00007.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00008.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00009.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00010.mpls",
+      "bytes": 372
+    },
+    {
+      "path": "PLAYLIST/00011.mpls",
+      "bytes": 232
+    },
+    {
+      "path": "PLAYLIST/00012.mpls",
+      "bytes": 330
+    },
+    {
+      "path": "PLAYLIST/00014.mpls",
+      "bytes": 330
+    },
+    {
+      "path": "PLAYLIST/00015.mpls",
+      "bytes": 330
+    },
+    {
+      "path": "PLAYLIST/00016.mpls",
+      "bytes": 330
+    },
+    {
+      "path": "PLAYLIST/00017.mpls",
+      "bytes": 428
+    },
+    {
+      "path": "PLAYLIST/00018.mpls",
+      "bytes": 232
+    },
+    {
+      "path": "PLAYLIST/00019.mpls",
+      "bytes": 232
+    },
+    {
+      "path": "PLAYLIST/00021.mpls",
+      "bytes": 1128
+    },
+    {
+      "path": "PLAYLIST/01997.mpls",
+      "bytes": 26290
+    },
+    {
+      "path": "PLAYLIST/01999.mpls",
+      "bytes": 202
+    },
+    {
+      "path": "CLIPINF/00000.clpi",
+      "bytes": 516
+    },
+    {
+      "path": "CLIPINF/00001.clpi",
+      "bytes": 848
+    },
+    {
+      "path": "CLIPINF/00002.clpi",
+      "bytes": 292
+    },
+    {
+      "path": "CLIPINF/00003.clpi",
+      "bytes": 488
+    },
+    {
+      "path": "CLIPINF/00004.clpi",
+      "bytes": 127128
+    },
+    {
+      "path": "CLIPINF/00005.clpi",
+      "bytes": 292
+    },
+    {
+      "path": "CLIPINF/00006.clpi",
+      "bytes": 3488
+    },
+    {
+      "path": "CLIPINF/00007.clpi",
+      "bytes": 4612
+    },
+    {
+      "path": "CLIPINF/00008.clpi",
+      "bytes": 2892
+    },
+    {
+      "path": "CLIPINF/00009.clpi",
+      "bytes": 3792
+    },
+    {
+      "path": "CLIPINF/00010.clpi",
+      "bytes": 2020
+    },
+    {
+      "path": "CLIPINF/00011.clpi",
+      "bytes": 4668
+    },
+    {
+      "path": "CLIPINF/00012.clpi",
+      "bytes": 2132
+    },
+    {
+      "path": "CLIPINF/00013.clpi",
+      "bytes": 5836
+    },
+    {
+      "path": "CLIPINF/00014.clpi",
+      "bytes": 1288
+    },
+    {
+      "path": "CLIPINF/00015.clpi",
+      "bytes": 1444
+    },
+    {
+      "path": "CLIPINF/00016.clpi",
+      "bytes": 1072
+    },
+    {
+      "path": "CLIPINF/00017.clpi",
+      "bytes": 576
+    },
+    {
+      "path": "CLIPINF/00019.clpi",
+      "bytes": 496
+    },
+    {
+      "path": "CLIPINF/00020.clpi",
+      "bytes": 472
+    },
+    {
+      "path": "CLIPINF/00021.clpi",
+      "bytes": 608
+    },
+    {
+      "path": "CLIPINF/00022.clpi",
+      "bytes": 776
+    },
+    {
+      "path": "CLIPINF/00023.clpi",
+      "bytes": 580
+    },
+    {
+      "path": "CLIPINF/00024.clpi",
+      "bytes": 564
+    },
+    {
+      "path": "CLIPINF/00025.clpi",
+      "bytes": 396
+    },
+    {
+      "path": "CLIPINF/00026.clpi",
+      "bytes": 1676
+    },
+    {
+      "path": "CLIPINF/00027.clpi",
+      "bytes": 1600
+    },
+    {
+      "path": "CLIPINF/00028.clpi",
+      "bytes": 1712
+    },
+    {
+      "path": "CLIPINF/00029.clpi",
+      "bytes": 1556
+    },
+    {
+      "path": "CLIPINF/00030.clpi",
+      "bytes": 1584
+    },
+    {
+      "path": "CLIPINF/00031.clpi",
+      "bytes": 1608
+    },
+    {
+      "path": "CLIPINF/00032.clpi",
+      "bytes": 1572
+    },
+    {
+      "path": "CLIPINF/00033.clpi",
+      "bytes": 1628
+    },
+    {
+      "path": "CLIPINF/00034.clpi",
+      "bytes": 2096
+    },
+    {
+      "path": "CLIPINF/00035.clpi",
+      "bytes": 372
+    }
+  ],
+  "totals": {
+    "files": 59,
+    "bytes": 218766
+  }
+}
