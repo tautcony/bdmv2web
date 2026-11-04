@@ -13,6 +13,7 @@ packages/test-runner/src/package-audit.ts
 packages/test-runner/src/index.test.ts
   s_f6582cfb1466be::t_8b99907f009d2e 92,120,125
   s_f6582cfb1466be::t_da3b34b97068b7 59,67-68,87-91,93-96
+  s_0889e0089d9030::t_fc215a4868a74b 98-99,101-107
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -25,6 +26,14 @@ packages/test-runner/src/index.test.ts
     }
   },
   "sessions": {
+    "s_0889e0089d9030": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a47d-7c4e-7463-815d-8500d13b2efb",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
     "s_f6582cfb1466be": {
       "agent_id": {
         "tool": "codex",
