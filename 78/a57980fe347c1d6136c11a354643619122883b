@@ -1,0 +1,45 @@
+packages/igs/test/m1-m2-m3.integration.test.ts
+  s_a1ac612903fe3c::t_33b9b04e1a547b 34
+packages/test-fixtures/src/bdmv.ts
+  s_a1ac612903fe3c::t_33b9b04e1a547b 25-26,39,121-131,142-154
+  s_a1ac612903fe3c::t_68dec3fed8c14d 27-28
+  s_a1ac612903fe3c::t_78a9c6f5dead5e 36-38
+  s_a1ac612903fe3c::t_0392f4643fefac 40-42
+  s_a1ac612903fe3c::t_2eeb1c1221ab0a 155-157
+packages/bdmv-parser/src/parser.ts
+  s_a1ac612903fe3c::t_9198d00d80236a 191,193,197-201,203,253,259-291,302,304,308-313,315
+packages/igs/test/extraction.test.ts
+  s_a1ac612903fe3c::t_d90568e5de8f3c 316,339,342,372,395
+docs/protocol-support.md
+  s_a1ac612903fe3c::t_4d4abe794d0dd6 27-28
+  s_a1ac612903fe3c::t_100ea5343ec38a 25-26
+  s_a1ac612903fe3c::t_3ac8db6f6d72b5 29
+packages/bdmv-parser/src/parser.test.ts
+  s_a1ac612903fe3c::t_33b9b04e1a547b 6
+packages/bdmv-parser/src/model.ts
+  s_a1ac612903fe3c::t_9198d00d80236a 17-28
+  s_a1ac612903fe3c::t_6e7065c1398203 29-30
+packages/media-export/src/closure.test.ts
+  s_a1ac612903fe3c::t_42e8037133d518 112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "78a57980fe347c1d6136c11a354643619122883b",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_a1ac612903fe3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a6cb-7ac2-70d0-b49b-759bf878c004",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
