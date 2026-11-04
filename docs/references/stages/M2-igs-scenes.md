@@ -11,6 +11,8 @@
 | `PNG-SPEC`, `ITU-BT709` | 2.3–2.4, 3.5 | [PNG 第三版](https://www.w3.org/TR/png-3/)提供图像编码、alpha 和色彩元数据依据；[BT.709-6 官方记录](https://www.itu.int/rec/R-REC-BT.709/en)用于核对适用的 HDTV 色彩参数。 | PNG 不定义 IGS 调色板转换；不能只凭画面分辨率默认采用某个矩阵。按源语义固定矩阵、范围、取整和透明度，再建立独立像素预期。 |
 | `BDedit` | 2.2–2.4, 3.5 | [BDedit 官方产品站](https://bdedit.pel.hu/) | 闭源专有 GUI，可作人工检查/提取；当前站点未找到可固定版本源码。工具导出可能出错，不能作为唯一预期或源码依据。 |
 
+字段逐项登记、解析表示和固定 libbluray revision 见 [IGS 字段与版本依据](M2-igs-field-register.md)。
+
 像素预期必须独立建立并记录 fixture ID、工具版本和色彩转换约定；不为外部原盘素材生成哈希。libbluray 与 igstools 的来源可能重合（后者 README 明确提及 libav patches），不能把两者导出简单计作两份独立验证。来源完整 URL 和 revision 见 [`sources.json`](../sources.json)。
 
 ## MenuScene 场景验收拆分
@@ -21,7 +23,7 @@
 
 - **Fixture / evidence / source:** `packages/igs/test/extraction.test.ts`，`synthetic IGS extraction > reassembles a complete menu scene with page, BOG, button, object, palette and PNG source mapping`；由 `packages/igs/test/fixtures.ts::syntheticClip()` 生成 TS/PES/ICS/PDS/ODS 输入。
 - **Expected:** 一个已闭合 Display Set；scene 有来源、PTS、分辨率、page 与资源引用；未通过真实参考验证时，颜色规则仍标未验证。
-- **Actual:** 测试断言一个完整的合成 scene（composition 7、PTS 90000、page 1、默认选择 button 1、palette 0、一个 1×1 object 5、一个 PNG asset）；来源指向 Clip `00001` / PID `0x120` / packet offset `384`。当时导出色彩规则为 `unverified-bt601-limited-round-nearest`，support 为 `unverified`。
+- **Actual:** 测试断言一个完整的合成 scene（composition 7、PTS 90000、page 1、默认选择 button 1、palette 0、一个 1×1 object 5、一个 PNG asset）；来源指向 Clip `00001` / PID `0x120` / packet offset `384`。项目当前使用 BT.709 limited-range round-nearest；多 fixture 比较在显式指定同一矩阵时结果相同，但这些对照没有独立判定各盘 IGS 源数据的矩阵；整体 IGS support 仍为 `unverified`。
 - **Result:** 合成结构与来源映射断言通过。没有真实菜单页的独立图像 golden，不能据此声称像素保真。
 
 ### M2-SYN-BUTTON-BOG-02 — 多页按钮与 BOG 作用域
@@ -35,8 +37,8 @@
 
 - **Fixture / evidence / source:** `packages/igs/test/extraction.test.ts` 两项：`keeps complete object versions attached to the Display Set and epoch that received them`；`maps one ODS through two palettes and preserves palette alpha in provisional PNG pixels`。
 - **Expected:** 不同版本不混拼；同一图像资源使用不同 palette 时，palette/version 映射可追踪，透明度按输入保留。
-- **Actual:** 第一项直接向状态机馈入合成 ICS/PDS/ODS，并用两个 time domain 断言 scene 分别绑定 object/palette version 0 和 1。第二项先解析合成 scene，再在内存中添加 page 2 和 palette 1；渲染得到 object 5/version 0 与 palette 0/1 的两个 asset，解码像素分别为 `[255,255,255,255]`、`[255,0,0,173]`。当时色彩转换标签为未验证的 provisional BT.601 limited/rne；现已调整为 BT.709，见下方逐元素对照记录。
-- **Result:** 版本隔离与两个 palette 输入的渲染行为通过合成断言。双 PDS 像素样本是程序构造且非独立 golden；测试没有证明真实 M2TS 中先后到达的两个 PDS 对应这些颜色。
+- **Actual:** 第一项直接向状态机馈入合成 ICS/PDS/ODS，并用两个 time domain 断言 scene 分别绑定 object/palette version 0 和 1。第二项验证同一 object 通过两个合成 palette 渲染且保留 alpha；真实 Battle Royale UHD Clip `00005` 另断言 object 13/version 0 映射到 palette 0–3，object 22、23、24、27、30/version 0 映射到 palette 1–3。
+- **Result:** 真实同 ODS 多 palette 资产映射、BT.709 limited 色彩向量和 alpha 通道都有逐像素断言；真实多 fixture 逐元素结果见下方独立对照记录。合成双 palette 用于隔离渲染行为，真实 fixture 用于验证实际资源映射。
 
 ### M2-SYN-TIME-EFFECT-04 — 动画字段、超时与效果
 
@@ -67,13 +69,13 @@
 - **参考工具：** `SAPikachu/igstools` 0.9.3，固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python 3.15.0、pypng 0.20220715.0、Pillow 13.0.0。工具解码器源自 libav patches，属于实现对照，不能等同规范。
 - **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
 - **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项结果见 [comparison.json](../../evidence/tamako-00005-igstools-comparison.json)。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
-- **更正：** 初次强制 BT.601 与旧实现完全一致只说明实现使用同一矩阵，不足以证明色彩正确。固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）；现在实现改为 BT.709，当前案例的转换及元素比对已确认可用；色彩规范正文未取得。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据，不把分辨率当作规范证明。
+- **更正：** 初次强制 BT.601 与旧实现完全一致只说明实现使用同一矩阵，不足以证明色彩正确。固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）；现在实现改为 BT.709，Tamako 元素与该显式矩阵下的参考结果一致。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据；因此这些结果验证的是对照矩阵下的实现一致性，不判定原盘实际矩阵。
 - **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/compare-igstools-reference.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。
 
 ## 2026-11-04 — 多 fixture 逐元素独立参考对照
 
 - **目的：** 把同类 IGS 工具作为独立的图像解码/调色板转换参考，对按钮 normal/selected/activated 状态引用的图像逐项核对，再逐像素比较导出的 PNG。比较键包含 page、object ID/version、palette ID/version；覆盖报告分别列出缺失和额外引用。每个图像逐 RGBA 通道比较，包括 alpha，不只比整页或按钮截图。
-- **参考实现与转换：** `SAPikachu/igstools` 固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python `3.15.0`、pypng `0.20220715.0`、Pillow `13.0.0`。参考解码显式使用 BT.709 limited range；工具的 16-bit RGBA 样本按 `(value + 128) // 257` 转为 8-bit 后，与项目对应 PNG 的 RGBA 像素做精确比较。输入由项目的提取器生成；工具页面组装不用于计算，参考图像由其 IGS segment、RLE、palette 解码路径和 `picture_to_png` 导出。
+- **参考实现与转换：** `SAPikachu/igstools` 固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python `3.15.0`、pypng `0.20220715.0`、Pillow `13.0.0`。参考解码显式配置 BT.709 limited range；工具的 16-bit RGBA 样本按 `(value + 128) // 257` 转为 8-bit 后，与项目对应 PNG 的 RGBA 像素做精确比较。输入由项目的提取器生成；工具页面组装不用于计算，参考图像由其 IGS segment、RLE、palette 解码路径和 `picture_to_png` 导出。此处是固定对照条件，不代表各 fixture 的原盘色彩矩阵已被独立确认。
 - **结果：** 9 个案例共 1,048 条按钮状态图像引用，覆盖 932 个唯一元素，共 46,815,935 像素。元素覆盖无缺失/额外项；对象版本及 palette 版本均在逐项报告中；所有 RGBA 像素完全一致，差异像素数为 0。样本无多帧对象范围，因此未产生动画帧对照。
 
 | Fixture | Clip | 按钮状态引用 | 唯一元素 | 像素 | 不同 RGBA 像素 |
@@ -89,4 +91,12 @@
 | tamako | `00043` | 168 | 168 | 14,922,045 | 0 |
 
 - **证据：** [总体汇总](../../evidence/igs-fixture-packet-comparison-summary.json)；[逐元素 JSON 报告目录](../../evidence/igs-fixture-packet-comparisons/)；执行脚本 [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 和导出脚本 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素 JSON 报告逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/test/fixtures.ts) 生成。
-- **适用范围：** 结果覆盖这 9 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段参考依据，以及 2.4 的独立色块/透明度向量和真实同 ODS 双 PDS 资产映射仍需补充；它们不影响上述已覆盖样本的逐元素比较结果。
+- **适用范围：** 结果覆盖这 9 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段依据见 [字段登记](M2-igs-field-register.md)；任务 2.4 的独立颜色向量和真实同 ODS 多 PDS 资产映射由 `packages/igs/test/extraction.test.ts` 与 `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` 断言。
+
+Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.709 limited range。该 packet fixture 只含 PAT、PMT 与 IGS PID 的筛选包，不含主视频码流；ICS 的 1920×1080 菜单分辨率也不能单独确定 PDS 的颜色矩阵。因此现有结果只能说明该 IGS 图像在 BT.709 对照条件下与参考输出一致，不能回答这张 UHD 盘的菜单源是否应按 BT.709 解码。
+
+## 2026-11-04 — IGS 字段登记与 BT.709 向量核验
+
+- **字段登记：** ICS、page、BOG、button、PDS、ODS 与 Display Set 的实现字段、版本键、libbluray 1.5.0 固定 revision 和本地样本见 [IGS 字段与版本依据](M2-igs-field-register.md)。解析器现保留此前被跳过的 ICS frame-rate code 和 button numeric-select value；外部真实 ICS 样本断言 frame-rate code 为 1、首按钮 numeric-select value 为 `65535`。
+- **独立颜色向量：** `packages/igs/test/extraction.test.ts` 对 6 个固定 YCbCrA 输入解码 PNG RGBA 全像素并与静态预期比较。输入和结果为：`(Y,Cb,Cr,A)=(16,128,128,0) → (0,0,0,0)`；`(235,128,128,1) → (255,255,255,1)`；`(126,128,128,127) → (128,128,128,127)`；`(81,90,240,128) → (255,24,0,128)`；`(145,54,34,254) → (0,216,0,254)`；`(41,240,110,255) → (0,15,255,255)`。覆盖黑白/中性灰、色彩分量、舍入、裁剪和 alpha 直通。
+- **真实多 palette 映射：** Battle Royale UHD Clip `00005` 的 packet fixture 断言 object 13/version 0 各自生成 palette 0、1、2、3 的资产；object 22、23、24、27、30/version 0 各自生成 palette 1、2、3 的资产。还断言 PDS 0/version 0 entry 0 值和 ODS 27/version 0 的尺寸及 RLE 索引样本。对应全部真实元素的同类工具像素比较在前节报告中为零差异。

@@ -59,6 +59,7 @@ export interface IgsPalette {
 
 export interface IgsButton {
   id: number;
+  numericSelectValue: number;
   scopeId?: string;
   x: number;
   y: number;
@@ -94,6 +95,7 @@ export interface IgsScene {
   compositionState: number;
   width: number;
   height: number;
+  frameRateCode: number;
   timeDomain: number;
   pts90k: string | null;
   streamModel: number;

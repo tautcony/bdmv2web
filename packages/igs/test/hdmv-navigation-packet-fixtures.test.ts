@@ -59,5 +59,20 @@ describe("real-disc IGS packet fixtures", () => {
     expect(result.scenes[0]?.objects).toHaveLength(objects);
     expect(result.scenes[0]?.palettes).toHaveLength(palettes);
     expect(result.assets).toHaveLength(assets);
+
+    if (caseId === "battle-royale-uhd" && clipId === "00005") {
+      const scene = result.scenes[0]!;
+      const palette0Entry0 = scene.palettes.find((palette) => palette.id === 0)?.entries.get(0);
+      expect(palette0Entry0).toEqual({ y: 16, cr: 128, cb: 128, alpha: 153 });
+      expect(scene.objects.find((object) => object.id === 27 && object.version === 0)).toMatchObject({ width: 35, height: 9 });
+      expect([...scene.objects.find((object) => object.id === 27)!.indices.slice(0, 10)]).toEqual(Array(10).fill(2));
+
+      const palettesFor = (objectId: number) => result.assets
+        .filter((asset) => asset.objectId === objectId && asset.objectVersion === 0)
+        .map((asset) => [asset.paletteId, asset.paletteVersion])
+        .sort(([a], [b]) => a! - b!);
+      expect(palettesFor(13)).toEqual([[0, 0], [1, 0], [2, 0], [3, 0]]);
+      for (const objectId of [22, 23, 24, 27, 30]) expect(palettesFor(objectId)).toEqual([[1, 0], [2, 0], [3, 0]]);
+    }
   });
 });

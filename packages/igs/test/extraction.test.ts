@@ -87,6 +87,33 @@ describe("synthetic IGS extraction", () => {
     expect(rendered.assets.map(decodePngRgbaPixel)).toEqual([[255, 255, 255, 255], [255, 11, 0, 173]]);
   });
 
+  it("matches fixed BT.709 limited-range YCbCrA vectors pixel by pixel", async () => {
+    const result = await extractIgsFromChunks("00001", chunks(syntheticClip(), 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    const scene = result.scenes[0]!;
+    const object = scene.objects[0]!;
+    object.width = 6;
+    object.indices = Uint8Array.from([0, 1, 2, 3, 4, 5]);
+    scene.palettes[0]!.entries = new Map([
+      [0, { y: 16, cr: 128, cb: 128, alpha: 0 }],
+      [1, { y: 235, cr: 128, cb: 128, alpha: 1 }],
+      [2, { y: 126, cr: 128, cb: 128, alpha: 127 }],
+      [3, { y: 81, cr: 240, cb: 90, alpha: 128 }],
+      [4, { y: 145, cr: 34, cb: 54, alpha: 254 }],
+      [5, { y: 41, cr: 110, cb: 240, alpha: 255 }],
+    ]);
+
+    const rendered = renderSceneAssets(scene);
+    expect(rendered.assets).toHaveLength(1);
+    expect(decodePngRgbaPixels(rendered.assets[0]!)).toEqual([
+      [0, 0, 0, 0],
+      [255, 255, 255, 1],
+      [128, 128, 128, 127],
+      [255, 24, 0, 128],
+      [0, 216, 0, 254],
+      [0, 15, 255, 255],
+    ]);
+  });
+
   it("preserves page-scoped button IDs and defaults, and diagnoses invalid explicit references", async () => {
     const segments = syntheticMenuSegments({ twoPages: true, invalidReferences: true });
     const splitAt = 160;
@@ -402,9 +429,15 @@ function concat(...parts: Uint8Array[]): Uint8Array {
 }
 
 function decodePngRgbaPixel(asset: { pngBytes: Uint8Array }): number[] {
+  return decodePngRgbaPixels(asset)[0]!;
+}
+
+function decodePngRgbaPixels(asset: { pngBytes: Uint8Array }): number[][] {
   const png = asset.pngBytes;
   const idatLength = (png[33]! * 0x1000000) + (png[34]! << 16) + (png[35]! << 8) + png[36]!;
   const scanline = inflateSync(png.slice(41, 41 + idatLength));
   if (scanline[0] !== 0) throw new Error(`Unsupported PNG filter ${scanline[0]}`);
-  return [...scanline.slice(1, 5)];
+  const pixels: number[][] = [];
+  for (let offset = 1; offset < scanline.length; offset += 4) pixels.push([...scanline.slice(offset, offset + 4)]);
+  return pixels;
 }

@@ -19,11 +19,12 @@ describe("real IGS composition sample", () => {
     expect(state.diagnostics).toEqual([]);
     expect(state.scenes).toHaveLength(1);
     const scene = state.scenes[0]!;
-    expect(scene).toMatchObject({ width: 1920, height: 1080 });
+    expect(scene).toMatchObject({ width: 1920, height: 1080, frameRateCode: 1 });
     expect(scene.pages).toHaveLength(4);
     expect(scene.pages.every((page) => page.buttons.length > 0)).toBe(true);
     const buttons = scene.pages.flatMap((page) => page.buttons);
     expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons[0]?.numericSelectValue).toBe(0xffff);
     const commands = buttons.flatMap((button) => button.commands);
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.every((command) => command.bytes.byteLength === 12)).toBe(true);

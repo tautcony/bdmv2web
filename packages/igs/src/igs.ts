@@ -209,7 +209,7 @@ function parsePalette(data: Uint8Array, src: IgsPalette["source"]): IgsPalette {
 
 function parseIcs(data: Uint8Array, limits: Limits): IgsScene {
   const r = new BitReader(data);
-  const width = r.u16(), height = r.u16(); r.u8();
+  const width = r.u16(), height = r.u16(); const frameRateCode = r.u8() >>> 4;
   const compositionNumber = r.u16(); const compositionState = r.bits(2); r.bits(6); const sequenceFlags = r.u8();
   if (!(sequenceFlags & 0x80) || !(sequenceFlags & 0x40)) throw new IgsError("IGS_INVALID_SEGMENT", "ICS sequence must be complete before decoding");
   const dataLength = r.u24();
@@ -224,7 +224,7 @@ function parseIcs(data: Uint8Array, limits: Limits): IgsScene {
   const pages: IgsPage[] = [];
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) pages.push(parsePage(r));
   if (r.remaining !== 0) throw new IgsError("IGS_INVALID_SEGMENT", `ICS has ${r.remaining} unparsed bytes`);
-  return { id: "", clipId: "", pid: 0, compositionNumber, compositionState, width, height, timeDomain: 0, pts90k: null, streamModel, uiModel, compositionTimeout90k, selectionTimeout90k, userTimeoutDuration, rawIcs: data.slice(), pages, objects: [], palettes: [], complete: false, source: source("", 0, 0n) };
+  return { id: "", clipId: "", pid: 0, compositionNumber, compositionState, width, height, frameRateCode, timeDomain: 0, pts90k: null, streamModel, uiModel, compositionTimeout90k, selectionTimeout90k, userTimeoutDuration, rawIcs: data.slice(), pages, objects: [], palettes: [], complete: false, source: source("", 0, 0n) };
 }
 
 function parsePage(r: BitReader): IgsPage {
@@ -237,7 +237,7 @@ function parsePage(r: BitReader): IgsPage {
     const defaultButtonId = r.u16(); const count = r.u8(); const buttonIds: number[] = [];
     for (let j = 0; j < count; j++) {
       const buttonStart = r.position;
-      const buttonId = r.u16(); r.u16(); const flags = r.u8(); const x = r.u16(), y = r.u16();
+      const buttonId = r.u16(); const numericSelectValue = r.u16(); const flags = r.u8(); const x = r.u16(), y = r.u16();
       const up = r.u16(), down = r.u16(), left = r.u16(), right = r.u16();
       const normalStart = r.u16(), normalEnd = r.u16(), normalFlags = r.u8();
       const selectedSoundId = r.u8(), selectedStart = r.u16(), selectedEnd = r.u16(), selectedFlags = r.u8();
@@ -246,7 +246,7 @@ function parsePage(r: BitReader): IgsPage {
       for (let commandIndex = 0; commandIndex < commandCount; commandIndex++) {
         const sourceOffset = r.position; commands.push({ bytes: r.bytes(12), recordIndex: commandIndex, sourceOffset: String(sourceOffset) });
       }
-      buttons.push({ id: buttonId, x, y, autoAction: !!(flags & 0x80), neighbors: { up, down, left, right }, visuals: { normal: { startObjectId: normalStart, endObjectId: normalEnd, repeat: !!(normalFlags & 0x80) }, selected: { startObjectId: selectedStart, endObjectId: selectedEnd, repeat: !!(selectedFlags & 0x80), soundId: selectedSoundId }, activated: { startObjectId: activatedStart, endObjectId: activatedEnd, soundId: activatedSoundId } }, commands });
+      buttons.push({ id: buttonId, numericSelectValue, x, y, autoAction: !!(flags & 0x80), neighbors: { up, down, left, right }, visuals: { normal: { startObjectId: normalStart, endObjectId: normalEnd, repeat: !!(normalFlags & 0x80) }, selected: { startObjectId: selectedStart, endObjectId: selectedEnd, repeat: !!(selectedFlags & 0x80), soundId: selectedSoundId }, activated: { startObjectId: activatedStart, endObjectId: activatedEnd, soundId: activatedSoundId } }, commands });
       buttonIds.push(buttonId);
       void buttonStart;
     }

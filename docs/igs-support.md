@@ -1,6 +1,6 @@
 # M2 IGS extraction support boundary
 
-This package implements IGS extraction with a workspace-local Tamako real-stream case. Its BT.709 limited-range color conversion and the 168 referenced image elements in this sample have been checked against igstools pixel by pixel. Overall IGS support remains unverified for behaviors outside this comparison, including effects and animation.
+This package implements IGS extraction with workspace-local real-stream cases. Its BT.709 limited-range conversion has fixed YCbCrA vector coverage; image elements in nine packet fixtures match igstools when that reference is explicitly configured for BT.709. The packet fixtures do not independently establish the source matrix for each disc. ICS, page, BOG, button, PDS, ODS, and Display Set field mappings are registered against a pinned libbluray revision and exercised with byte samples. Overall IGS support remains unverified for behaviors outside these comparisons, including effects and animation.
 
 M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can key paths relative to the BDMV root (`STREAM/...`) or include the `BDMV/` prefix. Extraction resolves between those names only through paths already present in the validated table.
 
@@ -25,12 +25,13 @@ Clip `00004` declares PGS (`0x90`) subtitle streams; that is not an IGS cue. The
 
 ## Unverified behavior
 
-- IGS field layouts and flags are implemented against the pinned `libbluray` source and cross-checked only within documented scope. BDA historical public whitepapers provide architecture context, not detailed IGS field semantics. The pinned `libbluray`, `igstools`, and `libhdmv` files listed in [M2 references](references/stages/M2-igs-scenes.md) are implementation comparisons, not automatically independent oracles. `igstools` documents libav-derived code, so it cannot be counted as an independent confirmation of libbluray behavior.
-- Palette Y/Cr/Cb conversion uses limited-range BT.709 with round-to-nearest and retains alpha. All 168 referenced image elements in Tamako Clip `00005` match igstools exactly; see [comparison evidence](references/stages/M2-igs-scenes.md#2026-11-03--tamako-00005-逐元素同类工具对照). Other colorimetry and multi-frame animation inputs are outside this sample.
+- IGS fields are mapped to the pinned implementation and documented with byte samples in the [field register](references/stages/M2-igs-field-register.md). Reserved fields, effect behavior, and any field semantics without a sample assertion remain unverified. `igstools` documents libav-derived code and is used as a rendering comparison, not as independent normative confirmation.
+- The current palette renderer uses limited-range BT.709 with round-to-nearest and retains alpha. Six fixed vectors cover neutral levels, color channels, clipping, rounding, and alpha passthrough. All reported image elements in nine packet fixtures match igstools configured for BT.709; see [comparison evidence](references/stages/M2-igs-scenes.md#2026-11-04--多-fixture-逐元素独立参考对照). The filtered packet fixtures do not establish source colorimetry for every disc; multi-frame animation is also outside these samples.
+- MPLS/CLPI can carry color-space and dynamic-range fields for HEVC video stream declarations. The current `ParsedDisc` model skips these fields, and their relationship to IGS palette conversion has not been established; see parse task 2.7.
 - ICS parsing covers the tested sequence model only. Incomplete ICS sequences, all button-area semantics, invalid-reference handling, timing, animation, windows, effect clipping, composition lifecycle rules, and exact default/selection behavior remain unverified. Unknown effects are preserved as raw bytes and mark a scene incomplete.
 - PNG element pixels match the reference for the tested sample; the comparison does not establish coverage of other inputs or effects.
 - Extraction consumes M1's `ParsedDisc` and bdmv-io read APIs and feeds the CLI and M4 integration.
 
 ## Task disposition
 
-M2 tasks are checked only where local synthetic tests or specifically identified comparisons exercise the stated behavior. Broader element coverage and full scene semantics remain open.
+M2 tasks are checked only where local tests or specifically identified comparisons exercise the stated behavior. Broader field semantics and full scene behavior remain open.
