@@ -1,5 +1,5 @@
 {
-  "kind": "metadata-only real-disc parser fixture",
+  "kind": "real-disc BDMV metadata fixture",
   "case": "baja",
   "files": [
     {

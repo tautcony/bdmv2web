@@ -7,11 +7,11 @@ import { extractIgsFromChunks } from "@bdmv-web/igs";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export async function loadRawIgsFixture(name: "tamako" | "baja", clipId: string, pid: number) {
-  const root = resolve(repo, `test-data/fixtures/hdmv-navigation/metadata-only/${name}/BDMV`);
+  const root = resolve(repo, `test-data/fixtures/hdmv-navigation/disc-data/${name}/BDMV`);
   const disc = await parseBdmv(root);
-  const packetFile = resolve(repo, `test-data/fixtures/hdmv-navigation/transport/${name}/clip-${clipId}-ig-packets.bin`);
+  const packetFile = resolve(root, `STREAM/${clipId}.m2ts_ig-packets.bin`);
   const data = await readFile(packetFile);
-  const sidecar = JSON.parse(await readFile(resolve(repo, `test-data/fixtures/hdmv-navigation/transport/${name}/offset-runs.json`), "utf8")) as {
+  const sidecar = JSON.parse(await readFile(`${packetFile}.offset-runs.json`, "utf8")) as {
     sourceM2ts: string; packetSize: number; pids: number[]; runs: Array<{ fixturePacketStart: number; sourcePacketStart: number; packetCount: number }>;
   };
   if (sidecar.packetSize !== 192 || !sidecar.pids.includes(0) || !sidecar.pids.includes(0x100) || !sidecar.pids.includes(pid)) throw new Error(`${name} IGS packet fixture sidecar mismatch`);

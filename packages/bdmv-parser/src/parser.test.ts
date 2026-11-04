@@ -52,7 +52,7 @@ describe("M1 BDMV discovery and structure", () => {
   });
 
   it("smokes the committed Tamako Love Story metadata sample without treating counts as protocol goldens", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/metadata-only/tamako/BDMV");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
     const disc = await parseBdmv(root);
     expect(disc.entries).toHaveLength(33);
     expect(disc.movieObjects).toHaveLength(17);
@@ -67,7 +67,7 @@ describe("M1 BDMV discovery and structure", () => {
     ["tamako", { entries: 33, movieObjects: 17, instructions: 4969, playlists: 26, playItems: 1025, clips: 18 }],
     ["baja", { entries: 6, movieObjects: 6, instructions: 73, playlists: 6, playItems: 6, clips: 7 }],
   ] as const)("parses the %s metadata-only fixture without STREAM files", async (name, expected) => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), `../../../test-data/fixtures/hdmv-navigation/metadata-only/${name}/BDMV`);
+    const root = join(dirname(fileURLToPath(import.meta.url)), `../../../test-data/fixtures/hdmv-navigation/disc-data/${name}/BDMV`);
     const disc = await parseBdmv(root);
     expect(disc.entries).toHaveLength(expected.entries);
     expect(disc.movieObjects).toHaveLength(expected.movieObjects);
@@ -81,7 +81,7 @@ describe("M1 BDMV discovery and structure", () => {
   });
 
   it("parses and graph-links CLPI referenced by a SubPath without comparing its IGS cue to the main clip", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/metadata-only/tamako/BDMV");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
     const disc = await parseBdmv(root);
     const playlist = disc.playlists.find((item) => item.id === "00003")!;
     const cue = playlist.playItems.flatMap((item) => item.streams).find((stream) => stream.streamType === 2)!;
@@ -94,7 +94,7 @@ describe("M1 BDMV discovery and structure", () => {
   });
 
   it("parses the real Baja Studio SubPlayItem bit fields and keeps its source sync identifier", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/metadata-only/baja/BDMV");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/baja/BDMV");
     const disc = await parseBdmv(root); const item = disc.playlists.find((playlist) => playlist.id === "00004")?.subPaths[0]?.items[0];
     expect(item).toMatchObject({ clipId: "00005", codecId: "M2TS", connectionCondition: 1, stcId: 0, multiClip: false, clips: [{ clipId: "00005", codecId: "M2TS", stcId: 0 }], inTime45k: 27_000_000, outTime45k: 27_001_876, syncPlayItemId: 0, syncPts45k: 0 });
   });
