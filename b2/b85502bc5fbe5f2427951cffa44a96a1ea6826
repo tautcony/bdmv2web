@@ -1,0 +1,31 @@
+packages/hdmv/src/control-flow.test.ts
+  s_f1e09a61530d1a::t_c1c729a2dfa843 87
+  s_f1e09a61530d1a::t_aa288c9c6997cb 34-35,83,98
+  s_f1e09a61530d1a::t_3c6996bb1dd52f 74-75
+  s_f1e09a61530d1a::t_d116ddbe32525c 20,23,26,40,59,104
+  s_f1e09a61530d1a::t_597012cb7c7cd1 76
+  s_f1e09a61530d1a::t_84ef3474b9d079 28-29,97,109
+  s_f1e09a61530d1a::t_c47db70080fbec 44
+  s_f1e09a61530d1a::t_0ca0c6d3886b42 1-19,21-22,24-25,27,30-33,36-39,41-43,45-58,60-73,77-82,84-86,88-96,99-103,105-108,110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b2b85502bc5fbe5f2427951cffa44a96a1ea6826",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
