@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile, symlink, stat } from "node:fs/
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildM1ClipInfoProgramAndCpi, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAudioPid, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv-web/test-fixtures";
+import { buildM1ClipInfoProgramAndCpi, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAudioPid, buildM1PlaylistWithMultiClipSubPlayItem, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv-web/test-fixtures";
 import { discoverBdmvRoot, parseBdmv, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
 
 async function temp(): Promise<string> { return mkdtemp(join(tmpdir(), "bdmv m1 中文 ")); }
@@ -52,7 +52,7 @@ describe("M1 BDMV discovery and structure", () => {
   });
 
   it("smokes the committed Tamako Love Story metadata sample without treating counts as protocol goldens", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/tamako-love-story-bd/BDMV");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/metadata-only/tamako/BDMV");
     const disc = await parseBdmv(root);
     expect(disc.entries).toHaveLength(33);
     expect(disc.movieObjects).toHaveLength(17);
@@ -63,8 +63,25 @@ describe("M1 BDMV discovery and structure", () => {
     expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "clip:00002", type: "clip", state: "missing" }));
   });
 
+  it.each([
+    ["tamako", { entries: 33, movieObjects: 17, instructions: 4969, playlists: 26, playItems: 1025, clips: 18 }],
+    ["baja", { entries: 6, movieObjects: 6, instructions: 73, playlists: 6, playItems: 6, clips: 7 }],
+  ] as const)("parses the %s metadata-only fixture without STREAM files", async (name, expected) => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), `../../../test-data/fixtures/hdmv-navigation/metadata-only/${name}/BDMV`);
+    const disc = await parseBdmv(root);
+    expect(disc.entries).toHaveLength(expected.entries);
+    expect(disc.movieObjects).toHaveLength(expected.movieObjects);
+    expect(disc.playlists).toHaveLength(expected.playlists);
+    expect(disc.clips).toHaveLength(expected.clips);
+    expect(disc.movieObjects.reduce((sum, object) => sum + object.instructions.length, 0)).toBe(expected.instructions);
+    expect(disc.playlists.reduce((sum, playlist) => sum + playlist.playItems.length, 0)).toBe(expected.playItems);
+    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_BACKUP_DIFFERS")).toBe(false);
+    expect(disc.diagnostics.filter((diagnostic) => diagnostic.code === "BDMV_MISSING_STREAM").length).toBeGreaterThan(0);
+    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_MISSING_CLPI")).toBe(false);
+  });
+
   it("parses and graph-links CLPI referenced by a SubPath without comparing its IGS cue to the main clip", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/tamako-love-story-bd/BDMV");
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/metadata-only/tamako/BDMV");
     const disc = await parseBdmv(root);
     const playlist = disc.playlists.find((item) => item.id === "00003")!;
     const cue = playlist.playItems.flatMap((item) => item.streams).find((stream) => stream.streamType === 2)!;
@@ -74,6 +91,12 @@ describe("M1 BDMV discovery and structure", () => {
     expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "clipInfo:00005", type: "clipInfo", state: "present" }));
     expect(disc.graph.edges).toContainEqual(expect.objectContaining({ from: "subPath:00003:0", to: "clipInfo:00005", kind: "subpath-clip-info-reference", resolution: "resolved" }));
     expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_STN_CLPI_PID_CONFLICT" && diagnostic.sourcePath === cue.source.path && diagnostic.offset === cue.source.offset)).toBe(false);
+  });
+
+  it("parses the real Baja Studio SubPlayItem bit fields and keeps its source sync identifier", async () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/metadata-only/baja/BDMV");
+    const disc = await parseBdmv(root); const item = disc.playlists.find((playlist) => playlist.id === "00004")?.subPaths[0]?.items[0];
+    expect(item).toMatchObject({ clipId: "00005", codecId: "M2TS", connectionCondition: 1, stcId: 0, multiClip: false, clips: [{ clipId: "00005", codecId: "M2TS", stcId: 0 }], inTime45k: 27_000_000, outTime45k: 27_001_876, syncPlayItemId: 0, syncPts45k: 0 });
   });
 
   it("retains mixed HDMV and BD-J title declarations and exact MOBJ bytes and offsets", async () => {
@@ -211,7 +234,13 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("preserves a nonempty SubPlayItem and its timing/source mapping", async () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithSubPlayItem());
-    try { const disc = await parseBdmv(root); expect(disc.playlists[0]?.subPaths[0]?.items[0]).toMatchObject({ clipId: "00009", inTime45k: 90_000, outTime45k: 180_000, syncPlayItemId: 1, syncPts45k: 45_000, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "214" } }); }
+    try { const disc = await parseBdmv(root); expect(disc.playlists[0]?.subPaths[0]?.items[0]).toMatchObject({ clipId: "00009", connectionCondition: 1, stcId: 7, multiClip: false, clips: [{ clipId: "00009", codecId: "M2TS", stcId: 7 }], inTime45k: 90_000, outTime45k: 180_000, syncPlayItemId: 1, syncPts45k: 45_000, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "214" } }); }
+    finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses multi-clip SubPlayItems and each clip STC identifier", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithMultiClipSubPlayItem());
+    try { const disc = await parseBdmv(root); expect(disc.playlists[0]?.subPaths[0]?.items[0]).toMatchObject({ clipId: "00009", connectionCondition: 1, stcId: 7, multiClip: true, clips: [{ clipId: "00009", codecId: "M2TS", stcId: 7 }, { clipId: "00010", codecId: "M2TS", stcId: 8 }] }); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -223,6 +252,12 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("rejects a SubPlayItem that crosses its enclosing SubPath while remaining inside the file", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1PlaylistWithSubPlayItem(); bytes[212] = 0; bytes[213] = 50; await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
+    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true); }
+    finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("rejects a SubPlayItem shorter than its fixed bit fields", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1PlaylistWithSubPlayItem(); bytes[212] = 0; bytes[213] = 27; await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
     try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });

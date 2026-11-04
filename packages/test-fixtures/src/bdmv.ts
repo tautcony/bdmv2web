@@ -80,10 +80,23 @@ export function buildM1PlaylistWithAudioPid(): Uint8Array {
 }
 
 export function buildM1PlaylistWithSubPlayItem(): Uint8Array {
-  const base = buildM1PlaylistGolden(); const out = new Uint8Array(base.length + 28); out.set(base.subarray(0, 212)); out.set(base.subarray(212, 246), 240);
-  put32(out, 12, 240); put32(out, 80, 156); put32(out, 202, 34); out[211] = 1;
-  put16(out, 212, 26); ascii(out, 214, "00009"); ascii(out, 219, "M2TS");
-  put32(out, 226, 90_000); put32(out, 230, 180_000); put16(out, 234, 1); put32(out, 236, 45_000);
+  return buildM1PlaylistWithSubPlayItemClips(false);
+}
+
+export function buildM1PlaylistWithMultiClipSubPlayItem(): Uint8Array {
+  return buildM1PlaylistWithSubPlayItemClips(true);
+}
+
+function buildM1PlaylistWithSubPlayItemClips(multiClip: boolean): Uint8Array {
+  const itemBodyLength = multiClip ? 39 : 28;
+  const extraBytes = itemBodyLength + 2;
+  const base = buildM1PlaylistGolden(); const out = new Uint8Array(base.length + extraBytes); out.set(base.subarray(0, 212)); out.set(base.subarray(212, 246), 212 + extraBytes);
+  put32(out, 12, 212 + extraBytes); put32(out, 80, 128 + extraBytes); put32(out, 202, 6 + extraBytes); out[211] = 1;
+  put16(out, 212, itemBodyLength); ascii(out, 214, "00009"); ascii(out, 219, "M2TS");
+  // reserved=0, connection=1, multi_clip flag, primary STC=7
+  out.set([0, 0, 0, multiClip ? 0x03 : 0x02, 7], 223);
+  put32(out, 228, 90_000); put32(out, 232, 180_000); put16(out, 236, 1); put32(out, 238, 45_000);
+  if (multiClip) { out[242] = 2; ascii(out, 243, "00010"); ascii(out, 248, "M2TS"); out[252] = 8; }
   return out;
 }
 

@@ -156,7 +156,24 @@ function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
     const source = r.source(file.rel, origin); r.skip(1); const type = r.u8(); const flags = r.u16(); const repeat = !!(flags & 0x8000); r.skip(1); const count = r.u8(); const items = [];
     if (r.offset > end) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${start}`, "SubPath header exceeds SubPath section");
     if (count > Math.floor((end - r.offset) / 2)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${start}`, "SubPlayItem count exceeds SubPath");
-    for (let j = 0; j < count; j++) { const rec = r.offset; if (r.offset + 2 > end) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${rec}`, "SubPlayItem length is outside SubPath"); const itemLen = r.u16(); const itemEnd = r.offset + itemLen; if (itemEnd > end || itemLen < 26) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${rec}`, "SubPlayItem exceeds SubPath or is too short for fixed fields"); const itemSource = r.source(file.rel, origin); const clipId = r.text(5); const codecId = r.text(4); r.skip(3); const inTime45k = r.u32(); const outTime45k = r.u32(); const syncPlayItemId = r.u16(); const syncPts45k = r.u32(); if (r.offset > itemEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${rec}`, "SubPlayItem fields exceed record"); r.seek(itemEnd); items.push({ clipId, codecId, stcId: 0, inTime45k, outTime45k, syncPlayItemId, syncPts45k, source: itemSource }); }
+    for (let j = 0; j < count; j++) {
+      const rec = r.offset;
+      if (r.offset + 2 > end) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${rec}`, "SubPlayItem length is outside SubPath");
+      const itemLen = r.u16(); const itemEnd = r.offset + itemLen;
+      if (itemEnd > end || itemLen < 28) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${rec}`, "SubPlayItem exceeds SubPath or is too short for fixed fields");
+      const itemSource = r.source(file.rel, origin); const clipId = r.text(5); const codecId = r.text(4);
+      r.skipBits(27); const connectionCondition = r.read(4); const multiClip = !!r.read(1); const stcId = r.u8();
+      const inTime45k = r.u32(); const outTime45k = r.u32(); const syncPlayItemId = r.u16(); const syncPts45k = r.u32();
+      const clips = [{ clipId, codecId, stcId }];
+      if (multiClip) {
+        if (r.offset + 1 > itemEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${rec}`, "SubPlayItem multi-clip count is outside record");
+        const clipCount = Math.max(1, r.u8());
+        if (clipCount - 1 > Math.floor((itemEnd - r.offset) / 10)) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${rec}`, "SubPlayItem multi-clip records exceed record");
+        for (let clipIndex = 1; clipIndex < clipCount; clipIndex++) clips.push({ clipId: r.text(5), codecId: r.text(4), stcId: r.u8() });
+      }
+      if (r.offset > itemEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${rec}`, "SubPlayItem fields exceed record");
+      r.seek(itemEnd); items.push({ clipId, codecId, connectionCondition, stcId, multiClip, clips, inTime45k, outTime45k, syncPlayItemId, syncPts45k, source: itemSource });
+    }
     r.seek(end); subPaths.push({ type, repeat, items, source });
   }
   r.seek(markPos); const markLen = r.u32(); const markEnd = r.offset + markLen; if (markEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/markLength", "PlayMark section exceeds file"); const markCount = r.u16();

@@ -21,7 +21,8 @@ export interface PlayItem {
   uoMask: string; stillMode: number; stillTime: number; streams: StreamDeclaration[]; source: SourceLocation;
 }
 export interface PlayMark { index: number; type: number; playItemRef: number; time45k: number; entryEsPid: number; duration45k: number; source: SourceLocation; }
-export interface SubPlayItem { clipId: string; codecId: string; stcId: number; inTime45k: number; outTime45k: number; syncPlayItemId: number; syncPts45k: number; source: SourceLocation; }
+export interface SubPlayItemClip { clipId: string; codecId: string; stcId: number; }
+export interface SubPlayItem { clipId: string; codecId: string; connectionCondition: number; stcId: number; multiClip: boolean; clips: SubPlayItemClip[]; inTime45k: number; outTime45k: number; syncPlayItemId: number; syncPts45k: number; source: SourceLocation; }
 export interface SubPath { type: number; repeat: boolean; items: SubPlayItem[]; source: SourceLocation; }
 export interface Playlist { id: string; version: string; playItems: PlayItem[]; marks: PlayMark[]; subPaths: SubPath[]; source: SourceLocation; }
 export interface ClipProgram { sequenceStartSpn: number; programMapPid: number; streams: Array<{ pid: number; codingType: number; language: string | null; source: SourceLocation }>; source: SourceLocation; }
