@@ -1,0 +1,31 @@
+packages/runtime-web/src/headless-navigation-fixture.ts
+  s_f1e09a61530d1a::t_c35139b1b56be9 10,12,14
+test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_840c0ce4c8945a 1-194
+scripts/extract-m2ts-pid-packets.mjs
+  s_f1e09a61530d1a::t_453c910ff59d5c 1-2,4-21,23-59
+  s_f1e09a61530d1a::t_e3457cc16725c7 3,22
+test-data/fixtures/hdmv-navigation/disc-data/baja/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_840c0ce4c8945a 1-70
+packages/bdmv-parser/src/parser.test.ts
+  s_f1e09a61530d1a::t_c35139b1b56be9 55,70,84,97
+test-data/fixtures/hdmv-navigation/README.md
+  s_f1e09a61530d1a::t_9f687b978c397e 4-5
+  s_f1e09a61530d1a::t_c35139b1b56be9 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ac7f4a2d836e292a554ee72235b9b7782844f0e",
+  "prompts": {},
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}

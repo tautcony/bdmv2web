@@ -1,0 +1,32 @@
+packages/media-export/src/index.ts
+  s_f1e09a61530d1a::t_90481daa11f979 396
+  s_f1e09a61530d1a::t_6dfc2841b3bcfd 279
+  s_f1e09a61530d1a::t_47859277148593 24,72,87,263,277,388
+packages/media-export/src/closure.test.ts
+  s_f1e09a61530d1a::t_ae677c7aca5af1 122
+packages/media-export/src/index.test.ts
+  s_f1e09a61530d1a::t_91811698364355 9,65-71
+packages/media-export/src/external-real-smoke.test.ts
+  s_f1e09a61530d1a::t_4b74e7031cc0dc 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "151e60c3b7b7938e66851a2d32f5af1a13c37e30",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
