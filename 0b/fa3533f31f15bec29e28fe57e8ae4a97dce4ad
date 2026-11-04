@@ -1,0 +1,66 @@
+openspec/specs/cli-delivery-status/spec.md
+  h_3705811fa4502c 2-6,8-87
+  s_a1ac612903fe3c::t_60bd22846145e7 1,7
+openspec/specs/workspace-build-gate/spec.md
+  h_3705811fa4502c 2-6,8-59
+  s_a1ac612903fe3c::t_4a2e580db3987a 1,7
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/verification.md
+  s_a1ac612903fe3c::t_0f4c67c942a198 144-145,161,163,238-261
+openspec/specs/interactive-graphics-extraction/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-54,58-63,65,67-73,77-87,89,91-92
+  s_a1ac612903fe3c::t_58d2ba9cfdcccf 1,7
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 2-4,6,8-10,12,14,55-57,64,66,74-76,88,90
+  s_a1ac612903fe3c::t_7299189ec7abf1 93-106
+openspec/specs/disc-contracts/spec.md
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,9-22,25-27,29-30,32-40,44,46,48-54,58-91,93,95-96
+  s_a1ac612903fe3c::t_f2461697b038ab 1,7
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 2-4,6,8,23-24,28,31,41-43,45,47,55-57,92,94
+openspec/specs/hdmv-navigation/spec.md
+  s_e53c1dd79dd4bf::t_03bfea8153d1cd 2-4,6,8-10,12,14,27-29,36,38,46-48,88,90
+  s_22438f96ffd6c0::t_5fae9869e0617f 5,11,13,15-26,30-35,37,39-45,49-53,55-87,89,91-92
+  s_a1ac612903fe3c::t_fe89ba9f54ca7e 1,7
+  s_22438f96ffd6c0::t_0a754871e1d926 54
+openspec/specs/bdmv-disc-inspection/spec.md
+  s_a1ac612903fe3c::t_8de88ba7f14de1 1-101
+openspec/changes/archive/2026-11-04-parse-bdmv-structure/tasks.md
+  h_3705811fa4502c 21,38
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/tasks.md
+  h_3705811fa4502c 56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0bfa3533f31f15bec29e28fe57e8ae4a97dce4ad",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_22438f96ffd6c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b34-42c0-7723-b0f9-f814d54e004c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_a1ac612903fe3c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a6cb-7ac2-70d0-b49b-759bf878c004",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_e53c1dd79dd4bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b30-045c-73f2-9ddd-19a20c15a41d",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
