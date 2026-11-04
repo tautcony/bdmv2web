@@ -51,6 +51,16 @@ trace 每条含 session/sequence/generation、源 PC/raw/decoded、输入/Action
 
 NavigationGraph 节点含对象/命令位置/播放目标，边含条件与来源。静态可确定边直接展开；依赖寄存器的目标保留候选或 unresolved，M5 保守闭包，禁止把一次运行未进入的分支删掉。按钮 raw 序列可作为额外程序批量加入同一分析器。分析预算耗尽标 unknown，不等于 unreachable。
 
+### 6. 多案例执行路径覆盖
+
+Corpus DFS 从 `ParsedDisc.entries` 中可解析的 HDMV First Play、Top Menu、title entries 开始，以 `HdmvVm` 实际运行 MOBJ 指令并处理 title-search 和媒体等待边界。每个运行状态以 VM snapshot（程序/PC、非零寄存器、调用栈、等待动作和播放上下文）去重；同步循环由 VM 指令预算终止，跨状态探索另有总预算。条件指令的未遍历目标、寄存器动态跳转、BD-J entry、外部媒体不可用都必须进入带原因的 unresolved/unsupported/unavailable 统计，不得标 unreachable 或 covered。测试消费 `buildNavigationGraph` 的图边分母，并结合 VM trace/action 记录区分实际执行、媒体不可用和未解析边。DFS 的媒体完成事件仅用于明确标注的 continuation 探索，不证明该媒体可播放，也不属于独立参考 golden。
+
+实际运行环路通过完整 VM state 的重复检测产生回边，记录首次状态位置、当前回边和从首次状态到回边的命令路径，并区分真实指令路径与模拟媒体事件后的路径。静态潜在环路使用 command/object 图 DFS coloring back-edge 分析，报告涉及的 MovieObject 与 PC；静态潜在环不等同于本次运行已走过的真实环路。
+
+### 7. 离线 VM 流程可视化
+
+提供 Node CLI，将 BDMV 目录解析为 ParsedDisc 后复用 `buildNavigationGraph` 与静态环路分析生成包含 fenced Mermaid block 的 `.md` 文件。流程图包含 First Play、Top Menu、title 根，MovieObject 指令节点、Compare 两分支、GOTO/Jump/Call/Resume 上下文、playlist/media wait，以及 unknown/unresolved 边。动态目标显式标unknown；静态潜在循环节点与回边以红色 class/样式标注并列出涉及的 MOBJ/PC。脚本不读取 STREAM/M2TS，示例使用仓库 fixture，输出文件由调用者指定。
+
 ## Verification / Exit Criteria
 
 每个 supported 编码有正例、边界/非法操作数、参考语义依据；控制流 golden 包含 Compare 下一条、Jump/Call/Resume、播放后恢复和返回。模拟桥覆盖乱序/重复/失败/unavailable/旧 generation、超预算；同一 profile/输入产生相同 trace。提交覆盖分母与 unresolved 边，M4 可消费 VM 接口，M5 可消费图。
