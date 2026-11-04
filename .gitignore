@@ -2,3 +2,7 @@
 .reference-cache/
 node_modules/
 **/dist/
+*.m2ts
+test-data/bdmv/
+test-data/output/
+__pycache__/
