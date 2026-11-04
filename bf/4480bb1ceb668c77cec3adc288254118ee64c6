@@ -1,0 +1,69 @@
+docs/evidence/igs-fixture-packet-comparisons/tamako-00043.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-6914
+docs/evidence/igs-fixture-packet-comparisons/synthetic-igs-parser-00001.json
+  s_f1e09a61530d1a::t_f1063ab20e18b1 1-67
+docs/evidence/igs-fixture-packet-comparisons/kyoani-ova-00005.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-1338
+openspec/changes/extract-igs-scenes/tasks.md
+  s_f1e09a61530d1a::t_c75e01d3cfda00 19,27
+  s_f1e09a61530d1a::t_653f36aedbe379 5
+docs/evidence/igs-fixture-packet-comparisons/tamako-00005.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-6914
+docs/evidence/igs-fixture-packet-comparison-summary.json
+  s_f1e09a61530d1a::t_f1063ab20e18b1 20-24,118-132,164-167
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-19,25-117,133-163,168-173
+.gitignore
+  s_f1e09a61530d1a::t_5458bcc82432bf 6
+docs/evidence/igs-fixture-packet-comparisons/bang-dream-mygo-vol1-00010.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-7734
+docs/evidence/igs-fixture-packet-comparisons/baja-00005.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-1707
+packages/igs/test/real-igs.test.ts
+  s_f1e09a61530d1a::t_0dd2c99c1fe463 4,9
+  s_f1e09a61530d1a::t_4ec52b5283dc99 7-8,10-11
+docs/evidence/igs-fixture-packet-comparisons/bang-dream-mygo-vol1-00011.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-2117
+docs/evidence/igs-fixture-packet-comparisons/battle-royale-uhd-00005.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-2814
+docs/references/stages/M2-igs-scenes.md
+  s_f1e09a61530d1a::t_21d9c1e77c7368 61,72-92
+packages/igs/test/fixtures.ts
+  s_f1e09a61530d1a::t_0dd2c99c1fe463 53-58,60-62,74-75
+  s_f1e09a61530d1a::t_1c434636029c83 59,63-73
+scripts/export-igs-packet-fixtures.mjs
+  s_f1e09a61530d1a::t_a7d41ca781102b 32,35,40,43
+  s_f1e09a61530d1a::t_fc42e7d352e623 3
+  s_f1e09a61530d1a::t_4ec52b5283dc99 28-30,33-34,36-39,70
+  s_f1e09a61530d1a::t_15715b06d18655 41,47,74-80
+  s_f1e09a61530d1a::t_15067ab0c030bf 1-2,4-27,31,42,44-46,48-69,71-73,81-85
+test-data/fixtures/igs-parser/README.md
+  s_f1e09a61530d1a::t_bc4f694ec551ae 5
+  s_f1e09a61530d1a::t_4ec52b5283dc99 4
+scripts/compare-igstools-reference.py
+  s_f1e09a61530d1a::t_891072379a2b0d 16,19
+  s_f1e09a61530d1a::t_fc42e7d352e623 7,9,15,17-18,20,31-36,42-44,48-50,56-57
+  s_f1e09a61530d1a::t_05c4ccecf933c5 37-38,55
+docs/evidence/igs-fixture-packet-comparisons/battle-royale-uhd-00002.json
+  s_f1e09a61530d1a::t_c7c5173d9352ac 1-8841
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf4480bb1ceb668c77cec3adc288254118ee64c6",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
