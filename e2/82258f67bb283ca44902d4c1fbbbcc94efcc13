@@ -1,0 +1,45 @@
+packages/bdmv-parser/src/parser.ts
+  s_f1e09a61530d1a::t_166fb781f91ff3 159-164,166-174,176
+  s_f1e09a61530d1a::t_229ac0a3fdc8fb 165,175
+packages/bdmv-parser/src/model.ts
+  s_f1e09a61530d1a::t_229ac0a3fdc8fb 25
+  s_f1e09a61530d1a::t_166fb781f91ff3 24
+packages/test-fixtures/src/bdmv.ts
+  s_f1e09a61530d1a::t_166fb781f91ff3 83-93,95-96,98-99
+  s_f1e09a61530d1a::t_089365b117ab31 97
+  s_f1e09a61530d1a::t_a0fb5cb8f42cd8 94
+packages/bdmv-parser/src/parser.test.ts
+  s_f1e09a61530d1a::t_089365b117ab31 6,96,98,100-101,238-242
+  s_f1e09a61530d1a::t_4bca3bba6f09d8 67-68,78
+  s_f1e09a61530d1a::t_a0fb5cb8f42cd8 99
+  s_f1e09a61530d1a::t_a9b7f9ab7b91f8 55,70,84,97
+  s_f1e09a61530d1a::t_180e9fba9e168c 66,69,71,76-77,79-82
+  s_f1e09a61530d1a::t_1b2512d2a3bf25 72-75
+  s_f1e09a61530d1a::t_229ac0a3fdc8fb 237,243
+  s_f1e09a61530d1a::t_2bd9faa5ddc479 259-264
+test-data/fixtures/hdmv-navigation/metadata-only/baja/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_b1f6581880c219 1-70
+test-data/fixtures/hdmv-navigation/metadata-only/tamako/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_af7088e8ccc96c 1-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e282258f67bb283ca44902d4c1fbbbcc94efcc13",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
