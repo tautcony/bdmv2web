@@ -50,6 +50,29 @@ export function syntheticClip(options: { pts?: bigint; effects?: boolean; richEf
   return concat(patPacket(), pmtPacket(options.streamPid ?? IG_PID, options.streamType ?? 0x91), m2tsPacket(options.streamPid ?? IG_PID, payload, { cc: 0, pusi: true }));
 }
 
+export function syntheticReferenceClip(): Uint8Array {
+  const segments = syntheticMenuSegments();
+  const packets: Uint8Array[] = [patPacket(), pmtPacket()];
+  for (let offset = 0, continuity = 0; offset < segments.length; continuity++) {
+    const length = (segments[offset + 1]! << 8) | segments[offset + 2]!;
+    const segment = segments.subarray(offset, offset + 3 + length);
+    packets.push(m2tsPacketWithExactPayload(IG_PID, pesPacket(segment, 90_000n + BigInt(continuity)), continuity & 0x0f));
+    offset += segment.length;
+  }
+  return concat(...packets);
+}
+
+function m2tsPacketWithExactPayload(pid: number, payload: Uint8Array, cc: number): Uint8Array {
+  if (payload.length > 183) throw new RangeError("synthetic IG PES packet exceeds one transport packet");
+  const frame = new Uint8Array(192); const ts = frame.subarray(4); ts.fill(0xff);
+  const adaptationLength = 183 - payload.length;
+  ts[0] = 0x47; ts[1] = 0x40 | (pid >> 8); ts[2] = pid & 255;
+  ts[3] = 0x30 | cc; ts[4] = adaptationLength;
+  if (adaptationLength > 0) ts[5] = 0;
+  ts.set(payload, 5 + adaptationLength);
+  return frame;
+}
+
 export async function* chunks(data: Uint8Array, size: number): AsyncGenerator<Uint8Array> { for (let at = 0; at < data.length; at += size) yield data.subarray(at, Math.min(data.length, at + size)); }
 
 function makePage(effects: boolean, pageId: number, missingObject = false, invalidReferences = false, richEffects = false, animated = false, buttonCommand?: Uint8Array, defaultSelectedButtonId?: number, defaultActivatedButtonId?: number): Uint8Array {

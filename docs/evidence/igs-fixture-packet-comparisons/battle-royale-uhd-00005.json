@@ -1,0 +1,2814 @@
+{
+  "source": "test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/STREAM/00005.m2ts_ig-packets.bin",
+  "tool": {
+    "name": "SAPikachu/igstools",
+    "commit": "34a133150ca8b52237284da4d47d93911bcd4954",
+    "matrix": "BT.709",
+    "range": "limited",
+    "output": "16-bit RGBA reduced to 8-bit with (value + 128) // 257"
+  },
+  "coverage": {
+    "button_state_references": 87,
+    "unique_referenced_elements": 68,
+    "missing": [],
+    "extra": [],
+    "multi_frame_ranges": []
+  },
+  "assets": 68,
+  "status_counts": {
+    "match": 68
+  },
+  "total_pixels": 8363970,
+  "different_pixels": 0,
+  "visible_rgb_different_pixels": 0,
+  "results": [
+    {
+      "assetId": "igs-00005-5120-0-p0-o0v0-pal0v0",
+      "page": 0,
+      "object": 0,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        321,
+        34
+      ],
+      "pixels": 10914,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o0v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o14v0-pal0v0",
+      "page": 0,
+      "object": 14,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        321,
+        34
+      ],
+      "pixels": 10914,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o14v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o1v0-pal0v0",
+      "page": 0,
+      "object": 1,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        108,
+        33
+      ],
+      "pixels": 3564,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o1v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o15v0-pal0v0",
+      "page": 0,
+      "object": 15,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        108,
+        33
+      ],
+      "pixels": 3564,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o15v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o2v0-pal0v0",
+      "page": 0,
+      "object": 2,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        198,
+        33
+      ],
+      "pixels": 6534,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o2v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o16v0-pal0v0",
+      "page": 0,
+      "object": 16,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        198,
+        33
+      ],
+      "pixels": 6534,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o16v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o3v0-pal0v0",
+      "page": 0,
+      "object": 3,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        36,
+        35
+      ],
+      "pixels": 1260,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o3v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o17v0-pal0v0",
+      "page": 0,
+      "object": 17,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        36,
+        35
+      ],
+      "pixels": 1260,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o17v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o4v0-pal0v0",
+      "page": 0,
+      "object": 4,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        90,
+        33
+      ],
+      "pixels": 2970,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o4v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o5v0-pal0v0",
+      "page": 0,
+      "object": 5,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        162,
+        47
+      ],
+      "pixels": 7614,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o5v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o6v0-pal0v0",
+      "page": 0,
+      "object": 6,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        36,
+        12
+      ],
+      "pixels": 432,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o6v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o7v0-pal0v0",
+      "page": 0,
+      "object": 7,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        198,
+        13
+      ],
+      "pixels": 2574,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o7v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o8v0-pal0v0",
+      "page": 0,
+      "object": 8,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        123,
+        138
+      ],
+      "pixels": 16974,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o8v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o9v0-pal0v0",
+      "page": 0,
+      "object": 9,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        198,
+        12
+      ],
+      "pixels": 2376,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o9v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o10v0-pal0v0",
+      "page": 0,
+      "object": 10,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        1183,
+        1080
+      ],
+      "pixels": 1277640,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o10v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o11v0-pal0v0",
+      "page": 0,
+      "object": 11,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        321,
+        502
+      ],
+      "pixels": 161142,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o11v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o12v0-pal0v0",
+      "page": 0,
+      "object": 12,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        321,
+        406
+      ],
+      "pixels": 130326,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o12v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p0-o13v0-pal0v0",
+      "page": 0,
+      "object": 13,
+      "version": 0,
+      "palette": 0,
+      "palette_version": 0,
+      "size": [
+        416,
+        1080
+      ],
+      "pixels": 449280,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p0-o13v0-pal0v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o18v0-pal1v0",
+      "page": 1,
+      "object": 18,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        179,
+        37
+      ],
+      "pixels": 6623,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o18v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o19v0-pal1v0",
+      "page": 1,
+      "object": 19,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        179,
+        37
+      ],
+      "pixels": 6623,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o19v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o20v0-pal1v0",
+      "page": 1,
+      "object": 20,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        226,
+        36
+      ],
+      "pixels": 8136,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o20v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o21v0-pal1v0",
+      "page": 1,
+      "object": 21,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        226,
+        36
+      ],
+      "pixels": 8136,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o21v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o22v0-pal1v0",
+      "page": 1,
+      "object": 22,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        35,
+        32
+      ],
+      "pixels": 1120,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o22v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o23v0-pal1v0",
+      "page": 1,
+      "object": 23,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        35,
+        32
+      ],
+      "pixels": 1120,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o23v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o24v0-pal1v0",
+      "page": 1,
+      "object": 24,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        321,
+        172
+      ],
+      "pixels": 55212,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o24v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o25v0-pal1v0",
+      "page": 1,
+      "object": 25,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        47,
+        37
+      ],
+      "pixels": 1739,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o25v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o26v0-pal1v0",
+      "page": 1,
+      "object": 26,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        191,
+        41
+      ],
+      "pixels": 7831,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o26v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o27v0-pal1v0",
+      "page": 1,
+      "object": 27,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        35,
+        9
+      ],
+      "pixels": 315,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o27v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o28v0-pal1v0",
+      "page": 1,
+      "object": 28,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        226,
+        10
+      ],
+      "pixels": 2260,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o28v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o29v0-pal1v0",
+      "page": 1,
+      "object": 29,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        226,
+        48
+      ],
+      "pixels": 10848,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o29v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o30v0-pal1v0",
+      "page": 1,
+      "object": 30,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        113,
+        172
+      ],
+      "pixels": 19436,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o30v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o31v0-pal1v0",
+      "page": 1,
+      "object": 31,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        844,
+        1080
+      ],
+      "pixels": 911520,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o31v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o32v0-pal1v0",
+      "page": 1,
+      "object": 32,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        660,
+        502
+      ],
+      "pixels": 331320,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o32v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o33v0-pal1v0",
+      "page": 1,
+      "object": 33,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        660,
+        406
+      ],
+      "pixels": 267960,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o33v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p1-o13v0-pal1v0",
+      "page": 1,
+      "object": 13,
+      "version": 0,
+      "palette": 1,
+      "palette_version": 0,
+      "size": [
+        416,
+        1080
+      ],
+      "pixels": 449280,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p1-o13v0-pal1v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o34v0-pal2v0",
+      "page": 2,
+      "object": 34,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        198,
+        37
+      ],
+      "pixels": 7326,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o34v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o35v0-pal2v0",
+      "page": 2,
+      "object": 35,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        198,
+        37
+      ],
+      "pixels": 7326,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o35v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o36v0-pal2v0",
+      "page": 2,
+      "object": 36,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        198,
+        36
+      ],
+      "pixels": 7128,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o36v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o37v0-pal2v0",
+      "page": 2,
+      "object": 37,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        198,
+        36
+      ],
+      "pixels": 7128,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o37v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o22v0-pal2v0",
+      "page": 2,
+      "object": 22,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        35,
+        32
+      ],
+      "pixels": 1120,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o22v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o23v0-pal2v0",
+      "page": 2,
+      "object": 23,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        35,
+        32
+      ],
+      "pixels": 1120,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o23v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o24v0-pal2v0",
+      "page": 2,
+      "object": 24,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        321,
+        172
+      ],
+      "pixels": 55212,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o24v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o38v0-pal2v0",
+      "page": 2,
+      "object": 38,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        163,
+        41
+      ],
+      "pixels": 6683,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o38v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o27v0-pal2v0",
+      "page": 2,
+      "object": 27,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        35,
+        9
+      ],
+      "pixels": 315,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o27v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o39v0-pal2v0",
+      "page": 2,
+      "object": 39,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        198,
+        10
+      ],
+      "pixels": 1980,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o39v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o40v0-pal2v0",
+      "page": 2,
+      "object": 40,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        198,
+        48
+      ],
+      "pixels": 9504,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o40v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o30v0-pal2v0",
+      "page": 2,
+      "object": 30,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        113,
+        172
+      ],
+      "pixels": 19436,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o30v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o41v0-pal2v0",
+      "page": 2,
+      "object": 41,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        872,
+        1080
+      ],
+      "pixels": 941760,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o41v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o42v0-pal2v0",
+      "page": 2,
+      "object": 42,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        632,
+        502
+      ],
+      "pixels": 317264,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o42v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o43v0-pal2v0",
+      "page": 2,
+      "object": 43,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        632,
+        406
+      ],
+      "pixels": 256592,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o43v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p2-o13v0-pal2v0",
+      "page": 2,
+      "object": 13,
+      "version": 0,
+      "palette": 2,
+      "palette_version": 0,
+      "size": [
+        416,
+        1080
+      ],
+      "pixels": 449280,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p2-o13v0-pal2v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o44v0-pal3v0",
+      "page": 3,
+      "object": 44,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        187,
+        31
+      ],
+      "pixels": 5797,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o44v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o45v0-pal3v0",
+      "page": 3,
+      "object": 45,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        187,
+        31
+      ],
+      "pixels": 5797,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o45v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o46v0-pal3v0",
+      "page": 3,
+      "object": 46,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        248,
+        36
+      ],
+      "pixels": 8928,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o46v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o47v0-pal3v0",
+      "page": 3,
+      "object": 47,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        248,
+        36
+      ],
+      "pixels": 8928,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o47v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o22v0-pal3v0",
+      "page": 3,
+      "object": 22,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        35,
+        32
+      ],
+      "pixels": 1120,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o22v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o23v0-pal3v0",
+      "page": 3,
+      "object": 23,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        35,
+        32
+      ],
+      "pixels": 1120,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o23v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o24v0-pal3v0",
+      "page": 3,
+      "object": 24,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        321,
+        172
+      ],
+      "pixels": 55212,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o24v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o48v0-pal3v0",
+      "page": 3,
+      "object": 48,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        61,
+        31
+      ],
+      "pixels": 1891,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o48v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o49v0-pal3v0",
+      "page": 3,
+      "object": 49,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        213,
+        41
+      ],
+      "pixels": 8733,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o49v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o27v0-pal3v0",
+      "page": 3,
+      "object": 27,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        35,
+        9
+      ],
+      "pixels": 315,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o27v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o50v0-pal3v0",
+      "page": 3,
+      "object": 50,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        248,
+        16
+      ],
+      "pixels": 3968,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o50v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o51v0-pal3v0",
+      "page": 3,
+      "object": 51,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        248,
+        48
+      ],
+      "pixels": 11904,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o51v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o30v0-pal3v0",
+      "page": 3,
+      "object": 30,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        113,
+        172
+      ],
+      "pixels": 19436,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o30v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o52v0-pal3v0",
+      "page": 3,
+      "object": 52,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        822,
+        1080
+      ],
+      "pixels": 887760,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o52v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o53v0-pal3v0",
+      "page": 3,
+      "object": 53,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        682,
+        502
+      ],
+      "pixels": 342364,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o53v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o54v0-pal3v0",
+      "page": 3,
+      "object": 54,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        682,
+        406
+      ],
+      "pixels": 276892,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o54v0-pal3v0.png"
+    },
+    {
+      "assetId": "igs-00005-5120-0-p3-o13v0-pal3v0",
+      "page": 3,
+      "object": 13,
+      "version": 0,
+      "palette": 3,
+      "palette_version": 0,
+      "size": [
+        416,
+        1080
+      ],
+      "pixels": 449280,
+      "different_pixels": 0,
+      "visible_rgb_different_pixels": 0,
+      "channel_differences": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max_difference": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "status": "match",
+      "reference_png": "reference/igs-00005-5120-0-p3-o13v0-pal3v0.png"
+    }
+  ]
+}

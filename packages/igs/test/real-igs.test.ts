@@ -1,8 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { consumeSegment, createIgsState } from "../src/igs.js";
+import { syntheticReferenceClip } from "./fixtures.js";
 
 describe("real IGS composition sample", () => {
+  it("keeps the synthetic pixel-reference stream fixture aligned with its builder", async () => {
+    const bytes = new Uint8Array(await readFile(new URL("../../../test-data/fixtures/igs-parser/synthetic-single-object.m2ts", import.meta.url)));
+    expect(bytes).toEqual(syntheticReferenceClip());
+  });
+
   it("parses the externally sourced four-page ICS and its button commands", async () => {
     const bytes = new Uint8Array(await readFile(new URL("../../../test-data/fixtures/igs-parser/ics-menu-disc14.bin", import.meta.url)));
     const state = createIgsState();

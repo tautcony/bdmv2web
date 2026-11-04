@@ -58,7 +58,7 @@
 - **Expected:** smoke 只检查结构提取事实和 partial/unverified 状态，不把合成预期或人工猜测填入真实 disc 观察。
 - **Actual:** CLPI 声明 IGS PID `0x1400`；菜单 playlist `00003` 有 999 个 play item，主项只引用 Clip `00004`，SubPath 含 Clip `00005`。Clip `00005` 得到一个 `1920×1080` scene，7 pages、168 objects、7 palettes，存在对应 PNG assets。当前阶段记录观察到 page 2 和 3 的默认按钮均为 `65534`；smoke 自动断言的是两条 `IGS_INVALID_BUTTON_REFERENCE`，没有断言具体 page/button ID。extract 为 `partial`、support 为 `unverified`。CLPI `00043` 也声明 IGS，但 workspace 缺少匹配 `STREAM/00043.m2ts`，报告 `BDMV_MISSING_STREAM`。
 - **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。真实 smoke 不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材，本记录不添加内容 hash。
-- **独立参考缺口:** 仍需独立像素 golden（明确 fixture、参考工具/版本、palette 与颜色转换规则、时间/裁剪预期）。libbluray 与 igstools 可能共享来源，不能不加分析地当成两份独立参考。此缺口不由本次 smoke、PNG 可打开或合成像素断言关闭。
+- **独立参考记录：** 此处记录的是 2026-11-03 当时的状态；随后已对 Tamako `00005`、`00043` 及其他 packet fixture 完成同类工具逐元素/逐像素对照，详见下方 2026-11-04 记录。动画帧在本次输入中没有可比较的多帧对象范围。
 
 
 ## 2026-11-03 — Tamako 00005 逐元素同类工具对照
@@ -69,3 +69,24 @@
 - **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项结果见 [comparison.json](../../evidence/tamako-00005-igstools-comparison.json)。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
 - **更正：** 初次强制 BT.601 与旧实现完全一致只说明实现使用同一矩阵，不足以证明色彩正确。固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）；现在实现改为 BT.709，当前案例的转换及元素比对已确认可用；色彩规范正文未取得。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据，不把分辨率当作规范证明。
 - **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/compare-igstools-reference.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。
+
+## 2026-11-04 — 多 fixture 逐元素独立参考对照
+
+- **目的：** 把同类 IGS 工具作为独立的图像解码/调色板转换参考，对按钮 normal/selected/activated 状态引用的图像逐项核对，再逐像素比较导出的 PNG。比较键包含 page、object ID/version、palette ID/version；覆盖报告分别列出缺失和额外引用。每个图像逐 RGBA 通道比较，包括 alpha，不只比整页或按钮截图。
+- **参考实现与转换：** `SAPikachu/igstools` 固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python `3.15.0`、pypng `0.20220715.0`、Pillow `13.0.0`。参考解码显式使用 BT.709 limited range；工具的 16-bit RGBA 样本按 `(value + 128) // 257` 转为 8-bit 后，与项目对应 PNG 的 RGBA 像素做精确比较。输入由项目的提取器生成；工具页面组装不用于计算，参考图像由其 IGS segment、RLE、palette 解码路径和 `picture_to_png` 导出。
+- **结果：** 9 个案例共 1,048 条按钮状态图像引用，覆盖 932 个唯一元素，共 46,815,935 像素。元素覆盖无缺失/额外项；对象版本及 palette 版本均在逐项报告中；所有 RGBA 像素完全一致，差异像素数为 0。样本无多帧对象范围，因此未产生动画帧对照。
+
+| Fixture | Clip | 按钮状态引用 | 唯一元素 | 像素 | 不同 RGBA 像素 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| baja | `00005` | 55 | 41 | 1,063,772 | 0 |
+| bang-dream-mygo-vol1 | `00010` | 188 | 188 | 1,195,478 | 0 |
+| bang-dream-mygo-vol1 | `00011` | 57 | 51 | 1,157,482 | 0 |
+| battle-royale-uhd | `00002` | 277 | 215 | 4,396,600 | 0 |
+| battle-royale-uhd | `00005` | 87 | 68 | 8,363,970 | 0 |
+| kyoani-ova | `00005` | 45 | 32 | 834,622 | 0 |
+| synthetic-igs-parser | `00001` | 3 | 1 | 1 | 0 |
+| tamako | `00005` | 168 | 168 | 14,881,965 | 0 |
+| tamako | `00043` | 168 | 168 | 14,922,045 | 0 |
+
+- **证据：** [总体汇总](../../evidence/igs-fixture-packet-comparison-summary.json)；[逐元素 JSON 报告目录](../../evidence/igs-fixture-packet-comparisons/)；执行脚本 [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 和导出脚本 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素 JSON 报告逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/test/fixtures.ts) 生成。
+- **适用范围：** 结果覆盖这 9 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段参考依据，以及 2.4 的独立色块/透明度向量和真实同 ODS 双 PDS 资产映射仍需补充；它们不影响上述已覆盖样本的逐元素比较结果。
