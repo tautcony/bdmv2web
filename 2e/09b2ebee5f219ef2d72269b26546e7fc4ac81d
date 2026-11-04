@@ -1,0 +1,49 @@
+docs/code-review.md
+  h_3705811fa4502c 1-511
+  h_3705811fa4502c 512-556
+openspec/changes/REVIEW_BACKLOG.md
+  h_3705811fa4502c 1-42
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  h_3705811fa4502c 1-93
+openspec/changes/converge-contracts-and-distribution/design.md
+  h_3705811fa4502c 1-145
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  h_3705811fa4502c 1-83
+openspec/changes/converge-contracts-and-distribution/specs/disc-contracts/spec.md
+  h_3705811fa4502c 1-60
+openspec/changes/converge-contracts-and-distribution/specs/distribution-budget/spec.md
+  h_3705811fa4502c 1-55
+openspec/changes/converge-contracts-and-distribution/specs/hdmv-navigation/spec.md
+  h_3705811fa4502c 1-65
+openspec/changes/converge-contracts-and-distribution/specs/interactive-graphics-extraction/spec.md
+  h_3705811fa4502c 1-36
+openspec/changes/converge-contracts-and-distribution/specs/offline-delivery-assurance/spec.md
+  h_3705811fa4502c 1-70
+openspec/changes/converge-contracts-and-distribution/specs/offline-menu-runtime/spec.md
+  h_3705811fa4502c 1-103
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  h_3705811fa4502c 1-111
+openspec/changes/restore-build-gate-and-delivery-status/assumptions.md
+  h_3705811fa4502c 1-80
+openspec/changes/restore-build-gate-and-delivery-status/design.md
+  h_3705811fa4502c 1-98
+openspec/changes/restore-build-gate-and-delivery-status/proposal.md
+  h_3705811fa4502c 1-44
+openspec/changes/restore-build-gate-and-delivery-status/specs/cli-delivery-status/spec.md
+  h_3705811fa4502c 1-87
+openspec/changes/restore-build-gate-and-delivery-status/specs/workspace-build-gate/spec.md
+  h_3705811fa4502c 1-59
+openspec/changes/restore-build-gate-and-delivery-status/tasks.md
+  h_3705811fa4502c 1-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2e09b2ebee5f219ef2d72269b26546e7fc4ac81d",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
