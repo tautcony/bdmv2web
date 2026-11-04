@@ -1,17 +1,28 @@
-import { access } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseBdmv } from "@bdmv-web/bdmv-parser";
 import { HdmvVm } from "@bdmv-web/hdmv";
-import { extractIgsScenes } from "../src/extract.js";
+import { extractIgsFromChunks } from "../src/extract.js";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/bdmv/tamako-love-story-bd/BDMV");
-const available = await Promise.all(["00005", "00006"].map((id) => access(resolve(root, `STREAM/${id}.m2ts`)).then(() => true, () => false))).then((values) => values.every(Boolean));
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const root = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
 
-describe.skipIf(!available)("Tamako menu-to-feature navigation", () => {
+describe("Tamako menu-to-feature navigation", () => {
   it("preserves First Play initialization, enters Top Menu, and resolves the film button to playlist 42", async () => {
-    const disc = await parseBdmv(root); const extraction = await extractIgsScenes(disc);
+    const disc = await parseBdmv(root);
+    const packetPath = resolve(root, "STREAM/00005.m2ts_ig-packets.bin");
+    const packetBytes = await readFile(packetPath);
+    async function* chunks() {
+      for (let offset = 0; offset < packetBytes.length; offset += 192 * 97) {
+        yield packetBytes.subarray(offset, Math.min(offset + 192 * 97, packetBytes.length));
+      }
+    }
+    const extraction = await extractIgsFromChunks("00005", chunks(), [{
+      pid: 0x1400,
+      source: { path: "BDMV/CLIPINF/00005.clpi", origin: "primary", offset: "0" },
+    }]);
     const scene = extraction.scenes.find((item) => item.clipId === "00005")!;
     const first = disc.entries.find((entry) => entry.kind === "firstPlay")!;
     const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries });
