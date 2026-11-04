@@ -1,11 +1,18 @@
 # 开发参考索引
 
-核验日期：2026-11-02。此索引为 M0–M6 开发提供可访问的一手规范入口、官方工具文档和可复核的参考实现。它不替代 Blu-ray 规范，也不表示本项目已实现或验证任何功能。阶段任务对应关系见下方各阶段页面；可机器读取的来源记录在 [sources.json](sources.json)。
+核验日期：2026-11-04。此索引为 M0–M6 开发提供固定 revision 的主要实现参考、补充背景来源、测试证据和可访问的规范入口。阶段任务对应关系见下方各阶段页面；可机器读取的来源记录在 [sources.json](sources.json)。
+
+## 证据层级
+
+1. **主行为依据：固定实现。** 对 BDMV/HDMV 优先以 VideoLAN libbluray 1.5.0（peeled commit `d75c88e54c893e5cbf4c61d356477655eb435769`，LGPL-2.1）作为当前行为参考。记录准确文件/位置与许可。实现冲突时记录双方 revision、差异和采用理由，不盲从任一来源。
+2. **辅助背景：公开白皮书。** `.reference-cache/specs/SOURCE.md` 列出的历史 BDA 白皮书仅在其实际叙述范围内提供架构或格式背景；引用时记录标题、版本和印刷页码。白皮书不是规范正文，不定义或核验未覆盖的字段/指令，也不阻碍实现。
+3. **项目测试与 golden。** 合成 fixture 只证明本项目实现的已声明行为。独立 golden 必须记录来源、版本/案例、生成或比较方法及边界；同源 fork 或移植代码不自动独立。
+4. **结论边界。** `unverified` 表示实现、测试、交叉核对或路径覆盖仍有具体缺口；不得单因未取得授权 BDA 书籍而阻塞实现。
 
 ## 使用顺序
 
 1. 先按 [实施依赖](../../openspec/changes/DEPENDENCIES.md) 进入对应阶段，再打开该阶段索引；每行列出对应的 `tasks.md` 编号，并可直达 change 的 `tasks.md` / `design.md`。
-2. 格式/指令只有在实现者记录规范/参考位置、固定 revision、fixture 和单独建立的预期后，才可在 M0 tasks 3.3 规划的 `docs/protocol-support.md` 中标记 supported。参考实现不等同规范，示例盘也不构成覆盖证明。
+2. 格式/指令状态需记录固定实现来源/位置、许可、fixture、golden provenance 和验证范围。参考实现不等同规范；示例盘不构成覆盖证明。
 3. 固定环境时记录实际 Node、pnpm、FFmpeg、ffprobe、浏览器完整版本；本索引中未锁定为项目依赖的工具不能凭文档版本推定验收已通过。
 4. 参考素材只登记来源、hash 和许可，不把商业盘内容复制进仓库。参考工具不进入离线发布包。
 
@@ -23,8 +30,8 @@
 
 ## 标准获取、版权与边界
 
-- Blu-ray BDMV/HDMV/IGS/PGS 规范由 Blu-ray Disc Association (BDA) 管理。BDA 的[格式规范 FAQ](https://blu-raydisc.info/format-spec/faq-info.php)说明书籍通过授权协议提供，且网站不公开协议文本/协议正文；应走[官方授权与申请入口](https://blu-raydisc.info/)，联系 Licensing Office（agent@blu-raydisc.info）。不要从非官方镜像下载或提交规范全文。FAQ 提到技术白皮书目录，但旧目录网址现返回 404；本轮没有核实到具体可下载的官方技术白皮书 PDF。已确认的官方公开 [Format Book Structure / All Books (2017)](https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf) 只是格式书版本图，不含规范正文。
-- MPEG-2 Systems 的一般 TS/PES 由 ITU-T H.222.0 / ISO/IEC 13818-1 定义。H.222.0 v10 (04/2025) 页面可访问，但匿名下载测试被重定向到 TIES 登录页；H.222.0 (10/2014) PDF 可匿名获取，是已被替代的历史版本。ITU 标准不规定 Blu-ray 私有化的 192-byte M2TS 外层包、IG/PG PID 选取和 BDMV 文件结构，这些仍需 BDA 规范/实现对照。
+- Blu-ray BDMV/HDMV/IGS/PGS 规格书由 Blu-ray Disc Association (BDA) 管理。BDA 的[格式规范 FAQ](https://blu-raydisc.info/format-spec/faq-info.php)说明规格书通过授权协议提供且不公开规格书正文；书目和访问状态见 [sources.json](sources.json)。BDA 历史公开白皮书已由 `.reference-cache/specs/SOURCE.md` 盘点，仅作实际覆盖范围内的背景，不作为规范性要求。已确认的官方公开 [Format Book Structure / All Books (2017)](https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf) 是书目/版本图。
+- MPEG-2 Systems 的一般 TS/PES 由 ITU-T H.222.0 / ISO/IEC 13818-1 定义。H.222.0 v10 (04/2025) 页面可访问，但匿名下载测试被重定向到 TIES 登录页；H.222.0 (10/2014) PDF 可匿名获取，是已被替代的历史版本。ITU 标准不规定 Blu-ray 私有化的 192-byte M2TS 外层包、IG/PG PID 选取和 BDMV 文件结构；这些行为以固定实现和明确标注的测试证据为主，白皮书只补充其覆盖背景。
 - 仓库引用的开源代码仅作交叉核对。遵守其许可证；特别注意不同仓库/文件版本、算法来源、静态链接和分发条件。不同语言/仓库不自动意味着来源独立；SAPikachu/igstools README 指明 parser/decoder 来自 libav patches，其他实现也应检查代码和算法来源后，才可作为相互独立的证据。BDedit 是闭源工具，不是规范或可复用源码。
 
 ## 可复现获取
@@ -60,9 +67,9 @@ python3 scripts/fetch-reference-cache.py
 
 缓存来源分别为 `.reference-cache/libbluray-1.5.0/`、`.reference-cache/igstools-2019/` 和 `.reference-cache/libhdmv-2026-03/`。该缓存是第三方代码副本，继续分发前必须逐项审查许可；source urls 指向原仓库固定 commit。H.222.0 的本地 PDF 不保留，匿名下载和核验摘要只作为获取记录。
 
-## 本轮明确未验证
+## 当前证据边界
 
-- 未取得受限 BDA Blu-ray 规范书；libbluray、libhdmv、igstools、BDedit 及公共白皮书均不能代替它。
+- 当前没有受限 BDA Blu-ray 规范书。该访问限制本身不阻止按固定实现开发。libbluray/libhdmv/igstools 是实现参考；公开白皮书只作补充背景。
 - 未解密/解析商业碟、未建立项目独立 golden、未验证像素/导航语义或 V1 Chrome 场景；任何源中的“支持”声明仅属该源自身范围。
 - V1 的 `file://` 与媒体播放策略按 macOS Google Chrome 环境实测；跨系统及其它浏览器不作为首版门槛。WHATWG/MDN 文档不能代替运行证据。
 - FFmpeg 文档是滚动文档。M5 应选定可再分发构建并记录 binary hash、`ffmpeg -version`、`ffprobe -version` 和 configure flags；按任务要求在转换输入数组中调用，不能用此索引暗中锁定转码工具版本。

@@ -8,7 +8,7 @@
       "url": "https://blu-raydisc.info/format-spec/faq-info.php",
       "classification": "official access/licensing information; not the specification text",
       "version": "access route checked 2026-11-02",
-      "location": "FAQ confirms the BDA specification books are agreement-gated and agreement contents are not published on the site. Official ROM book overview: https://blu-raydisc.info/format-spec/rom2-spec.php. Public PDF chart: https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf (Blu-ray Disc Format Book Structure / All Books, 2017-12-28; version overview only, no BDMV specification text). FAQ also points to a technical-whitepaper catalogue, but no concrete official BDMV whitepaper PDF was verified in this audit.",
+      "location": "FAQ confirms the BDA specification books are agreement-gated and agreement contents are not published on the site. Official ROM book overview: https://blu-raydisc.info/format-spec/rom2-spec.php. Public PDF chart: https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf (Blu-ray Disc Format Book Structure / All Books, 2017-12-28; version overview only, no BDMV specification text). Historical public White Paper inventory and archived-origin details are recorded under BDA-PUBLIC-WHITEPAPERS and in .reference-cache/specs/SOURCE.md.",
       "license_or_access": "Blu-ray BDMV/HDMV specification books require the applicable agreement; official FAQ says agreement contents are not published on the site; contact agent@blu-raydisc.info",
       "used_for": [
         "M1",
@@ -16,7 +16,7 @@
         "M3",
         "M6"
       ],
-      "limits": "Do not use public whitepapers or open-source parsers as replacements for the licensed normative books. No specific BDA technical-whitepaper PDF was confirmed as directly downloadable in this audit.",
+      "limits": "Access and book-version information only; this entry contains no field-level BDMV/HDMV behavior. Use the pinned open-source implementation as the primary behavior reference and the listed public whitepapers as supplementary background.",
       "public_overview_url": "https://blu-raydisc.info/docs/Spec_Info/AllBooksNovember2017.pdf"
     },
     {
@@ -31,6 +31,25 @@
         "M1"
       ],
       "limits": "Lists format book families/versions; does not expose BDMV/HDMV/IGS/PGS requirements."
+    },
+    {
+      "id": "BDA-PUBLIC-WHITEPAPERS",
+      "title": "Historical BDA BD-ROM Part 3 public whitepapers",
+      "url": "https://blu-raydisc.info/format-spec/rom3-spec.php",
+      "classification": "BDA-authored public historical whitepapers; non-normative architecture and format background",
+      "version": "BD-ROM Part 3 V2.5 (July 2011) and BD-ROM Part 3 V3.2 (January 2018); local source inventory and archived-origin details in .reference-cache/specs/SOURCE.md",
+      "location": {
+        "V2.5": "White Paper Blu-ray Disc Read-Only Format — 2.B Audio Visual Application Format Specifications for BD-ROM Version 2.5: printed pp. 7–11 (Index/Movie Object/Movie Playlist/Clip and directory overview), pp. 13–16 (BDAV MPEG-2 TS and PG/IG stream overview), pp. 17–24 (HDMV mode concepts).",
+        "V3.2": "White Paper Blu-ray Disc Read-Only Format (Ultra HD Blu-ray) — Audio Visual Application Format Specifications for BD-ROM Version 3.2: printed pp. 3–9 (HDMV mode and core-function concepts), pp. 12–18 (MPEG-2 transport-stream application concepts)."
+      },
+      "license_or_access": "Historical copies were retrieved from BDA-origin URLs via Wayback snapshots and are listed with provenance in .reference-cache/specs/SOURCE.md. BDA copyright applies; local copies are excluded from version control and are not redistributed.",
+      "used_for": [
+        "M1",
+        "M2",
+        "M3",
+        "M6"
+      ],
+      "limits": "Overview/background only. These whitepapers do not provide the detailed BDMV/HDMV syntax, opcode semantics, PSR definitions, or normative requirements. Do not call them specification text or use them as conformance criteria; use only the printed pages actually relevant to a cited background statement."
     },
     {
       "id": "ITU-H222-2025",
@@ -100,7 +119,7 @@
         "M5",
         "M6"
       ],
-      "limits": "Reference behavior is limited to this revision and its tested scope; it does not prove BDA conformance or complete support.",
+      "limits": "Reference behavior is limited to this revision and its tested scope; it does not prove BDA requirements or complete support.",
       "reproducible_command": "git clone https://code.videolan.org/videolan/libbluray.git && cd libbluray && git checkout --detach d75c88e54c893e5cbf4c61d356477655eb435769 && git rev-parse HEAD",
       "source_urls": {
         "M1": [

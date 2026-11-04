@@ -11,11 +11,11 @@
 | `WPT` | 3.4 | [web-platform-tests](https://github.com/web-platform-tests/wpt) 上游标准回归用例。 | 社区网页测试不是 Blu-ray 或本应用的符合性证明；引入用例时锁定 commit/许可，且不能替代目标浏览器矩阵。 |
 | `MDN-AUTOPLAY` / `MDN-MEDIA` | 4.1–4.2 | 浏览器播放策略、错误和 media Promise API。 | 必须在 V1 macOS Google Chrome 环境实际运行；缺少环境或场景证据时标记 not-verified。 |
 | `LIBBLURAY-1.5.0`, `IGSTOOLS-2019`, `LIBHDMV-2026-03` | 3.1–3.3 | M1/M2/M3 固定版本的实现源码可用于交叉比较。 | 不同语言或仓库不代表来源独立；应检查算法/代码沿袭，使用另外建立的 expected 数据，并记录来源版本和许可。 |
-| `BDA-BDMV-SPECS` | 2.1–2.3 | Blu-ray 授权规范的获取入口。 | 本轮未取得受限规范；应记录缺少的证据，不能宣称完整支持。 |
+| `BDA-BDMV-SPECS` / `BDA-PUBLIC-WHITEPAPERS` | 2.1–2.3 | 规范书访问状态和历史公开白皮书的背景来源，分别见 [`sources.json`](../sources.json)。 | 白皮书不作规范性依据；未取得授权书籍不是发布验证前置。按固定实现、独立 golden、真实环境验证及其具体缺口作结论。 |
 
 ## Task 3.4 安全回归证据
 
-以下 focused suites 均通过；这些 fixtures 覆盖输入边界和预算行为，不证明受限 Blu-ray 规范字段的完整符合性。
+以下 focused suites 均通过；这些 fixtures 覆盖输入边界和预算行为。
 
 | 范围 | 命令 | 结果 | 代表性用例 |
 | --- | --- | --- | --- |

@@ -28,7 +28,7 @@
 
 ## Remaining evidence gaps
 
-- 1.3 remains open because no field-level BDA normative source is available. Candidate versions and all format rows remain `unverified` in `docs/protocol-support.md`.
+- 1.3 remains open until the candidate version list and each parsed field are traced to exact locations in the pinned implementation, with independent byte fixtures for positive and negative cases. Lack of licensed BDA text alone does not block this task.
 - 2.4 now has a media-plan handoff test that preserves PlayItem codec/STC/connection/UO/still/angle markers and SubPath/SubPlayItem codec/STC/sync markers. Advanced playback remains partial/unsupported; this verifies retention, not normative semantics or playback.
 
 ## Completed evidence notes

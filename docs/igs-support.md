@@ -9,7 +9,7 @@ M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can
 - M2TS framing, incremental reads, adaptation fields, per-PID payload continuity, duplicate suppression, PAT/PMT parsing, PES assembly, PTS decoding, 33-bit wrap extension, and explicit time-domain reset.
 - IG segment accumulation across PES payloads, complete ICS/PDS/ODS/END scenes, version-keyed palette/object caches, ODS continuation assembly, bounded object dimensions, and bounded indexed-pixel RLE output.
 - Raw 12-byte button command retention with absolute source byte offsets, basic page/BOG/button relationships, PNG byte encoding, and stable asset path mapping.
-- Sparse PDS palettes: palette indices omitted from the segment render as transparent zero. This follows the pinned libbluray 1.5.0 shared PDS decoder's zero-initialized 256-entry table; BDA normative text is not available here.
+- Sparse PDS palettes: palette indices omitted from the segment render as transparent zero. This follows the pinned libbluray 1.5.0 shared PDS decoder's zero-initialized 256-entry table.
 - Diagnostics for malformed or incomplete packet/PES/segment/object state, PID disagreement, unsupported effects, and missing scene references.
 - A PSI continuity error discards the partial section. IG transport damage discards the active Display Set, residual segment bytes, pending ODS fragments, and cached object/palette definitions for that stream. A scene with damaged data, an unresolved object/palette, or an unfinished object sequence cannot retain `complete: true`.
 
@@ -25,7 +25,7 @@ Clip `00004` declares PGS (`0x90`) subtitle streams; that is not an IGS cue. The
 
 ## Unverified behavior
 
-- IGS field layouts and flags have not been checked against accessible normative BDA text. The pinned `libbluray`, `igstools`, and `libhdmv` files listed in [M2 references](references/stages/M2-igs-scenes.md) are implementation comparisons, not independent oracles. `igstools` documents libav-derived code, so it cannot be counted as an independent confirmation of libbluray behavior.
+- IGS field layouts and flags are implemented against the pinned `libbluray` source and cross-checked only within documented scope. BDA historical public whitepapers provide architecture context, not detailed IGS field semantics. The pinned `libbluray`, `igstools`, and `libhdmv` files listed in [M2 references](references/stages/M2-igs-scenes.md) are implementation comparisons, not automatically independent oracles. `igstools` documents libav-derived code, so it cannot be counted as an independent confirmation of libbluray behavior.
 - Palette Y/Cr/Cb conversion uses limited-range BT.709 with round-to-nearest and retains alpha. All 168 referenced image elements in Tamako Clip `00005` match igstools exactly; see [comparison evidence](references/stages/M2-igs-scenes.md#2026-11-03--tamako-00005-逐元素同类工具对照). Other colorimetry and multi-frame animation inputs are outside this sample.
 - ICS parsing covers the tested sequence model only. Incomplete ICS sequences, all button-area semantics, invalid-reference handling, timing, animation, windows, effect clipping, composition lifecycle rules, and exact default/selection behavior remain unverified. Unknown effects are preserved as raw bytes and mark a scene incomplete.
 - PNG element pixels match the reference for the tested sample; the comparison does not establish coverage of other inputs or effects.
@@ -33,4 +33,4 @@ Clip `00004` declares PGS (`0x90`) subtitle streams; that is not an IGS cue. The
 
 ## Task disposition
 
-M2 tasks are checked only where local synthetic tests exercise the stated behavior. Normative syntax registration, broader element coverage, and full scene semantics remain open. Do not describe this output as a verified Blu-ray menu renderer.
+M2 tasks are checked only where local synthetic tests or specifically identified comparisons exercise the stated behavior. Broader element coverage and full scene semantics remain open.

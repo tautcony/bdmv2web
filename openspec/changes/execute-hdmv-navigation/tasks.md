@@ -2,13 +2,13 @@
 
 前置依赖：establish-core-contracts、parse-bdmv-structure。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
 
-共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。仍未勾选的语义任务保留为待完成项；没有规范或独立 golden 的指令继续标为 unverified。
+共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；记录固定实现 revision、精确源文件/位置、许可、测试/golden provenance，并在使用白皮书时记录标题、版本、印刷页码。实现冲突要记录双方证据和采用理由。缺少独立 golden 的行为保持 unverified/open。公开白皮书用于补充背景。
 
 ## 1. 支持矩阵与解码
 
 - [x] 1.1 建立docs/hdmv-support.md逐编码/操作数/PC栈/Action等待条件矩阵；验收：每个supported项有固定参考revision及fixture，未知不作no-op。
 - [x] 1.2 实现统一12字节decoder与反汇编；验收：MOBJ/按钮相同raw同语义，立即数/寄存器/保留位/非法组合负例保留来源。
-- [ ] 1.3 锁定PlayerProfile默认值与标准PSR字段映射；验收：语言/地区/输出能力重置一致并写入trace，不能任意清零所有PSR。
+- [ ] 1.3 锁定PlayerProfile默认值与 pinned libbluray 对应的 PSR 字段映射；验收：语言/地区/输出能力重置一致并写入trace，映射和默认值均有来源与测试，不能任意清零所有PSR。
 
 ## 2. 执行语义
 
@@ -35,6 +35,6 @@
 
 ## Current evidence gaps
 
-- 1.3 has explicit PlayerProfile defaults and PSR mappings based on pinned libbluray implementation behavior, but no BDA normative clause or independent player check. Keep the mappings `unverified` and this task open.
-- 2.3 implements object jump/call/resume and validates known title targets when M1 entries are supplied. `CALL_TITLE` now resolves MovieObject-context HDMV entries and restores the caller and saved PSRs, following pinned libbluray. IG-button calls during playlist playback retain their continuation; BD-J title targets and independent reference traces remain open. Keep the task open.
-- 4.2 has deterministic semantic traces and supported/unknown instruction accounting, but no independent golden paths for Compare/Call/Resume/media restoration. Do not treat the synthetic VM fixtures as independent reference evidence.
+- 1.3 has explicit PlayerProfile defaults and PSR mappings based on pinned libbluray implementation behavior. It remains open for independent player/reference validation and explicit mapping review. Keep the unverified mapping status visible.
+- 2.3 implements object jump/call/resume and validates known title targets when M1 entries are supplied. `CALL_TITLE` resolves MovieObject-context HDMV entries and restores the caller and saved PSRs according to the pinned libbluray reference; IG-button calls during playlist playback retain their continuation. The focused VM tests are project-authored and are not independent golden evidence. BD-J execution remains unsupported, and independent call/title/resume traces remain open; keep this task open.
+- 4.2 has deterministic semantic traces and supported/unknown instruction accounting, but no independent golden paths for Compare/Call/Resume/media restoration. Record expected-data provenance and lineage before treating a comparison as independent. Do not treat synthetic VM fixtures or same-lineage implementation ports as independent evidence.
