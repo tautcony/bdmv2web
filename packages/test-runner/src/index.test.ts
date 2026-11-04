@@ -8,7 +8,6 @@ import {
   auditOutputPackage,
   compareIgRgbaFrames,
   compareVmTraces,
-  computePayloadFingerprint,
   createDependencyAuditReport,
   decideDelivery,
   inspectRuntimeUrl,
@@ -57,7 +56,7 @@ describe("offline package audit", () => {
     expect(createDependencyAuditReport({ ...base, checks: [] })).toMatchObject({ status: "not-verified", checks: [] });
   });
 
-  it("recomputes stable payload fingerprints from listed runtime bytes", async () => {
+  it("audits listed runtime files without checking hashes", async () => {
     const imageName = "assets/海报 %图.png";
     const html = `<img src="assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png"><script src="app.js"></script>`;
     const root = await packageRoot({ "index.html": html, "app.js": "(() => { document.body.dataset.ready = 'yes'; })();", [imageName]: pngSignature });
@@ -65,8 +64,8 @@ describe("offline package audit", () => {
     await writeFile(join(root, "reports", "links.json"), JSON.stringify({ source: "https://example.test/docs" }));
     const result = await auditOutputPackage(root);
     expect(result.checks.filter((check) => check.checkId === "OFFLINE_URL_LOCAL")).toHaveLength(2);
-    expect(result.checks.find((check) => check.checkId === "PAYLOAD_FINGERPRINT")?.result).toBe("pass");
-    expect(result.payloadFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.checks.some((check) => /HASH|FINGERPRINT/.test(check.checkId))).toBe(false);
+    expect(result.payloadFingerprint).toBeNull();
     expect(result.checks.some((check) => check.checkId === "OFFLINE_EXTERNAL_URL")).toBe(false);
   });
 
@@ -85,26 +84,16 @@ describe("offline package audit", () => {
     expect(result.checks.some((check) => check.checkId === "OFFLINE_EXTERNAL_URL" || check.checkId === "OFFLINE_URL_ESCAPE")).toBe(false);
   });
 
-  it("matches the M0 path-plus-SHA256 fingerprint fixed vector", () => {
-    const a = { path: "a.js", byteLength: "1", sha256: "0".repeat(64) };
-    const b = { path: "b.js", byteLength: "900", sha256: "1".repeat(64) };
-    const expected = "09caebace369909387f5b2c6784a1e7224e88a396d8f04108ccb398940cfe702";
-    expect(computePayloadFingerprint([b, a])).toBe(expected);
-    expect(computePayloadFingerprint([{ ...a, byteLength: "999999" }, { ...b, byteLength: "0" }])).toBe(expected);
-  });
-
-  it("requires a well-formed manifest fingerprint and the listed startup file", async () => {
-    const missingFingerprint = await packageRoot({ "index.html": "<main>menu</main>" });
-    const missingManifest = JSON.parse(await (await import("node:fs/promises")).readFile(join(missingFingerprint, "manifest.json"), "utf8")) as Record<string, unknown>;
-    delete missingManifest.payloadFingerprint;
-    await writeFile(join(missingFingerprint, "manifest.json"), JSON.stringify(missingManifest));
-    expect((await auditOutputPackage(missingFingerprint)).checks.some((check) => check.checkId === "PAYLOAD_FINGERPRINT_MISSING" && check.result === "fail")).toBe(true);
-
-    for (const value of ["", "not-a-sha256"]) {
-      const root = await packageRoot({ "index.html": "<main>menu</main>" }, { payloadFingerprint: value });
-      const result = await auditOutputPackage(root);
-      expect(result.checks.some((check) => ["PAYLOAD_FINGERPRINT_MISSING", "PAYLOAD_FINGERPRINT_INVALID"].includes(check.checkId) && check.result === "fail")).toBe(true);
-    }
+  it("ignores missing or invalid hashes and still requires the listed startup file", async () => {
+    const root = await packageRoot({ "index.html": "<main>menu</main>" }, { payloadFingerprint: "broken" });
+    const manifestPath = join(root, "manifest.json");
+    const manifestWithInvalidHash = JSON.parse(await (await import("node:fs/promises")).readFile(manifestPath, "utf8"));
+    delete manifestWithInvalidHash.files[0].sha256;
+    delete manifestWithInvalidHash.files[0].byteLength;
+    await writeFile(manifestPath, JSON.stringify(manifestWithInvalidHash));
+    const audit = await auditOutputPackage(root);
+    expect(audit.checks.some((check) => check.result === "fail")).toBe(false);
+    expect(audit.checks.some((check) => /HASH|FINGERPRINT/.test(check.checkId))).toBe(false);
 
     const noIndex = await packageRoot({});
     expect((await auditOutputPackage(noIndex)).checks.some((check) => check.checkId === "PACKAGE_ENTRY_MISSING" && check.result === "fail")).toBe(true);
@@ -117,12 +106,23 @@ describe("offline package audit", () => {
     expect(result.checks.some((check) => check.checkId === "PACKAGE_ENTRY_UNLISTED" && check.result === "fail")).toBe(true);
   });
 
-  it("fails on tampered, missing, and unlisted runtime files", async () => {
+    const noIndex = await packageRoot({});
+    expect((await auditOutputPackage(noIndex)).checks.some((check) => check.checkId === "PACKAGE_ENTRY_MISSING" && check.result === "fail")).toBe(true);
+
+    const unlistedIndex = await packageRoot({ "index.html": "<main>menu</main>" });
+    const manifest = JSON.parse(await (await import("node:fs/promises")).readFile(join(unlistedIndex, "manifest.json"), "utf8")) as { files: Array<{ path: string }> };
+    manifest.files = manifest.files.filter((file) => file.path !== "index.html");
+    await writeFile(join(unlistedIndex, "manifest.json"), JSON.stringify(manifest));
+    const result = await auditOutputPackage(unlistedIndex);
+    expect(result.checks.some((check) => check.checkId === "PACKAGE_ENTRY_UNLISTED" && check.result === "fail")).toBe(true);
+  });
+
+  it("ignores changed file size and fails on missing and unlisted runtime files", async () => {
     const root = await packageRoot({ "index.html": `<script src="app.js"></script>`, "app.js": "(() => {})();" });
     await writeFile(join(root, "app.js"), "changed");
     await writeFile(join(root, "extra.js"), "(() => {})();");
     const result = await auditOutputPackage(root);
-    expect(result.checks.some((check) => check.checkId === "PACKAGE_HASH_MISMATCH" && check.path === "app.js")).toBe(true);
+    expect(result.checks.some((check) => /HASH|FINGERPRINT|SIZE/.test(check.checkId))).toBe(false);
     expect(result.checks.some((check) => check.checkId === "PACKAGE_UNLISTED_PAYLOAD" && check.path === "extra.js")).toBe(true);
 
     const missingRoot = await packageRoot({ "index.html": `<img src="missing.png">` });

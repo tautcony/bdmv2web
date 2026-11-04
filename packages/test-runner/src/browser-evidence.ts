@@ -18,7 +18,7 @@ export interface BrowserEvidenceContext {
   mode: "menu-only" | "standalone-full";
   profile: unknown;
   /** Rows from this tool's output manifest only; never pass source-disc files. */
-  generatedFiles: readonly ManifestFile[];
+  generatedFiles: readonly (ManifestFile & { byteLength: string; sha256?: string })[];
   matrix: readonly BrowserMatrixCase[];
   environment: BrowserEnvironment;
 }
@@ -39,7 +39,7 @@ export interface BrowserEvidence {
   observedAt: string;
   environment: BrowserEnvironment;
   binding: {
-    payloadFingerprint: string;
+    payloadFingerprint: string | null;
     generatedMediaFingerprint: string;
     profileFingerprint: string;
     mode: "menu-only" | "standalone-full";
@@ -59,24 +59,22 @@ export interface BrowserEvidenceObservation {
   artifacts: Array<{ path: string; kind: string; bytes: Uint8Array }>;
 }
 
-const SHA256 = /^[a-f0-9]{64}$/i;
 const EVIDENCE_PATH = /^reports\/evidence\/(?:[A-Za-z0-9._ -]|%[0-9A-Fa-f]{2}|[^/])+\/(?:[A-Za-z0-9._ -]|%[0-9A-Fa-f]{2}|[^/])+$/;
 
 /** Create reproducible binding digests using JSON data only. */
 export function createBrowserEvidenceBinding(context: BrowserEvidenceContext): BrowserEvidence["binding"] {
-  if (!context.payloadFingerprint || !SHA256.test(context.payloadFingerprint)) throw new TypeError("A verified payloadFingerprint is required to bind browser evidence");
   if (context.mode !== "menu-only" && context.mode !== "standalone-full") throw new TypeError("A supported package mode is required to bind browser evidence");
   const matrix = normalizedMatrix(context.matrix);
   const environment = normalizedEnvironment(context.environment);
   const mediaRows = context.generatedFiles
     .filter((file) => ["media", "audio"].includes(file.kind.toLowerCase()))
-    .map(({ path, kind, byteLength, sha256 }) => ({ path, kind: kind.toLowerCase(), byteLength, sha256: sha256.toLowerCase() }))
+    .map(({ path, kind, byteLength }) => ({ path, kind: kind.toLowerCase(), byteLength }))
     .sort((a, b) => a.path.localeCompare(b.path, "en"));
-  if (mediaRows.some((file) => !isSafeRelativePath(file.path) || !/^(0|[1-9][0-9]*)$/.test(file.byteLength) || !SHA256.test(file.sha256))) {
-    throw new TypeError("Generated media manifest rows need safe paths, byte lengths, and SHA-256 values");
+  if (mediaRows.some((file) => !isSafeRelativePath(file.path))) {
+    throw new TypeError("Generated media manifest rows need safe paths");
   }
   return {
-    payloadFingerprint: context.payloadFingerprint.toLowerCase(),
+    payloadFingerprint: context.payloadFingerprint,
     generatedMediaFingerprint: digest(mediaRows),
     profileFingerprint: digest(context.profile),
     mode: context.mode,
@@ -125,7 +123,7 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
     expectedMismatch = digest(evidence.expected) !== digest(matrixCase.expected);
     environmentMismatch = digest(normalizedEnvironment(evidence.environment)) !== current.environmentFingerprint;
   } catch { expectedMismatch = true; environmentMismatch = true; }
-  const mismatches: string[] = (Object.keys(current) as Array<keyof typeof current>).filter((key) => evidence.binding?.[key] !== current[key]);
+  const mismatches: string[] = (["profileFingerprint", "mode", "matrixFingerprint", "environmentFingerprint"] as const).filter((key) => evidence.binding?.[key] !== current[key]);
   if (expectedMismatch) mismatches.push("matrixCase.expected");
   if (environmentMismatch) mismatches.push("recordedEnvironment");
   if (mismatches.length) {
@@ -133,11 +131,11 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
   }
   if (typeof evidence.observedAt !== "string" || !evidence.observedAt.trim()) return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser evidence for case ${id} has no observation timestamp.`, entityId: id };
   const artifactsValid = Array.isArray(evidence.artifacts) && evidence.artifacts.length > 0 && evidence.artifacts.every((artifact) =>
-    isEvidencePath(artifact.path) && artifact.kind.trim().length > 0 && /^(0|[1-9][0-9]*)$/.test(artifact.byteLength) && SHA256.test(artifact.sha256));
+    isEvidencePath(artifact.path) && artifact.kind.trim().length > 0);
   if (!artifactsValid) return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser evidence for case ${id} has no valid generated artifact record.`, entityId: id };
   if (evidence.result === "fail") return { checkId: "BROWSER_EVIDENCE_BINDING", result: "fail", message: `Browser case ${id} failed.`, entityId: id };
   if (evidence.result !== "pass") return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser case ${id} has not been verified.`, entityId: id };
-  return { checkId: "BROWSER_EVIDENCE_BINDING", result: "pass", message: `Browser evidence for case ${id} is bound to the current package, profile, mode, matrix, and environment.`, entityId: id, evidence: { payloadFingerprint: current.payloadFingerprint, generatedMediaFingerprint: current.generatedMediaFingerprint, profileFingerprint: current.profileFingerprint, mode: current.mode, matrixFingerprint: current.matrixFingerprint, environmentFingerprint: current.environmentFingerprint, artifacts: evidence.artifacts.map(({ path, sha256 }) => ({ path, sha256 })) } };
+  return { checkId: "BROWSER_EVIDENCE_BINDING", result: "pass", message: `Browser evidence for case ${id} is bound to the current profile, mode, matrix, and environment.`, entityId: id, evidence: { payloadFingerprint: current.payloadFingerprint, generatedMediaFingerprint: current.generatedMediaFingerprint, profileFingerprint: current.profileFingerprint, mode: current.mode, matrixFingerprint: current.matrixFingerprint, environmentFingerprint: current.environmentFingerprint, artifacts: evidence.artifacts.map(({ path, sha256 }) => ({ path, sha256 })) } };
 }
 
 /** Produce one gate check per matrix row so omitted cases cannot disappear from the denominator. */

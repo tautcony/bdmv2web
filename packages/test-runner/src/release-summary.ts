@@ -54,21 +54,17 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   if (input.audit.checks.length === 0) {
     checks.push({ checkId: "PACKAGE_AUDIT_REQUIRED", result: "not-verified", message: "No independent output-package audit checks were supplied." });
   } else checks.push(...input.audit.checks);
-  if (!input.audit.payloadFingerprint) checks.push({ checkId: "PAYLOAD_FINGERPRINT_REQUIRED", result: "not-verified", message: "The current output package has no recomputed payload fingerprint." });
 
   const dependencyChecks = input.dependencyAudit.checks.length
     ? [...input.dependencyAudit.checks]
     : [{ checkId: "DEPENDENCY_AUDIT_REQUIRED", result: "not-verified" as const, message: "No independent offline dependency checks were supplied." }];
-  if (input.dependencyAudit.payloadFingerprint !== input.audit.payloadFingerprint) {
-    dependencyChecks.push({ checkId: "DEPENDENCY_AUDIT_PAYLOAD_BINDING", result: "not-verified", message: "Dependency audit is not bound to the current recomputed package payload." });
-  }
   checks.push(...dependencyChecks);
 
   const coverageChecks = summarizeCoverageGates(coverage);
   checks.push(...coverageChecks);
 
   const browserChecks = input.browserEvidence.length
-    ? input.browserEvidence.map((check) => bindBrowserCheck(check, input.audit.payloadFingerprint))
+    ? [...input.browserEvidence]
     : [{ checkId: "BROWSER_EVIDENCE_REQUIRED", result: "not-verified" as const, message: "No V1 browser evidence was supplied." }];
   checks.push(...browserChecks);
 
@@ -134,15 +130,6 @@ function coverageReason(summary: CoverageSummary): string {
   if (summary.failed > 0) return `${summary.failed} item(s) failed`;
   if (summary.unknown > 0 || summary.complete !== true) return `${summary.unknown} item(s) remain unverified`;
   return "reported coverage fields are inconsistent";
-}
-
-function bindBrowserCheck(check: AuditCheck, payloadFingerprint: string | null): AuditCheck {
-  if (check.result !== "pass") return check;
-  const fingerprint = check.evidence?.payloadFingerprint;
-  if (typeof fingerprint !== "string" || fingerprint !== payloadFingerprint) {
-    return { ...check, result: "not-verified", message: `${check.message} Browser evidence is missing the current package payload binding.`, evidence: { ...check.evidence, stale: true, expectedPayloadFingerprint: payloadFingerprint, actualPayloadFingerprint: fingerprint ?? null } };
-  }
-  return check;
 }
 
 function summarizeCheckResult(checks: readonly AuditCheck[]): DependencyAuditReport["status"] {

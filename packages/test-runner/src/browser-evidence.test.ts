@@ -38,8 +38,6 @@ describe("browser evidence binding", () => {
   });
 
   it.each([
-    ["payload", { payloadFingerprint: "e".repeat(64) }],
-    ["generated media", { generatedFiles: context.generatedFiles.map((file) => file.kind === "media" ? { ...file, sha256: "f".repeat(64) } : file) }],
     ["profile", { profile: { audioLanguage: "jpn", outputProfile: "portable", region: "A" } }],
     ["mode", { mode: "menu-only" as const }],
     ["matrix", { matrix: [{ caseId: "J-file-chrome", expected: { launch: true, offline: false } }] }],
@@ -87,10 +85,10 @@ describe("browser evidence binding", () => {
     expect(checks.find((check) => check.entityId === "A-menu-static")?.message).toContain("No browser evidence");
   });
 
-  it("uses stable profile serialization and rejects missing package bindings", () => {
+  it("uses stable profile serialization without requiring package fingerprints", () => {
     const left = createBrowserEvidenceBinding({ ...context, profile: { region: "A", outputProfile: "portable", audioLanguage: "eng" } });
     const right = createBrowserEvidenceBinding({ ...context, profile: { audioLanguage: "eng", region: "A", outputProfile: "portable" } });
     expect(left.profileFingerprint).toBe(right.profileFingerprint);
-    expect(() => createBrowserEvidenceBinding({ ...context, payloadFingerprint: null })).toThrow(/payloadFingerprint/);
+    expect(evaluateBrowserEvidence(record(), { ...context, payloadFingerprint: null }).result).toBe("pass");
   });
 });

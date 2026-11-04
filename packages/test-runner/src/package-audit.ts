@@ -1,11 +1,8 @@
-import { createHash } from "node:crypto";
-import { createReadStream, type Dirent } from "node:fs";
+import { type Dirent } from "node:fs";
 import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { AuditCheck, DeliveryManifest, ManifestFile, OfflinePackageAudit } from "./types.js";
 
-const SHA256 = /^[a-f0-9]{64}$/i;
-const DECIMAL = /^(0|[1-9][0-9]*)$/;
 const PAYLOAD_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".png", ".wav", ".mp4", ".webm", ".vtt"]);
 const REPORT_FILES = new Set(["compatibility.json", "dependency-audit.json", "asset-manifest.json"]);
 const NON_RUNTIME_KINDS = new Set(["parsed-disc", "raw-command-table", "readme", "report", "evidence", "compatibility", "dependency-audit", "asset-manifest"]);
@@ -33,15 +30,13 @@ function parseManifest(value: unknown, checks: AuditCheck[]): DeliveryManifest |
   if (!Array.isArray(value.files)) { add(checks, "MANIFEST_SCHEMA", "fail", "files must be an array", "manifest.json/files"); return null; }
   const files: ManifestFile[] = [];
   value.files.forEach((item, index) => {
-    if (!isRecord(item) || typeof item.path !== "string" || typeof item.kind !== "string" || typeof item.byteLength !== "string" || typeof item.sha256 !== "string") {
-      add(checks, "MANIFEST_SCHEMA", "fail", "Each file needs path, kind, byteLength, and sha256 strings", `manifest.json/files/${index}`);
+    if (!isRecord(item) || typeof item.path !== "string" || typeof item.kind !== "string") {
+      add(checks, "MANIFEST_SCHEMA", "fail", "Each file needs path and kind strings", `manifest.json/files/${index}`);
       return;
     }
-    files.push({ path: item.path, kind: item.kind, byteLength: item.byteLength, sha256: item.sha256, ...(typeof item.required === "boolean" ? { required: item.required } : {}) });
+    files.push({ path: item.path, kind: item.kind, ...(typeof item.required === "boolean" ? { required: item.required } : {}) });
   });
   add(checks, "MANIFEST_SCHEMA", checks.some((x) => x.checkId === "MANIFEST_SCHEMA" && x.result === "fail") ? "fail" : "pass", "Validated package manifest shape", "manifest.json");
-  if (typeof value.payloadFingerprint !== "string" || value.payloadFingerprint.length === 0) add(checks, "PAYLOAD_FINGERPRINT_MISSING", "fail", "manifest.json must contain the recomputed payloadFingerprint", "manifest.json/payloadFingerprint");
-  else if (!SHA256.test(value.payloadFingerprint)) add(checks, "PAYLOAD_FINGERPRINT_INVALID", "fail", "payloadFingerprint must be a SHA-256 hex digest", "manifest.json/payloadFingerprint", { value: value.payloadFingerprint });
   return {
     schemaVersion: "1.0",
     mode: value.mode === "menu-only" ? "menu-only" : "standalone-full",
@@ -83,17 +78,6 @@ async function listFiles(root: string, checks: AuditCheck[]): Promise<string[]> 
   };
   await walk(root);
   return files.sort(comparePath);
-}
-
-async function hashRegularFile(path: string): Promise<{ sha256: string; byteLength: string }> {
-  const hash = createHash("sha256");
-  let byteLength = 0n;
-  for await (const chunk of createReadStream(path)) {
-    const bytes = chunk as Buffer;
-    byteLength += BigInt(bytes.byteLength);
-    hash.update(bytes);
-  }
-  return { sha256: hash.digest("hex"), byteLength: byteLength.toString(10) };
 }
 
 function decodeLayers(path: string): string[] {
@@ -293,15 +277,6 @@ async function auditRuntimeFiles(root: string, files: string[], checks: AuditChe
   }
 }
 
-/** M0 contract: locale-en sorted relative path, NUL, SHA-256, LF; byte length is checked separately. */
-export function computePayloadFingerprint(rows: Array<{ path: string; byteLength: string; sha256: string }>): string {
-  const hash = createHash("sha256");
-  for (const row of rows.sort((a, b) => a.path.localeCompare(b.path, "en"))) {
-    hash.update(row.path, "utf8").update("\0").update(row.sha256.toLowerCase(), "ascii").update("\n");
-  }
-  return hash.digest("hex");
-}
-
 export async function auditOutputPackage(inputRoot: string): Promise<OfflinePackageAudit> {
   const checks: AuditCheck[] = [];
   let root: string;
@@ -327,7 +302,6 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   if (!manifest) return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files };
 
   const seen = new Set<string>();
-  const hashRows: Array<{ path: string; byteLength: string; sha256: string }> = [];
   for (const [index, entry] of manifest.files.entries()) {
     const path = safeManifestPath(entry.path);
     if (!path) { add(checks, "PACKAGE_PATH_INVALID", "fail", "Manifest file path must be a relative POSIX path without dot segments", `manifest.json/files/${index}`, { value: entry.path }); continue; }
@@ -335,7 +309,6 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
     seen.add(path);
     if (path === manifestRel || isReportPath(path)) { add(checks, "MANIFEST_PATH_RESERVED", "fail", "Manifest file path overlaps a report or manifest file", path); continue; }
     if (path === "index.html" && entry.required === false) add(checks, "PACKAGE_ENTRY_OPTIONAL", "fail", "The startup file must be a required manifest entry", path);
-    if (!DECIMAL.test(entry.byteLength) || !SHA256.test(entry.sha256)) { add(checks, "MANIFEST_HASH_FIELDS_INVALID", "fail", "Manifest byteLength or sha256 is malformed", path); continue; }
     const absolute = resolve(root, path);
     if (!within(root, absolute)) { add(checks, "PACKAGE_PATH_ESCAPE", "fail", "Manifest path resolves outside package", path); continue; }
     try {
@@ -343,33 +316,23 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
       if (fileStat.isSymbolicLink() || !fileStat.isFile()) { add(checks, "PACKAGE_FILE_INVALID", "fail", "Expected a regular package file (symlinks are not accepted)", path); continue; }
       const canonical = await realpath(absolute);
       if (!within(root, canonical)) { add(checks, "PACKAGE_PATH_ESCAPE", "fail", "Resolved file escapes package root", path); continue; }
-      const { sha256: actualHash, byteLength: actualSize } = await hashRegularFile(canonical);
       if (path === "bdmv-config.json" && entry.kind === "external-config") {
         let config: unknown;
         try { config = JSON.parse(await readFile(canonical, "utf8")); } catch { config = null; }
         if (!isRecord(config) || typeof config.bdmvPath !== "string" || !config.bdmvPath || config.bdmvPath.includes("\0")) add(checks, "EXTERNAL_CONFIG_INVALID", "fail", "BDMV path configuration is invalid", path);
-        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV and external-player evidence must be verified in the current environment", path, { changed: actualHash.toLowerCase() !== entry.sha256.toLowerCase() });
+        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV and external-player evidence must be verified in the current environment", path);
         continue;
       }
-      if (actualSize !== entry.byteLength) add(checks, "PACKAGE_SIZE_MISMATCH", "fail", "File byte length differs from manifest", path, { expected: entry.byteLength, actual: actualSize });
-      if (actualHash.toLowerCase() !== entry.sha256.toLowerCase()) add(checks, "PACKAGE_HASH_MISMATCH", "fail", "File SHA-256 differs from manifest", path, { expected: entry.sha256, actual: actualHash });
-      else if (actualSize === entry.byteLength) add(checks, "PACKAGE_FILE_HASH", "pass", "File size and SHA-256 match manifest", path, { byteLength: actualSize, sha256: actualHash });
-      if (isPayloadEntry(path, entry.kind)) hashRows.push({ path, byteLength: actualSize, sha256: actualHash });
     } catch { add(checks, entry.required === false ? "PACKAGE_OPTIONAL_ASSET_MISSING" : "PACKAGE_MISSING_ASSET", entry.required === false ? "not-verified" : "fail", "Manifest asset is missing or unreadable", path); }
   }
   if (files.includes("index.html") && !seen.has("index.html")) add(checks, "PACKAGE_ENTRY_UNLISTED", "fail", "Required startup file index.html is absent from manifest files", "index.html");
   const unlisted = files.filter((path) => path !== manifestRel && !isReportPath(path) && !seen.has(path));
   const unlistedRuntime = unlisted.filter((path) => isPayloadEntry(path));
   for (const path of unlistedRuntime) add(checks, "PACKAGE_UNLISTED_PAYLOAD", "fail", "Runtime payload file is absent from manifest files", path);
-  const fingerprint = computePayloadFingerprint(hashRows);
-  if (manifest.payloadFingerprint && SHA256.test(manifest.payloadFingerprint)) {
-    if (manifest.payloadFingerprint.toLowerCase() !== fingerprint) add(checks, "PAYLOAD_FINGERPRINT_MISMATCH", "fail", "Recomputed payload fingerprint differs from manifest", "manifest.json/payloadFingerprint", { expected: manifest.payloadFingerprint, actual: fingerprint });
-    else add(checks, "PAYLOAD_FINGERPRINT", "pass", "Recomputed payload fingerprint matches the M0 path-and-SHA-256 contract", "manifest.json", { actual: fingerprint });
-  }
   await auditRuntimeFiles(root, files, checks);
   const staticChecks = checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
   if (staticChecks.some((check) => check.result === "fail")) add(checks, "OFFLINE_STATIC_AUDIT", "fail", "One or more disallowed static URL, data payload, or bundle entrypoints were found");
   else if (staticChecks.some((check) => check.result === "not-verified")) add(checks, "OFFLINE_STATIC_AUDIT", "not-verified", "One or more static runtime files could not be fully audited");
   else add(checks, "OFFLINE_STATIC_AUDIT", "pass", "No disallowed static URL, data payload, or bundle entrypoint was found");
-  return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: fingerprint, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) };
+  return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) };
 }

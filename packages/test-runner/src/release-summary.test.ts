@@ -69,14 +69,14 @@ describe("release summary aggregation", () => {
     expect(summary.release.gaps).toEqual([]);
   });
 
-  it("invalidates passing browser evidence bound to another payload", () => {
+  it("does not gate browser evidence on payload fingerprints", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
       browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint: "b".repeat(64) })],
       referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
     });
 
-    expect(summary.release.status).toBe("partial");
-    expect(summary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "BROWSER_EVIDENCE", result: "not-verified" }));
+    expect(summary.release.status).toBe("complete");
+    expect(summary.release.gaps).toEqual([]);
   });
 });

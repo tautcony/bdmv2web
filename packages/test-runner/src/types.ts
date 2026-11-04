@@ -13,8 +13,6 @@ export interface AuditCheck {
 export interface ManifestFile {
   path: string;
   kind: string;
-  byteLength: string;
-  sha256: string;
   required?: boolean;
 }
 
