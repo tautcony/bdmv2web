@@ -155,6 +155,41 @@ function referencedAssetIds(value: unknown): Set<string> {
   return ids;
 }
 
+function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number]): Array<{ clipId: string; pid: number }> {
+  const targets: Array<{ clipId: string; pid: number }> = [];
+  for (const item of playlist.playItems) {
+    const hasExplicitPrimaryIg = item.streams.some((stream) => stream.codingType === 0x91 && stream.streamType === 1 && stream.pid !== null);
+    for (const stream of item.streams) {
+      if (stream.codingType !== 0x91 || stream.pid === null) continue;
+      if (stream.streamType === 1) {
+        targets.push({ clipId: item.clipId, pid: stream.pid });
+      } else if (stream.streamType === 2 && stream.subPathId !== null && stream.subClipId !== null) {
+        const clip = playlist.subPaths[stream.subPathId]?.items[stream.subClipId];
+        if (clip) targets.push({ clipId: clip.clipId, pid: stream.pid });
+      }
+    }
+    // extractIgsScenes also accepts CLPI cues for primary clips when MPLS has no
+    // explicit IG stream. Keep that proven playlist-to-clip association here,
+    // while letting an explicit MPLS PID take precedence for the same clip.
+    if (!hasExplicitPrimaryIg) {
+      const clipInfo = disc.clips.find((clip) => clip.id.toLocaleLowerCase("en-US") === item.clipId.toLocaleLowerCase("en-US"));
+      for (const stream of clipInfo?.programs.flatMap((program) => program.streams) ?? []) {
+        if (stream.codingType === 0x91 && stream.pid !== null) targets.push({ clipId: item.clipId, pid: stream.pid });
+      }
+    }
+  }
+  return [...new Map(targets.map((target) => [`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`, target])).values()];
+}
+
+function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
+  const targets = menuIgsSceneTargets(disc, playlist);
+  const matches = scenes.filter((scene) => targets.some((target) => target.clipId.toLocaleLowerCase("en-US") === scene.clipId.toLocaleLowerCase("en-US") && target.pid === scene.pid));
+  const unique = [...new Map(matches.map((scene) => [`${scene.clipId.toLocaleLowerCase("en-US")}\0${scene.pid}\0${scene.source.segmentFileOffset}`, scene])).values()];
+  if (unique.length === 1) return { status: "found" as const, scene: unique[0]! };
+  if (unique.length === 0) return { status: "not-found" as const };
+  return { status: "ambiguous" as const, scenes: unique };
+}
+
 function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; clipId: string }>, exportsMenuMedia: boolean): DiscIR {
   const diagnostics: DiscIR["diagnostics"] = disc.diagnostics.map((item) => ({
     severity: item.severity === "fatal" ? "fatal" : item.severity === "error" ? "error" : item.severity === "warning" ? "warning" : "info",
@@ -194,7 +229,7 @@ function findTopMenuPlaylist(disc: ParsedDisc): ParsedDisc["playlists"][number] 
   return disc.playlists.find((item) => Number(item.id) === playlistNumber);
 }
 
-async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; outTime45k: number; repeatCount: number; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
+async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; outTime45k: number; stillMode: number; repeatCount: number; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
   const first = playlist?.playItems.at(-1);
   if (!playlist || !first || first.multiAngle) return null;
   let repeatCount = 0;
@@ -202,7 +237,8 @@ async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playli
     if (item.clipId !== first.clipId || item.inTime45k !== first.inTime45k || item.outTime45k !== first.outTime45k || item.multiAngle) break;
     repeatCount++;
   }
-  if (repeatCount < 2) return null;
+  const singleItemInfiniteStill = playlist.playItems.length === 1 && first.stillMode === 2;
+  if (repeatCount < 2 && !singleItemInfiniteStill) return null;
   const video = first.streams.find((stream) => stream.pid !== null && stream.codingType === 0x1b && stream.streamType === 1);
   const audioCodingTypes = new Set([0x03, 0x04, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0xa1, 0xa2]);
   const audioStreams = first.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType !== null && audioCodingTypes.has(stream.codingType) && stream.language !== null);
@@ -211,7 +247,7 @@ async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playli
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
   return {
     sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: first.index, clipId: first.clipId,
-    inTime45k: first.inTime45k, outTime45k: first.outTime45k, repeatCount, videoPid: video.pid,
+    inTime45k: first.inTime45k, outTime45k: first.outTime45k, stillMode: first.stillMode, repeatCount, videoPid: video.pid,
     audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
   };
 }
@@ -227,30 +263,39 @@ async function convert(): Promise<void> {
   const menuPlaylist = findTopMenuPlaylist(disc);
   const menuMedia = await menuLoopMediaInput(disc, menuPlaylist);
   const transaction = await beginOutputTransaction(roots.output);
-  if (!extraction.scenes.length) {
+  const failMenuConversion = async (code: string, message: string): Promise<void> => {
     try {
-      await writeFile(resolve(transaction.stagingPath, "README.md"), "# Menu-only preview\n\nConversion did not produce a runnable package because no complete IGS menu scene was found.\n\nStatus: **failed**.\n");
+      await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu-only preview\n\n${message}\n\nStatus: **failed**.\n`);
       const diagnostics = [
-        { code: "MENU_SCENE_NOT_FOUND", message: "No complete IGS menu scene was found in the BDMV input." },
+        { code, message },
         ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
         ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
       ];
-      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify({ schemaVersion: "1.0", status: "failed", code: "MENU_SCENE_NOT_FOUND", mode: "menu-only", diagnostics }, null, 2)}\n`);
+      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify({ schemaVersion: "1.0", status: "failed", code, mode: "menu-only", diagnostics }, null, 2)}\n`);
       await transaction.commit();
-      process.stdout.write(`${JSON.stringify({ status: "failed", code: "MENU_SCENE_NOT_FOUND", output: roots.output })}\n`);
+      process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
-      return;
     } catch (error) { await transaction.abort(); throw error; }
+  };
+  if (!extraction.scenes.length) {
+    await failMenuConversion("MENU_SCENE_NOT_FOUND", "Conversion did not produce a runnable package because no IGS scene was found in the BDMV input.");
+    return;
   }
-
-  const menuClipIds = new Set(menuPlaylist?.playItems.flatMap((item) => item.streams.flatMap((stream) => {
-    if (stream.codingType !== 0x91) return [];
-    if (stream.streamType === 1) return [item.clipId];
-    const clip = stream.streamType === 2 && stream.subPathId !== null && stream.subClipId !== null
-      ? menuPlaylist.subPaths[stream.subPathId]?.items[stream.subClipId] : undefined;
-    return clip ? [clip.clipId] : [];
-  })) ?? []);
-  const menuScene = extraction.scenes.find((item) => menuClipIds.has(item.clipId)) ?? extraction.scenes[0]!;
+  if (!menuPlaylist) {
+    await failMenuConversion("MENU_PLAYLIST_NOT_RESOLVED", "The HDMV Top Menu playlist could not be resolved from the disc navigation entries; no IGS scene was selected.");
+    return;
+  }
+  const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes);
+  if (menuSceneResult.status === "not-found") {
+    await failMenuConversion("MENU_SCENE_NOT_FOUND", `No extracted IGS scene matches the stream and clip declarations in Top Menu playlist ${menuPlaylist.id}; no other scene was selected.`);
+    return;
+  }
+  if (menuSceneResult.status === "ambiguous") {
+    const sources = menuSceneResult.scenes.map((scene) => `${scene.id} (clip ${scene.clipId}, PID ${scene.pid} @ byte ${scene.source.segmentFileOffset})`);
+    await failMenuConversion("MENU_SCENE_AMBIGUOUS", `Top Menu playlist ${menuPlaylist.id} maps to multiple extracted IGS scenes: ${sources.join(", ")}; no scene was selected.`);
+    return;
+  }
+  const menuScene = menuSceneResult.scene;
   const adapted = adaptIgsScene(menuScene, extraction.assets);
   const scene = adapted.scene;
   const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
@@ -375,7 +420,6 @@ async function validate(): Promise<void> {
     process.stdout.write(`Offline package audit: ${failed.length ? "failed" : unverified.length ? "not verified" : "passed"}\n`);
     process.stdout.write(`Dependency audit: ${dependencyAudit.status}\n`);
     process.stdout.write(`Delivery decision: ${decision.status}${decision.strict ? " (strict)" : ""}\n`);
-    process.stdout.write(`Payload fingerprint: ${audit.payloadFingerprint ?? "unavailable"}\n`);
     for (const check of audit.checks) if (check.result !== "pass") process.stdout.write(`${check.result.toUpperCase()} ${check.checkId}${check.path ? ` ${check.path}` : ""}: ${check.message}\n`);
     for (const gap of releaseSummary.release.gaps) process.stdout.write(`GAP ${gap.result} ${gap.checkId}${gap.path ? ` ${gap.path}` : ""}: ${gap.message} Next: ${gap.action}\n`);
     for (const reason of decision.reasons) process.stdout.write(`DECISION ${reason}\n`);
