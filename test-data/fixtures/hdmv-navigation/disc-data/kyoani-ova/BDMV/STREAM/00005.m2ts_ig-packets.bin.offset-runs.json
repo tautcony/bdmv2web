@@ -1,0 +1,61 @@
+{
+  "sourceM2ts": "BDMV/STREAM/00005.m2ts",
+  "packetSize": 192,
+  "pids": [
+    0,
+    256,
+    5120
+  ],
+  "runs": [
+    {
+      "fixturePacketStart": 0,
+      "sourcePacketStart": 0,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 2,
+      "sourcePacketStart": 4,
+      "packetCount": 203
+    },
+    {
+      "fixturePacketStart": 205,
+      "sourcePacketStart": 208,
+      "packetCount": 154
+    },
+    {
+      "fixturePacketStart": 359,
+      "sourcePacketStart": 363,
+      "packetCount": 149
+    },
+    {
+      "fixturePacketStart": 508,
+      "sourcePacketStart": 513,
+      "packetCount": 173
+    },
+    {
+      "fixturePacketStart": 681,
+      "sourcePacketStart": 687,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 683,
+      "sourcePacketStart": 690,
+      "packetCount": 87
+    },
+    {
+      "fixturePacketStart": 770,
+      "sourcePacketStart": 778,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 772,
+      "sourcePacketStart": 781,
+      "packetCount": 160
+    },
+    {
+      "fixturePacketStart": 932,
+      "sourcePacketStart": 942,
+      "packetCount": 168
+    }
+  ]
+}

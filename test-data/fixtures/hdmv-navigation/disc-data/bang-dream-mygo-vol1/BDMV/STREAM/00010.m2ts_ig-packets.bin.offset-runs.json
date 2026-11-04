@@ -1,0 +1,101 @@
+{
+  "sourceM2ts": "BDMV/STREAM/00010.m2ts",
+  "packetSize": 192,
+  "pids": [
+    0,
+    256,
+    5120
+  ],
+  "runs": [
+    {
+      "fixturePacketStart": 0,
+      "sourcePacketStart": 0,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 2,
+      "sourcePacketStart": 4,
+      "packetCount": 275
+    },
+    {
+      "fixturePacketStart": 277,
+      "sourcePacketStart": 280,
+      "packetCount": 153
+    },
+    {
+      "fixturePacketStart": 430,
+      "sourcePacketStart": 434,
+      "packetCount": 158
+    },
+    {
+      "fixturePacketStart": 588,
+      "sourcePacketStart": 593,
+      "packetCount": 154
+    },
+    {
+      "fixturePacketStart": 742,
+      "sourcePacketStart": 748,
+      "packetCount": 153
+    },
+    {
+      "fixturePacketStart": 895,
+      "sourcePacketStart": 902,
+      "packetCount": 142
+    },
+    {
+      "fixturePacketStart": 1037,
+      "sourcePacketStart": 1045,
+      "packetCount": 158
+    },
+    {
+      "fixturePacketStart": 1195,
+      "sourcePacketStart": 1204,
+      "packetCount": 117
+    },
+    {
+      "fixturePacketStart": 1312,
+      "sourcePacketStart": 1322,
+      "packetCount": 161
+    },
+    {
+      "fixturePacketStart": 1473,
+      "sourcePacketStart": 1484,
+      "packetCount": 166
+    },
+    {
+      "fixturePacketStart": 1639,
+      "sourcePacketStart": 1652,
+      "packetCount": 106
+    },
+    {
+      "fixturePacketStart": 1745,
+      "sourcePacketStart": 1759,
+      "packetCount": 158
+    },
+    {
+      "fixturePacketStart": 1903,
+      "sourcePacketStart": 1918,
+      "packetCount": 155
+    },
+    {
+      "fixturePacketStart": 2058,
+      "sourcePacketStart": 2074,
+      "packetCount": 133
+    },
+    {
+      "fixturePacketStart": 2191,
+      "sourcePacketStart": 2208,
+      "packetCount": 154
+    },
+    {
+      "fixturePacketStart": 2345,
+      "sourcePacketStart": 2363,
+      "packetCount": 138
+    },
+    {
+      "fixturePacketStart": 2483,
+      "sourcePacketStart": 2502,
+      "packetCount": 25
+    }
+  ]
+}

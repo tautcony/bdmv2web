@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -57,8 +57,6 @@ try {
       files.push({ path: path.replaceAll("\\", "/"), bytes });
       totalBytes += bytes;
     }
-    const manifest = { case: id, files, totals: { files: files.length, bytes: totalBytes } };
-    await writeFile(join(fixtureBdmv, "FIXTURE-SOURCE.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     console.log(`${id}: ${files.length} files, ${totalBytes} bytes`);
   }
   await mkdir(dirname(archive), { recursive: true });

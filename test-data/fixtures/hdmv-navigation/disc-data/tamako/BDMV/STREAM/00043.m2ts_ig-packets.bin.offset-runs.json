@@ -1,0 +1,296 @@
+{
+  "sourceM2ts": "BDMV/STREAM/00043.m2ts",
+  "packetSize": 192,
+  "pids": [
+    0,
+    256,
+    5120
+  ],
+  "runs": [
+    {
+      "fixturePacketStart": 0,
+      "sourcePacketStart": 0,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 2,
+      "sourcePacketStart": 4,
+      "packetCount": 2869
+    },
+    {
+      "fixturePacketStart": 2871,
+      "sourcePacketStart": 2874,
+      "packetCount": 2854
+    },
+    {
+      "fixturePacketStart": 5725,
+      "sourcePacketStart": 5729,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5727,
+      "sourcePacketStart": 5732,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5729,
+      "sourcePacketStart": 5735,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5731,
+      "sourcePacketStart": 5738,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5733,
+      "sourcePacketStart": 5741,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5735,
+      "sourcePacketStart": 5744,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5737,
+      "sourcePacketStart": 5747,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5739,
+      "sourcePacketStart": 5750,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 5741,
+      "sourcePacketStart": 5754,
+      "packetCount": 2870
+    },
+    {
+      "fixturePacketStart": 8611,
+      "sourcePacketStart": 8625,
+      "packetCount": 2872
+    },
+    {
+      "fixturePacketStart": 11483,
+      "sourcePacketStart": 11498,
+      "packetCount": 2871
+    },
+    {
+      "fixturePacketStart": 14354,
+      "sourcePacketStart": 14370,
+      "packetCount": 2398
+    },
+    {
+      "fixturePacketStart": 16752,
+      "sourcePacketStart": 16769,
+      "packetCount": 1437
+    },
+    {
+      "fixturePacketStart": 18189,
+      "sourcePacketStart": 18207,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 18191,
+      "sourcePacketStart": 18210,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 18193,
+      "sourcePacketStart": 18213,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 18195,
+      "sourcePacketStart": 18216,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 18197,
+      "sourcePacketStart": 18219,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 18199,
+      "sourcePacketStart": 18223,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 18201,
+      "sourcePacketStart": 18226,
+      "packetCount": 2266
+    },
+    {
+      "fixturePacketStart": 20467,
+      "sourcePacketStart": 20493,
+      "packetCount": 2316
+    },
+    {
+      "fixturePacketStart": 22783,
+      "sourcePacketStart": 22810,
+      "packetCount": 2858
+    },
+    {
+      "fixturePacketStart": 25641,
+      "sourcePacketStart": 25669,
+      "packetCount": 2817
+    },
+    {
+      "fixturePacketStart": 28458,
+      "sourcePacketStart": 28487,
+      "packetCount": 2322
+    },
+    {
+      "fixturePacketStart": 30780,
+      "sourcePacketStart": 30810,
+      "packetCount": 716
+    },
+    {
+      "fixturePacketStart": 31496,
+      "sourcePacketStart": 31527,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 31498,
+      "sourcePacketStart": 31530,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 31500,
+      "sourcePacketStart": 31533,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 31502,
+      "sourcePacketStart": 31537,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 31504,
+      "sourcePacketStart": 31540,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 31506,
+      "sourcePacketStart": 31543,
+      "packetCount": 2111
+    },
+    {
+      "fixturePacketStart": 33617,
+      "sourcePacketStart": 33655,
+      "packetCount": 2409
+    },
+    {
+      "fixturePacketStart": 36026,
+      "sourcePacketStart": 36065,
+      "packetCount": 1831
+    },
+    {
+      "fixturePacketStart": 37857,
+      "sourcePacketStart": 37897,
+      "packetCount": 2623
+    },
+    {
+      "fixturePacketStart": 40480,
+      "sourcePacketStart": 40521,
+      "packetCount": 2871
+    },
+    {
+      "fixturePacketStart": 43351,
+      "sourcePacketStart": 43393,
+      "packetCount": 1785
+    },
+    {
+      "fixturePacketStart": 45136,
+      "sourcePacketStart": 45179,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 45138,
+      "sourcePacketStart": 45182,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 45140,
+      "sourcePacketStart": 45186,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 45142,
+      "sourcePacketStart": 45189,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 45144,
+      "sourcePacketStart": 45192,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 45146,
+      "sourcePacketStart": 45195,
+      "packetCount": 1400
+    },
+    {
+      "fixturePacketStart": 46546,
+      "sourcePacketStart": 46596,
+      "packetCount": 2546
+    },
+    {
+      "fixturePacketStart": 49092,
+      "sourcePacketStart": 49143,
+      "packetCount": 1139
+    },
+    {
+      "fixturePacketStart": 50231,
+      "sourcePacketStart": 50283,
+      "packetCount": 2819
+    },
+    {
+      "fixturePacketStart": 53050,
+      "sourcePacketStart": 53103,
+      "packetCount": 2845
+    },
+    {
+      "fixturePacketStart": 55895,
+      "sourcePacketStart": 55949,
+      "packetCount": 2871
+    },
+    {
+      "fixturePacketStart": 58766,
+      "sourcePacketStart": 58821,
+      "packetCount": 12
+    },
+    {
+      "fixturePacketStart": 58778,
+      "sourcePacketStart": 58835,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 58780,
+      "sourcePacketStart": 58838,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 58782,
+      "sourcePacketStart": 58841,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 58784,
+      "sourcePacketStart": 58844,
+      "packetCount": 2
+    },
+    {
+      "fixturePacketStart": 58786,
+      "sourcePacketStart": 58847,
+      "packetCount": 976
+    },
+    {
+      "fixturePacketStart": 59762,
+      "sourcePacketStart": 59824,
+      "packetCount": 368
+    }
+  ]
+}
