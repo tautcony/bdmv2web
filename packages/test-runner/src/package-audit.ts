@@ -4,7 +4,7 @@ import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import type { AuditCheck, DeliveryManifest, ManifestFile, OfflinePackageAudit } from "./types.js";
 
 const PAYLOAD_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".png", ".wav", ".mp4", ".webm", ".vtt"]);
-const REPORT_FILES = new Set(["compatibility.json", "dependency-audit.json", "asset-manifest.json"]);
+const REPORT_FILES = new Set(["compatibility.json", "dependency-audit.json", "asset-manifest.json", "report.json"]);
 const NON_RUNTIME_KINDS = new Set(["parsed-disc", "raw-command-table", "readme", "report", "evidence", "compatibility", "dependency-audit", "asset-manifest"]);
 const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_BYTES = 16 * 1024 * 1024;

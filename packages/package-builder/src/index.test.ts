@@ -128,6 +128,19 @@ describe("menu package primitives", () => {
       ]);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
+  it("embeds the player profile in runtime data so the packaged VM matches conversion", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv-menu-profile-"));
+    const outputDirectory = resolve(parent, "profile preview");
+    try {
+      const playerProfile = { menuLanguage: "jpn", audioLanguage: "jpn", subtitleLanguage: "eng", country: "JP", region: "A" as const, outputProfile: "portable" as const, videoProfiles: [], audioProfiles: [] };
+      await buildMenuPackage({ outputDirectory, title: "Profile preview", ir, scene, graphics: [], playerProfile });
+      const embedded: { __BDMV_MENU_DATA__?: { profile?: unknown } } = {};
+      runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
+      expect(embedded.__BDMV_MENU_DATA__?.profile).toEqual(playerProfile);
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { profile?: unknown };
+      expect(manifest.profile).toEqual(playerProfile);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
   it("generates a complete local folder with a classic ES2020 IIFE and no dangling HTML references", async () => {
     const preserveOutput = process.env.BDMV_MENU_FIXTURE_OUT;
     const parent = preserveOutput ? resolve(preserveOutput) : await mkdtemp(resolve(tmpdir(), "bdmv-menu-package-"));

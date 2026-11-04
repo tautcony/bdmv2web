@@ -3,9 +3,17 @@ import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInp
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv-web/media-export/external-targets";
 import type { SerializedMenuState, SerializedScene } from "./igs-adapter.js";
 
-interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
+export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; }
+
+/** Build the menu VM from packaged data. The packaged player profile must reach the
+ * VM here: the conversion-time VM already ran with it, and PSR-dependent button
+ * commands (player language, country, region) must behave identically at run time. */
+export function createMenuVm(data: PackageData, onTrace?: (entry: TraceEntry) => void): HdmvVm {
+  if (data.profile !== undefined && (typeof data.profile !== "object" || data.profile === null || Array.isArray(data.profile))) throw new Error("Embedded player profile must be a JSON object.");
+  return new HdmvVm(data.vmPrograms ?? [], { ...(onTrace ? { onTrace } : {}), ...(data.vmEntries ? { entries: data.vmEntries } : {}), ...(data.profile ? { profile: data.profile } : {}) });
+}
 
 function visibleError(error: unknown): void {
   const status = document.getElementById("runtime-status"); const detail = document.getElementById("runtime-diagnostics");
@@ -79,7 +87,7 @@ async function boot(): Promise<void> {
     const audio = document.getElementById("menu-audio") as HTMLAudioElement | null;
     if (!status || !start || !canvas) throw new Error("The menu page is missing required runtime elements.");
     const viewport = new CanvasViewport(scene.width, scene.height);
-    const vm = new HdmvVm(data.vmPrograms ?? [], { onTrace: vmConsoleLogger(), ...(data.vmEntries ? { entries: data.vmEntries } : {}) });
+    const vm = createMenuVm(data, vmConsoleLogger());
     if (data.vmInitialProgramId !== undefined) {
       if (!Number.isSafeInteger(data.vmInitialProgramId) || !(data.vmPrograms ?? []).some((program) => program.id === data.vmInitialProgramId)) throw new Error(`Invalid initial MovieObject ${String(data.vmInitialProgramId)}.`);
       vm.reset(data.vmInitialProgramId);

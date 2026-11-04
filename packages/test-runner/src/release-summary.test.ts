@@ -46,15 +46,22 @@ describe("release summary aggregation", () => {
     expect(summary.compatibility.status).toBe("partial");
   });
 
-  it("keeps menu-only partial even when every independent fact passes", () => {
+  it("treats menu-only as a recorded mode rather than a gap when every independent fact passes", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
       browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })], referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: completeDecisionFacts,
     });
 
-    expect(summary.release.status).toBe("partial");
-    expect(summary.release.reasons).toContain("menu-only output is always partial.");
+    expect(summary.release.status).toBe("complete");
+    expect(summary.release.reasons.join(" ")).not.toContain("menu-only output is always partial.");
+
+    const gapped = createReleaseSummary({
+      audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
+      browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })], referenceEvidence: [pass("REFERENCE_COMPARISON")],
+      decisionFacts: { ...completeDecisionFacts, hasUnresolvedReachability: true },
+    });
+    expect(gapped.release.status).toBe("partial");
   });
 
   it("allows complete only from current passing tool facts and ignores persisted component statuses", () => {

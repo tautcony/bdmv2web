@@ -240,4 +240,25 @@ describe("offline browser boot", () => {
     expect(host.mediaPlayCalls).toEqual(["menu-background", "menu-audio"]);
   });
 
+  it("applies the packaged player profile to the menu VM registers instead of falling back to defaults", async () => {
+    const { createMenuVm } = await import("./browser.js");
+    const decoded = (word: number, width = 3) => Array.from({ length: width }, (_, index) => String.fromCharCode((word >>> (8 * (width - 1 - index))) & 0xff)).join("");
+    const registers = (profile?: Record<string, unknown>) => createMenuVm({
+      ir: structuredClone(validIr), scene: null, vmPrograms: [{ id: 7, instructions: [] }],
+      ...(profile ? { profile } : {}),
+    } as Parameters<typeof createMenuVm>[0]).snapshot().registers.psr;
+
+    const packaged = registers({ menuLanguage: "jpn", audioLanguage: "fre", subtitleLanguage: "ger", country: "JP", region: "A", outputProfile: "portable", videoProfiles: [], audioProfiles: [] });
+    // PSR16 audio language, PSR17 subtitle, PSR18 menu language, PSR19 country, PSR20 region.
+    expect([decoded(packaged[16]!), decoded(packaged[17]!), decoded(packaged[18]!), decoded(packaged[19]!, 2), packaged[20]]).toEqual(["fre", "ger", "jpn", "JP", 1]);
+
+    // Without an embedded profile the VM falls back to its own product default (eng/US/A),
+    // which is exactly the divergence from the conversion-time VM this test guards.
+    const unpackaged = registers();
+    expect([decoded(unpackaged[16]!), decoded(unpackaged[18]!), decoded(unpackaged[19]!, 2), unpackaged[20]]).toEqual(["eng", "eng", "US", 1]);
+    expect(packaged[18]).not.toBe(unpackaged[18]);
+
+    expect(() => createMenuVm({ ir: structuredClone(validIr), scene: null, profile: "jpn" } as unknown as Parameters<typeof createMenuVm>[0])).toThrow("Embedded player profile must be a JSON object.");
+  });
+
 });

@@ -1,5 +1,13 @@
 export type CheckResult = "pass" | "fail" | "not-verified";
-export type DeliveryStatus = "failed" | "partial" | "complete";
+
+/**
+ * Branded so a stage status can never be passed off as a delivery status, and a
+ * delivery status can never be passed off as a stage status. The brand is a
+ * compile-time-only phantom property: the runtime value stays the plain string,
+ * so JSON output is unaffected.
+ */
+const DELIVERY_STATUS_BRAND: unique symbol = Symbol("DeliveryStatus");
+export type DeliveryStatus = ("failed" | "partial" | "complete") & { readonly [DELIVERY_STATUS_BRAND]: true };
 
 export interface AuditCheck {
   checkId: string;

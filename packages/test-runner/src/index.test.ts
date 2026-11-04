@@ -3,13 +3,17 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { DeliveryStatus } from "./types.js";
+import type { StageStatus } from "./decisions.js";
 import {
   acknowledgeDiagnostic,
   auditOutputPackage,
+  classifyDiagnostics,
   compareIgRgbaFrames,
   compareVmTraces,
   createDependencyAuditReport,
   decideDelivery,
+  decideStageOutcome,
   inspectRuntimeUrl,
   isCoverageReportComplete,
   summarizeCoverage,
@@ -106,17 +110,6 @@ describe("offline package audit", () => {
     expect(result.checks.some((check) => check.checkId === "PACKAGE_ENTRY_UNLISTED" && check.result === "fail")).toBe(true);
   });
 
-    const noIndex = await packageRoot({});
-    expect((await auditOutputPackage(noIndex)).checks.some((check) => check.checkId === "PACKAGE_ENTRY_MISSING" && check.result === "fail")).toBe(true);
-
-    const unlistedIndex = await packageRoot({ "index.html": "<main>menu</main>" });
-    const manifest = JSON.parse(await (await import("node:fs/promises")).readFile(join(unlistedIndex, "manifest.json"), "utf8")) as { files: Array<{ path: string }> };
-    manifest.files = manifest.files.filter((file) => file.path !== "index.html");
-    await writeFile(join(unlistedIndex, "manifest.json"), JSON.stringify(manifest));
-    const result = await auditOutputPackage(unlistedIndex);
-    expect(result.checks.some((check) => check.checkId === "PACKAGE_ENTRY_UNLISTED" && check.result === "fail")).toBe(true);
-  });
-
   it("ignores changed file size and fails on missing and unlisted runtime files", async () => {
     const root = await packageRoot({ "index.html": `<script src="app.js"></script>`, "app.js": "(() => {})();" });
     await writeFile(join(root, "app.js"), "changed");
@@ -179,8 +172,10 @@ describe("delivery status and coverage", () => {
   };
 
   it("keeps strict policy separate from status and never upgrades acknowledged errors", () => {
-    expect(decideDelivery({ ...base, mode: "menu-only" }, false)).toMatchObject({ status: "partial", exitCode: 0 });
-    expect(decideDelivery({ ...base, mode: "menu-only" }, true)).toMatchObject({ status: "partial", exitCode: 2 });
+    expect(decideDelivery({ ...base, mode: "menu-only" }, false)).toMatchObject({ status: "complete", exitCode: 0 });
+    expect(decideDelivery({ ...base, mode: "menu-only" }, true)).toMatchObject({ status: "complete", exitCode: 0 });
+    expect(decideDelivery({ ...base, mode: "menu-only", hasUnresolvedReachability: true }, false)).toMatchObject({ status: "partial", exitCode: 0 });
+    expect(decideDelivery({ ...base, mode: "menu-only", hasUnresolvedReachability: true }, true)).toMatchObject({ status: "partial", exitCode: 2 });
     const acknowledged = acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED", blocksComplete: true }, "reviewer", "accepted for preview");
     expect(acknowledged).toMatchObject({ severity: "error", blocksComplete: true, acknowledged: true });
     expect(decideDelivery({ ...base, diagnostics: [acknowledged] }, true)).toMatchObject({ status: "partial", exitCode: 2 });
@@ -189,8 +184,8 @@ describe("delivery status and coverage", () => {
   });
 
   it.each([
-    ["menu-only", { ...base, mode: "menu-only" as const }, false, "partial", 0],
-    ["strict menu-only", { ...base, mode: "menu-only" as const }, true, "partial", 2],
+    ["menu-only without gaps", { ...base, mode: "menu-only" as const }, false, "complete", 0],
+    ["strict menu-only without gaps", { ...base, mode: "menu-only" as const }, true, "complete", 0],
     ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, true, "partial", 2],
     ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, true, "failed", 1],
     ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, true, "partial", 2],
@@ -198,6 +193,53 @@ describe("delivery status and coverage", () => {
     ["missing required evidence", { ...base, requiredEvidenceComplete: false }, true, "partial", 2],
   ])("applies delivery policy to %s", (_label, input, strict, status, exitCode) => {
     expect(decideDelivery(input, strict)).toMatchObject({ status, strict, exitCode });
+  });
+
+  it("records the output mode without letting it decide the status", () => {
+    const menuOnly = decideDelivery({ ...base, mode: "menu-only" }, false);
+    expect(menuOnly.status).toBe("complete");
+    expect(menuOnly.reasons.join(" ")).not.toContain("menu-only output is always partial.");
+  });
+
+  it("classifies diagnostics by severity and acknowledgement", () => {
+    expect(classifyDiagnostics([])).toMatchObject({ hasFatal: false, hasBlockingError: false, blocking: [] });
+    expect(classifyDiagnostics(undefined)).toMatchObject({ hasFatal: false, hasBlockingError: false, blocking: [] });
+    const fatal = classifyDiagnostics([{ severity: "fatal", code: "BDMV_REQUIRED_FILE_MISSING" }]);
+    expect(fatal).toMatchObject({ hasFatal: true, hasBlockingError: true });
+    expect(fatal.blocking).toHaveLength(1);
+    const error = classifyDiagnostics([{ severity: "error", code: "STREAM_TRUNCATED" }]);
+    expect(error).toMatchObject({ hasFatal: false, hasBlockingError: true });
+    const acknowledged = classifyDiagnostics([acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED" }, "reviewer", "accepted")]);
+    expect(acknowledged).toMatchObject({ hasFatal: false, hasBlockingError: true });
+    expect(classifyDiagnostics([{ severity: "warning", code: "M5_MENU_LOOP_UNAVAILABLE" }])).toMatchObject({ hasFatal: false, hasBlockingError: false, blocking: [] });
+  });
+
+  it.each([
+    ["fatal", [{ severity: "fatal", code: "BDMV_REQUIRED_FILE_MISSING" }], false, "failed", 1],
+    ["fatal under strict", [{ severity: "fatal", code: "BDMV_REQUIRED_FILE_MISSING" }], true, "failed", 1],
+    ["error", [{ severity: "error", code: "STREAM_TRUNCATED" }], false, "partial", 0],
+    ["error under strict", [{ severity: "error", code: "STREAM_TRUNCATED" }], true, "partial", 2],
+    ["acknowledged error", [acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED" }, "reviewer", "accepted")], false, "partial", 0],
+    ["no diagnostics", [], false, "complete", 0],
+  ])("decides the stage outcome for %s", (_label, diagnostics, strict, status, exitCode) => {
+    const outcome = decideStageOutcome({ stage: "extract", diagnostics, strict });
+    expect(outcome).toMatchObject({ status, strict, exitCode });
+    expect(outcome.blockingDiagnostics).toHaveLength(status === "complete" ? 0 : 1);
+  });
+
+  it("keeps delivery status and stage status mutually unassignable", () => {
+    const outcome = decideStageOutcome({ stage: "inspect", diagnostics: [], strict: false });
+    expect(outcome).toMatchObject({ status: "complete", exitCode: 0, blockingDiagnostics: [] });
+    const delivery = decideDelivery({ mode: "menu-only", checks: [], diagnostics: [] }, false);
+    expect(delivery.status).toBe("partial");
+
+    // @ts-expect-error a delivery status must not be usable where a stage status is required
+    const stageFromDelivery: StageStatus = delivery.status;
+    // @ts-expect-error a stage status must not be usable where a delivery status is required
+    const deliveryFromStage: DeliveryStatus = outcome.status;
+
+    expect(stageFromDelivery).toBe("partial");
+    expect(deliveryFromStage).toBe("complete");
   });
 
   it("does not turn zero/unknown denominators or missing evidence into 100 percent", () => {

@@ -33,6 +33,52 @@ export interface DeliveryDecision {
   blockingChecks: AuditCheck[];
 }
 
+/**
+ * Result of one command stage (inspect/extract). Deliberately not
+ * `DeliveryStatus`: a stage can only say whether its own goal was reached, and
+ * `status: "complete"` from a stage must never be read as a complete delivery.
+ */
+const STAGE_STATUS_BRAND: unique symbol = Symbol("StageStatus");
+export type StageStatus = ("complete" | "partial" | "failed") & { readonly [STAGE_STATUS_BRAND]: true };
+
+export interface StageOutcomeInput {
+  stage: "inspect" | "extract";
+  diagnostics?: readonly DeliveryDiagnostic[];
+  strict: boolean;
+}
+
+export interface StageOutcome {
+  status: StageStatus;
+  strict: boolean;
+  exitCode: 0 | 1 | 2;
+  blockingDiagnostics: DeliveryDiagnostic[];
+}
+
+function stageStatus(status: "complete" | "partial" | "failed"): StageStatus {
+  return status as StageStatus;
+}
+
+/** Single narrowing point for the branded delivery status. */
+function deliveryStatus(status: "complete" | "partial" | "failed"): DeliveryStatus {
+  return status as DeliveryStatus;
+}
+
+export interface DiagnosticClassification {
+  hasFatal: boolean;
+  hasBlockingError: boolean;
+  blocking: DeliveryDiagnostic[];
+}
+
+/** Single source of truth for "does this diagnostic block a complete outcome". */
+export function classifyDiagnostics(diagnostics: readonly DeliveryDiagnostic[] | undefined): DiagnosticClassification {
+  const blocking = (diagnostics ?? []).filter((diagnostic) => ["error", "fatal"].includes(diagnostic.severity.toLowerCase()));
+  return {
+    hasFatal: blocking.some((diagnostic) => diagnostic.severity.toLowerCase() === "fatal"),
+    hasBlockingError: blocking.length > 0,
+    blocking,
+  };
+}
+
 export function acknowledgeDiagnostic<T extends DeliveryDiagnostic>(diagnostic: T, by: string, reason: string): T & { acknowledged: true; acknowledgement: { by: string; reason: string } } {
   return { ...diagnostic, acknowledged: true, acknowledgement: { by, reason } };
 }
@@ -40,8 +86,9 @@ export function acknowledgeDiagnostic<T extends DeliveryDiagnostic>(diagnostic: 
 export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): DeliveryDecision {
   const reasons: string[] = [];
   const blockingChecks = input.checks.filter((check) => check.result === "fail");
-  const failedDiagnostic = input.diagnostics?.some((d) => d.severity.toLowerCase() === "fatal");
-  const errorDiagnostic = input.diagnostics?.some((d) => ["error", "fatal"].includes(d.severity.toLowerCase()));
+  const diagnosticFacts = classifyDiagnostics(input.diagnostics);
+  const failedDiagnostic = diagnosticFacts.hasFatal;
+  const errorDiagnostic = diagnosticFacts.hasBlockingError;
   const onlyBdj = input.declaredEntryCount !== undefined && input.hdmvEntryCount === 0;
   const hardFailure = blockingChecks.length > 0 || failedDiagnostic || onlyBdj || input.hasMissingRequiredAsset === true;
   if (blockingChecks.length) reasons.push("One or more package or offline checks failed.");
@@ -51,13 +98,12 @@ export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): D
 
   const unverifiedChecks = input.checks.filter((check) => check.result === "not-verified");
   const partialConditions: boolean[] = [
-    input.mode === "menu-only",
     input.checks.length === 0,
     input.declaredEntryCount === undefined || input.hdmvEntryCount === undefined,
     input.hasMissingRequiredAsset === undefined,
     input.hasUnresolvedReachability !== false,
     input.hasUnsupportedReachableCapability !== false,
-    input.diagnostics?.some((d) => ["error", "fatal"].includes(d.severity.toLowerCase())) ?? false,
+    errorDiagnostic,
     input.diagnostics?.some((d) => !["debug", "info", "warning", "error", "fatal"].includes(d.severity.toLowerCase())) ?? false,
     input.hasUnresolvedReachability === true,
     input.hasUnsupportedReachableCapability === true,
@@ -65,7 +111,6 @@ export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): D
     input.coverageComplete !== true,
     unverifiedChecks.length > 0,
   ];
-  if (input.mode === "menu-only") reasons.push("menu-only output is always partial.");
   if (input.checks.length === 0) reasons.push("No audit checks were supplied.");
   if (input.declaredEntryCount === undefined || input.hdmvEntryCount === undefined) reasons.push("Entry counts are missing.");
   if (input.hasMissingRequiredAsset === undefined || input.hasUnresolvedReachability === undefined || input.hasUnsupportedReachableCapability === undefined) reasons.push("Capability and asset facts are incomplete.");
@@ -75,7 +120,20 @@ export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): D
   if (input.requiredEvidenceComplete === false || unverifiedChecks.length > 0) reasons.push("Required evidence is missing or not verified.");
   if (input.coverageComplete !== true) reasons.push("Coverage is incomplete or contains unknown items.");
   if (input.limitations?.length) reasons.push(...input.limitations.map((item) => `Limitation: ${item}`));
-  const status: DeliveryStatus = hardFailure ? "failed" : partialConditions.some(Boolean) || input.limitations?.length ? "partial" : "complete";
+  const status: DeliveryStatus = deliveryStatus(hardFailure ? "failed" : partialConditions.some(Boolean) || input.limitations?.length ? "partial" : "complete");
   const exitCode: 0 | 1 | 2 = status === "failed" ? 1 : status === "partial" && strict ? 2 : 0;
   return { status, strict, exitCode, reasons: [...new Set(reasons)], blockingChecks };
+}
+
+/**
+ * Decide whether one command stage reached its own goal. `complete` here means
+ * "this stage produced what it promised", never "the delivery is complete".
+ * `strict` only turns an acceptable partial into a rejection; it never upgrades
+ * or downgrades the underlying diagnostic facts.
+ */
+export function decideStageOutcome(input: StageOutcomeInput): StageOutcome {
+  const facts = classifyDiagnostics(input.diagnostics);
+  if (facts.hasFatal) return { status: stageStatus("failed"), strict: input.strict, exitCode: 1, blockingDiagnostics: facts.blocking };
+  if (facts.hasBlockingError) return { status: stageStatus("partial"), strict: input.strict, exitCode: input.strict ? 2 : 0, blockingDiagnostics: facts.blocking };
+  return { status: stageStatus("complete"), strict: input.strict, exitCode: 0, blockingDiagnostics: [] };
 }

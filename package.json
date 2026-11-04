@@ -8,6 +8,7 @@
     "build": "pnpm generate:contracts && pnpm -r build",
     "typecheck": "pnpm build && pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:all": "pnpm -r --no-bail test",
     "generate:contracts": "pnpm --filter @bdmv-web/core generate"
   },
   "devDependencies": {

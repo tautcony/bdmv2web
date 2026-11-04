@@ -2,28 +2,45 @@
 import { link, lstat, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { assertDisjointRoots, beginOutputTransaction, hashFile, resolveInputFile } from "@bdmv-web/bdmv-io";
-import { ContractError, parseDiscIR, type DiscIR } from "@bdmv-web/core";
+import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv-web/core";
 import { parseBdmv, type ParsedDisc } from "@bdmv-web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv-web/igs";
 import { buildNavigationGraph, HdmvVm } from "@bdmv-web/hdmv";
 import { computeMediaClosure, createExternalMediaTargets } from "@bdmv-web/media-export";
 import { buildMenuPackage } from "@bdmv-web/package-builder";
 import { adaptIgsScene } from "@bdmv-web/runtime-web";
-import { auditOutputPackage, createDependencyAuditReport, createReleaseSummary, summarizeDeliveryCoverage } from "@bdmv-web/test-runner";
+import { auditOutputPackage, classifyDiagnostics, createDependencyAuditReport, createReleaseSummary, decideDelivery, decideStageOutcome, summarizeDeliveryCoverage, type DeliveryDiagnostic } from "@bdmv-web/test-runner";
 
 const argv = process.argv.slice(2);
 const command = argv[0];
 const supported = new Set(["inspect", "extract", "convert", "validate", "compare"]);
-function optionValue(name: string): string | undefined {
+function lookupOption(name: string): { found: boolean; value: string | undefined } {
   const index = argv.findIndex((value) => value === name || value.startsWith(`${name}=`));
-  if (index < 0) return undefined;
+  if (index < 0) return { found: false, value: undefined };
   const arg = argv[index]!;
-  return arg.includes("=") ? arg.slice(arg.indexOf("=") + 1) : argv[index + 1];
+  // `--flag=` carries no value, so it must behave like a bare flag instead of
+  // supplying an empty string to path and enum options.
+  if (arg.includes("=")) {
+    const inline = arg.slice(arg.indexOf("=") + 1);
+    return { found: true, value: inline === "" ? undefined : inline };
+  }
+  const next = argv[index + 1];
+  return { found: true, value: next === undefined || next === "" || next.startsWith("--") ? undefined : next };
+}
+function optionValue(name: string): string | undefined {
+  const option = lookupOption(name);
+  if (!option.found) return undefined;
+  if (option.value === undefined) fail("CLI_MISSING_VALUE", `${name} requires a value`);
+  return option.value;
+}
+/** Non-throwing lookup for the error handler, which must not fail while formatting a failure. */
+function rawOptionValue(name: string): string | undefined {
+  return lookupOption(name).value;
 }
 function strictDefault(): boolean {
   if (argv.includes("--strict")) return true;
   if (argv.includes("--no-strict")) return false;
-  return command === "convert" && optionValue("--mode") !== "menu-only";
+  return false;
 }
 function inputPath(): string | undefined {
   const takesValue = new Set(["--format", "--out", "--mode", "--player-profile", "--limits", "--title"]);
@@ -38,16 +55,76 @@ function fail(code: string, message: string, path?: string): never {
   throw new ContractError(code, path ?? "/", message);
 }
 
+const PLAYER_PROFILE_KEYS = ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "region", "outputProfile", "videoProfiles", "audioProfiles"] as const;
+
+/** Read and validate a `PlayerProfile` JSON file; a profile is either fully declared or absent. */
+async function loadPlayerProfile(path: string | undefined): Promise<PlayerProfile> {
+  if (path === undefined) return { ...DEFAULT_PLAYER_PROFILE, videoProfiles: [], audioProfiles: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(resolve(path), "utf8"));
+  } catch (error) {
+    throw new ContractError("CLI_INVALID_PROFILE", "/", `--player-profile could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new ContractError("CLI_INVALID_PROFILE", "/", "--player-profile must contain a JSON object");
+  const record = parsed as Record<string, unknown>;
+  for (const key of ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "outputProfile"] as const) {
+    if (typeof record[key] !== "string" || record[key] === "") throw new ContractError("CLI_INVALID_PROFILE", `/${key}`, `--player-profile requires a non-empty string '${key}'`);
+  }
+  if (!["A", "B", "C"].includes(record.region as string)) throw new ContractError("CLI_INVALID_PROFILE", "/region", "--player-profile requires region A, B, or C");
+  if (record.outputProfile !== "portable") throw new ContractError("CLI_INVALID_PROFILE", "/outputProfile", "--player-profile supports only the 'portable' output profile");
+  for (const key of ["videoProfiles", "audioProfiles"] as const) {
+    const value = record[key];
+    if (value !== undefined && (!Array.isArray(value) || !value.every((item) => typeof item === "string"))) throw new ContractError("CLI_INVALID_PROFILE", `/${key}`, `--player-profile requires '${key}' to be a string array`);
+  }
+  return {
+    menuLanguage: record.menuLanguage as string,
+    audioLanguage: record.audioLanguage as string,
+    subtitleLanguage: record.subtitleLanguage as string,
+    country: record.country as string,
+    region: record.region as PlayerProfile["region"],
+    outputProfile: "portable",
+    videoProfiles: (record.videoProfiles as string[] | undefined) ?? [],
+    audioProfiles: (record.audioProfiles as string[] | undefined) ?? [],
+  };
+}
+
+function deliveryDiagnostics(diagnostics: ReadonlyArray<{ code: string; message: string; severity?: string }>): DeliveryDiagnostic[] {
+  return diagnostics.map((item) => ({
+    severity: item.severity ?? "warning",
+    code: item.code,
+    message: item.message,
+  }));
+}
+
+function firstBlockingCode(diagnostics: DeliveryDiagnostic[]): string {
+  return diagnostics.find((item) => item.severity.toLowerCase() === "fatal")?.code ?? diagnostics[0]?.code ?? "STAGE_FAILED";
+}
+
+function stageFailure(code: string, diagnostics: DeliveryDiagnostic[]): void {
+  process.stdout.write(`${JSON.stringify({ status: "failed", code, diagnostics })}\n`);
+  process.exitCode = 1;
+}
+
 async function inspect(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "inspect requires an input path");
-  const disc = await parseBdmv(input);
-  const json = `${JSON.stringify(disc, null, 2)}\n`;
+  // Argument contract first: a missing flag value must not be masked by stage output.
   const out = optionValue("--out");
-  if (!out) { process.stdout.write(json); return; }
+  const strict = strictDefault();
+  const allowPartial = argv.includes("--allow-partial");
+  const disc = await parseBdmv(input);
+  const outcome = decideStageOutcome({ stage: "inspect", diagnostics: disc.diagnostics, strict });
+  if (outcome.status === "failed" && !allowPartial) {
+    stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics);
+    return;
+  }
+  const json = `${JSON.stringify({ ...disc, stageStatus: outcome.status }, null, 2)}\n`;
+  if (!out) { process.stdout.write(json); process.exitCode = allowPartial ? 0 : outcome.exitCode; return; }
   const target = resolve(out); await assertDisjointRoots(disc.root, target);
   const temp = resolve(dirname(target), `.${basename(target)}.tmp-${process.pid}`);
   try { await writeFile(temp, json, { flag: "wx" }); await link(temp, target); await unlink(temp); }
   catch (error) { await rm(temp, { force: true }); throw error; }
+  process.exitCode = allowPartial ? 0 : outcome.exitCode;
 }
 
 function buildExternalTargets(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
@@ -64,9 +141,14 @@ async function extract(): Promise<void> {
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "extract requires --out DIR");
   const disc = await parseBdmv(input);
   const roots = await assertDisjointRoots(disc.root, resolve(out));
+  const igs = await extractIgsScenes(disc);
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
+  if (outcome.status === "failed") {
+    stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics);
+    return;
+  }
   const transaction = await beginOutputTransaction(roots.output);
   try {
-    const igs = await extractIgsScenes(disc);
     const externalTargets = buildExternalTargets(disc, igs.scenes);
     await writeFile(resolve(transaction.stagingPath, "external-media-targets.json"), `${JSON.stringify(externalTargets, null, 2)}\n`, { flag: "wx" });
     const commandTable = disc.movieObjects.flatMap((object) => object.instructions.map((instruction, instructionIndex) => ({ movieObjectId: object.id, instructionIndex, words: instruction.words, bytes: instruction.bytes, source: instruction.source })));
@@ -107,10 +189,11 @@ async function extract(): Promise<void> {
       await writeFile(assetPath, asset.pngBytes, { flag: "wx" });
       generatedFiles.push(await generatedFileRecord(transaction.stagingPath, relativePath, "image"));
     }
-    const manifest = { schemaVersion: "1.0", status: "partial", analysisStage: "structural", igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS animation and visual effects are not fully verified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
+    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS animation and visual effects are not fully verified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
     await writeFile(resolve(transaction.stagingPath, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
-    process.stdout.write(`${JSON.stringify({ status: "partial", output: roots.output })}\n`);
+    process.stdout.write(`${JSON.stringify({ stageStatus: outcome.status, output: roots.output })}\n`);
+    if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }
 
@@ -216,10 +299,10 @@ function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; cl
   return parseDiscIR({ schemaVersion: "1.0", entries, programs, menus, playlists, mediaAssets: [], diagnostics });
 }
 
-function findTopMenuPlaylist(disc: ParsedDisc): ParsedDisc["playlists"][number] | undefined {
+function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile): ParsedDisc["playlists"][number] | undefined {
   const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV");
   if (typeof firstPlay?.target.target !== "number") return undefined;
-  const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries });
+  const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, profile });
   vm.reset(firstPlay.target.target);
   const startup = vm.runTurn();
   if (startup.waiting) vm.releaseExternalPlayback(startup.waiting);
@@ -254,17 +337,33 @@ async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playli
 
 async function convert(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "convert requires a BDMV input path");
-  const mode = optionValue("--mode") ?? "standalone-full";
-  if (mode !== "menu-only" && mode !== "standalone-full") fail("CLI_UNSUPPORTED_MODE", "Unsupported convert mode");
+  // Argument contract first: every option value is resolved before the input is parsed and
+  // before any output transaction exists. A missing value must never be masked by disc
+  // diagnostics, and a late failure must never leave a staging directory behind.
+  const mode = optionValue("--mode") ?? "menu-only";
+  if (mode !== "menu-only") fail("CLI_UNSUPPORTED_MODE", `convert only produces menu-only packages; '${mode}' is not implemented`);
+  if (lookupOption("--limits").found) {
+    optionValue("--limits"); // A bare `--limits` is a missing value, not an unimplemented feature.
+    fail("CLI_NOT_IMPLEMENTED", "--limits is not wired yet; it will apply once VmOptions.limits lands (batch 2, D3)");
+  }
+  const profile = await loadPlayerProfile(optionValue("--player-profile"));
+  const outOption = optionValue("--out");
+  const titleOption = optionValue("--title");
   const disc = await parseBdmv(input);
-  const out = optionValue("--out") ?? resolve(dirname(disc.root), "BDMV-menu");
+  const fatalDiagnostics = classifyDiagnostics(disc.diagnostics);
+  if (fatalDiagnostics.hasFatal) {
+    stageFailure(firstBlockingCode(fatalDiagnostics.blocking), fatalDiagnostics.blocking);
+    return;
+  }
+  const out = outOption ?? resolve(dirname(disc.root), "BDMV-menu");
+  const title = titleOption ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const extraction = await extractIgsScenes(disc);
-  const menuPlaylist = findTopMenuPlaylist(disc);
+  const menuPlaylist = findTopMenuPlaylist(disc, profile);
   const menuMedia = await menuLoopMediaInput(disc, menuPlaylist);
   const transaction = await beginOutputTransaction(roots.output);
-  const failMenuConversion = async (code: string, message: string): Promise<void> => {
-    try {
+  try {
+    const failMenuConversion = async (code: string, message: string): Promise<void> => {
       await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu-only preview\n\n${message}\n\nStatus: **failed**.\n`);
       const diagnostics = [
         { code, message },
@@ -275,65 +374,76 @@ async function convert(): Promise<void> {
       await transaction.commit();
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
-    } catch (error) { await transaction.abort(); throw error; }
-  };
-  if (!extraction.scenes.length) {
-    await failMenuConversion("MENU_SCENE_NOT_FOUND", "Conversion did not produce a runnable package because no IGS scene was found in the BDMV input.");
-    return;
-  }
-  if (!menuPlaylist) {
-    await failMenuConversion("MENU_PLAYLIST_NOT_RESOLVED", "The HDMV Top Menu playlist could not be resolved from the disc navigation entries; no IGS scene was selected.");
-    return;
-  }
-  const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes);
-  if (menuSceneResult.status === "not-found") {
-    await failMenuConversion("MENU_SCENE_NOT_FOUND", `No extracted IGS scene matches the stream and clip declarations in Top Menu playlist ${menuPlaylist.id}; no other scene was selected.`);
-    return;
-  }
-  if (menuSceneResult.status === "ambiguous") {
-    const sources = menuSceneResult.scenes.map((scene) => `${scene.id} (clip ${scene.clipId}, PID ${scene.pid} @ byte ${scene.source.segmentFileOffset})`);
-    await failMenuConversion("MENU_SCENE_AMBIGUOUS", `Top Menu playlist ${menuPlaylist.id} maps to multiple extracted IGS scenes: ${sources.join(", ")}; no scene was selected.`);
-    return;
-  }
-  const menuScene = menuSceneResult.scene;
-  const adapted = adaptIgsScene(menuScene, extraction.assets);
-  const scene = adapted.scene;
-  const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
-    id,
-    instructions: instructions.map(({ words, bytes, source }) => ({ words, bytes, source: { path: "<MovieObject>", origin: source.origin, offset: source.offset } })),
-    resumeIntention, menuCallMask, titleSearchMask,
-  }));
-  const menuEntry = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number")
-    ?? disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
-  const vmInitialProgramId = typeof menuEntry?.target.target === "number" ? menuEntry.target.target : undefined;
-  const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
-  const vmFirstPlayProgramId = typeof firstPlay?.target.target === "number" ? firstPlay.target.target : undefined;
-  const referenced = referencedAssetIds(scene);
-  const graphics = extraction.assets.filter((asset) => referenced.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
-  const title = optionValue("--title") ?? basename(dirname(disc.root));
-  const diagnostics = [
-    ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
-    ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
-    ...adapted.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
-  ];
-  if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "No supported repeated menu clip with video and primary-audio streams was found." });
-  if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands." });
-  let soundBytes: Uint8Array | null = null;
-  const soundPath = disc.sounds[0]?.source.path;
-  if (soundPath) {
-    try {
-      const relativeSoundPath = soundPath.replace(/^BDMV\//i, "");
-      soundBytes = new Uint8Array(await readFile(await resolveInputFile(disc.root, relativeSoundPath)));
-    } catch (error) {
-      diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(error instanceof Error ? error.message : String(error), roots.input) });
+    };
+    if (!extraction.scenes.length) {
+      await failMenuConversion("MENU_SCENE_NOT_FOUND", "Conversion did not produce a runnable package because no IGS scene was found in the BDMV input.");
+      return;
     }
-  }
-  try {
+    if (!menuPlaylist) {
+      await failMenuConversion("MENU_PLAYLIST_NOT_RESOLVED", "The HDMV Top Menu playlist could not be resolved from the disc navigation entries; no IGS scene was selected.");
+      return;
+    }
+    const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes);
+    if (menuSceneResult.status === "not-found") {
+      await failMenuConversion("MENU_SCENE_NOT_FOUND", `No extracted IGS scene matches the stream and clip declarations in Top Menu playlist ${menuPlaylist.id}; no other scene was selected.`);
+      return;
+    }
+    if (menuSceneResult.status === "ambiguous") {
+      const sources = menuSceneResult.scenes.map((scene) => `${scene.id} (clip ${scene.clipId}, PID ${scene.pid} @ byte ${scene.source.segmentFileOffset})`);
+      await failMenuConversion("MENU_SCENE_AMBIGUOUS", `Top Menu playlist ${menuPlaylist.id} maps to multiple extracted IGS scenes: ${sources.join(", ")}; no scene was selected.`);
+      return;
+    }
+    const menuScene = menuSceneResult.scene;
+    const adapted = adaptIgsScene(menuScene, extraction.assets);
+    const scene = adapted.scene;
+    const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
+      id,
+      instructions: instructions.map(({ words, bytes, source }) => ({ words, bytes, source: { path: "<MovieObject>", origin: source.origin, offset: source.offset } })),
+      resumeIntention, menuCallMask, titleSearchMask,
+    }));
+    const menuEntry = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number")
+      ?? disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
+    const vmInitialProgramId = typeof menuEntry?.target.target === "number" ? menuEntry.target.target : undefined;
+    const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
+    const vmFirstPlayProgramId = typeof firstPlay?.target.target === "number" ? firstPlay.target.target : undefined;
+    const referenced = referencedAssetIds(scene);
+    const graphics = extraction.assets.filter((asset) => referenced.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
+    const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
+      ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+      ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+      ...adapted.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+    ];
+    if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "No supported repeated menu clip with video and primary-audio streams was found.", severity: "warning" });
+    if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands.", severity: "warning" });
+    let soundBytes: Uint8Array | null = null;
+    const soundPath = disc.sounds[0]?.source.path;
+    if (soundPath) {
+      try {
+        const relativeSoundPath = soundPath.replace(/^BDMV\//i, "");
+        soundBytes = new Uint8Array(await readFile(await resolveInputFile(disc.root, relativeSoundPath)));
+      } catch (error) {
+        diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(error instanceof Error ? error.message : String(error), roots.input) });
+      }
+    }
     const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null);
-    await buildMenuPackage({ outputDirectory: transaction.stagingPath, title, ir, scene, vmPrograms, vmEntries: disc.entries, externalTargets: buildExternalTargets(disc, extraction.scenes), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root, ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }), ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }), graphics, soundEntries: disc.sounds, soundBytes, ...(menuMedia ? { menuLoopMedia: menuMedia } : {}), diagnostics });
+    await buildMenuPackage({ outputDirectory: transaction.stagingPath, title, ir, scene, vmPrograms, vmEntries: disc.entries, externalTargets: buildExternalTargets(disc, extraction.scenes), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root, ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }), ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }), graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, ...(menuMedia ? { menuLoopMedia: menuMedia } : {}), diagnostics: diagnostics.map(({ code, message }) => ({ code, message })) });
+    // Delivery status is decided from facts, not from the fact that packaging succeeded.
+    const decisionFacts = deliveryDiagnostics(diagnostics);
+    const decision = decideDelivery({
+      mode: "menu-only",
+      checks: [],
+      diagnostics: decisionFacts,
+      declaredEntryCount: disc.entries.length,
+      hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
+      hasMissingRequiredAsset: false,
+      limitations: menuMedia ? [] : ["Menu loop media is unavailable; the menu background holds its final frame."],
+    }, strictDefault());
+    const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
+    const report = { schemaVersion: "1.0", status: decision.status, mode: "menu-only", reasons: decision.reasons, diagnostics: decisionFacts, blockingDiagnostics };
+    await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
-    process.stdout.write(`${JSON.stringify({ status: "partial", mode: "menu-only", output: roots.output })}\n`);
-    if (strictDefault()) process.exitCode = 2;
+    process.stdout.write(`${JSON.stringify({ status: decision.status, mode: "menu-only", output: roots.output })}\n`);
+    if (decision.exitCode !== 0) process.exitCode = decision.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }
 
@@ -463,6 +573,6 @@ main().catch((error: unknown) => {
   const e = error instanceof Error ? error : new Error(String(error));
   const code = error instanceof ContractError ? error.code : "E_IO";
   const record = { code, message: e.message, path: error instanceof ContractError ? error.path : null };
-  process.stderr.write(optionValue("--format") === "json" ? `${JSON.stringify(record)}\n` : `${code}: ${e.message}\n`);
+  process.stderr.write(rawOptionValue("--format") === "json" ? `${JSON.stringify(record)}\n` : `${code}: ${e.message}\n`);
   process.exitCode = 1;
 });

@@ -7,12 +7,12 @@ const source: IgsSource = { clipId: "00001", pid: 0x18, packetOffset: "192", pes
 function fixture(): { scene: IgsScene; assets: IgsAsset[] } {
   const scene: IgsScene = {
     id: "00001:24:7:0:9000", clipId: "00001", pid: 0x18, compositionNumber: 7, compositionState: 0,
-    width: 1920, height: 1080, timeDomain: 0, pts90k: "9000", streamModel: 0, uiModel: 0,
+    width: 1920, height: 1080, frameRateCode: 1, timeDomain: 0, pts90k: "9000", streamModel: 0, uiModel: 0,
     compositionTimeout90k: "90000", selectionTimeout90k: "4500", userTimeoutDuration: 0, rawIcs: new Uint8Array(),
     pages: [{
       id: 2, version: 1, uoMask: 0n, defaultSelectedButtonId: 11, defaultActivatedButtonId: 12, paletteId: 3,
       buttons: [{
-        id: 11, x: 100, y: 200, autoAction: true,
+        id: 11, x: 100, y: 200, autoAction: true, numericSelectValue: 11,
         neighbors: { up: 12, down: 13, left: 14, right: 15 },
         visuals: {
           normal: { startObjectId: 21, endObjectId: 21, repeat: false },

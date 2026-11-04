@@ -7,3 +7,5 @@ node_modules/
 test-data/bdmv/
 test-data/output/
 __pycache__/
+.DS_Store
+**/.DS_Store

@@ -142,6 +142,8 @@ flowchart LR
 
 ## 4. TypeScript 项目组织
 
+> **历史设计（非当前实现）**：下面这棵目录树是 2026-11 初版的设想名，实际仓库没有 `apps/studio`，且 `m2ts-demux`、`igs-decoder`、`navigation-hdmv`、`ir-builder` 四个包没有独立存在。对照关系见本节末尾的映射表。读当前布局请直接看仓库根目录或 `docs/development.md`。
+
 ```text
 bdmv-web/
 ├── apps/
@@ -166,6 +168,26 @@ bdmv-web/
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
 ```
+
+**设计名 → 实际位置**
+
+| 设计名 | 实际位置 | 说明 |
+| --- | --- | --- |
+| `apps/cli` | `apps/cli` | 已实施 |
+| `apps/studio` | — | **未实施** |
+| `core` | `packages/core` | 已实施 |
+| `bdmv-io` | `packages/bdmv-io` | 已实施 |
+| `bdmv-parser` | `packages/bdmv-parser` | 已实施 |
+| `m2ts-demux` | `packages/igs`（传输层：TS 包、PSI/PES、PES 重组、PTS） | 与 IGS 解码同包 |
+| `igs-decoder` | `packages/igs`（ICS/PDS/ODS、palette、RLE、composition） | 与传输层同包 |
+| `navigation-hdmv` | `packages/hdmv`（命令解码、寄存器、VM） | 已实施，改名 |
+| `ir-builder` | `apps/cli` 的 `createMenuDiscIR` + `packages/bdmv-parser` 的解析结果 | 未独立成包 |
+| `media-export` | `packages/media-export` | 已实施 |
+| `package-builder` | `packages/package-builder` | 已实施 |
+| `runtime-web` | `packages/runtime-web` | 已实施 |
+| `test-fixtures` | `packages/test-fixtures` | 已实施 |
+| `test-runner` | `packages/test-runner` | 已实施 |
+
 
 建议 Node.js LTS + TypeScript 5.x + pnpm + Vitest；二进制操作使用 `Buffer`、`Uint8Array`、`DataView` 和 `node:fs` 流式读取。Web 构建使用 esbuild/Rollup，**输出 `iife` 或不含 import 的传统脚本**，不向最终包分发 npm 依赖、node_modules、Source Map、Native Addon 或开发工具。
 
@@ -524,6 +546,8 @@ V1 验证 macOS Google Chrome。记录实际 macOS build 与 Chrome 完整版本
 - **序列化约定**：TS 运行时可用 `bigint` 表示 90 kHz 时间值，但 `JSON.stringify` 不能直接序列化 `bigint`；IR 数据中一律以十进制字符串（如 `"time90k": "180000"`）保存时间，装载时显式还原 `BigInt`，禁止转换成可能损失精度的浮点值。
 - 每种导航类型使用显式 discriminated union，为未来 BD-J 保留数据位。
 
+> **历史设计（非当前 `DiscIR` 形状）**：下面这段是初版草案。实际类型由 `packages/core/schema/disc-ir.schema.json` 生成到 `packages/core/src/disc-ir.generated.ts`：条目多了 `id` 与 `source`，没有 `role`/`titleNumber`，导航判别字段是 `type` 而不是 `kind`。实际形状见本段代码之后。
+
 ```ts
 export type NavigationKind = 'HDMV' | 'BDJ';
 
@@ -555,6 +579,18 @@ export interface DiscIR {
   diagnostics: Diagnostic[];
 }
 ```
+
+**实际形状（`packages/core/src/disc-ir.generated.ts`）**
+
+```ts
+export interface DiscEntry { id: string; navigation: NavigationDescriptor; source: SourceRef }
+
+export type NavigationDescriptor =
+  | { type: 'HDMV'; movieObjectId: number }
+  | { type: 'BDJ'; bdjoId: string; status: 'unsupported' };
+```
+
+入口类别（`firstPlay` / `topMenu` / `title`）与标题号留在 `ParsedDisc.entries`，不进入 `DiscIR`；CLI 需要时从解析结果读取。
 
 未来 BD-J 新增 `BdjBackend` 时，不应要求重新编写页面图形引擎、音视频播放器、事件总线和资源管理；但 **BD-J 的执行模型与 HDMV 完全不同**，目前抽象只保证接入点，不承诺未来可用纯 TS 通用转译所有 Java 字节码。后续设计仍需符合“导出后不依赖后台”的产品约束；无法达到的 BD-J 功能应选择显式不支持，而非让最终用户安装 JVM。
 
