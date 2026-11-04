@@ -1,0 +1,29 @@
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_f1e09a61530d1a::t_e51474b60a60c2 5
+  s_f1e09a61530d1a::t_49bdb27917b4ca 11
+docs/protocol-support.md
+  s_f1e09a61530d1a::t_49bdb27917b4ca 25-29,35
+docs/references/stages/M1-bdmv-structure.md
+  s_f1e09a61530d1a::t_49bdb27917b4ca 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b182b104e46219a1636e09c73550752702580aaf",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
