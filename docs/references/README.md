@@ -52,7 +52,7 @@ SAPikachu/igstools 固定为已核验的 `34a133150ca8b52237284da4d47d93911bcd49
 
 ## 本地参考源码摘录
 
-为便于按固定 revision 对照，本地 `.reference-cache/` 只存少量开源文件和对应许可证文本，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将它排除在版本控制外。所选文件、原始 URL、revision、byteLength 和 SHA-256 在 [cache-manifest.json](cache-manifest.json) 中。重建/校验缓存：
+为便于按固定 revision 对照，本地 `.reference-cache/` 只存少量开源文件和对应许可证文本，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将它排除在版本控制外。所选文件、原始 URL、revision、byteLength 和 SHA-256 在 [cache-manifest.json](cache-manifest.json) 中。下载缓存（不校验 SHA-256）：
 
 ```sh
 python3 scripts/fetch-reference-cache.py
