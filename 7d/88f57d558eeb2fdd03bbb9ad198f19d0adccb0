@@ -1,0 +1,108 @@
+.gitignore
+  h_3705811fa4502c 10-11
+apps/cli/package.json
+  h_3705811fa4502c 4,10
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 4,102-129,251-277,292,344,378-463
+apps/cli/src/index.ts
+  h_3705811fa4502c 5,12,17,19,21-38,43,58-108,111,113-122,127,144-149,192,195-196,302,305,340-351,353-359,362,365-366,377-426,429-443,445-446,576
+apps/cli/tsconfig.build.json
+  h_3705811fa4502c 1
+bdmv_hdmv_offline_web_architecture.md
+  h_3705811fa4502c 145-146,172-191,549-550,583-594
+docs/browser-matrix.md
+  h_3705811fa4502c 5-6,9
+docs/development.md
+  h_3705811fa4502c 42-110,116
+docs/igs-support.md
+  h_3705811fa4502c 22
+docs/references/stages/M6-release-verification.md
+  h_3705811fa4502c 23-28,34-37,48
+openspec/changes/restore-build-gate-and-delivery-status/tasks.md
+  h_3705811fa4502c 9,16,20,29-30,33-35,40-44,48-51,55-60,64-69,74-80,84-86,97-98
+openspec/changes/restore-build-gate-and-delivery-status/verification.md
+  h_3705811fa4502c 1-241
+package.json
+  h_3705811fa4502c 11
+packages/bdmv-io/package.json
+  h_3705811fa4502c 7
+packages/bdmv-io/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/bdmv-parser/package.json
+  h_3705811fa4502c 8
+packages/bdmv-parser/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/core/package.json
+  h_3705811fa4502c 16
+packages/core/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/hdmv/package.json
+  h_3705811fa4502c 7
+packages/hdmv/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/hdmv/vitest.config.ts
+  h_3705811fa4502c 1-2
+packages/igs/package.json
+  h_3705811fa4502c 8
+packages/igs/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/media-export/package.json
+  h_3705811fa4502c 8
+packages/media-export/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/package-builder/package.json
+  h_3705811fa4502c 7
+packages/package-builder/src/index.test.ts
+  h_3705811fa4502c 131-143
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 5,70,114,128,140
+packages/package-builder/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/package-builder/vitest.config.ts
+  h_3705811fa4502c 2
+packages/runtime-web/package.json
+  h_3705811fa4502c 8,10
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 243-263
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 6,10-17,90
+packages/runtime-web/src/igs-adapter.test.ts
+  h_3705811fa4502c 10,15
+packages/runtime-web/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/runtime-web/vitest.config.ts
+  h_3705811fa4502c 2
+packages/test-fixtures/package.json
+  h_3705811fa4502c 8
+packages/test-fixtures/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/test-runner/package.json
+  h_3705811fa4502c 4,13,15
+packages/test-runner/src/decisions.ts
+  h_3705811fa4502c 36-81,89-91,106,123,127-139
+packages/test-runner/src/index.test.ts
+  h_3705811fa4502c 6-7,11,16,175-178,187-188,198-244
+packages/test-runner/src/package-audit.ts
+  h_3705811fa4502c 7
+packages/test-runner/src/release-summary.test.ts
+  h_3705811fa4502c 49,56-64
+packages/test-runner/src/types.ts
+  h_3705811fa4502c 2-10
+packages/test-runner/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/test-runner/vitest.config.ts
+  h_3705811fa4502c 1-2
+scripts/ci.sh
+  h_3705811fa4502c 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7d88f57d558eeb2fdd03bbb9ad198f19d0adccb0",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
