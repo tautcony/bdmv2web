@@ -1,0 +1,68 @@
+docs/hdmv-support.md
+  s_f1e09a61530d1a::t_c451d1d0f83c10 122
+  s_f1e09a61530d1a::t_c744081eff5fc6 90,120
+  s_f1e09a61530d1a::t_e81d4510867fc4 88,112,114
+  s_f1e09a61530d1a::t_d2bee8362c5604 3
+  s_f1e09a61530d1a::t_7fff89b141ca15 29,34,43
+  s_f1e09a61530d1a::t_328eaed83789ae 50-51,77-82,104-107
+docs/references/stages/M1-bdmv-structure.md
+  s_f1e09a61530d1a::t_a37cf6fd8a1fc3 3,8
+  s_f1e09a61530d1a::t_6efdfce9ee3312 10
+  s_f1e09a61530d1a::t_0013ad2d83f6cc 9,13
+docs/references/stages/M6-release-verification.md
+  s_f1e09a61530d1a::t_a37cf6fd8a1fc3 14,18
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_f1e09a61530d1a::t_62a4c1c7982332 31
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_f1e09a61530d1a::t_6efdfce9ee3312 5,38
+  s_f1e09a61530d1a::t_e81d4510867fc4 11
+  s_f1e09a61530d1a::t_3028d2cdf0dbca 40
+  s_f1e09a61530d1a::t_5222f0754cbc43 39
+docs/references/stages/M3-hdmv-navigation.md
+  s_f1e09a61530d1a::t_a37cf6fd8a1fc3 8,10
+  s_f1e09a61530d1a::t_0013ad2d83f6cc 9,13
+docs/igs-support.md
+  s_f1e09a61530d1a::t_33b2a628319f93 12,36
+  s_f1e09a61530d1a::t_0013ad2d83f6cc 28
+docs/protocol-support.md
+  s_f1e09a61530d1a::t_d2bee8362c5604 3,7,39-40
+  s_f1e09a61530d1a::t_1bdba6bf483c84 5-6,8-9,11,15,37,42
+  s_f1e09a61530d1a::t_62a4c1c7982332 19
+  s_f1e09a61530d1a::t_328eaed83789ae 35
+  s_f1e09a61530d1a::t_9774a4eb01a835 10
+  s_f1e09a61530d1a::t_15006bb2e36955 4
+docs/references/sources.json
+  s_f1e09a61530d1a::t_ae534b0a3f279a 36-53
+  s_f1e09a61530d1a::t_7ef06ff60bb247 11,19
+  s_f1e09a61530d1a::t_328eaed83789ae 122
+  s_f1e09a61530d1a::t_c8e86b5e9b0229 35
+docs/references/README.md
+  s_f1e09a61530d1a::t_ede3e6a7cdfe20 5-9,15,33-34,70
+  s_f1e09a61530d1a::t_a37cf6fd8a1fc3 3,10,72
+  s_f1e09a61530d1a::t_1f1c0a95770c64 4
+openspec/changes/execute-hdmv-navigation/proposal.md
+  s_f1e09a61530d1a::t_a37cf6fd8a1fc3 31
+openspec/changes/execute-hdmv-navigation/design.md
+  s_f1e09a61530d1a::t_a37cf6fd8a1fc3 19,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "210888cc086cd70c266dff6003b2ac41a9783560",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
