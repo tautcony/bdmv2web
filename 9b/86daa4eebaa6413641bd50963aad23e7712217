@@ -1,0 +1,47 @@
+README.md
+  s_b110babc9f7aa1::t_2cd5339a4458c4 3,7-12,16,18-21,26,28-29,32,36,38,44,50,53,56,58-63,66,68,70,72,79,81,83-84,88-89,91,93-98,100,104,130,136-142,144-145,147-148,154-158,161,167,178-188,194-200
+  h_3705811fa4502c 1-2,4-6,13-15,17,22-25,27,30-31,33-35,37,39-43,45-49,51-52,54-55,57,64-65,67,69,71,73-78,80,82,85-87,90,92,99,101-103,105-129,131-135,143,146,149-153,159-160,162-166,168-177,189-193,201-205
+.agents/skills/humanizer-zh/.gitignore
+  h_3705811fa4502c 1-9
+.agents/skills/humanizer-zh/CHANGELOG.md
+  h_3705811fa4502c 1-15
+.agents/skills/humanizer-zh/LICENSE
+  h_3705811fa4502c 1-21
+.agents/skills/humanizer-zh/README.md
+  h_3705811fa4502c 1-141
+.agents/skills/humanizer-zh/SKILL.md
+  h_3705811fa4502c 1-408
+.agents/skills/humanizer-zh/tests/README.md
+  h_3705811fa4502c 1-37
+.agents/skills/humanizer-zh/tests/check_structure.py
+  h_3705811fa4502c 1-36
+.agents/skills/humanizer-zh/tests/fixtures/cases.json
+  h_3705811fa4502c 1-92
+.agents/skills/humanizer-zh/tests/fixtures/structure.md
+  h_3705811fa4502c 1-33
+docs/bdmv_hdmv_offline_web_architecture.md
+  h_3705811fa4502c 1-894
+skills-lock.json
+  h_3705811fa4502c 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9b86daa4eebaa6413641bd50963aad23e7712217",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_b110babc9f7aa1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a740-ac24-71a0-9fc2-4a2f229faf8d",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
