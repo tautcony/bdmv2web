@@ -39,11 +39,14 @@ export class RegisterFile {
     this.gpr.fill(0); this.psr.fill(0);
     const defaults: Record<number, number> = { 0: 1, 1: 0xff, 2: 0x0fff0fff, 3: 1, 4: 0xffff, 5: 0xffff, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0xffff, 11: 0, 12: 0xff, 13: 0xff, 14: 0xffff, 15: 0xaaaa, 16: 0xffffff, 17: 0xffffff, 18: 0xffffff, 19: 0xffff, 20: 2, 21: 0, 22: 0, 23: 0, 24: 0, 25: 0, 26: 0, 27: 0, 28: 0, 29: 0x03, 30: 0x1ffff, 31: 0x00030200, 36: 0xffff, 37: 0xffff, 38: 0, 39: 0, 40: 0, 42: 0xffff, 43: 0, 44: 0xff };
     for (const [index, value] of Object.entries(defaults)) this.psr[Number(index)] = value;
-    this.psr[16] = profileWord(profile.audioLanguage, "eng", 3, "audioLanguage");
-    this.psr[17] = profileWord(profile.subtitleLanguage, "eng", 3, "subtitleLanguage");
-    this.psr[18] = profileWord(profile.menuLanguage, "eng", 3, "menuLanguage");
-    this.psr[19] = profileWord(profile.country, "US", 2, "country");
-    this.psr[20] = regionWord(profile.region ?? "A");
+    // Missing settings preserve the pinned libbluray initializer (all-ones
+    // language/country selectors and Region B); HdmvVm supplies its shared
+    // product profile explicitly before constructing or resetting this file.
+    if (profile.audioLanguage !== undefined) this.psr[16] = profileWord(profile.audioLanguage, 3, "audioLanguage");
+    if (profile.subtitleLanguage !== undefined) this.psr[17] = profileWord(profile.subtitleLanguage, 3, "subtitleLanguage");
+    if (profile.menuLanguage !== undefined) this.psr[18] = profileWord(profile.menuLanguage, 3, "menuLanguage");
+    if (profile.country !== undefined) this.psr[19] = profileWord(profile.country, 2, "country");
+    if (profile.region !== undefined) this.psr[20] = regionWord(profile.region);
     // `outputProfile: portable` is intentionally a product-level label only.
     // PSR21 expresses a distinct output preference and no verified portable mapping exists.
     this.psr[21] = uint32(profile.outputPreference ?? defaults[21]!, "outputPreference");
@@ -83,8 +86,7 @@ export class RegisterFile {
   }
 }
 
-function profileWord(value: string | number | undefined, fallback: string, width: number, name: string): number {
-  if (value === undefined) value = fallback;
+function profileWord(value: string | number, width: number, name: string): number {
   if (typeof value === "number") return uint32(value, name);
   if (value.length !== width || !/^[A-Za-z]+$/.test(value)) throw new TypeError(`${name} must be ${width} ASCII letters or an encoded uint32 PSR word`);
   let word = 0;

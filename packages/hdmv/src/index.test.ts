@@ -680,22 +680,33 @@ describe("M3 HDMV fixtures", () => {
     expect(() => regs.systemWrite(1, -1)).toThrow(/uint32/);
     expect(() => regs.systemWrite(1, 0x1_0000_0000)).toThrow(/uint32/);
   });
-  it("maps the shared product defaults to visible PSR words and resets deterministically", () => {
-    const regs = new RegisterFile({ outputProfile: "portable" });
-    expect(regs.read({ kind: "psr", index: 16 })).toBe(0x656e67); // eng
-    expect(regs.read({ kind: "psr", index: 17 })).toBe(0x656e67); // eng
-    expect(regs.read({ kind: "psr", index: 18 })).toBe(0x656e67); // eng
-    expect(regs.read({ kind: "psr", index: 19 })).toBe(0x5553); // US
-    expect(regs.read({ kind: "psr", index: 20 })).toBe(1); // region A
-    expect(regs.read({ kind: "psr", index: 15 })).toBe(0xaaaa); // pinned audio capability expression
-    expect(regs.read({ kind: "psr", index: 21 })).toBe(0); // pinned 2D output preference default
-    expect(regs.read({ kind: "psr", index: 29 })).toBe(0x03); // pinned video capability expression
-    expect(regs.read({ kind: "psr", index: 31 })).toBe(0x00030200); // pinned profile 2, version 2.0
-    expect(regs.read({ kind: "psr", index: 48 })).toBe(0xffffffff);
+  it("matches the complete pinned libbluray PSR initialization when no profile overrides are supplied", () => {
+    const regs = new RegisterFile();
+    const expected = [
+      1, 0xff, 0x0fff0fff, 1, 0xffff, 0xffff, 0, 0, 0, 0, 0xffff, 0, 0xff, 0xff, 0xffff,
+      0xaaaa, 0xffffff, 0xffffff, 0xffffff, 0xffff, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0x03, 0x1ffff, 0x00030200,
+      0, 0, 0, 0, 0xffff, 0xffff, 0, 0, 0, 0, 0xffff, 0, 0xff, 0, 0, 0,
+      ...Array.from({ length: 14 }, () => 0xffffffff),
+    ];
+    expect([...regs.psr.slice(0, 62)]).toEqual(expected);
+    expect([...regs.psr.slice(62)]).toEqual(Array.from({ length: 66 }, () => 0));
+
     const first = regs.snapshot();
     regs.write({ kind: "gpr", index: 4 }, 77);
-    regs.reset({ outputProfile: "portable" });
+    regs.reset();
     expect(regs.snapshot()).toEqual(first);
+  });
+  it("maps an explicit PlayerProfile onto its PSR fields without changing unrelated libbluray defaults", () => {
+    const regs = new RegisterFile({
+      audioLanguage: "eng", subtitleLanguage: "fra", menuLanguage: "jpn", country: "US", region: "A",
+      outputPreference: 1,
+    });
+    expect([...regs.psr.slice(16, 22)]).toEqual([0x656e67, 0x667261, 0x6a706e, 0x5553, 1, 1]);
+    expect(regs.psr[15]).toBe(0xaaaa);
+    expect(regs.psr[23]).toBe(0); expect(regs.psr[29]).toBe(0x03); expect(regs.psr[31]).toBe(0x00030200);
+
+    regs.reset({ audioLanguage: "jpn", region: "C" });
+    expect([...regs.psr.slice(16, 22)]).toEqual([0x6a706e, 0xffffff, 0xffffff, 0xffff, 4, 0]);
   });
   it("accepts raw caller capability and output preference words without deriving mappings", () => {
     const regs = new RegisterFile({
@@ -752,6 +763,7 @@ describe("M3 HDMV fixtures", () => {
       audioLanguage: "eng", audioProfiles: [], country: "US", menuLanguage: "eng",
       outputProfile: "portable", region: "A", subtitleLanguage: "eng", videoProfiles: [],
     });
+    expect([...vm.registers.psr.slice(16, 22)]).toEqual([0x656e67, 0x656e67, 0x656e67, 0x5553, 1, 0]);
 
     vm.reset(0, { audioLanguage: 0x6a706e, region: "C", capabilityValues: { 15: 0x1234 } });
     expect(resetProfile(vm.trace.at(-1)!)).toEqual({
@@ -759,9 +771,24 @@ describe("M3 HDMV fixtures", () => {
       menuLanguage: "eng", outputProfile: "portable", region: "C", subtitleLanguage: "eng", videoProfiles: [],
     });
     expect(vm.registers.psr[16]).toBe(0x6a706e); expect(vm.registers.psr[15]).toBe(0x1234);
+    expect([...vm.registers.psr.slice(17, 22)]).toEqual([0x656e67, 0x656e67, 0x5553, 4, 0]);
 
     vm.reset();
     expect(resetProfile(vm.trace.at(-1)!)).toEqual(resetProfile(vm.trace.at(-2)!));
+  });
+  it("maps each explicit HdmvVm player setting to its reference PSR and reset trace", () => {
+    const vm = new HdmvVm([], { profile: {
+      menuLanguage: "jpn", audioLanguage: "fra", subtitleLanguage: "deu", country: "JP", region: "B",
+      outputProfile: "portable",
+    } });
+    expect([...vm.registers.psr.slice(16, 22)]).toEqual([0x667261, 0x646575, 0x6a706e, 0x4a50, 2, 0]);
+    const profile = JSON.parse(vm.trace[0]!.decoded!.slice("RESET profile=".length));
+    expect(profile).toMatchObject({ audioLanguage: "fra", subtitleLanguage: "deu", menuLanguage: "jpn", country: "JP", region: "B" });
+
+    vm.reset(0, { menuLanguage: 0x656e67, audioLanguage: "jpn", subtitleLanguage: "fra", country: 0x5553, region: "C", outputPreference: 1 });
+    expect([...vm.registers.psr.slice(16, 22)]).toEqual([0x6a706e, 0x667261, 0x656e67, 0x5553, 4, 1]);
+    const resetProfile = JSON.parse(vm.trace.at(-1)!.decoded!.slice("RESET profile=".length));
+    expect(resetProfile).toMatchObject({ audioLanguage: "jpn", subtitleLanguage: "fra", menuLanguage: 0x656e67, country: 0x5553, region: "C", outputPreference: 1 });
   });
   it("keeps dynamic graph edges unresolved and unknown commands visible", () => {
     const graph = buildNavigationGraph([{ id: 0, instructions: [m3Fixtures.unknown] }]);
