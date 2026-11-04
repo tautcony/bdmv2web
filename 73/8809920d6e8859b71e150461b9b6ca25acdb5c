@@ -1,0 +1,30 @@
+scripts/package-hdmv-metadata-fixtures.mjs
+  s_f1e09a61530d1a::t_1e2fb4099969bb 1-72
+test-data/fixtures/hdmv-navigation/disc-data/kyoani-ova/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_a6001ca7699abd 1-61
+test-data/fixtures/hdmv-navigation/disc-data/bang-dream-mygo-vol1/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_a6001ca7699abd 1-85
+test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_a6001ca7699abd 1-245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "738809920d6e8859b71e150461b9b6ca25acdb5c",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
