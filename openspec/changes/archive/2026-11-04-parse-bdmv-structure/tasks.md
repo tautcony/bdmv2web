@@ -18,7 +18,7 @@
 - [x] 2.4 保留SubPath/角度/连接属性及支持状态；验收：高级播放标记完整交给M5，不能在归一化中消失。
 - [x] 2.5 实现CLPI ProgramInfo/CPI/EP映射及PID/语言/编码；验收：时间与SPN黄金数据一致，段越界安全失败。
 - [x] 2.6 实现sound条目/编码/采样信息及有界样本范围；验收：多条声音和截断负例，未输出假WAV。
-- [ ] 2.7 解析并保留MPLS/CLPI HEVC视频流的色彩空间与动态范围字段；验收：字段与视频流来源可追踪，未声明值保持未知。
+- [x] 2.7 解析并保留MPLS/CLPI HEVC视频流的色彩空间与动态范围字段；验收：字段与视频流来源可追踪，未声明值保持未知。
 
 ## 3. 图与CLI交接
 
@@ -35,3 +35,4 @@
 
 - 3.1 now has a cycle-safe bounded traversal API with explicit unresolved edges, missing targets, and an unvisited frontier; synthetic cycle and node-budget cases are covered in `packages/bdmv-parser/src/parser.test.ts`.
 - 3.4 uses `m1-m2-m3-source-handoff` in `packages/igs/test/m1-m2-m3.integration.test.ts`; the fixture checks First Play to MovieObject source, MPLS/CLPI audio PID and coding match, raw command source through M3 graph, M2 IGS extraction, and structural-only partial status.
+- 2.7 reads HEVC (`codingType=0x24`) dynamic-range and color-space nibbles from MPLS STN and CLPI ProgramInfo using the respective field order in pinned VideoLAN libbluray 1.5.0 `mpls_parse.c:156-174` and `clpi_parse.c:60-84` (`d75c88e54c893e5cbf4c61d356477655eb435769`, LGPL-2.1). Parsed streams retain source file and record offset; non-HEVC metadata is `null`, while explicitly encoded zero values remain `0`. `buildM1PlaylistWithHevcVideo` and `buildM1ClipInfoWithHevcVideo` exercise populated/zero fields and source locations. `corepack pnpm --filter @bdmv-web/test-fixtures build`, `corepack pnpm --filter @bdmv-web/bdmv-parser test` (50 passed), and typechecks for `bdmv-parser`, `igs`, and `media-export` passed. Per user decision, the pinned libbluray implementation is accepted as the format reference in place of an independent parser/player comparison.

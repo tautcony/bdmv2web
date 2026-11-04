@@ -141,6 +141,8 @@ $ tsc -p tsconfig.build.json     # 退出 0
 
 **与 0.1 参考值的差异**：`package-builder` 参考值 18 = 2×9，是 `dist` 与 `src` 同时被收集时的重复计数；重测值 9 为源码口径。`test-runner` 41→50、`cli` 20→25 是本 change 新增用例（`classifyDiagnostics`/`decideStageOutcome`/`mode` 断言、阶段与参数契约、`--player-profile`）。
 
+**计数说明**：上表与合计 427 是本节测量时（复评修复前）的数字，保留为当时的实测记录。复评修复新增 5 条用例后，当前口径为 runtime-web 92、package-builder 10、cli 28，合计 **432 passed + 1 skipped**，以「评审修复（独立复评第 2 轮）」一节和 `docs/development.md` 基线表为准。
+
 **`--no-bail` 的实际语义**：在某叶子包（`apps/cli`）植入失败用例时，其余 10 个包全部执行；在 `packages/core` 植入失败时，pnpm 按拓扑顺序跳过依赖它的包（只跑了 core 与 test-runner）。这是 pnpm 的依赖顺序保护，不是 `--no-bail` 失效；`docs/development.md` 的基线表与聚合命令不受影响。
 
 ## 阶段三：CLI 阶段状态与退出码（任务 4.1–4.6）
@@ -156,9 +158,9 @@ $ tsc -p tsconfig.build.json     # 退出 0
 | 已认可 `error` | `partial` | 0（不因认可而升级为 complete） |
 | 无诊断 | `complete` | 0 |
 
-`StageStatus` 带品牌（`unique symbol`），因此 `DeliveryStatus` **不能**赋给 `StageStatus`；`packages/test-runner/src/index.test.ts` 用 `@ts-expect-error` 断言该方向，`pnpm typecheck` 通过即证明检查生效。反方向（`StageStatus` → `DeliveryStatus`）仍允许：`StageStatus` 是带品牌的字符串字面量联合，是 `DeliveryStatus` 的子类型。
+`StageStatus` 与 `DeliveryStatus` 各自带一个编译期品牌（`unique symbol` 幻影属性），品牌只在类型层，运行时值仍是普通字符串。`packages/test-runner/src/index.test.ts` 对两个方向各放一条 `@ts-expect-error`，`pnpm typecheck` 通过即证明两条指令都被真实类型错误消耗（若某方向合法，TS 会报 unused `@ts-expect-error`），因此「两者不可互相赋值」按任务原文成立。
 
-**与任务原文的偏差（已记录，未静默收窄）**：任务写的是「两者不可**互相**赋值」。做到双向不可赋值需要给 `DeliveryStatus` 也加品牌，而它被 `report.ts` / `release-summary.ts` / `validate` 的公开 JSON 直接使用，加品牌会把类型断言扩散到整个交付链路。因此本 change 只保证「交付状态不能当作阶段状态使用」这一真正会出错的方向；阶段状态转交付状态在类型上是安全的子类型转换。若需要严格双向，建议在第 2 批与 `payloadFingerprint` / 证据绑定一起处理。
+品牌没有扩散到公开 JSON：`DeliveryDecision.status` / `ReleaseSummary.release.status` 只是承载品牌类型，`JSON.stringify` 输出仍是 `"complete" | "partial" | "failed"` 字符串；构造点收敛在 `decisions.ts` 的 `deliveryStatus()` 一个函数里。
 
 ### 4.3 `extract` 与 fatal
 
@@ -232,6 +234,30 @@ $ report.json: status=partial、mode=menu-only、blockingDiagnostics=37（首条
 - **7.3** 四条行为同一轮复现：`extract=1`（且 `/tmp/bdmv-empty-out` 不存在）、`convert=0`（`/tmp/menu-ok` 生成）、`mode=1`（`/tmp/mode-reject` 不存在）、`missing=1`。
 - **7.4** 文档一致性：0.1 基线表、6.1 CLI 状态、6.2 Chrome 表述、6.3 Tamako 结论、6.4 M6 计数、6.5 架构映射逐条对照通过，证据见上。
 - **7.5** `git diff --stat` 共 29 个已跟踪文件改动 + 15 个新增文件，不含 `.github/`、不含 `payloadFingerprint` 字段改动、不含性能改造、不含 `vm.ts` 常量收敛。
+
+## 评审修复（独立复评第 2 轮）
+
+上一版实现通过了门禁，但复评指出四个契约缺口与一处验收口径问题，均已修复并补测：
+
+- **[P1] `--player-profile` 未进入交付包的浏览器 VM**。`packages/package-builder/src/index.ts` 把 profile 写入 `runtime/disc-data.js` 的 `PackageData`（此前只落 `manifest.json`）；`packages/runtime-web/src/browser.ts` 新增并导出 `createMenuVm(data, onTrace)`，把 `data.profile` 作为 `VmOptions.profile` 传给 `HdmvVm`，`boot()` 改用它。实测：`node apps/cli/dist/index.js convert test-data/bdmv/tamako-love-story-bd --player-profile /tmp/profile-jpn.json --out /tmp/menu-profile` → exit 0，`disc-data.js` 含 `"profile":{"menuLanguage":"jpn",…,"country":"JP","region":"A"}`，`manifest.profile` 一致。测试覆盖到 PSR 而非清单字段：`runtime-web` 断言 PSR16/17/18/19/20 解码为 `fre/ger/jpn/JP/1`，并断言无 profile 时回落到 VM 自身默认 `eng/eng/US/1`（这正是原缺口造成的差异）；`package-builder` 断言 `disc-data.js` 与 `manifest.json` 同时携带 profile；`cli` 端到端断言 `disc-data.js` 含 `"profile":{"menuLanguage":"jpn"`。
+- **[P2] `--title` 缺值遗留 staging 目录**。`convert` 现在在解析输入、创建事务之前一次性解析全部选项（`--mode`/`--limits`/`--player-profile`/`--out`/`--title`），并把事务开启后的所有语句收进同一个 `try/catch`，任何失败都走 `abort()`（`commit()` 后 `abort()` 因 `closed` 标记为空操作）。实测 `convert /tmp/argcheck/BDMV --out /tmp/argcheck/out --title` → `CLI_MISSING_VALUE`、exit 1、`/tmp/argcheck` 下无 `.staging-` 目录；`cli` 测试用合成盘复现同一命令并断言无残留。
+- **[P2] `--flag=` 空值未按缺值拒绝**。`lookupOption` 把内联空值（`--out=`）视为无值，`optionValue` 因此统一抛 `CLI_MISSING_VALUE`。实测 `inspect … --out=` 不再把碟片 JSON 写到 stdout，`convert … --mode=` 不再落到 `CLI_UNSUPPORTED_MODE`。
+- **[P2] `--limits` 绕过缺值检查**。改为先 `optionValue("--limits")`（裸写即 `CLI_MISSING_VALUE`），仅在确有值时抛 `CLI_NOT_IMPLEMENTED`。实测 `convert … --limits` → `CLI_MISSING_VALUE`。
+- **参数校验顺序**同样被 `cli` 测试锁定：空盘 `convert … --out` 报 `CLI_MISSING_VALUE` 而非 `BDMV_REQUIRED_FILE_MISSING`，证明选项值在解析输入之前校验。
+
+### 4.2 双向不可赋值（已按原验收条件实现）
+
+评审指出原实现只做到单向，且不应在保留原验收条件的情况下按 41/41 归档。本轮改为**真正实现双向**，而不是调整验收口径：
+
+- `packages/test-runner/src/types.ts` 给 `DeliveryStatus` 加编译期品牌位（`unique symbol` 幻影属性），品牌只在类型层，运行时仍是普通字符串，`validate` 与 `report.json` 的 JSON 输出不受影响。
+- `decisions.ts` 新增唯一的窄化点 `deliveryStatus()`，`decideDelivery` 的返回值经它构造；`StageStatus` 保留自己的品牌，两者品牌不同，因此两个方向都不成立。
+- `index.test.ts`「keeps delivery status and stage status mutually unassignable」对两个方向各放一条 `@ts-expect-error`。`pnpm typecheck` 通过即证明两条指令都被真实类型错误消耗（否则 TS 会报 unused `@ts-expect-error`），也就是双向拦截确实生效。
+- `tasks.md:56` 的验收口径已恢复为「双向不可赋值」，不再需要记录「已知偏差 + 批准」。
+
+### 本轮门禁与计数
+
+- `generate:contracts → build → typecheck → test:all` 四步退出码 0；`find packages apps -path "*/dist/*" -name "*.test.*" | wc -l` = 0。
+- 逐包用例：core 14、bdmv-io 7、bdmv-parser 47、igs 54、hdmv 74、media-export 51+1 skipped、runtime-web 92、package-builder 10、test-fixtures 5、test-runner 50、cli 28，合计 **432 passed + 1 skipped**（较上一版 +5：runtime-web +1、package-builder +1、cli +3）。`docs/development.md` 基线表已同步。
 
 ## 记录口径说明
 
