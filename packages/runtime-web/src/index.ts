@@ -1,4 +1,4 @@
-import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult, type HdmvVm, type NavigationAction, type RawCommand, type VmEvent } from "@bdmv-web/hdmv";
+import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult, type HdmvVm, type NavigationAction, type RawCommand, type VmEvent, type VmSnapshot } from "@bdmv-web/hdmv";
 import type { SourceLocation } from "@bdmv-web/bdmv-parser";
 export { adaptIgsScene } from "./igs-adapter.js";
 export type { IgsAdapterDiagnostic, IgsSceneAdapterResult, SerializedMenuButton, SerializedMenuPage, SerializedMenuState, SerializedScene } from "./igs-adapter.js";
@@ -26,6 +26,8 @@ export interface MenuPage {
 export interface MenuScene { width: number; height: number; compositionTimeout90k?: string | null; selectionTimeout90k?: string | null; pages: MenuPage[] }
 export interface RuntimeVmPort {
   handleEvent(event: VmEvent): unknown;
+  snapshot?(): VmSnapshot;
+  applyMenuContext?(pageId: number, selectedButtonId: number | null): void;
   beginMenuAction?(): void;
   recoverMenuAction?(): boolean;
   executeButtonProgram?(commands: RawCommand[], context?: ButtonCommandContext): ButtonProgramResult;
@@ -145,7 +147,7 @@ function errorMessage(error: unknown): string { return error instanceof Error ? 
 /** Owns page/BOG/selection state and routes all activation through HDMV VM input. */
 export class MenuController {
   pageIndex = 0; selectedButtonId: number | null = null; activatedButtonId: number | null = null;
-  private readonly disabled = new Set<number>(); private bogSelections = new Map<string, number>(); private readonly scheduler: MenuScheduler; private readonly invalidUoMaskPages = new Set<number>(); private started = false; private readonly inputConfig: MenuInputConfig;
+  private readonly disabled = new Set<number>(); private bogSelections = new Map<string, number>(); private readonly scheduler: MenuScheduler; private readonly invalidUoMaskPages = new Set<number>(); private readonly unsupportedTimeoutActivationPages = new Set<number>(); private started = false; private autoActionDepth = 0; private readonly inputConfig: MenuInputConfig;
   constructor(readonly scene: MenuScene, readonly vm: RuntimeVmPort, readonly hooks: RuntimeHooks = {}, schedulerOrConfig: MenuScheduler | Partial<MenuInputConfig> = new EventScheduler()) {
     if (!scene.pages.length) throw new TypeError("menu scene must contain a page");
     const scheduler = isMenuScheduler(schedulerOrConfig);
@@ -164,8 +166,10 @@ export class MenuController {
   start(): void {
     if (this.started) return;
     this.started = true;
-    if (this.button?.autoAction) this.handle("activate");
+    this.syncMenuContext();
+    if (this.button?.autoAction) this.runAutomaticAction(this.button);
   }
+  syncVmContext(): void { this.syncMenuContext(); }
   setPage(index: number): void {
     this.changePage(index, true);
   }
@@ -178,25 +182,51 @@ export class MenuController {
     const buttonId = packed & 0xffff;
     if (effectsFlag) this.hooks.diagnostic?.(`SET_BUTTON_PAGE requests page effects for page ${pageId}; effects are not rendered in this preview.`);
     if (pageFlag) {
+      if (pageId === this.page.id) return;
       const pageIndex = this.scene.pages.findIndex((page) => page.id === pageId);
       if (pageIndex < 0) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references missing page ${pageId}.`); return; }
       this.changePage(pageIndex, !buttonFlag);
     }
     if (!buttonFlag) return;
     if (buttonId === 0xffff) {
-      this.selectedButtonId = null; this.activatedButtonId = null; this.hooks.invalidateSound?.(); this.hooks.render?.(); return;
+      this.selectedButtonId = null; this.activatedButtonId = null; this.syncMenuContext(); this.hooks.invalidateSound?.(); this.hooks.render?.(); return;
     }
     const target = this.page.buttons.find((button) => button.id === buttonId);
-    if (!this.isUsable(target)) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references unusable button ${buttonId} on page ${this.page.id}.`); return; }
-    this.selectButton(buttonId);
+    if (!this.isPageMember(target)) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references unusable button ${buttonId} on page ${this.page.id}.`); return; }
+    this.activateBogButton(target);
   }
   private changePage(index: number, runAutoAction: boolean): void {
     if (!Number.isInteger(index) || index < 0 || index >= this.scene.pages.length) throw new RangeError("page index out of range");
     this.scheduler.cancelScope(`page:${this.page.id}`); this.hooks.invalidateSound?.(); this.pageIndex = index; this.activatedButtonId = null; this.selectPageDefault(runAutoAction && this.started); this.hooks.render?.();
   }
   setButtonEnabled(id: number, enabled: boolean): void {
-    enabled ? this.disabled.delete(id) : this.disabled.add(id);
-    if (this.selectedButtonId === id && !this.isUsable(this.button)) { this.hooks.invalidateSound?.(); this.selectedButtonId = null; this.activatedButtonId = null; }
+    const target = this.page.buttons.find((button) => button.id === id);
+    if (!this.isPageMember(target)) return;
+    if (!this.page.bogDefaults) {
+      enabled ? this.disabled.delete(id) : this.disabled.add(id);
+      if (!enabled && this.selectedButtonId === id) {
+        this.hooks.invalidateSound?.(); this.activatedButtonId = null; this.selectedButtonId = null; this.syncMenuContext();
+      }
+      this.hooks.render?.();
+      return;
+    }
+    const key = this.bogSelectionKey(this.page.id, target.bog);
+    const current = this.bogSelections.get(key);
+    if (enabled) {
+      this.bogSelections.set(key, id);
+      if (current === this.selectedButtonId) this.selectButton(id);
+      else if (!this.isUsable(this.button)) {
+        const fallback = this.firstUsablePageButton();
+        if (fallback) this.selectButton(fallback.id);
+      }
+    } else if (current === id) {
+      this.bogSelections.set(key, 0xffff);
+      if (this.selectedButtonId === id) {
+        this.hooks.invalidateSound?.(); this.activatedButtonId = null;
+        this.selectedButtonId = this.firstUsablePageButton()?.id ?? null;
+        this.syncMenuContext();
+      }
+    }
     this.hooks.render?.();
   }
   handle(kind: InputKind): void {
@@ -220,6 +250,7 @@ export class MenuController {
     if (this.page.allowedActions?.activate === false || !this.isUoAllowed(19)) return;
     const button = this.button; if (!this.isUsable(button)) return;
     const activatedPageId = this.page.id;
+    this.syncMenuContext();
     this.vm.beginMenuAction?.();
     this.activatedButtonId = button.id; const state = button.states.selected;
     if (state?.soundId !== undefined && state.soundId !== 0xff) this.hooks.playSound?.(state.soundId, button.id);
@@ -230,11 +261,11 @@ export class MenuController {
           return { bytes: decoded.bytes, words: decoded.words, source: decoded.source };
         });
         const result = this.vm.executeButtonProgram(commands, "ig-button");
-        if (result.fault?.message) { this.hooks.diagnostic?.(result.fault.message); this.vm.recoverMenuAction?.(); }
-        else if (result.diagnostic?.message) { this.hooks.diagnostic?.(result.diagnostic.message); this.vm.recoverMenuAction?.(); }
+        if (result.fault?.message) { this.hooks.diagnostic?.(result.fault.message); this.recoverMenuAction(); }
+        else if (result.diagnostic?.message) { this.hooks.diagnostic?.(result.diagnostic.message); this.recoverMenuAction(); }
         else this.hooks.dispatchActions?.();
       } catch (error) {
-        this.vm.recoverMenuAction?.();
+        this.recoverMenuAction();
         this.hooks.diagnostic?.(error instanceof Error ? error.message : String(error));
       }
       this.hooks.activateButton?.(activatedPageId, button);
@@ -242,7 +273,7 @@ export class MenuController {
       for (const command of button.commands) {
         const result = this.vm.executeButtonCommand(command.bytes, command.source, "ig-button");
         if (result.diagnostic?.message) this.hooks.diagnostic?.(result.diagnostic.message);
-        if (result.status === "faulted" || result.diagnostic?.message) this.vm.recoverMenuAction?.();
+        if (result.status === "faulted" || result.diagnostic?.message) this.recoverMenuAction();
         else this.hooks.dispatchActions?.();
         if (result.buttonCommandTerminated || result.status === "faulted" || result.status === "suspended" || result.status === "stopped") break;
       }
@@ -251,8 +282,14 @@ export class MenuController {
     this.hooks.render?.();
   }
   hit(x: number, y: number): number | null {
-    const match = this.page.buttons.filter((button) => this.isUsable(button) && contains(button.states.selected?.bounds ?? button.states.normal?.bounds, x, y));
-    return match.length === 1 ? match[0]!.id : null;
+    // libbluray scans BOGs in page order and tests only each BOG's enabled
+    // button selected-state object. The serialized button list is normally
+    // already flattened in that order; use declarations when available so
+    // hand-authored scenes follow the same rule.
+    const orderedButtons = this.page.bogDefaults
+      ? this.page.bogDefaults.flatMap(({ bog }) => this.page.buttons.filter((button) => button.bog === bog))
+      : this.page.buttons;
+    return orderedButtons.find((button) => this.isUsable(button) && contains(button.states.selected?.bounds, x, y))?.id ?? null;
   }
   selectFromPointer(x: number, y: number): boolean {
     if (!this.isUoAllowed(18)) return false;
@@ -278,11 +315,31 @@ export class MenuController {
     if (this.isUsable(target)) this.selectButton(targetId);
   }
   private isUsable(button: MenuButton | null | undefined): button is MenuButton {
-    if (!button || !button.enabled || this.disabled.has(button.id) || !this.page.buttons.some((b) => b.bog === button.bog && b.id === button.id)) return false;
+    if (!button || !button.enabled || this.disabled.has(button.id) || !this.isPageMember(button) || !this.isBogEnabled(button)) return false;
     // When the serialized page declares BOG defaults, they also describe which BOG IDs exist.
     return !this.page.bogDefaults || this.page.bogDefaults.some((entry) => entry.bog === button.bog);
   }
+  private isPageMember(button: MenuButton | null | undefined): button is MenuButton {
+    return !!button && this.page.buttons.some((candidate) => candidate.id === button.id && candidate.bog === button.bog);
+  }
+  private isBogEnabled(button: MenuButton): boolean {
+    return !this.page.bogDefaults || this.bogSelections.get(this.bogSelectionKey(this.page.id, button.bog)) === button.id;
+  }
+  isDisplayed(button: MenuButton): boolean { return this.isBogEnabled(button); }
+  private activateBogButton(button: MenuButton): void {
+    this.bogSelections.set(this.bogSelectionKey(this.page.id, button.bog), button.id);
+    this.selectButton(button.id, false);
+    if (button.autoAction && this.selectedButtonId === button.id) this.runAutomaticAction(button);
+    this.hooks.render?.();
+  }
+  private firstUsablePageButton(): MenuButton | undefined {
+    const declaredDefault = this.page.buttons.find((button) => button.id === this.page.defaultButtonId && this.isUsable(button));
+    return declaredDefault ?? this.page.buttons.find((button) => this.isUsable(button));
+  }
   private bogSelectionKey(pageId: number, bog: number): string { return `${pageId}:${bog}`; }
+  private recoverMenuAction(): void {
+    if (this.vm.recoverMenuAction?.()) this.syncMenuContext();
+  }
   private isUoAllowed(fieldIndex: number): boolean {
     const serialized = this.page.uoMask;
     if (serialized === undefined) return true;
@@ -306,33 +363,61 @@ export class MenuController {
       this.hooks.invalidateSound?.();
       this.activatedButtonId = null;
       this.selectedButtonId = id;
-      this.bogSelections.set(this.bogSelectionKey(this.page.id, target.bog), id);
+      this.syncMenuContext();
       this.hooks.render?.();
       // Pointer selection passes false, so hover never activates an auto-action button.
       // Other selection sources retain the immediate flag behavior; timing is not inferred.
-      if (runAutoAction && target.autoAction) this.handle("activate");
+      if (runAutoAction && target.autoAction) this.runAutomaticAction(target);
     }
   }
   private selectPageDefault(runAutoAction: boolean): void {
     const page = this.page;
-    // BOG defaults seed page-scoped remembered choices. The page-level default remains
-    // authoritative for initial focus; there is no input action in SerializedScene that
-    // means “switch to another BOG”.
+    const previousSelection = this.selectedButtonId;
+    for (const key of [...this.bogSelections.keys()]) if (key.startsWith(`${page.id}:`)) this.bogSelections.delete(key);
+    // The per-BOG default valid refs establish which button variant is enabled.
     for (const entry of page.bogDefaults ?? []) {
-      const button = page.buttons.find((candidate) => candidate.id === entry.defaultButtonId && candidate.bog === entry.bog && candidate.enabled && !this.disabled.has(candidate.id));
-      if (button && !this.bogSelections.has(this.bogSelectionKey(page.id, entry.bog))) this.bogSelections.set(this.bogSelectionKey(page.id, entry.bog), button.id);
-      else if (!button && entry.defaultButtonId !== 0xffff) this.hooks.diagnostic?.(`Page ${page.id} BOG ${entry.bog} default button ${entry.defaultButtonId} is not a usable member of that BOG.`);
+      const member = page.buttons.find((candidate) => candidate.id === entry.defaultButtonId && candidate.bog === entry.bog);
+      if (member) {
+        this.bogSelections.set(this.bogSelectionKey(page.id, entry.bog), member.id);
+        // Empty, invisible, commandless defaults are structural placeholders.
+        // They cannot receive input and do not displace page focus.
+        const inertPlaceholder = !member.enabled && !member.autoAction && !member.states.normal && !member.states.selected && !member.commands.length;
+        if (!member.enabled && !inertPlaceholder) this.hooks.diagnostic?.(`Page ${page.id} BOG ${entry.bog} default button ${entry.defaultButtonId} belongs to the BOG but is disabled or has no usable hit geometry.`);
+      } else if (entry.defaultButtonId !== 0xffff) {
+        this.hooks.diagnostic?.(`Page ${page.id} BOG ${entry.bog} default button ${entry.defaultButtonId} is not a member of that BOG.`);
+      }
     }
     const declaredDefault = page.defaultButtonId === 0xffff ? undefined : page.buttons.find((b) => b.id === page.defaultButtonId && this.isUsable(b));
-    this.selectedButtonId = declaredDefault?.id ?? null;
+    const psrSelection = this.vm.snapshot?.().registers.psr[10];
+    const preservedSelection = psrSelection === undefined ? previousSelection : psrSelection === 0xffff ? null : psrSelection;
+    const priorEnabled = preservedSelection === null ? undefined : page.buttons.find((b) => b.id === preservedSelection && this.isUsable(b));
+    const firstEnabled = page.bogDefaults ? page.buttons.find((b) => this.isUsable(b)) : undefined;
+    const initialSelection = declaredDefault ?? priorEnabled ?? firstEnabled;
+    this.selectedButtonId = initialSelection?.id ?? null;
     this.activatedButtonId = null;
+    this.syncMenuContext();
     const defaultActivatedButtonId = page.defaultActivatedButtonId;
     if (defaultActivatedButtonId !== undefined && defaultActivatedButtonId !== 0xfffe && defaultActivatedButtonId !== 0xffff) {
       this.hooks.diagnostic?.(`Page ${page.id} declares default activated button ${defaultActivatedButtonId}, but its runtime semantics are unverified.`);
     }
-    if (declaredDefault) this.bogSelections.set(this.bogSelectionKey(page.id, declaredDefault.bog), declaredDefault.id);
-    if (runAutoAction && declaredDefault?.autoAction) this.handle("activate");
+    if (defaultActivatedButtonId === 0xfffe && this.hasSelectionTimeout() && !this.unsupportedTimeoutActivationPages.has(page.id)) {
+      this.unsupportedTimeoutActivationPages.add(page.id);
+      this.hooks.diagnostic?.(`Page ${page.id} requests activation of the selected button after the selection timeout, but timeout activation is not implemented.`);
+    }
+    if (initialSelection) this.bogSelections.set(this.bogSelectionKey(page.id, initialSelection.bog), initialSelection.id);
+    if (runAutoAction && initialSelection?.autoAction) this.runAutomaticAction(initialSelection);
   }
+  private runAutomaticAction(button: MenuButton): void {
+    if (this.autoActionDepth >= 32) {
+      this.hooks.diagnostic?.("Menu auto-action chain exceeded 32 nested activations and was stopped.");
+      return;
+    }
+    this.autoActionDepth++;
+    try { this.handle("activate"); }
+    finally { this.autoActionDepth--; }
+  }
+  private hasSelectionTimeout(): boolean { return this.scene.selectionTimeout90k !== null && this.scene.selectionTimeout90k !== undefined && this.scene.selectionTimeout90k !== "0"; }
+  private syncMenuContext(): void { this.vm.applyMenuContext?.(this.page.id, this.selectedButtonId); }
 }
 
 function isMenuScheduler(value: MenuScheduler | Partial<MenuInputConfig>): value is MenuScheduler {
@@ -349,6 +434,7 @@ export function drawMenu(context: CanvasRenderingContext2D, scene: MenuScene, co
     layerContext.setTransform(1, 0, 0, 1, 0, 0);
     layerContext.clearRect(0, 0, scene.width, scene.height);
     for (const button of controller.page.buttons) {
+      if (!controller.isDisplayed(button)) continue;
       const state = !button.enabled ? button.states.normal : button.id === controller.activatedButtonId ? button.states.activated : button.id === controller.selectedButtonId ? button.states.selected : button.states.normal;
       if (state?.image) layerContext.drawImage(state.image, state.bounds.x, state.bounds.y, state.bounds.width, state.bounds.height);
     }
@@ -356,6 +442,7 @@ export function drawMenu(context: CanvasRenderingContext2D, scene: MenuScene, co
   viewport.toCss(context, cssWidth, cssHeight, dpr); context.save(); context.beginPath(); context.rect(0, 0, scene.width, scene.height); context.clip();
   if (layerContext && pageLayer) context.drawImage(pageLayer, 0, 0, scene.width, scene.height);
   else for (const button of controller.page.buttons) {
+    if (!controller.isDisplayed(button)) continue;
     const state = !button.enabled ? button.states.normal : button.id === controller.activatedButtonId ? button.states.activated : button.id === controller.selectedButtonId ? button.states.selected : button.states.normal;
     if (state?.image) context.drawImage(state.image, state.bounds.x, state.bounds.y, state.bounds.width, state.bounds.height);
   }
@@ -392,7 +479,7 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
 
 export interface MenuLoopMediaPackage {
   playlist: number;
-  background: { path: string; loop: true };
+  background: { path: string; loop: boolean };
   /** Each entry is one source audio lane. Same-language lanes remain distinct. */
   audioTracks: Array<{ streamNumber: number; psrStreamNumber?: number; path: string; language: string; pid?: number; variantId?: string }>;
 }
@@ -467,7 +554,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       return true;
     }
     if (!this.startPromise) {
-      this.video.loop = true; this.audio.loop = true;
+      this.video.loop = this.media.background.loop; this.audio.loop = this.media.background.loop;
       this.video.src = this.media.background.path;
       this.audio.src = this.findAudioTrack(this.selectedAudioStream)!.path;
       const attempt = Promise.resolve().then(() => Promise.all([this.video.play(), this.audio.play()])).then(() => {

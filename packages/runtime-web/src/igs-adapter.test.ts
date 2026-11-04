@@ -62,6 +62,15 @@ describe("adaptIgsScene", () => {
     });
   });
 
+  it("preserves dynamic-selection and activate-current-selection sentinels", () => {
+    const { scene, assets } = fixture();
+    scene.pages[0]!.defaultSelectedButtonId = 0xffff;
+    scene.pages[0]!.defaultActivatedButtonId = 0xfffe;
+    const result = adaptIgsScene(scene, assets);
+    expect(result.scene.pages[0]).toMatchObject({ defaultButtonId: 0xffff, defaultActivatedButtonId: 0xfffe });
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("marks unsupported animation and page effects partial while using only the declared starting frame", () => {
     const { scene, assets } = fixture(); const button = scene.pages[0]!.buttons[0]!;
     button.visuals.selected.endObjectId = 23;

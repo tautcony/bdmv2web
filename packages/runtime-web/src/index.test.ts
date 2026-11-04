@@ -202,6 +202,115 @@ describe("offline menu primitives", () => {
     expect(menu.selectedButtonId).toBe(1); menu.handle("right"); expect(menu.selectedButtonId).toBe(2);
     menu.setButtonEnabled(2, false); expect(menu.selectedButtonId).toBeNull(); menu.setPage(1); expect(menu.selectedButtonId).toBeNull();
   });
+  it("keeps PSR menu page and selected button synchronized through focus changes", () => {
+    const applyMenuContext = vi.fn();
+    const vm = { handleEvent: vi.fn(), applyMenuContext };
+    const menu = new MenuController(scene(), vm);
+    expect(applyMenuContext).toHaveBeenLastCalledWith(0, 1);
+    menu.handle("right");
+    expect(applyMenuContext).toHaveBeenLastCalledWith(0, 2);
+    menu.setPage(1);
+    expect(applyMenuContext).toHaveBeenLastCalledWith(1, null);
+    menu.applySetButtonPage(0x20000009);
+    expect(applyMenuContext).toHaveBeenLastCalledWith(1, 9);
+    menu.applySetButtonPage(0x2000ffff);
+    expect(applyMenuContext).toHaveBeenLastCalledWith(1, null);
+    expect(applyMenuContext).toHaveBeenCalledTimes(5);
+    applyMenuContext.mockClear();
+    menu.start();
+    expect(applyMenuContext).toHaveBeenCalledWith(1, null);
+  });
+  it("ignores same-page SET_BUTTON_PAGE requests while allowing button-only selection", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [] }]);
+    const page = (id: number, defaultButtonId: number, autoActionButton = false): MenuScene["pages"][number] => ({
+      id, defaultButtonId, bogDefaults: [{ bog: 0, defaultButtonId }], buttons: [
+        { id: defaultButtonId, bog: 0, enabled: true, neighbors: { up: defaultButtonId, down: defaultButtonId, left: defaultButtonId, right: defaultButtonId }, states: {}, commands: [] },
+        ...(autoActionButton ? [{ id: 2, bog: 0, enabled: true, autoAction: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: {}, commands: [{ bytes: m3Fixtures.move5.bytes }] }] : []),
+      ],
+    });
+    const menu = new MenuController({ width: 100, height: 60, pages: [page(0, 1, true), page(1, 3)] }, vm);
+
+    // A repeated page-only request is a no-op and must not auto-activate its default.
+    menu.applySetButtonPage(0x80000000);
+    expect(menu.page.id).toBe(0);
+    expect(menu.button?.id).toBe(1);
+    expect(vm.snapshot().registers.gpr[0]).toBe(0);
+
+    // libbluray ignores the whole request when its page flag names the current page.
+    menu.applySetButtonPage(0xa0000002);
+    expect(menu.page.id).toBe(0);
+    expect(menu.button?.id).toBe(1);
+    expect(vm.snapshot().registers.gpr[0]).toBe(0);
+    expect(vm.snapshot().registers.psr[10]).toBe(1);
+    expect(vm.snapshot().registers.psr[11]).toBe(0);
+
+    // Without a page flag the same button reference is applied and auto-activated.
+    menu.applySetButtonPage(0x20000002);
+    expect(menu.button?.id).toBe(2);
+    expect(vm.snapshot().registers.gpr[0]).toBe(5);
+    expect(vm.snapshot().registers.psr[10]).toBe(2);
+
+    // A page+button request changes page, then selects the requested button there.
+    menu.applySetButtonPage(0xa0010003);
+    expect(menu.page.id).toBe(1);
+    expect(menu.button?.id).toBe(3);
+    expect(vm.snapshot().registers.psr[10]).toBe(3);
+    expect(vm.snapshot().registers.psr[11]).toBe(1);
+  });
+  it("reasserts the visible menu context after a failed button command restores VM state", () => {
+    const visibleContext = { pageId: -1, buttonId: null as number | null };
+    const applyMenuContext = vi.fn((pageId: number, selectedButtonId: number | null) => {
+      visibleContext.pageId = pageId; visibleContext.buttonId = selectedButtonId;
+    });
+    const vm = {
+      handleEvent: vi.fn(), applyMenuContext,
+      beginMenuAction: vi.fn(),
+      executeButtonProgram: vi.fn(() => {
+        visibleContext.pageId = 99; visibleContext.buttonId = 65535;
+        const fault = { code: "TEST_FAILURE", message: "failed", source: null };
+        return {
+          status: "faulted" as const, programId: 0, pc: 0, registers: { gpr: [], psr: [] }, callStack: [],
+          playback: { status: "idle" as const, playlist: null, playItem: null, presentationTime: null, pendingActionId: null },
+          generation: 0, waiting: null, instructionsThisTurn: 0, diagnostic: fault,
+          actions: [], terminated: false, buttonCommandTerminated: false, fault,
+        };
+      }),
+      recoverMenuAction: vi.fn(() => { visibleContext.pageId = 0; visibleContext.buttonId = 65535; return true; }),
+    };
+    const testScene = scene(); testScene.pages[0]!.buttons[0]!.commands = [{ bytes: "000000000000000000000000" }];
+    const menu = new MenuController(testScene, vm);
+    menu.handle("activate");
+    expect(vm.beginMenuAction).toHaveBeenCalledOnce();
+    expect(applyMenuContext.mock.invocationCallOrder.some((callOrder) => callOrder < vm.beginMenuAction.mock.invocationCallOrder[0]!)).toBe(true);
+    expect(vm.recoverMenuAction).toHaveBeenCalledOnce();
+    expect(visibleContext).toEqual({ pageId: 0, buttonId: 1 });
+    expect(applyMenuContext).toHaveBeenLastCalledWith(0, 1);
+  });
+  it("preserves PSR side effects from a successful title or MovieObject route", () => {
+    const vmContext = { pageId: 0, buttonId: 1 as number | null };
+    const vm = {
+      handleEvent: vi.fn(), applyMenuContext: vi.fn((pageId: number, selectedButtonId: number | null) => {
+        vmContext.pageId = pageId; vmContext.buttonId = selectedButtonId;
+      }),
+      beginMenuAction: vi.fn(), recoverMenuAction: vi.fn(() => false),
+      executeButtonProgram: vi.fn(() => {
+        vmContext.pageId = 88; vmContext.buttonId = 6;
+        return {
+          status: "idle" as const, programId: 2, pc: 4, registers: { gpr: [], psr: [] }, callStack: [],
+          playback: { status: "idle" as const, playlist: null, playItem: null, presentationTime: null, pendingActionId: null },
+          generation: 0, waiting: null, instructionsThisTurn: 1, diagnostic: null,
+          actions: [], terminated: false, buttonCommandTerminated: false, fault: null,
+        };
+      }),
+    };
+    const testScene = scene(); testScene.pages[0]!.buttons[0]!.commands = [{ bytes: "000000000000000000000000" }];
+    const dispatchActions = vi.fn();
+    const menu = new MenuController(testScene, vm, { dispatchActions });
+    menu.handle("activate");
+    expect(dispatchActions).toHaveBeenCalledOnce();
+    expect(vmContext).toEqual({ pageId: 88, buttonId: 6 });
+    expect(vm.applyMenuContext).toHaveBeenCalledTimes(2); // constructor default and activation preflight
+  });
   it("clears held keys on blur and ignores repeated keydown while a key is held", () => {
     const controller = new MenuController(scene(), { handleEvent: vi.fn() }); const input = fakeWindow();
     const remove = installKeyboardInput(input.target, controller);
@@ -215,6 +324,97 @@ describe("offline menu primitives", () => {
   it("does not guess a focus when the declared default button is invalid", () => {
     const vm = new HdmvVm([{ id: 0, instructions: ["000000000000000000000000"] }]); const menu = new MenuController(scene(), vm);
     menu.setPage(1); expect(menu.page.buttons.map((button) => button.id)).toEqual([9]); expect(menu.page.defaultButtonId).toBe(99); expect(menu.selectedButtonId).toBeNull();
+  });
+  it("distinguishes an unusable BOG member from a default button outside the BOG", () => {
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 8, defaultButtonId: 1, bogDefaults: [{ bog: 10, defaultButtonId: 10 }, { bog: 11, defaultButtonId: 12 }, { bog: 12, defaultButtonId: 11 }], buttons: [
+        { id: 1, bog: 10, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: {}, commands: [] },
+        { id: 10, bog: 10, enabled: false, neighbors: { up: 10, down: 10, left: 10, right: 10 }, states: {}, commands: [] },
+        { id: 11, bog: 12, enabled: false, neighbors: { up: 11, down: 11, left: 11, right: 11 }, states: {}, commands: [{ bytes: "000000000000000000000000" }] },
+      ],
+    }] };
+    const diagnostic = vi.fn();
+    const menu = new MenuController(testScene, { handleEvent: vi.fn() }, { diagnostic });
+    expect(menu.selectedButtonId).toBeNull();
+    expect(menu.button).toBeNull();
+    expect(diagnostic).not.toHaveBeenCalledWith(expect.stringContaining("BOG 10 default button 10"));
+    expect(diagnostic).toHaveBeenCalledWith("Page 8 BOG 11 default button 12 is not a member of that BOG.");
+    expect(diagnostic).toHaveBeenCalledWith("Page 8 BOG 12 default button 11 belongs to the BOG but is disabled or has no usable hit geometry.");
+  });
+  it("uses the BOG default as the only visible and hittable member until VM enables its alternative", () => {
+    const makeButton = (id: number) => ({
+      id, bog: 0, enabled: true, neighbors: { up: id, down: id, left: id, right: id },
+      states: { normal: { bounds: bounds(10) }, selected: { bounds: bounds(10) } }, commands: [],
+    });
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 6, defaultButtonId: 1, bogDefaults: [{ bog: 0, defaultButtonId: 1 }], buttons: [makeButton(1), makeButton(2)],
+    }] };
+    const menu = new MenuController(testScene, { handleEvent: vi.fn() });
+    expect(menu.isDisplayed(menu.page.buttons[0]!)).toBe(true);
+    expect(menu.isDisplayed(menu.page.buttons[1]!)).toBe(false);
+    expect(menu.hit(15, 15)).toBe(1);
+    expect(menu.selectFromPointer(15, 15)).toBe(true);
+    menu.setButtonEnabled(2, true);
+    expect(menu.button?.id).toBe(2);
+    expect(menu.isDisplayed(menu.page.buttons[0]!)).toBe(false);
+    expect(menu.isDisplayed(menu.page.buttons[1]!)).toBe(true);
+    expect(menu.hit(15, 15)).toBe(2);
+    menu.setButtonEnabled(2, false);
+    expect(menu.hit(15, 15)).toBeNull();
+  });
+  it("hits only selected-state geometry and resolves overlaps by BOG order", () => {
+    const overlap = bounds(10);
+    const button = (id: number, bog: number, selected: boolean) => ({
+      id, bog, enabled: true, neighbors: { up: id, down: id, left: id, right: id },
+      states: { normal: { bounds: overlap }, ...(selected ? { selected: { bounds: overlap } } : {}) }, commands: [],
+    });
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 4, defaultButtonId: 1, bogDefaults: [{ bog: 0, defaultButtonId: 1 }, { bog: 1, defaultButtonId: 2 }],
+      // Deliberately reverse serialized button order; the BOG declarations own hit priority.
+      buttons: [button(2, 1, true), button(1, 0, true)],
+    }] };
+    const menu = new MenuController(testScene, { handleEvent: vi.fn() });
+    expect(menu.hit(15, 15)).toBe(1);
+
+    testScene.pages[0]!.buttons[1]!.states = { normal: { bounds: overlap } };
+    expect(menu.hit(15, 15)).toBe(2);
+    testScene.pages[0]!.buttons[0]!.states = { normal: { bounds: overlap } };
+    expect(menu.hit(15, 15)).toBeNull();
+  });
+  it("activates an autoAction selected by SET_BUTTON_PAGE", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [] }]);
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 0, defaultButtonId: 1, bogDefaults: [{ bog: 0, defaultButtonId: 1 }], buttons: [
+        { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: {}, commands: [] },
+        { id: 2, bog: 0, enabled: true, autoAction: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: {}, commands: [{ bytes: m3Fixtures.move5.bytes }] },
+      ],
+    }] };
+    const menu = new MenuController(testScene, vm);
+    menu.applySetButtonPage(0x20000002);
+    expect(menu.button?.id).toBe(2);
+    expect(vm.snapshot().registers.gpr[0]).toBe(5);
+  });
+  it("stops a cyclic SET_BUTTON_PAGE autoAction chain at the documented depth limit", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [] }]);
+    const makePage = (id: number): MenuScene["pages"][number] => ({
+      id, defaultButtonId: 1, bogDefaults: [{ bog: 0, defaultButtonId: 1 }], buttons: [
+        { id: 1, bog: 0, enabled: true, autoAction: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: {}, commands: [] },
+      ],
+    });
+    const testScene: MenuScene = { width: 100, height: 60, pages: [makePage(0), makePage(1)] };
+    const diagnostic = vi.fn(); let menu!: MenuController; let dispatchCount = 0;
+    menu = new MenuController(testScene, vm, {
+      diagnostic,
+      dispatchActions: () => {
+        dispatchCount++;
+        const destination = menu.page.id === 0 ? 1 : 0;
+        const packed = (0xa0000001 | (destination << 16)) >>> 0;
+        menu.applySetButtonPage(packed);
+      },
+    });
+    menu.start();
+    expect(dispatchCount).toBe(32);
+    expect(diagnostic).toHaveBeenCalledWith("Menu auto-action chain exceeded 32 nested activations and was stopped.");
   });
   it("tracks BOG focus, draws normal-selected-activated states, and resets focus to each page default", () => {
     const img = (label: string) => ({ label }) as unknown as CanvasImageSource;
@@ -248,8 +448,9 @@ describe("offline menu primitives", () => {
   });
   it("uses the page default for focus and recognizes default-activation sentinels", () => {
     const testScene = scene();
+    testScene.pages[0]!.defaultButtonId = 0xffff;
     testScene.pages[0]!.defaultActivatedButtonId = 0xfffe;
-    testScene.pages[0]!.bogDefaults = [{ bog: 0, defaultButtonId: 2 }];
+    testScene.pages[0]!.bogDefaults = [{ bog: 0, defaultButtonId: 1 }];
     testScene.pages[0]!.buttons[1]!.bog = 1;
     testScene.pages[0]!.bogDefaults.push({ bog: 1, defaultButtonId: 2 });
     testScene.pages[1]!.defaultButtonId = 9;
@@ -258,6 +459,8 @@ describe("offline menu primitives", () => {
     const executeButtonCommand = vi.fn(() => ({ status: "running" }));
     const port = { handleEvent: vi.fn(), executeButtonCommand };
     const diagnostic = vi.fn(); const menu = new MenuController(testScene, port, { diagnostic });
+    // FFFF means the page does not force a selected button; use the valid BOG
+    // default (equivalent to libbluray's first valid button fallback).
     expect(menu.selectedButtonId).toBe(1);
     expect(menu.activatedButtonId).toBeNull();
     expect(executeButtonCommand).not.toHaveBeenCalled();
@@ -268,6 +471,34 @@ describe("offline menu primitives", () => {
     expect(menu.selectedButtonId).toBe(9);
     expect(menu.activatedButtonId).toBeNull();
     expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining("runtime semantics are unverified"));
+  });
+  it("reports a nonzero selection timeout when default activation targets the current focus", () => {
+    const testScene = scene(); testScene.selectionTimeout90k = "4500";
+    testScene.pages[0]!.defaultActivatedButtonId = 0xfffe;
+    const diagnostic = vi.fn(); const executeButtonCommand = vi.fn();
+    const menu = new MenuController(testScene, { handleEvent: vi.fn(), executeButtonCommand }, { diagnostic });
+    expect(menu.selectedButtonId).toBe(1);
+    expect(menu.activatedButtonId).toBeNull();
+    expect(executeButtonCommand).not.toHaveBeenCalled();
+    expect(diagnostic).toHaveBeenCalledWith("Page 0 requests activation of the selected button after the selection timeout, but timeout activation is not implemented.");
+  });
+  it("uses the live PSR10 value for dynamic page focus before falling back to the first BOG button", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [] }]);
+    const makeButton = (id: number, bog: number): MenuScene["pages"][number]["buttons"][number] => ({
+      id, bog, enabled: true, neighbors: { up: id, down: id, left: id, right: id }, states: {}, commands: [],
+    });
+    const testScene: MenuScene = { width: 100, height: 60, pages: [
+      { id: 0, defaultButtonId: 1, bogDefaults: [{ bog: 0, defaultButtonId: 1 }], buttons: [makeButton(1, 0)] },
+      { id: 1, defaultButtonId: 0xffff, bogDefaults: [{ bog: 0, defaultButtonId: 1 }, { bog: 1, defaultButtonId: 2 }], buttons: [makeButton(1, 0), makeButton(2, 1)] },
+    ] };
+    const menu = new MenuController(testScene, vm);
+    expect(menu.selectedButtonId).toBe(1);
+
+    // Model a MovieObject PSR10 write after the controller last synchronized focus.
+    vm.registers.systemWrite(10, 2);
+    menu.setPage(1);
+    expect(menu.selectedButtonId).toBe(2);
+    expect(vm.snapshot().registers.psr[10]).toBe(2);
   });
   it("runs autoAction on non-pointer focus transitions without repeating the same focus", () => {
     const testScene = scene();
@@ -536,6 +767,8 @@ describe("offline menu primitives", () => {
     const run = (createBridge: (vm: HdmvVm) => PlaybackBridge, scheduler: MenuScheduler = new EventScheduler()) => {
       const vm = new HdmvVm([{ id: 0, instructions: [] }]);
       const menuScene = structuredClone(menuInteractionFixture.scene) as unknown as MenuScene;
+      menuScene.pages[0]!.buttons[1]!.bog = 1;
+      menuScene.pages[0]!.bogDefaults!.push({ bog: 1, defaultButtonId: 2 });
       const bridge = createBridge(vm);
       const controller = new MenuController(menuScene, vm, { dispatchActions: () => { for (const action of vm.drainActions()) void bridge.dispatch(action); } }, scheduler);
       for (const step of menuInteractionFixture.steps) controller.handle(step.input);
@@ -596,7 +829,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", currentTime: 0, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement;
     const reports: string[] = []; const changed: number[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false }, audioTracks: [
       { streamNumber: 0, pid: 0x1100, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
       { streamNumber: 1, pid: 0x1101, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
     ] }, (message) => reports.push(message), { audioTrackChanged: (track) => changed.push(track.streamNumber) });
@@ -840,12 +1073,13 @@ describe("offline menu primitives", () => {
     vm.reset(9); expect(vm.runTurn().status).toBe("idle"); expect(vm.drainActions()).toEqual([]);
     const video = { loop: false, src: "", currentTime: 0, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audio = { loop: false, src: "", currentTime: 0, duration: 109.234, readyState: 1, paused: false, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), load: vi.fn() } as unknown as HTMLAudioElement;
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false }, audioTracks: [
       { streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
       { streamNumber: 1, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
     ] }, () => {});
     expect(await bridge.startMenuBackground()).toBe(true);
     expect(video.src).toBe("assets/media/background.mp4"); expect(audio.src).toBe("assets/media/audio-1100-eng.m4a");
+    expect(video.loop).toBe(false); expect(audio.loop).toBe(false);
     expect(vm.snapshot().status).toBe("idle"); expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED")).toBe(false);
   });
   it("returns unavailable for an unmatched VM playlist action instead of mapping it onto the menu loop", async () => {

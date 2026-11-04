@@ -25,7 +25,7 @@ function vmConsoleLogger(): (entry: TraceEntry) => void {
       scheduled = false;
       const batch = pending;
       pending = [];
-      const commands = batch.filter((item) => item.decoded).map((item) => `${item.programId}:${item.pc} ${item.decoded}`);
+      const commands = batch.filter((item) => item.decoded && !item.decoded.startsWith("MENU_CONTEXT")).map((item) => `${item.programId}:${item.pc} ${item.decoded}`);
       const actions = summarizeLabels(batch.flatMap((item) => item.action ? [item.action.type] : []));
       const events = summarizeLabels(batch.flatMap((item) => {
         const type = item.event?.type ?? item.input?.type;
@@ -107,11 +107,13 @@ async function boot(): Promise<void> {
           const packed = action.payload.packed;
           if (typeof packed === "number") controller.applySetButtonPage(packed);
           else status.textContent = "VM emitted SET_BUTTON_PAGE without its packed operand.";
+        } else if ((action.type === "ENABLE_BUTTON" || action.type === "DISABLE_BUTTON") && typeof action.payload.button === "number") {
+          controller.setButtonEnabled(action.payload.button, action.type === "ENABLE_BUTTON");
         } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number" && data.vmEntries) {
           const selected = vm.selectTitle(action.payload.title);
           if (selected.diagnostic) {
             status.textContent = selected.diagnostic.message;
-            if (vm.recoverMenuAction()) { pendingActions.length = 0; continue; }
+            if (vm.recoverMenuAction()) { controller.syncVmContext(); pendingActions.length = 0; continue; }
           }
           pendingActions.push(...vm.drainActions());
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist && data.media)) {
