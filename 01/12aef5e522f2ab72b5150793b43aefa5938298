@@ -1,0 +1,85 @@
+apps/cli/package.json
+  s_0889e0089d9030::t_578e4900d15040 5-7,13-27
+apps/cli/src/index.test.ts
+  s_0889e0089d9030::t_c0080ce648a639 20-21,70,74,87-89,94-122,151
+apps/cli/src/index.ts
+  s_0889e0089d9030::t_b52624efe8fbab 3,8-9,53-61,70-71,96,184-205,214,222,224,227-228,246-254,264-265,274,288
+docs/hdmv-support.md
+  s_0889e0089d9030::t_70d9ec8cb5e949 44,98
+docs/references/stages/M6-release-verification.md
+  s_0889e0089d9030::t_8d2c56968d380e 48-59
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  s_0889e0089d9030::t_71edb53878ac74 59,65
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_0889e0089d9030::t_e87de9c64909bb 37
+openspec/changes/export-playable-media/design.md
+  s_0889e0089d9030::t_bead2b2053ffe0 15,27
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_0889e0089d9030::t_0cad87096ad0b2 91,108-112,115
+openspec/changes/export-playable-media/tasks.md
+  s_0889e0089d9030::t_0cb4df5bb7e8b7 58,75-84
+packages/hdmv/src/graph.ts
+  s_0889e0089d9030::t_8ce910ca662019 1,8,28-33,41-55
+packages/hdmv/src/index.test.ts
+  s_0889e0089d9030::t_dec9a8ce2b94ac 421-437,709-731
+packages/hdmv/src/vm.ts
+  s_0889e0089d9030::t_2d4248914f0d55 23-28,48,66,71-98,205,245-279,307-308,392-394,400,406-422,536
+packages/igs/src/transport.ts
+  s_0889e0089d9030::t_94d6c07cc85da6 304,309,311-315,317
+packages/igs/test/tamako-external-navigation.test.ts
+  s_0889e0089d9030::t_dcda7b4bad20c8 1-34
+packages/igs/test/transport.test.ts
+  s_0889e0089d9030::t_8a0f4aa21f6684 88-102
+packages/media-export/package.json
+  s_0889e0089d9030::t_295618229c21e4 7
+packages/media-export/src/closure.test.ts
+  s_0889e0089d9030::t_aabe203cb944bc 86,89
+packages/media-export/src/external-real-smoke.test.ts
+  s_0889e0089d9030::t_2c4d3a31a192e1 1-25
+packages/media-export/src/external-targets.test.ts
+  s_0889e0089d9030::t_00087f3b45e894 1-41
+packages/media-export/src/external-targets.ts
+  s_0889e0089d9030::t_1c25aab1bbf0e6 1-81
+packages/media-export/src/index.ts
+  s_0889e0089d9030::t_6b5bb3a30489ae 7
+packages/package-builder/src/index.test.ts
+  s_0889e0089d9030::t_5d275c9cba3bd0 137,159
+packages/package-builder/src/index.ts
+  s_0889e0089d9030::t_9d56a4b821d5c2 1,6-8,54,60,71-73,75,109,113,115-121,126,128,130,137,187,198,200-201,206
+packages/package-builder/src/local-player-bridge.test.ts
+  s_0889e0089d9030::t_b53037a9407423 1-41
+packages/package-builder/src/local-player-bridge.ts
+  s_0889e0089d9030::t_23e08780002fea 1-44
+packages/runtime-web/package.json
+  s_0889e0089d9030::t_c179af5e60efc3 7-20
+packages/runtime-web/src/browser.test.ts
+  s_0889e0089d9030::t_92602c893e33cc 26,65-68,81,167-187,214,232
+packages/runtime-web/src/browser.ts
+  s_0889e0089d9030::t_c07375fcde5016 1,3,6,82,97,99,110-129,131,163-170,179-181
+packages/runtime-web/src/index.test.ts
+  s_0889e0089d9030::t_dbacfb3b237a08 169-182,569,599,619,642,656,671,706,751,789,813,820,832,843,857
+packages/runtime-web/src/index.ts
+  s_0889e0089d9030::t_6b0fcfffd5e576 29-30,213,223,233-235,237,245-246,394,439
+packages/test-runner/src/package-audit.ts
+  s_0889e0089d9030::t_1461d9ac3d65b1 65,271-272,347-353
+pnpm-lock.yaml
+  s_0889e0089d9030::t_0156500a323781 38-40,44-46,174-176
+test-data/tamako-love-story-bd/README.md
+  s_0889e0089d9030::t_4ae0159bd7f6bb 1,3,5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0112aef5e522f2ab72b5150793b43aefa5938298",
+  "prompts": {},
+  "sessions": {
+    "s_0889e0089d9030": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a47d-7c4e-7463-815d-8500d13b2efb",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
