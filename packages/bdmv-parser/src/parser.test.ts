@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile, symlink, stat } from "node:fs/
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildM1ClipInfoProgramAndCpi, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAudioPid, buildM1PlaylistWithMultiClipSubPlayItem, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv-web/test-fixtures";
+import { buildM1ClipInfoProgramAndCpi, buildM1ClipInfoWithHevcVideo, buildM1ClipInfoWithSequence, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAppInfo, buildM1PlaylistWithAudioPid, buildM1PlaylistWithHevcVideo, buildM1PlaylistWithMultiClipSubPlayItem, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv-web/test-fixtures";
 import { discoverBdmvRoot, parseBdmv, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
 
 async function temp(): Promise<string> { return mkdtemp(join(tmpdir(), "bdmv m1 中文 ")); }
@@ -274,6 +274,30 @@ describe("M1 BDMV discovery and structure", () => {
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
+  it("parses MPLS HEVC color metadata and keeps the STN stream source", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithHevcVideo());
+    try {
+      const stream = (await parseBdmv(root)).playlists[0]?.playItems[0]?.streams[0];
+      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1011, dynamicRangeType: 1, colorSpace: 2, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "140" } });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses CLPI HEVC color metadata, preserves explicit zero codes, and points to the stream record", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithHevcVideo(0, 0));
+    try {
+      const stream = (await parseBdmv(root)).clips[0]?.programs[0]?.streams[0];
+      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1100, dynamicRangeType: 0, colorSpace: 0, source: { path: "BDMV/CLIPINF/00001.clpi", offset: "74" } });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("leaves color metadata unknown for non-HEVC streams", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoProgramAndCpi());
+    try {
+      const stream = (await parseBdmv(root)).clips[0]?.programs[0]?.streams[0];
+      expect(stream).toMatchObject({ codingType: 0x80, dynamicRangeType: null, colorSpace: null });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("bounds-checks nonempty CLPI CPI sections", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1ClipInfoProgramAndCpi(); bytes[89] = 0xff; await writeFile(join(root, "CLIPINF", "00001.clpi"), bytes);
     try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true); }
@@ -339,6 +363,157 @@ describe("M1 BDMV discovery and structure", () => {
     try { await mkdir(join(parent, "BDMV")); try { await mkdir(join(parent, "bdmv")); } catch { secondCreated = false; }
       if (secondCreated) await expect(discoverBdmvRoot(parent)).rejects.toThrow("BDMV_ROOT_AMBIGUOUS");
       else expect(await discoverBdmvRoot(parent)).toBe(await realpath(join(parent, "BDMV")));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses INDX app info and the 3.1 UHD extension into disc-level declarations", async () => {
+    const parent = await temp();
+    const index = buildM1Index({ appInfo: { initialOutputMode: true, contentExist: true, initialDynamicRangeType: 2, videoFormat: 6, frameRate: 4 }, uhd: { discType: 5, exists4k: true, hdrFlags: 3, dolbyVision: true } });
+    const root = await skeleton(parent, index);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.discInfo.appInfo).toMatchObject({ initialOutputModePreference: true, contentExistFlag: true, initialDynamicRangeType: 2, videoFormat: 6, frameRate: 4, userDataBytes: 32, source: { path: "BDMV/index.bdmv", origin: "primary", offset: "40" } });
+      expect(disc.discInfo.uhd).toMatchObject({ discType: 5, exists4k: true, hdrFlags: 3, hdr10Plus: false, dolbyVision: true });
+      expect(disc.entries).toHaveLength(2);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reads the UHD HDR signalling declared by the committed UHD fixture", async () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV");
+    const disc = await parseBdmv(root);
+    expect(disc.discInfo.uhd).toMatchObject({ discType: 5, exists4k: true, hdrFlags: 3, hdr10Plus: false, dolbyVision: true });
+    expect(disc.discInfo.appInfo).toMatchObject({ userDataBytes: 32, initialOutputModePreference: false, contentExistFlag: false });
+  });
+
+  it("rejects an INDEX UHD extension whose declared length or entry bounds cross the file", async () => {
+    const parent = await temp(); const root = await skeleton(parent, buildM1Index({ uhd: { discType: 5 } })); const path = join(root, "index.bdmv");
+    try {
+      const truncated = buildM1Index({ uhd: { discType: 5 } }); truncated[121] = 0xff;
+      await writeFile(path, truncated);
+      const truncatedDisc = await parseBdmv(root);
+      expect(truncatedDisc.entries).toHaveLength(0);
+      expect(truncatedDisc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/index.bdmv")).toBe(true);
+      const outOfRange = buildM1Index({ uhd: { discType: 5 } }); outOfRange[134] = 0x02;
+      await writeFile(path, outOfRange);
+      const outOfRangeDisc = await parseBdmv(root);
+      expect(outOfRangeDisc.entries).toHaveLength(0);
+      expect(outOfRangeDisc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/index.bdmv")).toBe(true);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses AppInfoPlayList playback type, count, UO mask and capability flags", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithAppInfo({ playbackType: 3, playbackCount: 7, flags: 0xf8 }));
+    try {
+      const appInfo = (await parseBdmv(root)).playlists[0]?.appInfo;
+      expect(appInfo).toMatchObject({ playbackType: 3, playbackCount: 7, uoMask: "4604204941312", randomAccessFlag: true, audioMixFlag: true, losslessBypassFlag: true, mvcBaseViewRFlag: true, sdrConversionNotificationFlag: true, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "40" } });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("keeps the reserved playback count unknown for non-multi-playback types", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithAppInfo({ playbackType: 1, flags: 0 }));
+    try {
+      const appInfo = (await parseBdmv(root)).playlists[0]?.appInfo;
+      expect(appInfo).toMatchObject({ playbackType: 1, playbackCount: null, randomAccessFlag: false, audioMixFlag: false, sdrConversionNotificationFlag: false });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reads the real Tamako AppInfoPlayList UO mask without inventing a playback count", async () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
+    const appInfo = (await parseBdmv(root)).playlists.find((playlist) => playlist.id === "00003")?.appInfo;
+    expect(appInfo).toMatchObject({ playbackType: 1, playbackCount: null, uoMask: "4604204941312", randomAccessFlag: false, audioMixFlag: true, losslessBypassFlag: false });
+  });
+
+  it("treats a zero-length AppInfoPlayList as absent and keeps the playlist", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1EmptyPlaylist(); bytes[43] = 0;
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.playlists[0]?.appInfo).toBeNull();
+      expect(disc.playlists[0]?.playItems).toEqual([]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("rejects an AppInfoPlayList too short for its UO mask", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1EmptyPlaylist(); bytes[43] = 11;
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.playlists).toHaveLength(0);
+      expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses CLPI clip info header fields and ATC/STC sequence declarations", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithSequence());
+    try {
+      const clip = (await parseBdmv(root)).clips[0]!;
+      expect(clip.header).toMatchObject({ streamType: 1, applicationType: 1, tsRecordingRate: 48_000_000, sourcePacketCount: 12_000, atcDelta: true, tsTypeId: "HDMV", source: { path: "BDMV/CLIPINF/00001.clpi", offset: "40" } });
+      expect(clip.sequence).toMatchObject([{
+        spnAtcStart: 32, offsetStcId: 0,
+        stcs: [
+          { pcrPid: 0x1001, spnStcStart: 32, presentationStartPts: 0, presentationEndPts: 4_500_000 },
+          { pcrPid: 0x1011, spnStcStart: 8_000, presentationStartPts: 4_500_000, presentationEndPts: 9_000_000 },
+        ],
+        source: { path: "BDMV/CLIPINF/00001.clpi", offset: "201" },
+      }]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reads the committed CLPI clip info and sequence declarations", async () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/baja/BDMV");
+    const clips = (await parseBdmv(root)).clips;
+    expect(clips.find((clip) => clip.id === "00001")?.header).toMatchObject({ streamType: 1, applicationType: 1, tsRecordingRate: 6_000_000, sourcePacketCount: 1_508_864, atcDelta: false, tsTypeId: "HDMV" });
+    expect(clips.find((clip) => clip.id === "00001")?.sequence).toMatchObject([{ spnAtcStart: 0, offsetStcId: 0, stcs: [{ pcrPid: 0x1001, spnStcStart: 0, presentationStartPts: 251_077_500, presentationEndPts: 253_847_767 }] }]);
+  });
+
+  it("leaves the clip header and sequence empty when the CLPI omits both sections", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1EmptyClipInfo());
+    try {
+      const clip = (await parseBdmv(root)).clips[0]!;
+      expect(clip.header).toBeNull();
+      expect(clip.sequence).toEqual([]);
+      expect(clip.programs).toEqual([]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("bounds-checks CLPI TS type info and ATC sequence counts against their sections", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    const tsType = buildM1ClipInfoWithSequence(); tsType[189] = 0xff;
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), tsType);
+    try {
+      const badTsType = await parseBdmv(root);
+      expect(badTsType.clips).toHaveLength(0);
+      expect(badTsType.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true);
+      const atc = buildM1ClipInfoWithSequence(); atc[200] = 0xff;
+      await writeFile(join(root, "CLIPINF", "00001.clpi"), atc);
+      const badAtc = await parseBdmv(root);
+      expect(badAtc.clips).toHaveLength(0);
+      expect(badAtc.diagnostics.some((d) => d.code === "BDMV_INVALID_COUNT" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("accepts the 0240 3D profile for index, playlist and clip metadata", async () => {
+    const parent = await temp(); const root = await skeleton(parent, buildM1Index({ version: "0240" }));
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1EmptyPlaylist("0240"));
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1EmptyClipInfo("0240"));
+    try {
+      const disc = await parseBdmv(root);
+      expect([disc.entries.length, disc.playlists.length, disc.clips.length]).toEqual([2, 1, 1]);
+      expect(disc.diagnostics.some((d) => d.code === "BDMV_UNSUPPORTED_VERSION")).toBe(false);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it.each([0x00, 0xc0] as const)("rejects an index title with object type byte 0x%# instead of shifting later records", async (firstByte) => {
+    const parent = await temp(); const bytes = buildM1Index({ hdmvTitle: 0, bdjTitle: "00042" }); bytes[118] = firstByte;
+    const root = await skeleton(parent, bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.entries).toHaveLength(0);
+      expect(disc.diagnostics.some((d) => d.code === "BDMV_UNKNOWN_OBJECT_TYPE" && d.sourcePath === "BDMV/index.bdmv")).toBe(true);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

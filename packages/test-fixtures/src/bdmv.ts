@@ -11,17 +11,35 @@ function playback(type: 1 | 2, target: number | string, playbackType = 1, access
   return out;
 }
 
-export function buildM1Index(options: { version?: string; first?: number; top?: number; hdmvTitle?: number; bdjTitle?: string; titleAccess?: number } = {}): Uint8Array {
+export function buildM1Index(options: {
+  version?: string; first?: number; top?: number; hdmvTitle?: number; bdjTitle?: string; titleAccess?: number;
+  appInfo?: { initialOutputMode?: boolean; contentExist?: boolean; initialDynamicRangeType?: number; videoFormat?: number; frameRate?: number };
+  uhd?: { discType?: number; exists4k?: boolean; hdrFlags?: number; hdr10Plus?: boolean; dolbyVision?: boolean };
+} = {}): Uint8Array {
   const first = options.first ?? 0; const top = options.top ?? 1; const titleCount = Number(options.hdmvTitle !== undefined) + Number(options.bdjTitle !== undefined);
-  const out = new Uint8Array(88 + 4 + 12 + 12 + 2 + 12 * titleCount);
-  ascii(out, 0, "INDX"); ascii(out, 4, options.version ?? "0100"); put32(out, 8, 88); put32(out, 12, 0);
+  const bodySize = 92 + 26 + 12 * titleCount;
+  const extensionSize = options.uhd ? 36 : 0;
+  const out = new Uint8Array(bodySize + extensionSize);
+  ascii(out, 0, "INDX"); ascii(out, 4, options.version ?? "0100"); put32(out, 8, 88); put32(out, 12, options.uhd ? bodySize : 0);
   put32(out, 40, 34);
+  if (options.appInfo) {
+    out[44] = (options.appInfo.initialOutputMode ? 0x40 : 0) | (options.appInfo.contentExist ? 0x20 : 0) | ((options.appInfo.initialDynamicRangeType ?? 0) & 0x0f);
+    out[45] = (((options.appInfo.videoFormat ?? 0) & 0x0f) << 4) | ((options.appInfo.frameRate ?? 0) & 0x0f);
+  }
   put32(out, 88, 26 + 12 * titleCount);
   out.set(playback(1, first), 92); out.set(playback(1, top), 104);
   put16(out, 116, titleCount);
   let p = 118;
   if (options.hdmvTitle !== undefined) { out.set(playback(1, options.hdmvTitle), p); p += 12; }
   if (options.bdjTitle !== undefined) out.set(playback(2, options.bdjTitle, 2, options.titleAccess ?? 1), p);
+  if (options.uhd) {
+    // Extension 3.1: 32-byte payload, one 12-byte entry at address 24, 8-byte UHD body.
+    put32(out, bodySize, 32); put32(out, bodySize + 4, 24); out[bodySize + 11] = 1;
+    put16(out, bodySize + 12, 3); put16(out, bodySize + 14, 1); put32(out, bodySize + 16, 24); put32(out, bodySize + 20, 12);
+    put32(out, bodySize + 24, 8);
+    out[bodySize + 28] = ((options.uhd.discType ?? 0) << 4) | (options.uhd.exists4k ? 1 : 0);
+    out[bodySize + 30] = (options.uhd.hdr10Plus ? 0x10 : 0) | (options.uhd.dolbyVision ? 0x04 : 0) | ((options.uhd.hdrFlags ?? 0) & 0x03);
+  }
   return out;
 }
 
@@ -100,6 +118,17 @@ function buildM1PlaylistWithSubPlayItemClips(multiClip: boolean): Uint8Array {
   return out;
 }
 
+/** HEVC STN attributes follow libbluray's MPLS field order: dynamic range, then color space. */
+export function buildM1PlaylistWithHevcVideo(dynamicRangeType = 1, colorSpace = 2): Uint8Array {
+  const out = buildM1PlaylistWithAudioPid();
+  out[128] = 1; out[129] = 0; // One primary video stream, no audio streams.
+  out[140] = 3; out[141] = 1; out[142] = 0x10; out[143] = 0x11; // Stream record and PID.
+  out[144] = 5; out[145] = 0x24; out[146] = 0x11; // Attribute length, HEVC coding type, format/rate.
+  out[147] = ((dynamicRangeType & 0x0f) << 4) | (colorSpace & 0x0f);
+  out[148] = 0; out[149] = 0;
+  return out;
+}
+
 export function buildM1ClipInfoProgramAndCpi(): Uint8Array {
   const out = new Uint8Array(114); ascii(out, 0, "HDMV"); ascii(out, 4, "0200"); put32(out, 8, 0); put32(out, 12, 60); put32(out, 16, 86); put32(out, 20, 0); put32(out, 24, 0);
   put32(out, 40, 0);
@@ -107,6 +136,22 @@ export function buildM1ClipInfoProgramAndCpi(): Uint8Array {
   put32(out, 86, 24); out[90] = 0x00; out[91] = 0x10; out[92] = 0; out[93] = 1;
   out.set(packBits([[0x1100, 16], [0, 10], [1, 4], [0, 16], [1, 18], [14, 32]]), 94);
   put32(out, 106, 4); out.set(packBits([[0, 1], [0, 3], [5, 11], [7, 17]]), 110);
+  return out;
+}
+
+/** CLPI HEVC coding attributes follow libbluray's CLPI order and retain the stream record offset. */
+export function buildM1ClipInfoWithHevcVideo(dynamicRangeType = 1, colorSpace = 2): Uint8Array {
+  const original = buildM1ClipInfoProgramAndCpi();
+  const out = new Uint8Array(original.length + 4);
+  out.set(original.subarray(0, 86)); out.set(original.subarray(86), 90);
+  put32(out, 16, 90); // CPI follows the enlarged ProgramInfo section.
+  put32(out, 60, 22); // ProgramInfo length grows by the four extra HEVC attribute bytes.
+  out[76] = 9; out[77] = 0x24; // Stream attribute length and HEVC coding type.
+  out[78] = 0x11; // Format and frame rate.
+  out[79] = 0x12; // Aspect=1, reserved=0, oc_flag=1, cr_flag=0.
+  out[80] = ((dynamicRangeType & 0x0f) << 4) | (colorSpace & 0x0f);
+  out[81] = 0; // HDR10+ flag and reserved bits.
+  out.fill(0, 82, 86);
   return out;
 }
 
@@ -130,6 +175,43 @@ export function buildM1SoundTwoRanges(): Uint8Array {
   const out = new Uint8Array(88); ascii(out, 0, "BCLK"); ascii(out, 4, "0100"); put32(out, 8, 80); put32(out, 40, 8); out[45] = 2;
   for (let i = 0; i < 2; i++) { const p = 46 + i * 10; out[p] = 0x11; out[p + 1] = 0x40; put32(out, p + 2, i * 4); put32(out, p + 6, 4); }
   out.set([1, 2, 3, 4, 5, 6, 7, 8], 80); return out;
+}
+
+/** AppInfoPlayList is 14 bytes: reserved, playback type, count, 8-byte UO mask, one flag byte. */
+export function buildM1PlaylistWithAppInfo(options: { version?: string; playbackType?: number; playbackCount?: number; uoMask?: bigint; flags?: number } = {}): Uint8Array {
+  const out = buildM1EmptyPlaylist(options.version ?? "0200");
+  put32(out, 40, 14);
+  out[44] = 0; out[45] = options.playbackType ?? 3;
+  put16(out, 46, options.playbackCount ?? 7);
+  const mask = options.uoMask ?? 0x0000_0430_0000_0000n;
+  put32(out, 48, Number(mask >> 32n)); put32(out, 52, Number(mask & 0xffff_ffffn));
+  out[56] = options.flags ?? 0x40; out[57] = 0;
+  return out;
+}
+
+function putStc(bytes: Uint8Array, offset: number, pcrPid: number, spnStcStart: number, start45k: number, end45k: number): void {
+  put16(bytes, offset, pcrPid); put32(bytes, offset + 2, spnStcStart); put32(bytes, offset + 6, start45k); put32(bytes, offset + 10, end45k);
+}
+
+/** CLPI with a 151-byte ClipInfo (including TS type info) and a two-STC sequence info section. */
+export function buildM1ClipInfoWithSequence(): Uint8Array {
+  const clipInfoPayload = 16 + 128 + 2 + 5;
+  const sequenceStart = 40 + 4 + clipInfoPayload;
+  const sequencePayload = 2 + 6 + 28;
+  const out = new Uint8Array(sequenceStart + 4 + sequencePayload);
+  ascii(out, 0, "HDMV"); ascii(out, 4, "0200");
+  put32(out, 8, sequenceStart); put32(out, 12, 0); put32(out, 16, 0); put32(out, 20, 0); put32(out, 24, 0);
+  put32(out, 40, clipInfoPayload);
+  out[46] = 1; out[47] = 1;
+  put32(out, 48, 1);
+  put32(out, 52, 48_000_000); put32(out, 56, 12_000);
+  put16(out, 188, 5); out[190] = 3; ascii(out, 191, "HDMV");
+  put32(out, sequenceStart, sequencePayload);
+  out[sequenceStart + 4] = 0; out[sequenceStart + 5] = 1;
+  put32(out, sequenceStart + 6, 32); out[sequenceStart + 10] = 2; out[sequenceStart + 11] = 0;
+  putStc(out, sequenceStart + 12, 0x1001, 32, 0, 4_500_000);
+  putStc(out, sequenceStart + 26, 0x1011, 8_000, 4_500_000, 9_000_000);
+  return out;
 }
 
 export function buildM1EmptyClipInfo(version = "0200"): Uint8Array {

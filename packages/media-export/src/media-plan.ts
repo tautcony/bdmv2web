@@ -288,7 +288,7 @@ function buildCapabilityReport(requirements: MediaPlanRequirement[]): MediaCapab
 function planSubPlayItem(item: SubPlayItem, disc: ParsedDisc): MediaPlanRequirement["subPaths"][number]["items"][number] {
   const streamNode = disc.graph.nodes.find((node) => node.id === `clip:${item.clipId}`);
   const clipInfo = disc.graph.nodes.find((node) => node.id === `clipInfo:${item.clipId}`);
-  const tracks = disc.clips.find((clip) => sameId(clip.id, item.clipId))?.programs.flatMap((program) => program.streams.map((stream) => toTrack({ streamType: 1, pid: stream.pid, subPathId: null, subClipId: null, codingType: stream.codingType, language: stream.language, source: stream.source }))) ?? [];
+  const tracks = disc.clips.find((clip) => sameId(clip.id, item.clipId))?.programs.flatMap((program) => program.streams.map((stream) => toTrack({ streamType: 1, pid: stream.pid, subPathId: null, subClipId: null, codingType: stream.codingType, language: stream.language, dynamicRangeType: stream.dynamicRangeType, colorSpace: stream.colorSpace, source: stream.source }))) ?? [];
   return { clipId: item.clipId, codecId: item.codecId, stcId: item.stcId, sourceIn45k: item.inTime45k, sourceOut45k: item.outTime45k, syncPlayItemId: item.syncPlayItemId, syncPts45k: item.syncPts45k, source: item.source, streamFile: { path: `BDMV/STREAM/${item.clipId}.m2ts`, present: streamNode?.state === "present", source: streamNode?.source ?? null }, clipInfo: { id: item.clipId, present: clipInfo?.state === "present", source: clipInfo?.source ?? null }, tracks };
 }
 

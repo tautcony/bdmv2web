@@ -31,7 +31,7 @@ describe("M1 to M2/M3 consumer handoff", () => {
       const declaredTrack = playlist.playItems[0]!.streams.find((stream) => stream.pid === 0x1100)!;
       const clipTrack = disc.clips.find((clip) => clip.id === "00001")!.programs[0]!.streams.find((stream) => stream.pid === declaredTrack.pid)!;
       expect(declaredTrack).toMatchObject({ codingType: 0x80, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "140" } });
-      expect(clipTrack).toMatchObject({ pid: declaredTrack.pid, codingType: declaredTrack.codingType, source: { path: "BDMV/CLIPINF/00001.clpi", origin: "primary", offset: "82" } });
+      expect(clipTrack).toMatchObject({ pid: declaredTrack.pid, codingType: declaredTrack.codingType, source: { path: "BDMV/CLIPINF/00001.clpi", origin: "primary", offset: "74" } });
       expect(disc.diagnostics.some((item) => item.code === "BDMV_STN_CLPI_PID_CONFLICT" || item.code === "BDMV_STN_CLPI_CODING_CONFLICT")).toBe(false);
 
       const instruction = disc.movieObjects[0]!.instructions[0]!;

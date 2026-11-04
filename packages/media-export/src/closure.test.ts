@@ -26,7 +26,7 @@ function discFixture(): ParsedDisc {
     ]),
   ];
   return {
-    schemaVersion: "1.0", analysisStage: "structural", root: "/disc", entries: [
+    schemaVersion: "1.0", analysisStage: "structural", root: "/disc", discInfo: { appInfo: null, uhd: null }, entries: [
       { id: "first", kind: "firstPlay", target: { objectType: "HDMV", playbackType: 1, target: 0, source }, source },
     ], movieObjects: [], playlists: [], clips: [], sounds: [], graph: { nodes, edges },
     declarations: { entries: 1, movieObjects: 1, playlists: 2, playItems: 2, clips: 2, streams: 2, sounds: 0, unknown: 0 }, diagnostics: [],
@@ -109,9 +109,9 @@ describe("conservative M1/M3 media closure", () => {
 });
 
 function playlistFixture(id: string, items: Array<{ index: number; clipId: string; inTime45k: number; outTime45k: number; multiAngle?: boolean; angleCount?: number; streamPid?: number | null; codingType?: number | null }>, withSubPath = false): ParsedDisc["playlists"][number] {
-  const stream = (codingType: number | null, pid: number | null, language: string | null) => ({ streamType: 1, pid, subPathId: null, subClipId: null, codingType, language, source });
+  const stream = (codingType: number | null, pid: number | null, language: string | null) => ({ streamType: 1, pid, subPathId: null, subClipId: null, codingType, language, dynamicRangeType: null, colorSpace: null, source });
   return {
-    id, version: "0200", source,
+    id, version: "0200", appInfo: null, source,
     playItems: items.map((item) => ({
       index: item.index, clipId: item.clipId, codecId: "M2TS", stcId: 0, inTime45k: item.inTime45k, outTime45k: item.outTime45k,
       connectionCondition: 1, multiAngle: item.multiAngle ?? false, angleCount: item.angleCount ?? 1, differentAudio: false, seamlessAngle: item.multiAngle ?? false,
@@ -204,7 +204,7 @@ describe("media plan adaptation", () => {
     const disc = discFixture();
     const playlist = playlistFixture("00001", [{ index: 0, clipId: "00001", inTime45k: 0, outTime45k: 45_000, multiAngle: true, angleCount: 2 }], true);
     playlist.playItems[0]!.seamlessAngle = true;
-    playlist.playItems[0]!.streams.push({ streamType: 1, pid: 0x1200, subPathId: null, subClipId: null, codingType: 0x90, language: "eng", source });
+    playlist.playItems[0]!.streams.push({ streamType: 1, pid: 0x1200, subPathId: null, subClipId: null, codingType: 0x90, language: "eng", dynamicRangeType: null, colorSpace: null, source });
     disc.playlists = [playlist];
     const graph = navigationGraph({
       nodes: [{ id: "object:0", kind: "object", objectId: 0, source, status: "known" }],

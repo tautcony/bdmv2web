@@ -313,7 +313,7 @@ describe("synthetic IGS extraction", () => {
       const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0" };
       const disc = {
         schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
-        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, source }], source }], marks: [], subPaths: [], source }],
+        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, dynamicRangeType: null, colorSpace: null, source }], source }], marks: [], subPaths: [], source }],
         clips: [], graph: { nodes: [{ id: "clip:00001", type: "clip", state: "present", source: { path: "BDMV/STREAM/00001.m2ts", origin: "primary", offset: "0" } }], edges: [] },
         declarations: { entries: 0, movieObjects: 0, playlists: 1, playItems: 1, clips: 0, streams: 1, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
       } as unknown as ParsedDisc;
@@ -336,10 +336,10 @@ describe("synthetic IGS extraction", () => {
         playlists: [{
           id: "00003", version: "0200",
           playItems: [{ index: 0, clipId: "00004", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0,
-            streams: [{ streamType: 2, pid: IG_PID, subPathId: 0, subClipId: 0, codingType: 0x91, language: null, source: playlistSource }], source: playlistSource }],
+            streams: [{ streamType: 2, pid: IG_PID, subPathId: 0, subClipId: 0, codingType: 0x91, language: null, dynamicRangeType: null, colorSpace: null, source: playlistSource }], source: playlistSource }],
           marks: [], subPaths: [{ type: 0, repeat: false, items: [{ clipId: "00005", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source: playlistSource }], source: playlistSource }], source: playlistSource,
         }],
-        clips: [{ id: "00005", version: "0200", programs: [{ sequenceStartSpn: 0, programMapPid: 100, streams: [{ pid: IG_PID, codingType: 0x91, language: null, source: subclipSource }], source: subclipSource }], cpi: [], source: subclipSource }],
+        clips: [{ id: "00005", version: "0200", programs: [{ sequenceStartSpn: 0, programMapPid: 100, streams: [{ pid: IG_PID, codingType: 0x91, language: null, dynamicRangeType: null, colorSpace: null, source: subclipSource }], source: subclipSource }], cpi: [], source: subclipSource }],
         graph: { nodes: [
           { id: "clip:00004", type: "clip", state: "present", source: { path: "BDMV/STREAM/00004.m2ts", origin: "primary", offset: "0" } },
           { id: "clip:00005", type: "clip", state: "present", source: { path: "BDMV/STREAM/00005.m2ts", origin: "primary", offset: "0" } },
@@ -369,7 +369,7 @@ describe("synthetic IGS extraction", () => {
         playlists: [{
           id: "00003", version: "0200",
           playItems: [{ index: 0, clipId: "00004", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0,
-            streams: [{ streamType: 2, pid: IG_PID, subPathId: 0, subClipId: 0, codingType: 0x91, language: null, source: playlistSource }], source: playlistSource }],
+            streams: [{ streamType: 2, pid: IG_PID, subPathId: 0, subClipId: 0, codingType: 0x91, language: null, dynamicRangeType: null, colorSpace: null, source: playlistSource }], source: playlistSource }],
           marks: [], subPaths: [{ type: 0, repeat: false, items: [{ clipId: "00005", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source: playlistSource }], source: playlistSource }], source: playlistSource,
         }],
         clips: [],
@@ -392,7 +392,7 @@ describe("synthetic IGS extraction", () => {
       const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0" };
       const disc = {
         schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
-        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, source }], source }], marks: [], subPaths: [], source }],
+        playlists: [{ id: "00001", version: "0200", playItems: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, dynamicRangeType: null, colorSpace: null, source }], source }], marks: [], subPaths: [], source }],
         clips: [], graph: { nodes: [{ id: "clip:00001", type: "clip", state: "present", source: { path: "BDMV/STREAM/00001.m2ts", origin: "primary", offset: "0" } }], edges: [] },
         declarations: { entries: 0, movieObjects: 0, playlists: 1, playItems: 1, clips: 0, streams: 1, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
       } as unknown as ParsedDisc;

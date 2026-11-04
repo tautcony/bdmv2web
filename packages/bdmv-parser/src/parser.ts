@@ -1,8 +1,10 @@
 import { BinaryCursor, ContractError, DEFAULT_LIMITS, serializeOffset, type Limits } from "@bdmv-web/core";
 import { discoverBdmvInput, readRegisteredFile } from "@bdmv-web/bdmv-io";
-import type { ClipInfo, EntryTarget, GraphEdge, GraphNode, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, PlayMark, Playlist, SoundEntry, SourceLocation, StreamDeclaration, SubPath } from "./model.js";
+import type { AtcSequence, ClipHeader, ClipInfo, DiscAppInfo, EntryTarget, GraphEdge, GraphNode, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, Playlist, PlaylistAppInfo, PlayMark, SoundEntry, SourceLocation, StcSequence, StreamDeclaration, SubPath, UhdMetadata } from "./model.js";
 
-const supportedVersions = new Set(["0100", "0200", "0300"]);
+// 0240 is the 3D/MVC profile. libbluray does not restrict the version field and
+// ChapterTool's readers accept the same four values for INDX/MOBJ/MPLS/CLPI/BDJO.
+const supportedVersions = new Set(["0100", "0200", "0240", "0300"]);
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 const asUtf8 = (bytes: Uint8Array) => new TextDecoder("ascii").decode(bytes);
 
@@ -57,11 +59,52 @@ function sourceFor(file: FileEntry, root: string, origin: "primary" | "backup", 
 }
 
 interface ParsedFile<T> { value: T; version: string; raw: Uint8Array; }
-function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<EntryTarget[]> {
+interface ParsedIndex { entries: EntryTarget[]; appInfo: DiscAppInfo | null; uhd: UhdMetadata | null; }
+
+/** INDX AppInfoBDMV starts at byte 40 in every version; libbluray seeks there unconditionally. */
+function parseIndexAppInfo(r: Bits, dataLength: number, file: FileEntry, origin: "primary" | "backup", section: number): DiscAppInfo | null {
+  r.seek(40); const lengthOffset = r.offset; const length = r.u32(); const end = r.offset + length;
+  if (length > dataLength - r.offset || end > section) throw new ContractError("BDMV_INVALID_SECTION", "/appInfoLength", "INDEX app info exceeds the index section");
+  if (length === 0) return null;
+  const flags = r.u8();
+  const hasVideoFields = length >= 2;
+  return {
+    initialOutputModePreference: ((flags >> 6) & 1) === 1, contentExistFlag: ((flags >> 5) & 1) === 1, initialDynamicRangeType: flags & 0x0f,
+    videoFormat: hasVideoFields ? r.read(4) : 0, frameRate: hasVideoFields ? r.read(4) : 0,
+    userDataBytes: Math.max(0, length - 2), source: sourceFor(file, "", origin, lengthOffset),
+  };
+}
+
+/** INDX extension 3.1 carries the UHD disc type, 4K flag and HDR signalling. */
+function parseIndexUhdExtension(r: Bits, dataLength: number, file: FileEntry, origin: "primary" | "backup", extension: number): UhdMetadata | null {
+  r.seek(extension); const length = r.u32(); const end = r.offset + length;
+  if (length < 8 || end > dataLength) throw new ContractError("BDMV_INVALID_SECTION", "/extensionLength", "INDEX extension section exceeds file");
+  r.u32(); r.skip(3); const countOffset = r.offset; const count = r.u8();
+  if (count > Math.floor((end - r.offset) / 12)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${countOffset}`, "INDEX extension entry count exceeds section");
+  let uhd: UhdMetadata | null = null;
+  for (let i = 0; i < count; i++) {
+    const start = r.offset; const type = r.u16(); const entryVersion = r.u16(); const address = r.u32(); const entryLength = r.u32();
+    if (address < 4 || address + entryLength > length + 4) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${start}`, "INDEX extension entry exceeds the extension section");
+    if (type === 3 && entryVersion === 1) {
+      const payload = extension + address; r.seek(payload); const payloadLength = r.u32();
+      if (payloadLength < 8 || r.offset + payloadLength > end) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${payload}`, "INDEX UHD extension is truncated");
+      const discType = r.read(4); r.skipBits(3); const exists4k = !!r.read(1);
+      r.skipBits(8); r.skipBits(3); const hdr10Plus = !!r.read(1); r.skipBits(1); const dolbyVision = !!r.read(1); const hdrFlags = r.read(2);
+      r.skipBits(8); r.skipBits(32);
+      uhd = { discType, exists4k, hdrFlags, hdr10Plus, dolbyVision, source: sourceFor(file, "", origin, payload) };
+      r.seek(start + 12);
+    }
+  }
+  return uhd;
+}
+
+function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<ParsedIndex> {
   const r = new Bits(data);
   r.checkMagic("INDX"); const version = r.version(); const section = r.u32(); const ext = r.u32();
   if (section < 40 || section >= data.length) throw new ContractError("BDMV_INVALID_SECTION", "/indexOffset", `Invalid index section offset ${section}`);
   if (ext && ext >= data.length) throw new ContractError("BDMV_INVALID_SECTION", "/extensionOffset", `Invalid extension offset ${ext}`);
+  const appInfo = parseIndexAppInfo(r, data.length, file, origin, section);
+  const uhd = ext ? parseIndexUhdExtension(r, data.length, file, origin, ext) : null;
   r.seek(section);
   const blockLength = r.u32(); if (blockLength > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/indexLength", "Index section exceeds file");
   const end = r.offset + blockLength;
@@ -72,14 +115,16 @@ function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "back
     let playbackType = 0; let target: number | string | null = null; let objectType: EntryTarget["objectType"] = "unknown";
     if (type === 1) { objectType = "HDMV"; playbackType = r.read(2); r.skipBits(14); target = r.read(16); r.skipBits(32); }
     else if (type === 2) { objectType = "BDJ"; playbackType = r.read(2); r.skipBits(14); target = r.text(5); r.skip(1); }
-    else if (type !== 0) { throw new ContractError("BDMV_UNKNOWN_OBJECT_TYPE", `/offset/${start}`, `Unknown index object type ${type}`); }
+    // libbluray aborts the whole index on an unknown object type; skipping an
+    // assumed body length would silently misalign every following title.
+    else throw new ContractError("BDMV_UNKNOWN_OBJECT_TYPE", `/offset/${start}`, `Unknown index object type ${type}`);
     return { objectType, playbackType, target, ...(access === undefined ? {} : { accessType: access }), source: sourceFor(file, "", origin, start) };
   };
   const entries = [parseTarget(), parseTarget()];
-  const count = r.u16();
-  if (count > Math.floor((end - r.offset) / 12)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${r.offset - 2}`, `Title count ${count} exceeds index section`);
+  const countOffset = r.offset; const count = r.u16();
+  if (count > Math.floor((end - r.offset) / 12)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${countOffset}`, `Title count ${count} exceeds index section`);
   for (let i = 0; i < count; i++) entries.push(parseTarget(true));
-  return { value: entries, version, raw: data };
+  return { value: { entries, appInfo, uhd }, version, raw: data };
 }
 
 function parseMobj(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<MovieObject[]> {
@@ -107,8 +152,28 @@ function parseMobj(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
 
 function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<Playlist> {
   const r = new Bits(data); r.checkMagic("MPLS"); const version = r.version(); const listPos = r.u32(); const markPos = r.u32(); const extPos = r.u32();
-  r.skip(20); const appLen = r.u32(); if (appLen > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/appInfoLength", "MPLS app info exceeds file");
-  const appEnd = r.offset + appLen; r.skip(1); r.read(8); r.skip(2); r.skip(8); r.read(1); r.read(1); r.read(1); r.read(1); r.read(1); if (r.offset > appEnd) throw new ContractError("BDMV_INVALID_SECTION", "/appInfo", "MPLS app info fields exceed section");
+  r.skip(20); const appLenOffset = r.offset; const appLen = r.u32(); if (appLen > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/appInfoLength", "MPLS app info exceeds file");
+  const appEnd = r.offset + appLen;
+  let appInfo: PlaylistAppInfo | null = null;
+  if (appLen === 0) appInfo = null;
+  else {
+    // Twelve bytes are the minimum for the reserved byte through the UO mask;
+    // the flag byte is read when declared, matching libbluray's tolerance here.
+    if (appLen < 12) throw new ContractError("BDMV_INVALID_SECTION", "/appInfoLength", "MPLS app info is too short for its fixed fields");
+    r.skip(1); const playbackType = r.u8();
+    let playbackCount: number | null = null;
+    if (playbackType === 2 || playbackType === 3) playbackCount = r.u16(); else r.skip(2);
+    const uoMask = ((BigInt(r.u32()) << 32n) | BigInt(r.u32())).toString();
+    const flags = appLen >= 13 ? r.u8() : 0;
+    appInfo = {
+      playbackType, playbackCount, uoMask,
+      randomAccessFlag: ((flags >> 7) & 1) === 1, audioMixFlag: ((flags >> 6) & 1) === 1, losslessBypassFlag: ((flags >> 5) & 1) === 1,
+      mvcBaseViewRFlag: ((flags >> 4) & 1) === 1, sdrConversionNotificationFlag: ((flags >> 3) & 1) === 1,
+      source: sourceFor(file, "", origin, appLenOffset),
+    };
+  }
+  if (r.offset > appEnd) throw new ContractError("BDMV_INVALID_SECTION", "/appInfo", "MPLS app info fields exceed section");
+  r.seek(appEnd);
   if (listPos < 40 || listPos >= data.length || markPos < 40 || markPos >= data.length || (extPos && extPos >= data.length)) throw new ContractError("BDMV_INVALID_SECTION", "/sectionOffset", "MPLS section offset exceeds file");
   r.seek(listPos); const listLen = r.u32(); const listEnd = r.offset + listLen; if (listEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/playlistLength", "MPLS playlist section exceeds file");
   r.skip(2); const itemCount = r.u16(); const subCount = r.u16();
@@ -123,14 +188,19 @@ function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
     if (context.offset > streamEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${source.offset}`, "MPLS stream header exceeds record"); context.seek(streamEnd);
     if (context.offset + 1 > enclosingEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${source.offset}`, "MPLS stream attribute length is outside STN section");
     const attrLen = context.u8(); const attrEnd = context.offset + attrLen; if (attrEnd > enclosingEnd || context.offset >= attrEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${source.offset}`, "MPLS stream attributes exceed STN section or omit coding type"); const codingType = context.u8(); let language: string | null = null;
-    const attrBytes = [0x90,0x91,0xa0,0x92,3,4,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0xa1,0xa2].includes(codingType) ? 4 : [1,2,0xea,0x1b,0x24].includes(codingType) ? 4 : 0;
+    const attrBytes = [0x90,0x91,0xa0,0x92,3,4,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0xa1,0xa2].includes(codingType) ? 4 : [1,2,0xea,0x1b].includes(codingType) ? 4 : codingType === 0x24 ? 4 : 0;
     if (context.offset + attrBytes > attrEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${source.offset}`, "MPLS coding attributes exceed stream record");
+    let dynamicRangeType: number | null = null; let colorSpace: number | null = null;
     if ([0x90,0x91,0xa0].includes(codingType)) { language = context.text(3); context.skip(1); }
     else if (codingType === 0x92) { context.skip(1); language = context.text(3); }
     else if ([3,4,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0xa1,0xa2].includes(codingType)) { context.skip(1); language = context.text(3); }
-    else if ([1,2,0xea,0x1b,0x24].includes(codingType)) context.skip(4);
+    else if ([1,2,0xea,0x1b].includes(codingType)) context.skip(4);
+    else if (codingType === 0x24) {
+      context.skip(1); // Format and frame rate.
+      dynamicRangeType = context.read(4); colorSpace = context.read(4);
+    }
     if (context.offset > attrEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${source.offset}`, "MPLS stream attributes exceed record"); context.seek(attrEnd);
-    return { streamType, pid, subPathId, subClipId, codingType, language, source };
+    return { streamType, pid, subPathId, subClipId, codingType, language, dynamicRangeType, colorSpace, source };
   };
   for (let i = 0; i < itemCount; i++) {
     const recordStart = r.offset; const itemLen = r.u16(); const end = r.offset + itemLen;
@@ -180,13 +250,45 @@ function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   if (markCount > Math.floor((markEnd - r.offset) / 14)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${r.offset - 2}`, "PlayMark count exceeds section");
   const marks: PlayMark[] = [];
   for (let i = 0; i < markCount; i++) { const source = r.source(file.rel, origin); r.skip(1); const type = r.u8(); const playItemRef = r.u16(); const time45k = r.u32(); const entryEsPid = r.u16(); const duration45k = r.u32(); marks.push({ index: i, type, playItemRef, time45k, entryEsPid, duration45k, source }); }
-  return { value: { id: file.rel.split("/").pop()!.replace(/\.mpls$/i, ""), version, playItems, marks, subPaths, source: sourceFor(file, "", origin, 0) }, version, raw: data };
+  return { value: { id: file.rel.split("/").pop()!.replace(/\.mpls$/i, ""), version, appInfo, playItems, marks, subPaths, source: sourceFor(file, "", origin, 0) }, version, raw: data };
 }
 
 function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<ClipInfo> {
   const r = new Bits(data); r.checkMagic("HDMV"); const version = r.version(); const seqPos = r.u32(); const programPos = r.u32(); const cpiPos = r.u32(); const markPos = r.u32(); const extPos = r.u32();
   for (const [name, pos] of [["sequence", seqPos], ["program", programPos], ["cpi", cpiPos], ["mark", markPos], ["extension", extPos]] as const) if (pos && pos >= data.length) throw new ContractError("BDMV_INVALID_SECTION", `/${name}Offset`, `${name} offset exceeds file`);
-  r.seek(40); const infoLen = r.u32(); if (infoLen > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/clipInfoLength", "CLPI clip info exceeds file"); r.skip(2); r.u8(); r.u8(); r.skip(4); r.u32(); r.u32();
+  r.seek(40); const infoStart = 40; const infoLen = r.u32(); const infoEnd = r.offset + infoLen;
+  if (infoLen > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/clipInfoLength", "CLPI clip info exceeds file");
+  let header: ClipHeader | null = null;
+  if (infoLen >= 16) {
+    r.skip(2); const streamType = r.u8(); const applicationType = r.u8();
+    const flags = r.u32(); const tsRecordingRate = r.u32(); const sourcePacketCount = r.u32();
+    let tsTypeId: string | null = null;
+    // TS type info follows the 128 reserved bytes; it is absent in older layouts.
+    if (infoLen >= 146) {
+      r.seek(infoStart + 4 + 144); const tsTypeLength = r.u16();
+      if (tsTypeLength > infoEnd - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/tsTypeInfoLength", "CLPI TS type info exceeds clip info");
+      if (tsTypeLength > 0) { if (tsTypeLength < 5) throw new ContractError("BDMV_INVALID_SECTION", "/tsTypeInfoLength", "CLPI TS type info is too short"); r.skip(1); tsTypeId = r.text(4); }
+    }
+    if (r.offset > infoEnd) throw new ContractError("BDMV_INVALID_RECORD", "/clipInfoLength", "CLPI clip info fields exceed section");
+    header = { streamType, applicationType, tsRecordingRate, sourcePacketCount, atcDelta: (flags & 1) === 1, tsTypeId, source: sourceFor(file, "", origin, infoStart) };
+  }
+  r.seek(infoEnd);
+  const sequence: AtcSequence[] = [];
+  if (seqPos) {
+    r.seek(seqPos); const seqLen = r.u32(); const seqEnd = r.offset + seqLen;
+    if (seqLen < 2 || seqEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/sequenceInfoLength", "CLPI sequence info exceeds file or is too short");
+    r.skip(1); const atcCountOffset = r.offset; const atcCount = r.u8();
+    if (atcCount > Math.floor((seqEnd - r.offset) / 6)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${atcCountOffset}`, "CLPI ATC sequence count exceeds section");
+    for (let i = 0; i < atcCount; i++) {
+      const source = r.source(file.rel, origin);
+      const spnAtcStart = r.u32(); const stcCountOffset = r.offset; const stcCount = r.u8(); const offsetStcId = r.u8();
+      if (stcCount > Math.floor((seqEnd - r.offset) / 14)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${stcCountOffset}`, "CLPI STC sequence count exceeds section");
+      const stcs: StcSequence[] = [];
+      for (let j = 0; j < stcCount; j++) stcs.push({ pcrPid: r.u16(), spnStcStart: r.u32(), presentationStartPts: r.u32(), presentationEndPts: r.u32() });
+      sequence.push({ spnAtcStart, offsetStcId, stcs, source });
+    }
+    r.seek(seqEnd);
+  }
   const programs: ClipInfo["programs"] = [];
   if (programPos) {
     r.seek(programPos); const pLen = r.u32(); const pEnd = r.offset + pLen; if (pEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/programInfoLength", "CLPI program info exceeds file"); r.skip(1); const count = r.u8(); if (r.offset > pEnd) throw new ContractError("BDMV_INVALID_SECTION", "/programInfoLength", "CLPI program info header exceeds section");
@@ -197,14 +299,20 @@ function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
       const streams = [];
       for (let j = 0; j < streamCount; j++) {
         const streamOffset = r.offset; if (r.offset + 3 > pEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${streamOffset}`, "CLPI stream header exceeds ProgramInfo section"); const pid = r.u16(); const attrLen = r.u8(); const attrEnd = r.offset + attrLen; if (attrEnd > pEnd || r.offset >= attrEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${streamOffset}`, "CLPI stream attributes exceed ProgramInfo section or omit coding type"); const codingType = r.u8(); let language: string | null = null;
-        const attrBytes = [3,4,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0xa1,0xa2,0x92].includes(codingType) ? 4 : [0x90,0x91,0xa0].includes(codingType) ? 4 : [1,2,0xea,0x1b,0x20].includes(codingType) ? 4 : codingType === 0x24 ? 8 : 0;
+        const attrBytes = [3,4,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0xa1,0xa2,0x92].includes(codingType) ? 4 : [0x90,0x91,0xa0].includes(codingType) ? 4 : [1,2,0xea,0x1b,0x20,0x24].includes(codingType) ? 4 : 0;
         if (r.offset + attrBytes > attrEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${streamOffset}`, "CLPI coding attributes exceed stream record");
+        let dynamicRangeType: number | null = null; let colorSpace: number | null = null;
         if ([3,4,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0xa1,0xa2].includes(codingType)) { r.skip(1); language = r.text(3); }
         else if ([0x90,0x91,0xa0].includes(codingType)) { language = r.text(3); r.skip(1); }
         else if (codingType === 0x92) { r.skip(1); language = r.text(3); }
-        else if ([1,2,0xea,0x1b,0x20,0x24].includes(codingType)) r.skip(codingType === 0x24 ? 8 : 4);
+        else if ([1,2,0xea,0x1b,0x20].includes(codingType)) r.skip(4);
+        else if (codingType === 0x24) {
+          r.skip(1); // Format and frame rate.
+          r.skipBits(4 + 2); r.read(1); r.read(1); // Aspect, reserved bits, oc_flag, cr_flag.
+          dynamicRangeType = r.read(4); colorSpace = r.read(4);
+        }
         if (r.offset > attrEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${streamOffset}`, "CLPI stream attribute exceeds record"); r.seek(attrEnd);
-        streams.push({ pid, codingType, language, source: r.source(file.rel, origin) });
+        streams.push({ pid, codingType, language, dynamicRangeType, colorSpace, source: sourceFor(file, "", origin, streamOffset) });
       }
       void groupCount;
       programs.push({ sequenceStartSpn, programMapPid, streams, source: sourceFor(file, "", origin, start) });
@@ -230,7 +338,7 @@ function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
       }
     }
   }
-  return { value: { id: file.rel.split("/").pop()!.replace(/\.clpi$/i, ""), version, programs, cpi, source: sourceFor(file, "", origin, 0) }, version, raw: data };
+  return { value: { id: file.rel.split("/").pop()!.replace(/\.clpi$/i, ""), version, header, sequence, programs, cpi, source: sourceFor(file, "", origin, 0) }, version, raw: data };
 }
 
 function parseSound(data: Uint8Array, file: FileEntry, fullLength: number): SoundEntry[] {
@@ -349,7 +457,7 @@ export async function parseBdmv(inputPath: string, options: { limits?: Limits } 
   const mobjFile = locate(index, "BDMV/MovieObject.bdmv"); const parsedObjects = choose("MovieObject.bdmv", mobjFile, allBytes, (data, file, origin) => parseMobj(data, file, origin), diagnostics, false);
   if (!parsedObjects) diagnose(diagnostics, "BDMV_REQUIRED_FILE_MISSING", "MovieObject.bdmv is missing or invalid", mobjFile.primary, undefined, "error", true);
   const entries: ParsedDisc["entries"] = [];
-  for (const [i, target] of (parsedIndex?.value ?? []).entries()) { const kind = i === 0 ? "firstPlay" : i === 1 ? "topMenu" : "title"; entries.push({ id: `${kind}:${i < 2 ? "0" : i - 2}`, kind, target, source: target.source }); if (target.objectType === "BDJ") diagnose(diagnostics, "BDMV_BDJ_UNSUPPORTED", "BD-J entry retained but not executed by this tool", indexFile.primary, Number(target.source.offset), "warning", true, `${kind}:${i}`); }
+  for (const [i, target] of (parsedIndex?.value.entries ?? []).entries()) { const kind = i === 0 ? "firstPlay" : i === 1 ? "topMenu" : "title"; entries.push({ id: `${kind}:${i < 2 ? "0" : i - 2}`, kind, target, source: target.source }); if (target.objectType === "BDJ") diagnose(diagnostics, "BDMV_BDJ_UNSUPPORTED", "BD-J entry retained but not executed by this tool", indexFile.primary, Number(target.source.offset), "warning", true, `${kind}:${i}`); }
   const objects = parsedObjects?.value ?? [];
   const playlists: Playlist[] = [];
   const playlistNames = new Set(files.filter((x) => /\/PLAYLIST\/[^/]+\.mpls$/i.test(x.rel)).map((f) => f.rel.replace(/^BDMV\/BACKUP\//i, "BDMV/")));
@@ -365,6 +473,6 @@ export async function parseBdmv(inputPath: string, options: { limits?: Limits } 
   if (!soundFile) diagnose(diagnostics, "BDMV_OPTIONAL_SOUND_MISSING", "Optional AUXDATA/sound.bdmv is absent", undefined, undefined, "info", true);
   const graph = buildGraph(entries, objects, playlists, clips, sounds, files, diagnostics);
   const declarations = { entries: entries.length, movieObjects: objects.length, playlists: playlists.length, playItems: playlists.reduce((n, p) => n + p.playItems.length, 0), clips: clips.length, streams: clips.reduce((n, c) => n + c.programs.reduce((m, p) => m + p.streams.length, 0), 0), sounds: sounds.length, unknown: diagnostics.filter((d) => d.code.includes("UNSUPPORTED") || d.code.includes("UNKNOWN")).length };
-  const unverified = ["Blu-ray normative conformance", "all format versions", "MPLS advanced extensions", "full CLPI sequence and clip marks", "dynamic MovieObject target resolution", "BD-J execution"];
-  return { schemaVersion: "1.0", analysisStage: "structural", root, entries, movieObjects: objects, playlists, clips, sounds, graph, declarations, diagnostics, supportPrediction: { status: "partial", supported: [], unsupported: ["BD-J execution", "MPLS multi-angle playback", "SubPath playback", "media decoding"], unverified } };
+  const unverified = ["Blu-ray normative conformance", "all format versions", "MPLS advanced extensions", "CLPI clip marks", "dynamic MovieObject target resolution", "BD-J execution"];
+  return { schemaVersion: "1.0", analysisStage: "structural", root, discInfo: { appInfo: parsedIndex?.value.appInfo ?? null, uhd: parsedIndex?.value.uhd ?? null }, entries, movieObjects: objects, playlists, clips, sounds, graph, declarations, diagnostics, supportPrediction: { status: "partial", supported: [], unsupported: ["BD-J execution", "MPLS multi-angle playback", "SubPath playback", "media decoding"], unverified } };
 }
