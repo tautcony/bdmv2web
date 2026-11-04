@@ -1,0 +1,45 @@
+docs/references/stages/M2-igs-field-register.md
+  s_f1e09a61530d1a::t_a6a861741cf45d 1-19
+docs/references/stages/M2-igs-scenes.md
+  s_f1e09a61530d1a::t_a6a861741cf45d 14-15,40-41,94,97-102
+  s_f1e09a61530d1a::t_15621ba7726d26 26,72,78,95-96
+packages/igs/src/types.ts
+  s_f1e09a61530d1a::t_f7a3018aad68b7 62,98
+packages/igs/test/extraction.test.ts
+  s_f1e09a61530d1a::t_8db36ccfbe11cd 90-116,432-435,440-442
+packages/igs/test/real-igs.test.ts
+  s_f1e09a61530d1a::t_8db36ccfbe11cd 22,27
+docs/igs-support.md
+  s_f1e09a61530d1a::t_a6a861741cf45d 28,37
+  s_f1e09a61530d1a::t_15621ba7726d26 3,29
+  s_f1e09a61530d1a::t_7cfaf3f1b4a32c 30
+openspec/changes/extract-igs-scenes/tasks.md
+  s_f1e09a61530d1a::t_fe14d114ef4e3f 16,19
+openspec/changes/parse-bdmv-structure/tasks.md
+  s_f1e09a61530d1a::t_7cfaf3f1b4a32c 21
+packages/igs/test/hdmv-navigation-packet-fixtures.test.ts
+  s_f1e09a61530d1a::t_8db36ccfbe11cd 62-76
+packages/igs/src/igs.ts
+  s_f1e09a61530d1a::t_f53fd6085c60e9 212,227,240,249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "614b4fe1aa6aa6160aff3f8b5d9cf1f72e31c4e2",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
