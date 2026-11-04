@@ -23,7 +23,8 @@ type Continuation = { action: NavigationAction; nextProgramId: number; nextPc: n
 type MenuCheckpoint = {
   programId: number; pc: number; status: VmStatus; registers: ReturnType<RegisterFile["snapshot"]>;
   callStack: Array<{ programId: number; pc: number }>; continuation: Continuation | null;
-  suspendedPlaylistContinuation: Continuation | null; playback: PlaybackContext; queuedActionIds: Set<string>;
+  suspendedPlaylistContinuation: Continuation | null; suspendedPlaylistPlayback: PlaybackContext | null;
+  pendingTitleCall: number | null; playback: PlaybackContext; queuedActionIds: Set<string>;
   diagnostic: VmDiagnostic | null; firstAction: number;
 };
 const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
@@ -45,7 +46,7 @@ export class HdmvVm {
   status: VmStatus = "idle";
   programId = 0; pc = 0; generation = 0; instructionsThisTurn = 0; diagnostic: VmDiagnostic | null = null;
   private readonly programs = new Map<number, VmProgram>(); private readonly callStack: Array<{ programId: number; pc: number }> = [];
-  private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
+  private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private suspendedPlaylistPlayback: PlaybackContext | null = null; private pendingTitleCall: number | null = null; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
   private readonly consumedResponses = new Set<string>(); private readonly eventQueue: VmEvent[] = []; private readonly actionQueue: NavigationAction[] = [];
   private profile: PlayerProfile; private lastAction: NavigationAction | undefined; private resumeAfterPlaylistStop = false;
   private readonly entries: VmOptions["entries"];
@@ -63,7 +64,7 @@ export class HdmvVm {
   }
   reset(programId = 0, profile: PlayerProfile = this.profile): void {
     this.profile = normalizeProfile(profile); this.registers.reset(this.profile); this.programId = programId; this.pc = 0; this.status = "idle"; this.generation++;
-    this.callStack.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.menuCheckpoint = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
+    this.callStack.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.pendingTitleCall = null; this.menuCheckpoint = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
@@ -88,7 +89,8 @@ export class HdmvVm {
     this.menuCheckpoint = {
       programId: this.programId, pc: this.pc, status: this.status, registers: this.registers.snapshot(),
       callStack: this.callStack.map((frame) => ({ ...frame })), continuation: this.continuation,
-      suspendedPlaylistContinuation: this.suspendedPlaylistContinuation, playback: { ...this.playback },
+      suspendedPlaylistContinuation: this.suspendedPlaylistContinuation, suspendedPlaylistPlayback: this.suspendedPlaylistPlayback ? { ...this.suspendedPlaylistPlayback } : null,
+      pendingTitleCall: this.pendingTitleCall, playback: { ...this.playback },
       queuedActionIds: new Set(this.actionQueue.map((action) => action.id)), diagnostic: this.diagnostic,
       firstAction: this.actions.length,
     };
@@ -102,6 +104,7 @@ export class HdmvVm {
     this.programId = saved.programId; this.pc = saved.pc; this.status = saved.status;
     this.callStack.splice(0, this.callStack.length, ...saved.callStack.map((frame) => ({ ...frame })));
     this.continuation = saved.continuation; this.suspendedPlaylistContinuation = saved.suspendedPlaylistContinuation;
+    this.suspendedPlaylistPlayback = saved.suspendedPlaylistPlayback ? { ...saved.suspendedPlaylistPlayback } : null; this.pendingTitleCall = saved.pendingTitleCall;
     this.playback = { ...saved.playback }; this.diagnostic = saved.diagnostic; this.resumeAfterPlaylistStop = false; this.lastAction = undefined;
     if (saved.continuation) this.consumedResponses.delete(`${saved.continuation.action.generation}:${saved.continuation.action.id}`);
     const retained = this.actionQueue.filter((queued) => saved.queuedActionIds.has(queued.id));
@@ -258,23 +261,34 @@ export class HdmvVm {
   }
   /** Resolve a title-search action using the disc index without inventing a media-ended event. */
   selectTitle(title: number): VmSnapshot {
+    if (this.pendingTitleCall !== null && this.pendingTitleCall !== title) {
+      const diagnostic = { code: "HDMV_TITLE_RESPONSE_MISMATCH", message: `CALL_TITLE is waiting for title ${this.pendingTitleCall}, received title ${title}`, source: null };
+      this.record({ source: null, raw: null, decoded: "TITLE_SEARCH_RESPONSE_IGNORED", registerDelta: EMPTY_DELTA, status: this.status, diagnostic });
+      return this.snapshot();
+    }
     try {
       if (!this.entries) throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "Title navigation requires the disc title table");
       this.validateTitleTarget(title);
       const entry = title === 0 ? this.entries.find((item) => item.kind === "topMenu")
         : title === 0xffff ? this.entries.find((item) => item.kind === "firstPlay")
           : this.entries.filter((item) => item.kind === "title")[title - 1];
-      if (!entry || entry.target.objectType !== "HDMV" || typeof entry.target.target !== "number") throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `Title ${title} is not a resolved HDMV object`);
+      if (!entry) throw new RegisterFault("HDMV_INVALID_TARGET", `Title ${title} has no index entry`);
+      if (entry.target.objectType === "BDJ") throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `Title ${title} resolves to unsupported BD-J`);
+      if (entry.target.objectType !== "HDMV" || typeof entry.target.target !== "number") throw new RegisterFault("HDMV_INVALID_TARGET", `Title ${title} has no resolved HDMV object target`);
       this.validateTarget(entry.target.target, 0);
-      if (this.continuation) {
+      const isCallReturn = this.pendingTitleCall !== null;
+      if (!isCallReturn && this.continuation) {
         const action = this.continuation.action;
         this.consumedResponses.add(`${action.generation}:${action.id}`);
         this.removeAction(action.id);
       }
-      this.continuation = null;
+      if (!isCallReturn) this.continuation = null;
+      this.pendingTitleCall = null;
       this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
+      const before = this.registers.snapshot();
       this.registers.systemWrite(4, title);
       this.programId = entry.target.target; this.pc = 0; this.status = "running";
+      this.record({ source: entry.source, raw: null, decoded: `TITLE_SELECTED title=${title} object=${entry.target.target}`, registerDelta: delta(before, this.registers.snapshot()), status: this.status });
       return this.runTurn();
     } catch (error) {
       this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), null);
@@ -405,6 +419,8 @@ export class HdmvVm {
         this.restoreCallPsrState(); this.programId = frame.programId; this.pc = frame.pc;
         if (this.suspendedPlaylistContinuation) {
           this.continuation = this.suspendedPlaylistContinuation; this.suspendedPlaylistContinuation = null; this.status = "suspended";
+          if (this.suspendedPlaylistPlayback) this.playback = { ...this.suspendedPlaylistPlayback };
+          this.suspendedPlaylistPlayback = null;
         }
         return;
       }
@@ -412,6 +428,7 @@ export class HdmvVm {
         this.validateTitleTarget(av);
         this.callStack.length = 0;
         this.suspendedPlaylistContinuation = null;
+        this.suspendedPlaylistPlayback = null;
         this.resetCallPsrBackup();
         // The reference emits a title event and continues at the next command;
         // this is an immediate external request, not a VM continuation wait.
@@ -423,15 +440,21 @@ export class HdmvVm {
         const entry = av === 0 ? this.entries.find((item) => item.kind === "topMenu")
           : av === 0xffff ? this.entries.find((item) => item.kind === "firstPlay")
             : this.entries.filter((item) => item.kind === "title")[av - 1];
-        if (!entry || entry.target.objectType !== "HDMV" || typeof entry.target.target !== "number") throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `CALL_TITLE target ${av} is not a resolved HDMV object`);
+        if (!entry) throw new RegisterFault("HDMV_INVALID_TARGET", `CALL_TITLE target ${av} has no index entry`);
+        if (entry.target.objectType === "BDJ") throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", `CALL_TITLE target ${av} resolves to unsupported BD-J`);
+        if (entry.target.objectType !== "HDMV" || typeof entry.target.target !== "number") throw new RegisterFault("HDMV_INVALID_TARGET", `CALL_TITLE target ${av} has no resolved HDMV object target`);
         this.validateTarget(entry.target.target, 0);
         if (this.opts.maxCallDepth < 1) throw new RegisterFault("VM_CALL_DEPTH_LIMIT", `Call depth exceeds ${this.opts.maxCallDepth}`);
         this.saveCallPsrState();
         this.suspendedPlaylistContinuation = context === "ig-button" && this.hasPlaylistContinuation() ? this.continuation : null;
+        this.suspendedPlaylistPlayback = this.suspendedPlaylistContinuation ? { ...this.playback } : null;
         if (this.suspendedPlaylistContinuation) this.continuation = null;
         this.callStack.splice(0, this.callStack.length, { programId: this.programId, pc: this.pc });
-        this.registers.systemWrite(4, av);
-        this.transfer(entry.target.target, 0, false, d.source);
+        // A title call suspends this object while the player resolves and starts
+        // the title. The title event bridge re-enters through selectTitle().
+        this.pendingTitleCall = av;
+        this.status = "suspended";
+        this.emit("TITLE_SEARCH", { title: av }, d.source);
         return;
       }
       case "PLAY_PL": if (context !== "movie-object") return; this.actionAndSuspend("PLAY_PLAYLIST", { playlist: av }, d.source); return;
@@ -619,7 +642,7 @@ export class HdmvVm {
   private currentSource(): SourceLocation | null { const row = this.programs.get(this.programId)?.instructions[this.pc]; if (!row) return null; try { return decodeInstruction(row).source; } catch { return null; } }
   private fail(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: ReturnType<RegisterFile["snapshot"]>, location?: { programId: number; pc: number }): void {
     if (this.continuation) this.removeAction(this.continuation.action.id);
-    this.continuation = null; this.playback.pendingActionId = null;
+    this.continuation = null; this.pendingTitleCall = null; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.playback.pendingActionId = null;
     const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }

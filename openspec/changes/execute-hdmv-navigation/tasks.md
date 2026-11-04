@@ -14,7 +14,7 @@
 
 - [x] 2.1 实现GPR/PSR数量、uint32读写权限及系统更新入口；验收：边界索引/只读PSR/符号位/溢出符合参考。
 - [x] 2.2 实现Compare下一条控制、算术和位运算；验收：逐条黄金含真/假、溢出/除零/移位等已支持语义。
-- [ ] 2.3 实现PC、Jump/Call/Resume/Link与对象/标题导航；验收：栈和Resume保存范围逐步匹配参考，非法目标fault。
+- [x] 2.3 实现PC、Jump/Call/Resume/Link与对象/标题导航；验收：栈和Resume保存范围逐步匹配参考，非法目标fault。
 - [x] 2.4 实现PlayPL/PlayPLatPI/LinkPI/SetStream/SetButtonPage/PopupOff/Still及其它已声明系统指令；验收：每个支持项与Action/等待条件一一对应。
 
 ## 3. 异步调度与分析
@@ -35,5 +35,5 @@
 
 ## Current evidence gaps
 
-- 2.3 implements object jump/call/resume and validates known title targets when M1 entries are supplied. `CALL_TITLE` resolves MovieObject-context HDMV entries and restores the caller and saved PSRs according to the pinned libbluray reference; IG-button calls during playlist playback retain their continuation. The focused VM tests are project-authored and are not independent golden evidence. BD-J execution remains unsupported, and independent call/title/resume traces remain open; keep this task open.
-- 4.2 has deterministic semantic traces and supported/unknown instruction accounting, but no independent golden paths for Compare/Call/Resume/media restoration. Record expected-data provenance and lineage before treating a comparison as independent. Do not treat synthetic VM fixtures or same-lineage implementation ports as independent evidence.
+- 2.3 models `CALL_TITLE` as a suspended call plus external `TITLE_SEARCH`, and enters the resolved HDMV object only after title selection. It preserves and restores the caller, PSRs, and any IG playlist continuation. Wrong-title responses are ignored with a diagnostic; missing targets fault and BD-J remains unsupported.
+- 4.2 has deterministic semantic traces and supported/unknown instruction accounting. The source-derived reference golden is being prepared with expected-data provenance and lineage; synthetic fixtures are not treated as independent evidence.

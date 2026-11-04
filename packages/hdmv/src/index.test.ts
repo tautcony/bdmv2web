@@ -425,16 +425,65 @@ describe("M3 HDMV fixtures", () => {
       { id: 1, instructions: [m3Fixtures.add7, m3Fixtures.resume] },
     ], { entries: callEntries });
     called.registers.systemWrite(4, 12);
-    const resumed = called.runTurn();
+    const titleCall = called.runTurn();
+    expect(titleCall).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }], registers: { psr: expect.arrayContaining([12]) } });
+    expect(called.actions.at(-1)).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
+    expect(called.actions.at(-1)).not.toHaveProperty("waitFor");
+    expect(called.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))).toMatchObject({ status: "suspended", programId: 0, pc: 0, callDepth: 1 });
+    expect(titleCall.registers.psr[4]).toBe(12); // PSR4 is set by title selection, not by CALL_TITLE.
+    expect(called.selectTitle(2)).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }] });
+    expect(called.trace.at(-1)).toMatchObject({ decoded: "TITLE_SEARCH_RESPONSE_IGNORED", status: "suspended", callDepth: 1, diagnostic: { code: "HDMV_TITLE_RESPONSE_MISMATCH" } });
+    const resumed = called.selectTitle(1);
     expect(resumed).toMatchObject({ status: "stopped", programId: 0, registers: { gpr: expect.arrayContaining([5]), psr: expect.arrayContaining([12]) } });
     expect(resumed.registers.psr[4]).toBe(12);
-    expect(called.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))?.registerDelta.psr[4]).toBe(1);
+    expect(called.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))?.registerDelta.psr[4]).toBeUndefined();
+    expect(called.trace.find((entry) => entry.decoded === "TITLE_SELECTED title=1 object=1")?.registerDelta.psr[4]).toBe(1);
     expect(called.trace.some((entry) => entry.decoded?.startsWith("RESUME") && entry.programId === 1)).toBe(true);
     const badCallTitle = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21830000, 2)] }], { entries });
     expect(badCallTitle.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
     expect(badCallTitle.snapshot().callStack).toEqual([]);
+    const unresolvedCallEntries = callEntries.map((entry) => entry.kind === "title" ? { ...entry, target: { ...entry.target, objectType: "unknown" as const, target: null } } : entry);
+    const unresolvedCall = new HdmvVm([{ id: 0, instructions: [callTitle] }], { entries: unresolvedCallEntries });
+    expect(unresolvedCall.runTurn()).toMatchObject({ status: "faulted", programId: 0, pc: 1, callStack: [], diagnostic: { code: "HDMV_INVALID_TARGET" } });
+    expect(unresolvedCall.actions).toHaveLength(0);
+    const bdjCallEntries = callEntries.map((entry) => entry.kind === "title" ? { ...entry, target: { ...entry.target, objectType: "BDJ" as const, target: "00001" } } : entry);
+    const bdjCall = new HdmvVm([{ id: 0, instructions: [callTitle] }], { entries: bdjCallEntries });
+    expect(bdjCall.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 0, callStack: [], diagnostic: { code: "HDMV_UNVERIFIED_OPCODE", message: expect.stringContaining("unsupported BD-J") } });
+    expect(bdjCall.actions).toHaveLength(0);
     const missingTable = new HdmvVm([{ id: 0, instructions: [callTitle] }]);
     expect(missingTable.runTurn().diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
+  });
+  it("restores an IG playlist continuation after CALL_TITLE selection and RESUME", () => {
+    const source = m3Fixtures.move5.source;
+    const entries = [
+      { id: "firstPlay:0", kind: "firstPlay" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source }, source },
+      { id: "topMenu:0", kind: "topMenu" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source }, source },
+      { id: "title:0", kind: "title" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 2, accessType: 0, source }, source },
+    ];
+    const vm = new HdmvVm([
+      { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
+      { id: 1, instructions: [m3Fixtures.break] },
+      { id: 2, instructions: [m3Fixtures.resume] },
+    ], { entries });
+    expect(vm.runTurn()).toMatchObject({ status: "suspended", programId: 0, pc: 1 });
+    const playlistAction = vm.snapshot().waiting!;
+    expect(playlistAction.type).toBe("PLAY_PLAYLIST");
+    vm.drainActions();
+
+    const button = vm.executeButtonProgram([rawCommand(0x21830000, 1)], "ig-button");
+    expect(button).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }] });
+    expect(button.actions).toHaveLength(1);
+    expect(button.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
+    expect(button.actions[0]).not.toHaveProperty("waitFor");
+
+    const resumed = vm.selectTitle(1);
+    expect(resumed).toMatchObject({
+      status: "suspended", programId: 0, pc: 1, callStack: [], waiting: { id: playlistAction.id, type: "PLAY_PLAYLIST" },
+      playback: { status: "requested", playlist: 42, pendingActionId: playlistAction.id },
+    });
+    expect(vm.handleEvent({ type: "MEDIA_ENDED", generation: playlistAction.generation, responseTo: playlistAction.id })).toMatchObject({ status: "stopped", programId: 0, pc: 2 });
+    expect(vm.trace.some((entry) => entry.decoded?.startsWith("CALL_TITLE") && entry.status === "suspended" && entry.callDepth === 1)).toBe(true);
+    expect(vm.trace.some((entry) => entry.decoded?.startsWith("RESUME") && entry.programId === 2 && entry.status === "suspended")).toBe(true);
   });
   it("uses the selected IG button PSR when a button computes a title target", () => {
     const source = m3Fixtures.move5.source;
