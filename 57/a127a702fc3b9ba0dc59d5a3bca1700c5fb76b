@@ -1,0 +1,366 @@
+packages/test-runner/src/browser-evidence.test.ts
+  s_3a3ffd5e9a879b::t_78ff2632cc670d 1,3-60,62-71,90-96
+  s_3a3ffd5e9a879b::t_4b62b1e62df663 2,77-87
+  s_3a3ffd5e9a879b::t_f1a8194e10c67c 61
+  s_3a3ffd5e9a879b::t_abd5e5c466a517 72-76,88-89
+packages/test-runner/src/index.test.ts
+  s_3a3ffd5e9a879b::t_dd23e512e05c72 12,46-59
+  s_3a3ffd5e9a879b::t_0b78f484a19ad9 191-200
+  s_3a3ffd5e9a879b::t_39bbea330b6d02 244
+  s_3a3ffd5e9a879b::t_d6e2524768f485 2,73-87,201
+  s_3a3ffd5e9a879b::t_ff0b0de57e7dca 18,235-236,245
+  s_3a3ffd5e9a879b::t_cce7cd5ca38d61 202
+packages/test-runner/src/report.ts
+  s_3a3ffd5e9a879b::t_dd23e512e05c72 44
+  s_3a3ffd5e9a879b::t_f14584480cfb7d 4,61-89,91-92,94,96-97
+  s_3a3ffd5e9a879b::t_1b1715c5f83fb0 11,16-18
+  s_3a3ffd5e9a879b::t_9be2b9d0c64830 90,93,95
+packages/test-runner/src/compare.test.ts
+  s_3a3ffd5e9a879b::t_9be2b9d0c64830 44-53
+  s_3a3ffd5e9a879b::t_2b85923900bb85 1-43,54-57
+packages/test-runner/src/browser-evidence.ts
+  s_3a3ffd5e9a879b::t_bb8c2d2f6f1dc6 128
+  s_3a3ffd5e9a879b::t_87f618c6ce5a90 92-93,122-127,129-130,134
+  s_3a3ffd5e9a879b::t_12da26db054803 1-91,94-121,131-133,135-142,152-181
+  s_3a3ffd5e9a879b::t_1357c76cbe4bcd 143-151
+packages/test-runner/src/release-summary.test.ts
+  s_3a3ffd5e9a879b::t_d81d1af315e79f 1-82
+packages/test-runner/src/coverage.test.ts
+  s_3a3ffd5e9a879b::t_6a38bb2d8e706d 1-39
+packages/test-runner/src/index.ts
+  s_3a3ffd5e9a879b::t_ae41875519d676 6
+  s_3a3ffd5e9a879b::t_427489e93e7e48 7
+openspec/changes/verify-offline-release/tasks.md
+  s_3a3ffd5e9a879b::t_4de3191042a1b5 5,35
+  s_3a3ffd5e9a879b::t_1e2a500c096441 21
+  s_3a3ffd5e9a879b::t_a1b68f4a9d6c76 32
+  s_3a3ffd5e9a879b::t_eca06bcf963b97 13
+  s_3a3ffd5e9a879b::t_807ec128ea4325 9-10
+  s_3a3ffd5e9a879b::t_f77410cc207cba 34
+  s_3a3ffd5e9a879b::t_f5904e129275bd 26-27
+  s_3a3ffd5e9a879b::t_b3fd332275646d 12
+  s_3a3ffd5e9a879b::t_369658559263f0 25
+  s_3a3ffd5e9a879b::t_4b985addd3846e 17,20
+  s_3a3ffd5e9a879b::t_fbff0d64db06f1 28
+  s_f1e09a61530d1a::t_70d8b6ddd54dba 11,18-19
+  s_f1e09a61530d1a::t_e2f54ee0eb9d37 33
+packages/test-runner/src/compare.ts
+  s_3a3ffd5e9a879b::t_e5b823ec969ea1 38-45
+apps/cli/src/index.ts
+  s_3a3ffd5e9a879b::t_c803ede652ae71 256-260
+  s_3a3ffd5e9a879b::t_356b7fecc51ee0 69,76-84,86-89,91-95,97-109,117-137
+  s_3a3ffd5e9a879b::t_76ec65eed91a58 85
+  s_3a3ffd5e9a879b::t_e717e2b121a638 307-311,317-320,329,377,381,383
+  s_3a3ffd5e9a879b::t_137ccef244e6bd 215
+  s_3a3ffd5e9a879b::t_5a8db3f7a2e62e 12,299,302,304,321-326,328,330-334,336-343,346,359-364,367-368,370-371,384-403
+  s_3a3ffd5e9a879b::t_c33d991efa1b64 11,144-157,255,266-267,272
+  s_3a3ffd5e9a879b::t_bb5d9893ae84cd 175-178
+  s_3a3ffd5e9a879b::t_7dd49549b8e648 233-237
+  s_3a3ffd5e9a879b::t_476866b515ff74 312-316,347-358
+  s_3a3ffd5e9a879b::t_fde142ab32a8f0 5,7,10,140,182-183,219-221,223,225-226,245,269-271,273,286,289-294,410
+  s_3a3ffd5e9a879b::t_88e88a7585a821 6,29,141-143,159-170,172-174,179-181,229-232,239,241-244,268
+  s_3a3ffd5e9a879b::t_9099fee706797d 300-301,303,305-306,376
+  s_3a3ffd5e9a879b::t_b320352317f373 2
+  s_3a3ffd5e9a879b::t_88fde9ffe48154 261-263,275
+  s_3a3ffd5e9a879b::t_156cfa1dc69fa3 138,295-298,369,372-375,378-379,382,404-405,411
+  s_3a3ffd5e9a879b::t_a0129e4d688a26 4,276-285
+  s_3a3ffd5e9a879b::t_25e966539ceb2f 158,171,206-213,216-218,287
+  s_3a3ffd5e9a879b::t_f5c7bdf5a0ef03 327,335,344-345,365-366
+  s_3a3ffd5e9a879b::t_84580975e82144 380
+  s_3a3ffd5e9a879b::t_b2892e117b1c09 238,240
+  s_3a3ffd5e9a879b::t_50130e9c5fce89 139
+  s_f1e09a61530d1a::t_eec19482eb314d 110
+  s_f1e09a61530d1a::t_6ed69e36ecdb78 288
+  s_f1e09a61530d1a::t_ab99e6270f75ee 9,71,96
+  s_f1e09a61530d1a::t_3176a4e2e7ffae 264-265
+  s_f1e09a61530d1a::t_1edd3b2c02447f 3,53-61,70,222,224
+  s_f1e09a61530d1a::t_6ace63c15f4112 184,186,194-197,205,227-228,246-252
+  s_f1e09a61530d1a::t_2d0e6ab8a03450 214,253-254,274
+  s_f1e09a61530d1a::t_f923df039ee04f 8,185,187-193,198-204
+packages/test-runner/src/release-summary.ts
+  s_3a3ffd5e9a879b::t_baf03ef1faef36 1-98,101-162
+  s_3a3ffd5e9a879b::t_427489e93e7e48 99-100
+apps/cli/src/index.test.ts
+  s_3a3ffd5e9a879b::t_4d9f7bb9661507 268,271,273-274,278
+  s_3a3ffd5e9a879b::t_0a3f2882b991c9 257,272
+  s_3a3ffd5e9a879b::t_2cf42f6eb13bec 9,187,217
+  s_3a3ffd5e9a879b::t_17f2a678a05a83 131-133
+  s_3a3ffd5e9a879b::t_5486b91993a1fd 195
+  s_3a3ffd5e9a879b::t_c47e83a31a0ecf 182,210
+  s_3a3ffd5e9a879b::t_dd23e512e05c72 265-266,269-270,275-277
+  s_3a3ffd5e9a879b::t_f95d22ead14bac 311
+  s_3a3ffd5e9a879b::t_69786bb81c98f5 13-14,17,22,23-24,27
+  s_3a3ffd5e9a879b::t_66919b170c3d75 8,160-181,183-186,188-194,196-203,205-209,211-216,218-233
+  s_3a3ffd5e9a879b::t_bcb5efbee85271 3,137,234-249,251-256,258-263,285-296,300-302
+  s_3a3ffd5e9a879b::t_e717e2b121a638 267,279-284
+  s_3a3ffd5e9a879b::t_71f0fadd7ff298 250
+  s_3a3ffd5e9a879b::t_7eedd542e1d1f7 37-61,63-69,71-73,75-85,90-93,123-128,130,134-136
+  s_3a3ffd5e9a879b::t_270c691bef8c86 4,62,86,129
+  s_3a3ffd5e9a879b::t_ec8a7ed27b13ea 303-310,312-324
+  s_3a3ffd5e9a879b::t_602873544d358e 264,297-299
+  s_3a3ffd5e9a879b::t_b3347e581de91b 138
+  s_f1e09a61530d1a::t_eec19482eb314d 204
+  s_f1e09a61530d1a::t_6ed69e36ecdb78 116-119
+  s_f1e09a61530d1a::t_e1ce083963d70a 151
+  s_f1e09a61530d1a::t_644ba02244a4a9 107-114
+  s_f1e09a61530d1a::t_5aa474a1e39607 20-21,87-89
+  s_f1e09a61530d1a::t_59c4949caef216 94-101,106,115,120-122
+  s_f1e09a61530d1a::t_b82d471ea1070e 102-105
+  s_f1e09a61530d1a::t_e5af3eaf86fc23 70,74
+packages/test-runner/src/coverage.ts
+  s_3a3ffd5e9a879b::t_5be44ecde96a91 107
+  s_3a3ffd5e9a879b::t_e9e8be8cd1cb5e 9-18,27-33,57-70,94-100,105-106,108
+  s_3a3ffd5e9a879b::t_bee803ae51f6a3 19-26,41
+  s_3a3ffd5e9a879b::t_bfdff33a8c5b1b 109
+pnpm-lock.yaml
+  s_3a3ffd5e9a879b::t_bad3b70159111e 41-43,47-55,105-107,120-126,130-138,143-157,162-173,177-180
+  s_3a3ffd5e9a879b::t_97753199fdb839 60-62,69-72,86-88,127-129,139-142,158-161,188-192
+  s_f1e09a61530d1a::t_729f52d67fe8b6 38-40,44-46,174-176
+apps/cli/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+packages/media-export/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+packages/media-export/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 9-10
+  s_f1e09a61530d1a::t_1edd3b2c02447f 7
+packages/package-builder/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 8-9
+packages/package-builder/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+packages/test-runner/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 15-16
+packages/bdmv-io/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 8-9
+packages/igs/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 18
+packages/bdmv-parser/package.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 17
+packages/test-runner/tsconfig.json
+  s_3a3ffd5e9a879b::t_dd66d6d7254c7d 1
+openspec/changes/build-offline-menu-runtime/specs/offline-menu-runtime/spec.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 5,80,82,84,86-87
+openspec/changes/verify-offline-release/design.md
+  s_f1e09a61530d1a::t_2f9670f6dac7be 17
+  s_f1e09a61530d1a::t_e2f54ee0eb9d37 23,29,31,41,48-49,51,64
+  s_f1e09a61530d1a::t_e01603f7af5340 37
+openspec/changes/extract-igs-scenes/specs/interactive-graphics-extraction/spec.md
+  s_f1e09a61530d1a::t_e01603f7af5340 100-101
+  s_f1e09a61530d1a::t_c3abceb31da7ca 93-99,102-106
+openspec/changes/build-offline-menu-runtime/proposal.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 11,31
+openspec/changes/extract-igs-scenes/design.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 11
+  s_f1e09a61530d1a::t_e01603f7af5340 58
+openspec/changes/export-playable-media/proposal.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 5,9-13,19,23,27,31
+openspec/changes/build-offline-menu-runtime/design.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 5,37,43
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_f1e09a61530d1a::t_064dfc506670a0 89,93,95-96,98,100-101,103,105-106,113,116
+  s_f1e09a61530d1a::t_ade644d8a1d472 75,77,79,81-82,84,86-87
+  s_f1e09a61530d1a::t_df8227e23ab0ad 5,9,11,13,15-16,18,20-21,23,25-26,28,30,32,34-35,37,39-40,42,44-45,47,49,51,53-54,56,58-59,61,63,65,67-68,70,72-73
+  s_f1e09a61530d1a::t_e2d83f5cb9bff0 91,108-112,115
+openspec/changes/export-playable-media/design.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 5,9,11,21,23,25,29,31,33,39
+  s_f1e09a61530d1a::t_064dfc506670a0 13,17,19
+  s_f1e09a61530d1a::t_ade644d8a1d472 35
+  s_f1e09a61530d1a::t_e2d83f5cb9bff0 15
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 27
+openspec/changes/READINESS_REVIEW.md
+  s_f1e09a61530d1a::t_e2f54ee0eb9d37 3-4
+bdmv_hdmv_offline_web_architecture.md
+  s_f1e09a61530d1a::t_2f9670f6dac7be 1-2
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  s_f1e09a61530d1a::t_e2f54ee0eb9d37 73
+  s_f1e09a61530d1a::t_df8227e23ab0ad 16,19,74-75,77,88-91,93,107
+  s_f1e09a61530d1a::t_ade644d8a1d472 87
+  s_f1e09a61530d1a::t_16901cc357e414 59
+  s_f1e09a61530d1a::t_b1b11ea872aa21 65
+openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md
+  s_f1e09a61530d1a::t_e01603f7af5340 83
+  s_f1e09a61530d1a::t_064dfc506670a0 11
+  s_f1e09a61530d1a::t_e2f54ee0eb9d37 15,31,54-55,82,97,102
+openspec/changes/build-offline-menu-runtime/tasks.md
+  s_f1e09a61530d1a::t_70d8b6ddd54dba 30-31
+openspec/changes/export-playable-media/tasks.md
+  s_f1e09a61530d1a::t_ade644d8a1d472 3
+  s_f1e09a61530d1a::t_df8227e23ab0ad 53
+  s_f1e09a61530d1a::t_064dfc506670a0 59
+  s_f1e09a61530d1a::t_70d8b6ddd54dba 4,49-52
+  s_f1e09a61530d1a::t_2f9670f6dac7be 55-57,60-74
+  s_f1e09a61530d1a::t_4ea9f13534deda 54
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 83-84
+  s_f1e09a61530d1a::t_16901cc357e414 58
+  s_f1e09a61530d1a::t_7849359830da25 75-78,80
+  s_f1e09a61530d1a::t_cabbde9aafe47a 79,81-82
+openspec/changes/DEPENDENCIES.md
+  s_f1e09a61530d1a::t_df8227e23ab0ad 37-38,41,54-55,58
+openspec/changes/extract-igs-scenes/tasks.md
+  s_f1e09a61530d1a::t_2afb901862eef9 27
+  s_f1e09a61530d1a::t_eec19482eb314d 19
+scripts/compare-igstools-reference.py
+  s_f1e09a61530d1a::t_8e9fd096f0d111 2-3,5-11,29-43
+  s_f1e09a61530d1a::t_a96fff819f9624 1,4,12-28,44
+docs/igs-support.md
+  s_f1e09a61530d1a::t_eec19482eb314d 3,24,29,31-32,36
+docs/evidence/tamako-00005-igstools-comparison.json
+  s_f1e09a61530d1a::t_23d92bdf0d9e7a 2-8
+  s_f1e09a61530d1a::t_8e9fd096f0d111 1,9-6234
+packages/igs/src/png.ts
+  s_f1e09a61530d1a::t_dbbec8ec81ce16 40,59,62-63
+  s_f1e09a61530d1a::t_eec19482eb314d 45
+packages/igs/src/types.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 132
+packages/igs/test/extraction.test.ts
+  s_f1e09a61530d1a::t_58c360f42ff38f 87
+  s_f1e09a61530d1a::t_eec19482eb314d 30,84-85
+packages/runtime-web/src/igs-adapter.test.ts
+  s_f1e09a61530d1a::t_eec19482eb314d 34
+docs/references/stages/M2-igs-scenes.md
+  s_f1e09a61530d1a::t_23d92bdf0d9e7a 69
+  s_f1e09a61530d1a::t_e01603f7af5340 24,38,62-68,71
+  s_f1e09a61530d1a::t_eec19482eb314d 70
+packages/media-export/src/index.ts
+  s_f1e09a61530d1a::t_d7dc0a41dbb501 7
+apps/cli/package.json
+  s_f1e09a61530d1a::t_8720108147d9cd 5-7,13-27
+packages/runtime-web/src/browser.ts
+  s_f1e09a61530d1a::t_6d412f18b0188b 3,110-111,116,118-121,123-125,128-129
+  s_f1e09a61530d1a::t_2b5c6ab902c150 82
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 166
+  s_f1e09a61530d1a::t_f923df039ee04f 117,131
+  s_f1e09a61530d1a::t_3176a4e2e7ffae 6,163-165,167-170
+  s_f1e09a61530d1a::t_f1c783ad1a45b5 122
+  s_f1e09a61530d1a::t_a12bc714371fc6 179
+  s_f1e09a61530d1a::t_a54a07a06fd4ae 180-181
+  s_f1e09a61530d1a::t_e1ce083963d70a 1
+  s_f1e09a61530d1a::t_73efd34807afff 97,99,112-115,126-127
+packages/media-export/src/external-real-smoke.test.ts
+  s_f1e09a61530d1a::t_6775b2b468f34c 1-18,20-25
+  s_f1e09a61530d1a::t_f1c783ad1a45b5 19
+packages/runtime-web/src/index.ts
+  s_f1e09a61530d1a::t_73efd34807afff 29-30,213,223,233-235,237,245-246
+  s_f1e09a61530d1a::t_f923df039ee04f 394,439
+docs/hdmv-support.md
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 44,98
+packages/package-builder/src/index.test.ts
+  s_f1e09a61530d1a::t_cabbde9aafe47a 137,159
+packages/igs/src/transport.ts
+  s_f1e09a61530d1a::t_f923df039ee04f 304,309,311-315,317
+packages/test-runner/src/package-audit.ts
+  s_f1e09a61530d1a::t_5baef0ccf2ddc2 65,271-272,347-353
+packages/runtime-web/src/index.test.ts
+  s_f1e09a61530d1a::t_e2d83f5cb9bff0 169-182
+  s_f1e09a61530d1a::t_4e0ff629a95125 569,599,619,642,656,671,706,751,789,813,820,832,843,857
+test-data/tamako-love-story-bd/README.md
+  s_f1e09a61530d1a::t_e223fb6009c520 1,3,5
+openspec/changes/execute-hdmv-navigation/tasks.md
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 37
+packages/media-export/src/external-targets.ts
+  s_f1e09a61530d1a::t_d7dc0a41dbb501 1-6,8-48,50-75,77-81
+  s_f1e09a61530d1a::t_f1c783ad1a45b5 7,49,76
+packages/package-builder/src/index.ts
+  s_f1e09a61530d1a::t_5aa474a1e39607 7,120
+  s_f1e09a61530d1a::t_2d0e6ab8a03450 113
+  s_f1e09a61530d1a::t_60de096165a8d6 137
+  s_f1e09a61530d1a::t_e1ce083963d70a 6,71
+  s_f1e09a61530d1a::t_3176a4e2e7ffae 75
+  s_f1e09a61530d1a::t_3975fd5d8a4cd1 1,8,72-73,116-119,121,126,128
+  s_f1e09a61530d1a::t_e5af3eaf86fc23 54,60,130,198,201,206
+  s_f1e09a61530d1a::t_5baef0ccf2ddc2 109,187
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 115
+  s_f1e09a61530d1a::t_c71bd51f734e80 200
+packages/media-export/src/closure.test.ts
+  s_f1e09a61530d1a::t_d40069753465f7 86,89
+packages/hdmv/src/graph.ts
+  s_f1e09a61530d1a::t_d233dbc1c68558 28-33
+  s_f1e09a61530d1a::t_d40069753465f7 41-45
+  s_f1e09a61530d1a::t_8445a7aa52f87d 1,8,46-55
+packages/package-builder/src/local-player-bridge.ts
+  s_f1e09a61530d1a::t_75c9b4dd91f9a1 1-36,38-40
+  s_f1e09a61530d1a::t_5aa474a1e39607 41-44
+  s_f1e09a61530d1a::t_6810548a74d4bf 37
+packages/media-export/src/external-targets.test.ts
+  s_f1e09a61530d1a::t_445378aa648cdf 1-41
+packages/package-builder/src/local-player-bridge.test.ts
+  s_f1e09a61530d1a::t_5336994bcb00ba 1-41
+packages/igs/test/transport.test.ts
+  s_f1e09a61530d1a::t_16901cc357e414 88-102
+packages/hdmv/src/index.test.ts
+  s_f1e09a61530d1a::t_749d1180c65a34 421-437
+  s_f1e09a61530d1a::t_68f876c898f131 709-718
+  s_f1e09a61530d1a::t_c971ae5d6946fd 719-731
+packages/runtime-web/src/browser.test.ts
+  s_f1e09a61530d1a::t_5f141db39835c3 26,65-68,81,167-172,174-185
+  s_f1e09a61530d1a::t_4e0ff629a95125 214,232
+  s_f1e09a61530d1a::t_f1c783ad1a45b5 173
+  s_f1e09a61530d1a::t_a4b928270b366b 186-187
+docs/references/stages/M6-release-verification.md
+  s_f1e09a61530d1a::t_e223fb6009c520 48-55
+  s_f1e09a61530d1a::t_54ddd3c9ffc5e9 56-59
+packages/hdmv/src/vm.ts
+  s_f1e09a61530d1a::t_6ed69e36ecdb78 81
+  s_f1e09a61530d1a::t_79b260301ee696 205,392-394,400,407,416-417
+  s_f1e09a61530d1a::t_7e110656a1f7ae 270-274,276-279
+  s_f1e09a61530d1a::t_f6cce0958f4d38 536
+  s_f1e09a61530d1a::t_73efd34807afff 23-28,48,66,71-80,82-98,275,307-308
+  s_f1e09a61530d1a::t_749d1180c65a34 406,408-415,418-422
+  s_f1e09a61530d1a::t_aa03bb41f65c73 245-269
+packages/runtime-web/package.json
+  s_f1e09a61530d1a::t_7e110656a1f7ae 7-20
+packages/igs/test/tamako-external-navigation.test.ts
+  s_f1e09a61530d1a::t_af88e90b3d7e96 1-22,33-34
+  s_f1e09a61530d1a::t_e2d83f5cb9bff0 23-32
+packages/bdmv-parser/src/parser.ts
+  s_f1e09a61530d1a::t_166fb781f91ff3 159-164,166-174,176
+  s_f1e09a61530d1a::t_229ac0a3fdc8fb 165,175
+packages/bdmv-parser/src/model.ts
+  s_f1e09a61530d1a::t_229ac0a3fdc8fb 25
+  s_f1e09a61530d1a::t_166fb781f91ff3 24
+packages/test-fixtures/src/bdmv.ts
+  s_f1e09a61530d1a::t_166fb781f91ff3 83-93,95-96,98-99
+  s_f1e09a61530d1a::t_089365b117ab31 97
+  s_f1e09a61530d1a::t_a0fb5cb8f42cd8 94
+packages/bdmv-parser/src/parser.test.ts
+  s_f1e09a61530d1a::t_089365b117ab31 6,96,98,100-101,238-242
+  s_f1e09a61530d1a::t_4bca3bba6f09d8 67-68,78
+  s_f1e09a61530d1a::t_a0fb5cb8f42cd8 99
+  s_f1e09a61530d1a::t_a9b7f9ab7b91f8 55,70,84,97
+  s_f1e09a61530d1a::t_180e9fba9e168c 66,69,71,76-77,79-82
+  s_f1e09a61530d1a::t_1b2512d2a3bf25 72-75
+  s_f1e09a61530d1a::t_229ac0a3fdc8fb 237,243
+  s_f1e09a61530d1a::t_2bd9faa5ddc479 259-264
+test-data/fixtures/hdmv-navigation/metadata-only/baja/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_b1f6581880c219 1-70
+test-data/fixtures/hdmv-navigation/metadata-only/tamako/BDMV/FIXTURE-SOURCE.json
+  s_f1e09a61530d1a::t_af7088e8ccc96c 1-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "57a127a702fc3b9ba0dc59d5a3bca1700c5fb76b",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_3a3ffd5e9a879b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19b71-2805-7b83-91de-b97518ac6ab5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}

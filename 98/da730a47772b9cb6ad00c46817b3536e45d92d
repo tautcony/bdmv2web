@@ -1,0 +1,28 @@
+packages/hdmv/src/index.test.ts
+  s_f1e09a61530d1a::t_1fd3226cbaaf8e 492-503
+  s_f1e09a61530d1a::t_c8dcf142e5985f 439-465
+  s_f1e09a61530d1a::t_bdcc7e40764bca 466-491,504
+packages/hdmv/src/vm.ts
+  s_f1e09a61530d1a::t_ababccc83c8c72 71-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "98da730a47772b9cb6ad00c46817b3536e45d92d",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f1e09a61530d1a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a095-f0c1-7061-97e0-53a171fe3549",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}

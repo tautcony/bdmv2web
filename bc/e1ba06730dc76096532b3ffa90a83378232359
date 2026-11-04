@@ -1,0 +1,26 @@
+scripts/fetch-reference-cache.py
+  s_f6582cfb1466be::t_09f52adc9607fe 2,25-26
+docs/references/README.md
+  s_f6582cfb1466be::t_09f52adc9607fe 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bce1ba06730dc76096532b3ffa90a83378232359",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f6582cfb1466be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a441-35af-7062-8440-d647469f4acb",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
