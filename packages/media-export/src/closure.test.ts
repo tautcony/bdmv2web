@@ -119,7 +119,7 @@ function playlistFixture(id: string, items: Array<{ index: number; clipId: strin
       streams: [stream(item.codingType === undefined ? 0x1b : item.codingType, item.streamPid === undefined ? 0x1011 : item.streamPid, null), stream(0x80, 0x1100, "eng")], source,
     })),
     marks: [],
-    subPaths: withSubPath ? [{ type: 1, repeat: false, source, items: [{ clipId: "00002", codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source }] }] : [],
+    subPaths: withSubPath ? [{ type: 1, repeat: false, source, items: [{ clipId: "00002", codecId: "M2TS", stcId: 0, connectionCondition: 0, multiClip: false, clips: [{ clipId: "00002", codecId: "M2TS", stcId: 0 }], inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source }] }] : [],
   } as ParsedDisc["playlists"][number];
 }
 

@@ -6,7 +6,7 @@ import { parseBdmv } from "@bdmv-web/bdmv-parser";
 import { createExternalMediaTargets, resolveExternalPlayTarget } from "./external-targets.js";
 import type { MediaClosure } from "./closure.js";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/tamako-love-story-bd/BDMV");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/bdmv/tamako-love-story-bd/BDMV");
 const present = await access(resolve(root, "STREAM/00006.m2ts")).then(() => true, () => false);
 
 describe.skipIf(!present)("Tamako local 00006 replacement source", () => {

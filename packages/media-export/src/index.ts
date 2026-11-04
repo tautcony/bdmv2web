@@ -21,6 +21,7 @@ export interface MenuLoopMediaInput {
   clipId: string;
   inTime45k: number;
   outTime45k: number;
+  stillMode: number;
   repeatCount: number;
   videoPid: number;
   audioTracks: MediaAudioTrackInput[];
@@ -68,7 +69,7 @@ export interface MediaPlan {
   sourceOut45k: number;
   durationSeconds: number;
   repeatCount: number;
-  backgroundMode: "loop-one-clip";
+  backgroundMode: "loop-one-clip" | "still-last-frame";
   videoPid: number;
   audioTracks: MediaAudioTrackInput[];
   encoding: {
@@ -83,7 +84,7 @@ export interface ExportedMediaAsset { path: string; absolutePath: string; byteLe
 export interface MenuLoopMediaResult {
   plan: MediaPlan;
   tools: { ffmpeg: string; ffprobe: string; invocations: MediaToolInvocation[] };
-  background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: true };
+  background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: boolean };
   audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number }>;
   files: Array<{ path: string; absolutePath: string; byteLength: number }>;
 }
@@ -259,7 +260,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Complete output directory exceeded maxOutputBytes while publishing media-plan.json." });
     return {
       plan, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
-      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: "h264", pid: input.videoPid, width: outputVideo.width!, height: outputVideo.height!, durationSeconds: videoDuration, loop: true },
+      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: "h264", pid: input.videoPid, width: outputVideo.width!, height: outputVideo.height!, durationSeconds: videoDuration, loop: input.stillMode !== 2 },
       audioTracks, files,
     };
   } catch (error) {
@@ -273,8 +274,9 @@ export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "o
 
 function validateInput(input: MenuLoopMediaInput): void {
   for (const key of ["playlistId", "clipId", "sourceFile", "sourcePath"] as const) if (!input[key]) throw new TypeError(`${key} is required`);
-  for (const [name, value] of Object.entries({ playItemIndex: input.playItemIndex, inTime45k: input.inTime45k, outTime45k: input.outTime45k, repeatCount: input.repeatCount })) if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a non-negative safe integer`);
+  for (const [name, value] of Object.entries({ playItemIndex: input.playItemIndex, inTime45k: input.inTime45k, outTime45k: input.outTime45k, stillMode: input.stillMode, repeatCount: input.repeatCount })) if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a non-negative safe integer`);
   if (input.outTime45k <= input.inTime45k) throw new RangeError("outTime45k must be greater than inTime45k");
+  if (input.stillMode > 2) throw new RangeError("stillMode must be one of the defined Playlist PlayItem modes (0, 1, or 2)");
   if (input.repeatCount < 1) throw new RangeError("repeatCount must be positive");
   validatePid(input.videoPid);
   const seen = new Set<number>();
@@ -383,7 +385,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
   return {
     status: "partial", playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId,
     sourceFile: input.sourceFile, sourceIn45k: input.inTime45k, sourceOut45k: input.outTime45k,
-    durationSeconds: durationSeconds(input), repeatCount: input.repeatCount, backgroundMode: "loop-one-clip", videoPid: input.videoPid,
+    durationSeconds: durationSeconds(input), repeatCount: input.repeatCount, backgroundMode: input.stillMode === 2 ? "still-last-frame" : "loop-one-clip", videoPid: input.videoPid,
     audioTracks: input.audioTracks.map((track) => ({ ...track })),
     encoding: {
       video: { codec: "h264", pixelFormat: "yuv420p", preset, crf, aspectRatioPolicy: "preserve-source-display-aspect", frameRatePolicy: "passthrough", evenDimensions: true },
@@ -391,7 +393,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
       container: { video: "mp4", audio: "m4a", faststart: true },
     },
     budget: { ...estimate, existingOutputBytes: existingOutputBytes.toString(), plannedPackageBytes: plannedPackageBytes.toString(), maxAssetBytes, maxOutputBytes },
-    limitations: ["This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete 999-item HDMV timeline.", "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu-loop export contract.", "Persistent cache reuse is disabled because this export contract does not validate source-content identity.", "PGS subtitle streams are not exported by this background-loop path."],
+    limitations: [input.stillMode === 2 ? "This output covers the single infinite-still menu PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : "This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete HDMV playlist timeline.", "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu-loop export contract.", "Persistent cache reuse is disabled because this export contract does not validate source-content identity.", "PGS subtitle streams are not exported by this background-loop path."],
   };
 }
 

@@ -6,7 +6,7 @@ import { durationSeconds, exportMenuLoopMedia, MediaBudgetError, MediaJobError, 
 
 const input: MenuLoopMediaInput = {
   sourcePath: "/source/BDMV/STREAM/00004.m2ts", sourceFile: "BDMV/STREAM/00004.m2ts", playlistId: "00003",
-  playItemIndex: 0, clipId: "00004", inTime45k: 524_280, outTime45k: 5_439_815, repeatCount: 999,
+  playItemIndex: 0, clipId: "00004", inTime45k: 524_280, outTime45k: 5_439_815, stillMode: 0, repeatCount: 999,
   videoPid: 4113, audioTracks: [{ streamNumber: 0, pid: 4352, language: "eng" }, { streamNumber: 1, pid: 4353, language: "jpn" }],
 };
 const availableEncoders = " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n A....D aac AAC (Advanced Audio Coding)\n";
@@ -62,6 +62,13 @@ describe("menu-loop media export", () => {
       expect(result.tools).toMatchObject({ ffmpeg: "ffmpeg version test", ffprobe: "ffprobe version test" });
       expect(result.tools.invocations).toEqual(calls);
       expect(result.tools.invocations.some(({ executable, args }) => executable === "ffmpeg" && args.includes("-encoders"))).toBe(true);
+      const stillRoot = await mkdtemp(join(tmpdir(), "bdmv-media-still-"));
+      try {
+        const still = await exportMenuLoopMedia({ ...input, stillMode: 2, repeatCount: 1 }, { outputDirectory: stillRoot, runProcess: run });
+        expect(still.plan).toMatchObject({ repeatCount: 1, backgroundMode: "still-last-frame" });
+        expect(still.background.loop).toBe(false);
+        expect(still.audioTracks).toHaveLength(2);
+      } finally { await rm(stillRoot, { recursive: true, force: true }); }
       const videoEncode = calls.find((call) => call.executable === "ffmpeg" && call.args.includes("-map") && call.args.includes("0:i:0x1011"))!.args;
       expect(videoEncode).toEqual(expect.arrayContaining(["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p", "-aspect", "16:9", "-fps_mode", "passthrough", "-movflags", "+faststart", "-f", "mp4"]));
       const audioEncode = calls.find((call) => call.executable === "ffmpeg" && call.args.includes("0:i:0x1100"))!.args;
