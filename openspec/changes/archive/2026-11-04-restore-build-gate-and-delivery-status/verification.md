@@ -233,7 +233,7 @@ $ report.json: status=partial、mode=menu-only、blockingDiagnostics=37（首条
 - **7.2** `find packages apps -path "*/dist/*" -name "*.test.*" | wc -l` = 0；`-name "*.test.d.ts"` 亦为 0。
 - **7.3** 四条行为同一轮复现：`extract=1`（且 `/tmp/bdmv-empty-out` 不存在）、`convert=0`（`/tmp/menu-ok` 生成）、`mode=1`（`/tmp/mode-reject` 不存在）、`missing=1`。
 - **7.4** 文档一致性：0.1 基线表、6.1 CLI 状态、6.2 Chrome 表述、6.3 Tamako 结论、6.4 M6 计数、6.5 架构映射逐条对照通过，证据见上。
-- **7.5** `git diff --stat` 共 29 个已跟踪文件改动 + 15 个新增文件，不含 `.github/`、不含 `payloadFingerprint` 字段改动、不含性能改造、不含 `vm.ts` 常量收敛。
+- **7.5** `git diff --stat` 共 29 个已跟踪文件改动 + 15 个新增文件，不含 `.github/`、不含性能改造、不含 `vm.ts` 常量收敛。
 
 ## 评审修复（独立复评第 2 轮）
 

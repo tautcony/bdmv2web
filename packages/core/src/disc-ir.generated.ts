@@ -9,7 +9,6 @@ export type NavigationDescriptor =
       status: "unsupported";
     };
 export type Time90K = string;
-export type Sha256 = string;
 
 export interface DiscIR {
   schemaVersion: "1.0";
@@ -53,7 +52,6 @@ export interface AssetReference {
   relativePath: string;
   mime: string;
   byteLength: string;
-  sha256: Sha256;
   sources: SourceRef[];
 }
 export interface Diagnostic {

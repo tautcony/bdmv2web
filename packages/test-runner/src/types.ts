@@ -31,7 +31,6 @@ export interface DeliveryManifest {
   diagnostics?: Array<{ severity: string; code?: string; acknowledged?: boolean; blocksComplete?: boolean }>;
   limitations?: string[];
   status?: string;
-  payloadFingerprint?: string;
 }
 
 export interface OfflinePackageAudit {
@@ -39,6 +38,5 @@ export interface OfflinePackageAudit {
   packageRoot: string;
   manifestPath: string;
   checks: AuditCheck[];
-  payloadFingerprint: string | null;
   discoveredPayloadFiles: string[];
 }

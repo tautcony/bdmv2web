@@ -18,7 +18,7 @@ export interface PgsPlacement {
 }
 
 export interface PgsDisplaySet {
-  /** 32-bit 90 kHz PTS from the SUP PCS packet. */
+  /** 90 kHz PTS from the SUP PCS packet, extended across 32-bit wrap within the stream. */
   pts90k: number;
   width: number;
   height: number;
@@ -151,9 +151,14 @@ export class PgsSubtitleTimeline {
 function readSegments(data: Uint8Array): Segment[] {
   const segments: Segment[] = [];
   let offset = 0;
+  let previousRawPts: number | undefined;
+  let epoch = 0n;
   while (offset < data.length) {
     if (offset + 13 > data.length || data[offset] !== 0x50 || data[offset + 1] !== 0x47) throw new TypeError(`Invalid or truncated PGS SUP segment at byte ${offset}.`);
-    const pts = u32(data, offset + 2); const type = data[offset + 10]!; const length = u16(data, offset + 11);
+    const rawPts = u32(data, offset + 2);
+    if (previousRawPts !== undefined && previousRawPts - rawPts > 0x80000000) epoch += 0x1_0000_0000n;
+    previousRawPts = rawPts;
+    const pts = Number(epoch + BigInt(rawPts)); const type = data[offset + 10]!; const length = u16(data, offset + 11);
     const start = offset + 13; const end = start + length;
     if (end > data.length) throw new TypeError(`Truncated PGS segment payload at byte ${offset}.`);
     segments.push({ pts, type, payload: data.subarray(start, end) });

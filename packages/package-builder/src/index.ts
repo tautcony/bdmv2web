@@ -1,20 +1,21 @@
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { build } from "esbuild";
 import { parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
 import { LOCAL_PLAYER_BRIDGE, localPlayerLauncher } from "./local-player-bridge.js";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput, type PgsDisplaySet } from "@bdmv2web/media-export";
 
 export interface PngPayload { id: string; bytes: Uint8Array }
 export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
 export interface SoundMetadata { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number }
 export interface SoundPayload { index: number; path: string; byteLength: number; format: "wav-pcm" }
+export interface PgsTrackPackageInput { playlistId: string; playlistNumber: number; playItemIndex: number; clipId: string; pid: number; streamNumber: number; language: string; sourceIn90k: string; sourceOut90k: string; source: string; path: string; displaySets: PgsDisplaySet[] }
 /** Delivery status as decided by the caller; the package must not invent one. */
 export type MenuPackageStatus = "failed" | "partial" | "complete";
 export interface MenuPackageDiagnostic { code: string; message: string; severity?: string }
-export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; mode: "menu-only"; status: MenuPackageStatus; diagnostics: MenuPackageDiagnostic[]; payloadFingerprint?: string }
+export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; mode: "menu-only"; status: MenuPackageStatus; diagnostics: MenuPackageDiagnostic[] }
 
 /** Serialize data for a classic script. Escaping '<' also prevents HTML script termination. */
 export function serializeSafeScriptData(value: unknown): string {
@@ -47,7 +48,7 @@ export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSiz
   const assets = Array.from({ length: assetBatchCount }, (_, i) => `<script defer src="runtime/assets-data-${String(i).padStart(3, "0")}.js"></script>`).join("");
   const aspectRatio = sceneSize ? ` style="aspect-ratio:${sceneSize.width} / ${sceneSize.height}"` : "";
   const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${safeTitle}</title><link rel="stylesheet" href="runtime/style.css"><script defer src="runtime/disc-data.js"></script>${assets}<script defer src="runtime/app.bundle.js"></script>`;
-  const stage = `<div id="menu-stage"${aspectRatio}><video id="menu-background" aria-hidden="true" playsinline></video><audio id="menu-audio"></audio><canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas></div>`;
+  const stage = `<div id="menu-stage"${aspectRatio}><video id="menu-background" aria-hidden="true" playsinline></video><audio id="menu-audio"></audio><canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas><canvas id="popup-canvas" aria-label="Blu-ray popup menu" hidden></canvas></div>`;
   return `<!doctype html>\n<html lang="en"><head>${head}</head><body><main>${stage}<button id="start-menu" type="button" hidden>Start menu preview</button><p id="runtime-status" role="status" aria-live="polite" class="is-visible">Loading menu preview…</p><pre id="runtime-diagnostics" hidden></pre></main></body></html>\n`;
 }
 
@@ -75,6 +76,11 @@ export interface MenuPackageInput {
   title: string;
   ir: DiscIR;
   scene: unknown;
+  /** Extracted title popup IGS compositions, retained with their source clip/PID. */
+  popupScenes?: unknown[];
+  /** Validated SUP display sets extracted from reachable playlist PGS streams. */
+  pgsTracks?: PgsTrackPackageInput[];
+  pgsLimits?: { maxRuntimeBytes?: number };
   /** Delivery status decided by the caller. Defaults to `partial` for library callers. */
   status?: MenuPackageStatus;
   /** Entry counts recorded for report consumers; they never decide the status. */
@@ -104,6 +110,11 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const soundResult = convertSounds(input.soundEntries ?? [], input.soundBytes ?? null, input.scene);
   const sounds = soundResult.assets;
   const diagnostics = [...(input.diagnostics ?? []), ...soundResult.diagnostics];
+  const serializedPgsTracks = (input.pgsTracks ?? []).map(serializePgsTrack);
+  const pgsPayloadBytes = Buffer.byteLength(serializeSafeScriptData(serializedPgsTracks));
+  const maxPgsRuntimeBytes = input.pgsLimits?.maxRuntimeBytes ?? 64 * 1024 * 1024;
+  if (!Number.isSafeInteger(maxPgsRuntimeBytes) || maxPgsRuntimeBytes <= 0) throw new RangeError("maxPgsRuntimeBytes must be a positive safe integer.");
+  if (pgsPayloadBytes > maxPgsRuntimeBytes) throw new RangeError(`Serialized PGS payload exceeds maxPgsRuntimeBytes (${pgsPayloadBytes} > ${maxPgsRuntimeBytes} bytes).`);
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
   const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, preset: "veryfast" }) : undefined;
@@ -118,12 +129,13 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     ...batches.map((batch) => ({ path: `runtime/assets-data-${String(batch.index).padStart(3, "0")}.js`, kind: "runtime", required: true })),
     ...sounds.map((sound) => ({ path: sound.path, kind: "audio", required: true })),
     ...(exportedMedia?.files.map((file) => ({ path: file.path, kind: "media", required: true })) ?? []),
+    ...[...new Set((input.pgsTracks ?? []).map((track) => track.path))].map((path) => ({ path, kind: "subtitle", required: true })),
     ...(exportedMedia ? [{ path: "media-plan.json", kind: "media-plan", required: true }] : []),
     ...(input.externalTargets ? [{ path: "bdmv-config.json", kind: "external-config", required: true }, ...["external-targets.json", "local-player-bridge.mjs", "start-menu.sh"].map((path) => ({ path, kind: "runtime", required: true }))] : []),
   ];
   await Promise.all([
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize)),
-    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}) })),
+    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}) })),
     writeFile(resolve(runtimeDirectory, "style.css"), MENU_STYLE),
     writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status) + (input.externalTargets ? "\nThe launcher starts a local-only playback bridge. Close its terminal window to stop it. Node.js is required. The menu skips any First Play media while retaining initialization performed before it. The default media player opens the entire M2TS; playlist boundaries and chapter offsets are not enforced.\n" : "")),
     ...(input.externalTargets ? [
@@ -134,22 +146,22 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     ] : []),
     ...batches.map((batch) => writeFile(resolve(runtimeDirectory, `assets-data-${String(batch.index).padStart(3, "0")}.js`), createAssetBatchScript(batch))),
     ...soundResult.files.map(async ({ path, bytes }) => { await mkdir(resolve(output, "assets/audio"), { recursive: true }); await writeFile(resolve(output, path), bytes); }),
-    writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, null, 2)}\n`),
+    writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
   ]);
   if (input.externalTargets) await chmod(resolve(output, "start-menu.sh"), 0o755);
   // Bundling reads runtime-web's TypeScript entry directly; the source-path coupling is scheduled for removal in D7 (batch 2), so `packages/runtime-web/src/` stays in the build scope for now.
   const entry = resolve(import.meta.dirname, "../../runtime-web/src/browser.ts");
   await build({ entryPoints: [entry], outfile: resolve(runtimeDirectory, "app.bundle.js"), bundle: true, platform: "browser", format: "iife", target: "es2020", legalComments: "none", alias: { "@bdmv2web/hdmv": resolve(import.meta.dirname, "../../hdmv/src/index.ts"), "@bdmv2web/media-export/external-targets": resolve(import.meta.dirname, "../../media-export/src/external-targets.ts") } });
-  const payloadFingerprint = await hashGeneratedPayload(output, files);
-  await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility({ ...metadata, payloadFingerprint }, !!input.externalTargets), null, 2)}\n`);
+  await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility(metadata, !!input.externalTargets), null, 2)}\n`);
   // M6 reserves compatibility.json and asset-manifest.json as report metadata and rejects them in manifest.files.
   const manifestFiles = await Promise.all(files.filter((file) => file.path !== "compatibility.json" && file.path !== "asset-manifest.json").map(async (file) => {
-    const bytes = await readFile(resolve(output, file.path));
-    return { ...file, byteLength: String(bytes.byteLength), sha256: createHash("sha256").update(bytes).digest("hex") };
+    const fileInfo = await stat(resolve(output, file.path));
+    return { ...file, byteLength: String(fileInfo.size) };
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
   const menuMediaLimitation = input.externalTargets ? "Feature playback requires start-menu.sh and the local player bridge; PlayItem ranges and chapters are not enforced" : exportedMedia ? exportedMedia.background.loop ? "Menu background is a partial single-clip loop; complete HDMV playlist navigation and PGS are unsupported" : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem; complete HDMV playlist navigation and PGS are unsupported" : "Menu-only preview; media playback unavailable";
-  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
+  const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
+  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
@@ -198,25 +210,16 @@ function getSceneSize(scene: unknown): { width: number; height: number } {
   return { width: (scene as { width: number }).width, height: (scene as { height: number }).height };
 }
 
-async function hashGeneratedPayload(root: string, files: Array<{ path: string; kind: string }>): Promise<string> {
-  const excludedKinds = new Set(["parsed-disc", "raw-command-table", "readme", "report", "evidence", "compatibility", "dependency-audit", "asset-manifest", "external-config"]);
-  const excludedPaths = new Set(["compatibility.json", "dependency-audit.json", "asset-manifest.json"]);
-  const rows = await Promise.all(files.filter((file) => !excludedKinds.has(file.kind.toLowerCase()) && !excludedPaths.has(file.path) && file.path.startsWith("reports/") === false)
-    .filter((file) => /\.(?:html?|mjs|js|css|json|png|wav|mp4|webm|vtt)$/i.test(file.path))
-    .map(async ({ path }) => { const bytes = await readFile(resolve(root, path)); return { path, sha256: createHash("sha256").update(bytes).digest("hex") }; }));
-  const hash = createHash("sha256");
-  for (const row of rows.sort((a, b) => a.path.localeCompare(b.path, "en"))) hash.update(row.path, "utf8").update("\0").update(row.sha256, "ascii").update("\n");
-  return hash.digest("hex");
-}
-
 const MENU_STYLE = `:root{color-scheme:dark;font:16px system-ui,-apple-system,"Segoe UI",sans-serif;background:#000;color:#eee}
 html,body{height:100%;margin:0;overflow:hidden;background:#000;overscroll-behavior:none;-webkit-text-size-adjust:100%}
 main{position:fixed;inset:0}
 #menu-stage{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:#000;cursor:default;-webkit-user-select:none;user-select:none}
-#menu-background,#menu-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
+#menu-background,#menu-canvas,#popup-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
 #menu-background{z-index:0}
 #menu-audio{display:none}
 #menu-canvas{z-index:1;background:transparent;touch-action:manipulation}
+#popup-canvas{z-index:2;background:transparent;touch-action:manipulation}
+#popup-canvas[hidden]{display:none}
 #runtime-status{position:fixed;top:max(1rem,env(safe-area-inset-top));right:max(1rem,env(safe-area-inset-right));z-index:30;box-sizing:border-box;max-width:min(30rem,calc(100vw - 2rem));margin:0;padding:.55rem .85rem;border-radius:.6rem;background:rgba(18,18,22,.55);color:#f4f4f6;font-size:.85rem;line-height:1.35;text-align:left;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transform:translateY(-.4rem);transition:opacity .4s ease,transform .4s ease;pointer-events:none}
 #runtime-status.is-visible{opacity:1;transform:translateY(0)}
 #runtime-status.is-error{background:rgba(96,20,26,.7);color:#ffe2df;border:1px solid rgba(255,140,130,.35)}
@@ -243,6 +246,23 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
 export function runtimeAudioTrackMetadata(track: { streamNumber?: number; path: string; language: string }): { streamNumber: number; psrStreamNumber: number; path: string; language: string } {
   if (!Number.isSafeInteger(track.streamNumber) || track.streamNumber! < 0) throw new TypeError("Exported audio track requires its zero-based STN streamNumber.");
   return { streamNumber: track.streamNumber!, psrStreamNumber: track.streamNumber! + 1, path: track.path, language: track.language };
+}
+
+function serializePgsTrack(track: PgsTrackPackageInput) {
+  if (!Number.isSafeInteger(track.pid) || !Number.isSafeInteger(track.streamNumber) || track.streamNumber <= 0 || !Number.isSafeInteger(track.playItemIndex) || track.playItemIndex < 0) throw new TypeError("PGS package track has invalid PID, stream number, or PlayItem index.");
+  if (BigInt(track.sourceOut90k) <= BigInt(track.sourceIn90k)) throw new TypeError("PGS package track has an invalid source interval.");
+  return {
+    playlistId: track.playlistId, playlistNumber: track.playlistNumber, playItemIndex: track.playItemIndex,
+    clipId: track.clipId, pid: track.pid, streamNumber: track.streamNumber, language: track.language,
+    sourceIn90k: track.sourceIn90k, sourceOut90k: track.sourceOut90k, source: track.source, path: track.path,
+    displaySets: track.displaySets.map((set) => ({
+      pts90k: set.pts90k, width: set.width, height: set.height, compositionNumber: set.compositionNumber,
+      compositionState: set.compositionState, paletteId: set.paletteId,
+      palette: [...set.palette].map(([index, rgba]) => [index, [...rgba]]),
+      bitmaps: [...set.bitmaps.values()].map((bitmap) => ({ objectId: bitmap.objectId, width: bitmap.width, height: bitmap.height, pixels: bitmap.pixels })),
+      placements: set.placements,
+    })),
+  };
 }
 
 export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Record<string, unknown> {

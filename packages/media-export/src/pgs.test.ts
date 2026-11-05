@@ -1,7 +1,37 @@
+import { readFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { parsePgsSup, PgsSubtitleTimeline } from "./pgs.js";
+import { extractPgsTrack } from "./index.js";
 
 describe("PGS SUP parsing", () => {
+  it("parses bdmvkit-generated PGS show and clear display sets", async () => {
+    const path = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated/pgs/english.sup");
+    const sets = parsePgsSup(new Uint8Array(await readFile(path)));
+    expect(sets.length).toBeGreaterThanOrEqual(3);
+    const shown = sets.find((set) => set.placements.length > 0);
+    expect(shown).toMatchObject({ width: 1920, height: 1080, placements: [expect.objectContaining({ x: 0, y: 0 })] });
+    expect([...shown!.bitmaps.values()][0]?.pixels.some((value) => value > 0)).toBe(true);
+    const timeline = new PgsSubtitleTimeline(); timeline.register("eng", sets); timeline.select("eng");
+    expect(timeline.at(shown!.pts90k)).toBe(shown);
+    expect(timeline.at(49_500)).toBeNull();
+  });
+
+  it.skipIf(!ffmpegAvailable())("extracts the reachable title PGS PID from the generated M2TS", async () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated");
+    const output = await mkdtemp(resolve(tmpdir(), "bdmvkit-pgs-"));
+    try {
+      const track = await extractPgsTrack(resolve(root, "BDMV/STREAM/00001.m2ts"), 0x1200, resolve(output, "english.sup"));
+      expect(track).toMatchObject({ pid: 0x1200, byteLength: expect.any(Number) });
+      expect(track.displaySets.length).toBeGreaterThanOrEqual(3);
+      expect(track.displaySets.some((set) => set.placements.length > 0 && [...set.bitmaps.values()][0]?.pixels.some((value) => value > 0))).toBe(true);
+    } finally { await rm(output, { recursive: true, force: true }); }
+  });
+
   it("assembles palette, fragmented object, PCS placement, pixels and 90 kHz timeline", () => {
     const first = segment(90_000, 0x15, [0, 7, 0, 0x80, 0, 0, 14, 0, 2, 0, 2, 1, 0, 1, 0, 0]);
     const continuation = segment(90_000, 0x15, [0, 7, 0, 0x40, 0, 1, 2, 0, 0]);
@@ -43,6 +73,19 @@ describe("PGS SUP parsing", () => {
     expect(timeline.at(19)).toBe(sets[0]);
   });
 
+  it("extends 32-bit SUP PTS across the 90 kHz wrap point", () => {
+    const sets = parsePgsSup(join(
+      segment(0xfffffff0, 0x16, [0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 7, 0, 0, 0, 0, 0, 0]),
+      segment(0xfffffff0, 0x80, []),
+      segment(0x10, 0x16, [0, 1, 0, 1, 0, 2, 0, 0, 0, 0, 0]),
+      segment(0x10, 0x80, []),
+    ));
+    expect(sets.map((set) => set.pts90k)).toEqual([0xfffffff0, 0x1_0000_0010]);
+    const timeline = new PgsSubtitleTimeline(); timeline.register("wrap", sets); timeline.select("wrap");
+    expect(timeline.at(0xfffffff0)).toBe(sets[0]);
+    expect(timeline.at(0x1_0000_0010)).toBeNull();
+  });
+
   it("reads the PCS crop flag and crop rectangle", () => {
     const sets = parsePgsSup(join(
       segment(1, 0x16, [0, 4, 0, 3, 0, 1, 0, 0, 0, 0, 1, 0, 7, 0, 0x40, 0, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 2]),
@@ -69,6 +112,8 @@ describe("PGS SUP parsing", () => {
     expect(() => parsePgsSup(join(extraData, composition, segment(2, 0x80, [])))).toThrow(/trailing RLE data/);
   });
 });
+
+function ffmpegAvailable(): boolean { try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return true; } catch { return false; } }
 
 function segment(pts: number, type: number, payload: number[]): Uint8Array {
   const data = new Uint8Array(13 + payload.length);

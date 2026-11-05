@@ -8,17 +8,17 @@
 
 ### Requirement: 资源与离线审计
 
-系统 SHALL 独立验证 schema、包内引用、生成资产 hash、URL 边界和依赖，不盲信既有 status；由可编辑配置指向、已声明且受约束的源 M2TS 与包内菜单资源分开检查；配置变化使相关交接证据失效。
+系统 SHALL 独立验证 schema、包内引用、URL 边界和依赖，不盲信既有 status；由可编辑配置指向、已声明且受约束的源 M2TS 与包内菜单资源分开检查；配置变化使相关交接证据失效。
 
 #### Scenario: 远程或越界
 
 - **WHEN** 菜单运行资源含远程或协议相对 URL、未经授权的外部 file URL、编码目录逃逸或外部 symlink
 - **THEN** validate --offline 报具体引用与规范化目标，状态failed
 
-#### Scenario: 资产被篡改
+#### Scenario: 文件内容变化
 
-- **WHEN** 必需媒体/JS/PNG字节与manifest不一致
-- **THEN** 报告 PACKAGE_MISSING_ASSET 或校验错误并拒绝complete，旧证据失效
+- **WHEN** 必需媒体/JS/PNG内容变化，但路径和引用仍有效
+- **THEN** validate 按实际执行的结构与引用检查报告结果，不作文件内容一致性结论
 
 #### Scenario: 合法说明网址
 
@@ -70,7 +70,7 @@
 
 ### Requirement: 对照与浏览器证据
 
-系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并将浏览器证据绑定到制品指纹、Google Chrome 版本和测试场景。
+系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并将浏览器证据绑定到profile、mode、生成媒体清单、Google Chrome 版本和测试场景。
 
 #### Scenario: 首个行为分歧
 

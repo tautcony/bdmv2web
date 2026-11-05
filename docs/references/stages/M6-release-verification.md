@@ -5,7 +5,7 @@
 | 来源 | 任务 | 可用内容 | 使用边界 |
 | --- | --- | --- | --- |
 | `WHATWG-URL-FILE` / `MDN-FILE-CORS` | 1.2–1.3, 4.1–4.3 | M4 所列的 [file URL](https://url.spec.whatwg.org/#file-scheme)、[origin](https://html.spec.whatwg.org/multipage/origin.html#origin)、[file CORS 行为](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS/Errors/CORSRequestNotHttp)。 | 审计嵌套 HTML/CSS/JS/manifest URL、路径逃逸、symlink、原盘引用和外部请求；HTTP 冒烟测试不能替代双击本地包的证据。 |
-| `JSON-SCHEMA-2020-12` | 1.1, 1.4 | 校验 manifest/compatibility/audit JSON 结构。 | 从包字节重算 hash、资产闭包和 status；不能只信包内 status 或 schema 校验通过。 |
+| `JSON-SCHEMA-2020-12` | 1.1, 1.4 | 校验 manifest/compatibility/audit JSON 结构。 | 检查资产闭包和 status；不能只信包内 status 或 schema 校验通过。 |
 | `FFMPEG-DOCS` | 1.1, 4.2 | 收集 ffprobe JSON（`-show_streams -show_format -of json`）及转换工具 build/version 证据。 | 离线审计不应依赖原碟或 FFmpeg；转换证据绑定工具版本、profile 和本工具生成的输出资产，不记录原盘哈希。 |
 | `PLAYWRIGHT-DOCS` | 3.1–3.3, 4.1–4.3 | [浏览器自动化](https://playwright.dev/docs/browsers), [截图](https://playwright.dev/docs/screenshots), 用于重复执行应用导航断言和采集证据。 | V1 门槛要求实际 Google Chrome 直接打开 `file://`；Playwright 内置 Chromium 不能代替品牌版 Chrome。记录 Chrome 完整版本、console 和声音。验收不限定操作系统，也不要求跨浏览器矩阵。 |
 | `WPT` | 3.4 | [web-platform-tests](https://github.com/web-platform-tests/wpt) 上游标准回归用例。 | 社区网页测试不是 Blu-ray 或本应用的符合性证明；引入用例时锁定 commit/许可，且不能替代目标浏览器矩阵。 |
@@ -27,14 +27,14 @@
 
 计数于 2026-11-04 用 `corepack pnpm test:all` 逐包重测（Node `24.18.0` / pnpm `11.25.0`）；逐包明细见 [`docs/development.md` 的测试基线表](../../development.md#test-baseline)。旧计数（42/40/56/51）是 `dist/**/*.test.js` 与 `src` 被重复收集时的结果，不再使用。
 
-这些结果来源于仓库合成 fixtures 及已提供的本地 IGS 样本；未对外部原盘媒体生成指纹或完整性记录。
+这些结果来源于仓库合成 fixtures 及已提供的本地 IGS 样本。
 
 M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IMPLEMENTATION_BASELINE.md#4-状态统一判定)和 M6 tasks 为准，不由本索引降低。来源链接和属性在 [`sources.json`](../sources.json)。
 
 <a id="v1-chrome-file-evidence"></a>
 ## V1 Chrome `file://` 实测证据 — 2026-11-03（唯一证据位置）
 
-**结论：已完成 macOS Chrome `file://` 实测，证据未绑定制品指纹。** [`docs/browser-matrix.md`](../../browser-matrix.md) 与 [`docs/development.md`](../../development.md) 只引用本节，不另立说法；"未绑定制品指纹"指本次运行没有与原盘或产物的 payload hash 绑定，不表示场景未执行。
+**结论：已完成 macOS Chrome `file://` 实测。** [`docs/browser-matrix.md`](../../browser-matrix.md) 与 [`docs/development.md`](../../development.md) 只引用本节，不另立说法。
 
 | 项目 | 结果 |
 | --- | --- |
@@ -45,7 +45,7 @@ M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IM
 | 视频/音频 | 背景 MP4 与菜单 M4A 均从包内 `assets/media/` 加载；`readyState=4`、`paused=false`、媒体错误为空。 |
 | Console | 未发现 error 或 warn；VM 以 `[bdmv2web:vm]` 输出结构化 trace，本次菜单启动记录在 Console 合并为 158 条。 |
 
-这项验收只记录默认菜单音轨可从本地包播放，不覆盖语言切换行为。验收未为原盘文件或派生媒体生成哈希，因此本节的证据未绑定制品指纹。
+这项验收只记录默认菜单音轨可从本地包播放，不覆盖语言切换行为。
 
 ### `CALL_TITLE` 后菜单返回复验
 
@@ -53,7 +53,7 @@ M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IM
 
 ## 外部 M2TS 替身接入检查 — 2026-11-03
 
-- 用户提供 `STREAM/00006.m2ts` 作为正片替身，并确认其与 `00004.m2ts` 内容相同；`cmp` 逐字节比较一致。没有对源素材生成 hash。
+- 用户提供 `STREAM/00006.m2ts` 作为正片替身，并确认其与 `00004.m2ts` 内容相同；`cmp` 逐字节比较一致。
 - `extract` 生成的 `external-media-targets.json` 将 Playlist `00004` 和 `00042` 映射到存在的 `STREAM/00006.m2ts`；每个 Playlist 含一个 PlayItem，源 IN/OUT 分别为 `1048560` / `432669750`（90 kHz）。Mark 1 对应源时间 `17647642`；独立测试 `external-real-smoke.test.ts` 验证这两个 Playlist 和 Mark 映射。
 - 盘片声明的片段时长约 4795.791 秒，替身文件的 ffprobe 时长约 109.234 秒。这是已知替身条件，不能用于验证原正片的时长、末尾或章节 seek；文件存在不代表内容和原碟片段一致。
 - macOS 27.2 build 26B123 的默认关联为 IINA 1.4.4 (168)。通过系统 `open` 打开实际替身后，IINA 窗口显示 `00006.m2ts`，界面观察到画面及 `00:13 / 01:49` 播放进度。该观察验证操作系统文件关联及替身视频解码，不证明声音、章节或菜单按钮交接。

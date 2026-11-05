@@ -28,8 +28,6 @@ describe("reference compare adapter", () => {
       referenceTool: { name: "ReferenceVM", version: "1.2.3", invocation: expect.stringContaining(input.fixtureId) },
       result: "pass", comparison: { equal: true, count: 1 },
     });
-    expect(report).not.toHaveProperty("sourceHash");
-    expect(report.input).not.toHaveProperty("sourceFingerprint");
   });
 
   it("marks absent reference evidence not verified and retains the input label and reason", () => {
@@ -49,9 +47,5 @@ describe("reference compare adapter", () => {
       reference: { trace, tool: { name: "ReferenceVM", version: null, invocation: "reference-vm --fixture synthetic-call-resume-01" } },
     });
     expect(report).toMatchObject({ result: "not-verified", comparison: { equal: true, count: 1 }, reason: expect.stringContaining("version was not recorded") });
-  });
-
-  it("rejects compare inputs that attempt to carry source fingerprints", () => {
-    expect(() => createReferenceCompareReport({ input: { ...input, sourceFingerprint: "forbidden" }, actualTrace: [] })).toThrow(/source fingerprint/);
   });
 });

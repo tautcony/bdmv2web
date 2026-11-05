@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { access, mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { parsePgsSup } from "./pgs.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates, MediaBudgetError } from "./budget.js";
 
 export * from "./closure.js";
@@ -12,6 +14,29 @@ export * from "./linear.js";
 export * from "./budget.js";
 export * from "./pgs.js";
 
+export interface ExtractedPgsTrack { pid: number; sourcePath: string; path: string; byteLength: number; displaySets: ReturnType<typeof parsePgsSup>; }
+
+/** Extract one declared Blu-ray PGS PID as SUP, then parse and validate every display set. */
+export async function extractPgsTrack(sourcePath: string, pid: number, outputPath: string, options: { ffmpegPath?: string; timeoutMs?: number; runProcess?: MediaProcessRunner; maxBytes?: number } = {}): Promise<ExtractedPgsTrack> {
+  if (!Number.isSafeInteger(pid) || pid < 0x20 || pid > 0x1ffe) throw new RangeError("PGS PID must be a valid 13-bit transport PID.");
+  const maxBytes = options.maxBytes ?? 64 * 1024 * 1024;
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new RangeError("maxBytes must be a positive safe integer.");
+  const output = resolve(outputPath);
+  await mkdir(resolve(output, ".."), { recursive: true });
+  const args = ["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", resolve(sourcePath), "-map", `0:i:0x${pid.toString(16)}`, "-c:s", "copy", "-f", "sup", output];
+  await (options.runProcess ?? runProcess)(options.ffmpegPath ?? "ffmpeg", args, options.timeoutMs ?? 5 * 60 * 1000);
+  const bytes = new Uint8Array(await readFile(output));
+  if (bytes.byteLength > maxBytes) { await unlink(output).catch(() => undefined); throw new RangeError(`Extracted PGS PID ${pid} exceeds maxBytes.`); }
+  try {
+    const displaySets = parsePgsSup(bytes);
+    if (displaySets.length === 0) throw new TypeError(`Extracted PGS PID ${pid} contains no complete display sets.`);
+    return { pid, sourcePath: resolve(sourcePath), path: output, byteLength: bytes.byteLength, displaySets };
+  } catch (error) {
+    await unlink(output).catch(() => undefined);
+    throw error;
+  }
+}
+
 export interface MediaAudioTrackInput { streamNumber: number; pid: number; language: string; }
 export interface MenuLoopMediaInput {
   sourcePath: string;
@@ -20,6 +45,8 @@ export interface MenuLoopMediaInput {
   playItemIndex: number;
   clipId: string;
   inTime45k: number;
+  /** Optional nonzero source mark used as the repeated menu segment's start. */
+  loopStart45k?: number;
   outTime45k: number;
   stillMode: number;
   repeatCount: number;
@@ -67,6 +94,7 @@ export interface MediaPlan {
   sourceFile: string;
   sourceIn45k: number;
   sourceOut45k: number;
+  loopStart45k?: number;
   durationSeconds: number;
   repeatCount: number;
   backgroundMode: "loop-one-clip" | "still-last-frame";
@@ -156,7 +184,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     containerOverheadPercent: options.containerOverheadPercent ?? 5,
   };
   validateBudgetRates(rates);
-  const estimate = estimateMenuLoopBudget(input.outTime45k - input.inTime45k, input.audioTracks.length, rates);
+  const estimate = estimateMenuLoopBudget(input.outTime45k - (input.loopStart45k ?? input.inTime45k), input.audioTracks.length, rates);
   const backgroundPath = "assets/media/background.mp4";
   const audioPaths = input.audioTracks.map((track) => `assets/media/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`);
   for (const [path, bytes] of [[backgroundPath, estimate.videoBytes] as const, ...audioPaths.map((path, index) => [path, estimate.audioBytes[index]!] as const)]) {
@@ -192,7 +220,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const sourceProbe = parseProbe((await invoke(ffprobe, probeArgs(input.sourcePath), timeoutMs)).stdout, input.sourcePath);
   const sourceStart = Number(sourceProbe.format?.start_time);
   if (!Number.isFinite(sourceStart)) throw new Error(`ffprobe did not report the source timeline start for '${input.sourcePath}'.`);
-  const rawSeekSeconds = input.inTime45k / 45_000 - sourceStart;
+  const rawSeekSeconds = (input.loopStart45k ?? input.inTime45k) / 45_000 - sourceStart;
   const seekSeconds = rawSeekSeconds < 0.000001 ? 0 : rawSeekSeconds;
   const videoStream = findPidStream(sourceProbe, input.videoPid, "video", input.sourcePath);
   if (videoStream.codec_name !== "h264") throw new Error(`Menu loop Clip ${input.clipId} video PID ${input.videoPid} is ${videoStream.codec_name ?? "unknown"}; H.264 is required for this export.`);
@@ -270,12 +298,16 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
 }
 
 export function pidSpecifier(pid: number): string { validatePid(pid); return `0:i:0x${pid.toString(16)}`; }
-export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "outTime45k">): number { return (input.outTime45k - input.inTime45k) / 45_000; }
+export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "outTime45k" | "loopStart45k">): number { return (input.outTime45k - (input.loopStart45k ?? input.inTime45k)) / 45_000; }
+export function resolveMenuLoopStart45k(playItemIndex: number, inTime45k: number, outTime45k: number, marks: readonly { type: number; playItemRef: number; time45k: number }[]): number | undefined {
+  return marks.filter((mark) => mark.type === 1 && mark.playItemRef === playItemIndex && mark.time45k > inTime45k && mark.time45k < outTime45k).at(-1)?.time45k;
+}
 
 function validateInput(input: MenuLoopMediaInput): void {
   for (const key of ["playlistId", "clipId", "sourceFile", "sourcePath"] as const) if (!input[key]) throw new TypeError(`${key} is required`);
   for (const [name, value] of Object.entries({ playItemIndex: input.playItemIndex, inTime45k: input.inTime45k, outTime45k: input.outTime45k, stillMode: input.stillMode, repeatCount: input.repeatCount })) if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${name} must be a non-negative safe integer`);
   if (input.outTime45k <= input.inTime45k) throw new RangeError("outTime45k must be greater than inTime45k");
+  if (input.loopStart45k !== undefined && (!Number.isSafeInteger(input.loopStart45k) || input.loopStart45k <= input.inTime45k || input.loopStart45k >= input.outTime45k)) throw new RangeError("loopStart45k must be an integer inside the PlayItem interval and after inTime45k");
   if (input.stillMode > 2) throw new RangeError("stillMode must be one of the defined Playlist PlayItem modes (0, 1, or 2)");
   if (input.repeatCount < 1) throw new RangeError("repeatCount must be positive");
   validatePid(input.videoPid);
@@ -381,10 +413,13 @@ async function runProcess(executable: string, args: string[], timeoutMs: number,
   });
 }
 
+export const runMediaProcess: MediaProcessRunner = runProcess;
+
 function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, plannedPackageBytes: bigint, maxAssetBytes: number | null, maxOutputBytes: number | null, crf: number, preset: string): MediaPlan {
   return {
     status: "partial", playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId,
     sourceFile: input.sourceFile, sourceIn45k: input.inTime45k, sourceOut45k: input.outTime45k,
+    ...(input.loopStart45k !== undefined ? { loopStart45k: input.loopStart45k } : {}),
     durationSeconds: durationSeconds(input), repeatCount: input.repeatCount, backgroundMode: input.stillMode === 2 ? "still-last-frame" : "loop-one-clip", videoPid: input.videoPid,
     audioTracks: input.audioTracks.map((track) => ({ ...track })),
     encoding: {

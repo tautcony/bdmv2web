@@ -15,38 +15,14 @@
 
 ## B. 证据链减承诺（D9=C）
 
-- [ ] B.0 **先改基线，再改代码**（顺序不能反）：`IMPLEMENTATION_BASELINE.md §4` 当前规定 `compatibility.json` 必须含 `payloadFingerprint`，且状态表把"必需包内资产缺失**或被篡改**"判为 `failed`。这两条与 D9=C 直接冲突——按现状执行，任何删字段的实现都是"违反基线"。
-  改动三处：
-  1. 必需字段列表删除 `payloadFingerprint`（改为 `schemaVersion/toolVersion/runtimeVersion/mode/profile/status/diagnostics/coverage/browserEvidence`）。
-  2. 状态表首行拆为两类：`必需资产缺失 → failed`；`内容被替换（字节篡改）→ 完整性未实现，记 not-verified 并阻止 complete`。
-  3. 表下段落"任意 fatal 或安全检查失败一律 failed"后补一句："未实现字节级校验时，不得把'未检测到问题'表述为安全检查通过。"
-  验收：§4 不再出现 `payloadFingerprint`；`grep -n "篡改" openspec/changes/IMPLEMENTATION_BASELINE.md` 只命中"未实现/未验证"语义；与 `specs/offline-delivery-assurance/spec.md` 的对应条款逐句一致（无一处仍要求 failed）。
-
-- [ ] B.1 移除 `payloadFingerprint` 的字段层与函数层。实测影响面 **13 个 `.ts` 文件**（不是 4 处），逐文件处置如下：
-
-  | 文件 | 现状 | 处置 |
-  | --- | --- | --- |
-  | `test-runner/src/package-audit.ts:337` 及其它提前返回点 | 恒返回 `payloadFingerprint: null` | 删除字段与所有 `: null` 写入 |
-  | `test-runner/src/types.ts:26,34` | `AuditResult` 与 manifest 类型中的字段 | 删除 |
-  | `test-runner/src/report.ts:10,23,34,45` | 报告类型与输出对象 | 删除 |
-  | `test-runner/src/release-summary.ts:38,78,100` | 汇总类型与 `release` 输出 | 删除 |
-  | `test-runner/src/browser-evidence.ts:17,42,77,138` | `payloadFingerprint` 与 `generatedMediaFingerprint` | 两个字段都删；evidence 只保留 profile/mode/matrix/environment/artifacts |
-  | `package-builder/src/index.ts` | `hashGeneratedPayload` 与写入点（manifest / 元数据） | 删除函数与全部写入 |
-  | `bdmv-io/src/index.ts:124-147` | 导出函数 `payloadFingerprint()`，仓库内无其它调用方 | 删除导出；实现保留在 git 历史，将来做 A 方案时恢复 |
-  | `test-runner/src/index.test.ts:68`、`apps/cli/src/index.test.ts:352` | 把"不检查 hash"固化成预期的断言 | 改为断言"结果不含该字段" |
-  | `package-builder/src/index.test.ts`、`test-runner/src/release-summary.test.ts`、`test-runner/src/browser-evidence.test.ts`、`bdmv-io/src/index.test.ts` | 夹具/断言引用该字段 | 删除夹具字段，断言改为"不存在" |
-
-  **注意**：`packages/core/schema` 只有 `disc-ir.schema.json`，其中**不含**该字段——原任务里"从 core schema 移除"是不存在的动作，不要去找。
-  验收：`grep -rn "payloadFingerprint\|generatedMediaFingerprint\|hashGeneratedPayload" packages apps --include=*.ts` 无命中（含测试文件）；`corepack pnpm -r typecheck` 通过（漏删一个引用就会编译失败，这是本条的自检手段）。
-
-- [ ] B.2 重新生成仓库内的示例产物：`test-data` 下三套包共 **12 个 JSON** 仍含该字段（`output/baja-studio-menu`、`bdmv/tamako-love-story-bd/BDMV-menu`、`.../BDMV-menu.backup-2026-11-04` 各 4 个：`compatibility.json`、`manifest.json`、`dependency-audit.json`、`reports/release-summary.json`）。
-  处置：`output/baja-studio-menu` 用 `convert` 重新生成（它是 CLI 测试的输入）；`BDMV-menu` 同理；`BDMV-menu.backup-2026-11-04` **保留不动**，作为 B.7 的"旧包"夹具。
-  验收：`grep -rl "payloadFingerprint" test-data --include=*.json` 仅命中 `BDMV-menu.backup-2026-11-04`；重新生成的包通过 `validate --offline`；`package-builder` / `cli` / `test-runner` 中依赖这些 JSON 的断言仍通过（若断言硬编码了字段存在，属 B.1 的漏网，需一并改）。
-- [ ] B.3 测试名与措辞同步：`test-runner/src/index.test.ts:68`、`apps/cli/src/index.test.ts:352` 的用例名不再出现"without checking hashes"这类把缺失写成特性的表述，改为"does not report a payload fingerprint"一类事实陈述。验收：两条测试名与被测行为一致；`grep -rn "without checking hash\|not check.*hash" packages apps --include=*.ts` 无命中。
-- [ ] B.4 浏览器证据绑定范围写明事实：`packages/test-runner/src/browser-evidence.ts:126` 的比较列表保持 profile/mode/matrix/environment；check message 增加 `artifact hash recorded, not re-verified`。验收：证据报告的 message 含该短语；不改 mismatch 列表内容。
-- [ ] B.5 记录未实现项（不实现）：`compatibility.json` 构建侧缺 `toolVersion`、validate 侧缺 `runtimeVersion` / `diagnostics`，写入 `verify-offline-release/tasks.md` 的未完成项，并在 `docs/references/stages/M6-release-verification.md` 列出。验收：任务与文档均显式记为缺口，不出现"已对齐 schema"的表述。
-- [ ] B.6 取消勾选与降级表述：`openspec/changes/verify-offline-release/tasks.md` 的 1.1 与 4.3 改回未勾选；`specs/offline-delivery-assurance` 的篡改场景改为 `not-verified` 语义（见本 change 的 spec delta）。验收：`grep -n "\[x\] 1.1\|\[x\] 4.3" openspec/changes/verify-offline-release/tasks.md` 无命中。
-- [ ] B.7 兼容旧产物：`validate` 对仍带 `payloadFingerprint` 的旧包按"未知字段忽略"处理且不重写该字段。夹具直接用 B.2 保留的 `test-data/bdmv/tamako-love-story-bd/BDMV-menu.backup-2026-11-04`（不另造）。验收：对该目录执行 `validate --offline` 成功；输出 JSON 中无该字段；目录内原文件的 `payloadFingerprint` 未被改写（`git status` 无变化）。
+- [x] B.0 更新实施基线：包清单不声明文件内容完整性；必需资产缺失仍为 failed。
+- [x] B.1 移除产品侧内容摘要字段和计算。DiscIR 资产、包 manifest、审计报告及浏览器产物均不记录文件内容摘要；manifest 保留路径和长度。浏览器证据直接保存 profile、mode、生成媒体清单、矩阵和环境值。
+- [x] B.2 检查仓库样本产物；当前 test-data 中没有需要重新生成的交付包。
+- [x] B.3 删除旧内容摘要逻辑对应的专属测试和夹具，保留常规资源审计与文件长度行为测试。
+- [x] B.4 浏览器证据按 profile/mode/生成媒体清单/矩阵/环境值判断是否过期；artifact 记录路径、类型和长度。
+- [ ] B.5 在发布验证文档中记录 compatibility 构建与审计仍缺的工具版本及诊断字段。
+- [x] B.6 实施基线与离线审计规范已更新；M6 中内容完整性相关任务未勾选。
+- [ ] B.7 对历史包格式的兼容性仍需独立验证。
 
 ## C. 图与 VM 语义（D11）
 
@@ -97,11 +73,11 @@
 - [ ] H.1 一致性 grep 三连（同 `design.md` Exit Criteria 1）：
   1. 无重复常量：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中。
   2. 无占位源位置：`grep -rn "source/structural\|<MovieObject>" packages apps` 无命中。
-  3. `payloadFingerprint` 口径：`grep -rn "payloadFingerprint" packages apps --include=*.ts` **无命中**；`test-data` 内仅 `BDMV-menu.backup-2026-11-04`（B.7 的旧包夹具）保留；`docs` / `openspec` 中只作为历史与迁移说明出现，不出现"已校验/可检测篡改"的表述。
+  3. `内容摘要字段` 口径：`grep -rn "内容摘要字段" packages apps --include=*.ts` **无命中**；`test-data` 内仅 `BDMV-menu.backup-2026-11-04`（B.7 的旧包夹具）保留；`docs` / `openspec` 中只作为历史与迁移说明出现，不出现"已校验/可检测篡改"的表述。
   
   验收：三条命令的输出与上述口径逐字一致；第 3 条若在代码内有命中，说明 B.1 漏删，不得以"仅剩迁移说明"放过。
 - [ ] H.2 行为回归：`corepack pnpm build && corepack pnpm typecheck && corepack pnpm test:all` 全绿；hdmv ≥ 80 用例、runtime-web ≥ 95 用例（含新增），其余包不低于第 1 批基线。
-- [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `payloadFingerprint` 字段移除与源位置字段变真实）。
+- [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `内容摘要字段` 字段移除与源位置字段变真实）。
 - [ ] H.4 诚实性检查：README「已知限制」含"未实现字节级完整性校验""本地桥 token 在 URL（审计无法归因）""`loop=false` 不支持独立末帧状态"三条；M6 的 1.1 / 4.3 未勾选。
 - [ ] H.5 范围守界：`git diff --stat` 不包含本地桥实现改动（D6）、不包含 `standalone-full` 实现、不包含新增 CI workflow。
 - [ ] H.6 规格归属处理（apply 的第一步，先于任何代码改动）：`openspec validate` 通过但 archive 会拒绝 5 个 MODIFIED delta。按 `proposal.md` 的表执行——`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 的上游 change 已标记 Complete，先 `openspec archive` 使主规格存在；`offline-menu-runtime`（`build-offline-menu-runtime` 13/16）与 `offline-delivery-assurance`（`verify-offline-release` 14/17）上游未完成，把本 delta 内容并入上游 `spec.md` 后删除本 change 的对应目录。验收：处理后 `openspec archive converge-contracts-and-distribution --dry-run`（或等效检查）不再报"target spec does not exist"；删除的 delta 内容可在上游 spec.md 中原样检出。

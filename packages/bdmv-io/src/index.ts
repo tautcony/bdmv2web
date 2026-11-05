@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -108,42 +107,6 @@ export async function* readFileChunks(path: string, limits: Limits = DEFAULT_LIM
   if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0 || chunkSize > limits.maxReadWindowBytes) throw new ContractError("LIMIT_EXCEEDED", "/chunkSize", "Chunk size exceeds maxReadWindowBytes");
   const stream = createReadStream(path, { highWaterMark: chunkSize });
   for await (const chunk of stream) yield chunk as Uint8Array;
-}
-
-export async function hashFile(path: string, limits?: Limits): Promise<{ sha256: string; byteLength: bigint }> {
-  const hash = createHash("sha256"); let byteLength = 0n;
-  for await (const chunk of readFileChunks(path, limits)) { hash.update(chunk); byteLength += BigInt(chunk.byteLength); }
-  return { sha256: hash.digest("hex"), byteLength };
-}
-
-export function assetIdFromSha256(sha256: string): string {
-  if (!/^[a-f0-9]{64}$/.test(sha256)) throw new ContractError("INVALID_SHA256", "/sha256", "Expected lowercase SHA-256 hex");
-  return `sha256-${sha256}`;
-}
-
-export async function payloadFingerprint(rootPath: string, reportPaths: string[] = ["reports.json"]): Promise<string> {
-  const root = await canonicalDirectory(rootPath);
-  const excluded = new Set(reportPaths.map((p) => p.split(sep).join("/")));
-  const files: string[] = [];
-  const visit = async (dir: string): Promise<void> => {
-    for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name, "en"))) {
-      const path = resolve(dir, entry.name);
-      if (entry.isSymbolicLink()) throw new ContractError("SYMLINK_REJECTED", path, "Symlinks are not accepted in a payload tree");
-      if (entry.isDirectory()) await visit(path);
-      else if (entry.isFile()) {
-        const rel = relative(root, path).split(sep).join("/");
-        if (!excluded.has(rel)) files.push(path);
-      }
-    }
-  };
-  await visit(root);
-  const hash = createHash("sha256");
-  for (const path of files.sort((a, b) => relative(root, a).localeCompare(relative(root, b), "en"))) {
-    const rel = relative(root, path).split(sep).join("/");
-    const result = await hashFile(path);
-    hash.update(rel).update("\0").update(result.sha256).update("\n");
-  }
-  return hash.digest("hex");
 }
 
 export function assertByteLimit(value: number | bigint, maxBytes: number, path = "/byteLength"): void {

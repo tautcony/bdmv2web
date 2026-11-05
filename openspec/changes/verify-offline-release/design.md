@@ -14,9 +14,9 @@
 
 ### 1. validate 只依赖输出包
 
-先读 manifest/schema，再核对资产存在/大小/SHA-256、实体引用、命令支持、影片目标、所有运行文件 URL 和证据。缺报告也显式记录，不能相信包里已有 status。输出 checks[] 含 checkId/result(pass/fail/not-verified)/entityId/source/evidence，报告保留输入包指纹。
+先读 manifest/schema，再核对资产存在、实体引用、命令支持、影片目标、所有运行文件 URL 和证据。缺报告也显式记录，不能相信包里已有 status。输出 checks[] 含 checkId/result(pass/fail/not-verified)/entityId/source/evidence。
 
-payloadFingerprint 覆盖运行 HTML/JS/CSS/数据/图形/媒体及相对路径，不含 reports，避免兼容报告自引用。manifest 列出 payload；报告/证据另以 hash 和生成工具版本关联。资产改一字节、bundle 改动、模式/profile/矩阵变化都会使相关证据失效；不复用不同制品的截图。
+manifest 列出运行文件路径和长度。审计不计算文件内容摘要；浏览器证据记录 profile、mode、生成媒体路径与长度、矩阵、环境和生成工具版本。对应值变化后重新执行相关场景。
 
 ### 2. 离线和路径审计
 
@@ -53,7 +53,7 @@ V1 验收使用 Google Chrome，不限定操作系统。M0 建立单行模板，
 | I 破损/缺失/循环 | 各模块/M6；预算内终止与准确诊断 |
 | J Chrome 环境/分辨率/路径 | M4–M6；Chrome 版本、DPI、移动包证据 |
 
-每份证据含 caseId/fixtureId/inputSequence/profile/payloadFingerprint/Chrome版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。
+每份证据含 caseId/fixtureId/inputSequence/profile/mode/generatedMedia/Chrome版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。
 
 ### 6. 发布与失败保留
 
@@ -61,7 +61,7 @@ validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和
 
 ## Verification / Exit Criteria
 
-决策表驱动测试覆盖 complete 候选、外部交接未验证、混合/纯 BD-J、unknown opcode、缺媒体、篡改资产、缺浏览器证据及 acknowledged Error。URL 负例含双重编码/反斜杠/协议相对/data 嵌套/symlink；合法中文/百分号与说明网址不过度拦截。A–J 对应实际证据，无法取得环境时准确保留未验证，不能宣布发布完成。
+决策表驱动测试覆盖 complete 候选、外部交接未验证、混合/纯 BD-J、unknown opcode、缺媒体、缺浏览器证据及 acknowledged Error。URL 负例含双重编码/反斜杠/协议相对/data 嵌套/symlink；合法中文/百分号与说明网址不过度拦截。A–J 对应实际证据，无法取得环境时准确保留未验证，不能宣布发布完成。
 
 ## Risks / Trade-offs
 

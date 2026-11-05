@@ -1,34 +1,37 @@
 #!/usr/bin/env python3
-"""Fetch only the file extracts pinned in docs/references/cache-manifest.json."""
+"""Clone the pinned reference repositories listed in cache-manifest.json."""
 import json
+import subprocess
 from pathlib import Path
-from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 manifest_path = ROOT / 'docs/references/cache-manifest.json'
 manifest = json.loads(manifest_path.read_text())
+cache_root = ROOT / '.reference-cache/repositories'
 
 
-def looks_like_html(data):
-    prefix = data.lstrip()[:512].lower()
-    return prefix.startswith((b'<!doctype html', b'<html')) or b'<!doctype html' in prefix
+def run_git(*args, cwd=None):
+    subprocess.run(['git', *args], cwd=cwd, check=True)
 
 
 for source in manifest['sources']:
-    for item in source['files']:
-        target = ROOT / item['path']
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.is_file():
-            existing = target.read_bytes()
-            if looks_like_html(existing):
-                raise RuntimeError(f"HTML/challenge content found in cache: {item['path']}")
-            print(f"using existing {item['path']}")
-            continue
-        with urlopen(item['url'], timeout=60) as response:
-            if response.status != 200 or 'text/html' in response.headers.get('Content-Type', '').lower():
-                raise RuntimeError(f"unexpected HTTP response: {response.status} {response.headers.get('Content-Type')}: {item['url']}")
-            data = response.read()
-        if looks_like_html(data):
-            raise RuntimeError(f"HTML/challenge response from {item['url']}")
-        target.write_bytes(data)
-        print(f"fetched {item['path']} ({item['bytes']} bytes)")
+    target = cache_root / source['id']
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not (target / '.git').exists():
+        if target.exists() and any(target.iterdir()):
+            raise RuntimeError(f"cache path exists but is not a git checkout: {target}")
+        run_git('clone', source['repository'], str(target))
+    else:
+        origin = subprocess.check_output(
+            ['git', 'remote', 'get-url', 'origin'], cwd=target, text=True
+        ).strip()
+        if origin.removesuffix('.git').rstrip('/') != source['repository'].removesuffix('.git').rstrip('/'):
+            raise RuntimeError(f"unexpected origin for {target}: {origin}")
+        run_git('fetch', 'origin', source['revision'], cwd=target)
+    run_git('checkout', '--detach', source['revision'], cwd=target)
+    actual = subprocess.check_output(
+        ['git', 'rev-parse', 'HEAD'], cwd=target, text=True
+    ).strip()
+    if actual != source['revision']:
+        raise RuntimeError(f"revision mismatch for {source['id']}: {actual}")
+    print(f"checked out {source['id']} at {actual}")

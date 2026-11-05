@@ -7,7 +7,6 @@ export interface CompatibilityReport {
   schemaVersion: "1.0";
   status: DeliveryStatus;
   mode: "menu-only" | "standalone-full";
-  payloadFingerprint: string | null;
   profile?: string;
   checks: AuditCheck[];
   coverage: CoverageReport;
@@ -20,7 +19,6 @@ export interface CompatibilityReport {
 
 export interface DependencyAuditReport {
   schemaVersion: "1.0";
-  payloadFingerprint: string | null;
   status: "pass" | "fail" | "not-verified";
   externalReferences: AuditCheck[];
   checks: AuditCheck[];
@@ -31,7 +29,6 @@ export function createCompatibilityReport(audit: OfflinePackageAudit, decision: 
     schemaVersion: "1.0",
     status: decision.status,
     mode,
-    payloadFingerprint: audit.payloadFingerprint,
     checks: audit.checks,
     coverage,
     reasons: decision.reasons,
@@ -42,7 +39,7 @@ export function createCompatibilityReport(audit: OfflinePackageAudit, decision: 
 export function createDependencyAuditReport(audit: OfflinePackageAudit): DependencyAuditReport {
   const relevant = audit.checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
   const status = relevant.length === 0 || relevant.some((check) => check.result === "not-verified") ? "not-verified" : relevant.some((check) => check.result === "fail") ? "fail" : "pass";
-  return { schemaVersion: "1.0", payloadFingerprint: audit.payloadFingerprint, status, externalReferences: relevant.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"), checks: relevant };
+  return { schemaVersion: "1.0", status, externalReferences: relevant.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"), checks: relevant };
 }
 
 export interface CompareReport<T = unknown> {
@@ -76,7 +73,7 @@ export interface ReferenceCompareInput {
 
 /** Bind a validated input sequence to an actual trace and optional independent reference evidence. */
 export function createReferenceCompareReport(args: ReferenceCompareInput): ReferenceCompareReport {
-  if (!validateCompareInput(args.input)) throw new TypeError("Compare input is invalid or contains a prohibited source fingerprint field.");
+  if (!validateCompareInput(args.input)) throw new TypeError("Compare input is invalid.");
   const input = args.input;
   if (!args.reference) {
     return {

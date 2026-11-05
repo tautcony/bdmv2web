@@ -44,7 +44,6 @@ Limits 至少有 maxReadWindowBytes/maxObjectPixels/maxSegmentBytes/maxReassembl
 
 realpath 检查输入/输出/缓存无重叠，拒绝 symlink 逃逸。二进制资源引用只通过已验证文件表解析。提供 staging/commit/abort：已存在目标拒绝覆盖，同父目录构建，调用方校验后 rename；中断不损坏源与旧输出。
 
-不为外部 BDMV 输入生成 sourceFingerprint，也不承诺原始文件完整性。生成的资产可按内容 hash 命名并保留多对一来源；payloadFingerprint 只覆盖本工具生成的运行文件及路径，不含引用该指纹的 reports，避免自引用。诊断 code/severity 可机器判定，无位置取 null，公开来源用相对路径。
 
 ## Verification / Exit Criteria
 

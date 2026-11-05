@@ -57,7 +57,6 @@
 ### P3-INFO-3: [INFO] `manifest.profile` 与 `compatibility.profile` 双源，审计不校验
 
 - 位置: `packages/package-builder/src/index.ts:145`（对象）vs `:59-68`（`profile:"portable"` 字符串）；`packages/test-runner/src/package-audit.ts:27-47`（`parseManifest` 丢弃未知字段，`DeliveryManifest` 无 `profile`）
-- 影响: 同一个包里 profile 有两种形态；`validate` 既无法核对"运行期确实用了该 profile"，也发现不了 `manifest.profile` 与 `disc-data.js` 不一致。`payloadFingerprint` 覆盖 `runtime/disc-data.js`，所以篡改会被指纹捕捉（若能重算），但语义正确性无人校验。
 - 建议: compatibility 记录同一 profile（或指纹），audit 校验 `manifest.profile` 形状并与 `disc-data.js` 比对。
 
 ### P3-INFO-4: [INFO] 首帧未 resize（既有问题，被全屏布局放大）

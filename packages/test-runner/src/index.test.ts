@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,17 +36,15 @@ async function packageRoot(payload: Record<string, string | Uint8Array>, extra: 
     await mkdir(join(target, ".."), { recursive: true });
     const bytes = typeof content === "string" ? Buffer.from(content) : Buffer.from(content);
     await writeFile(target, bytes);
-    files.push({ path, kind: path.endsWith(".html") ? "html" : path.endsWith(".js") ? "runtime" : path.endsWith(".png") ? "graphics" : "asset", byteLength: String(bytes.byteLength), sha256: createHash("sha256").update(bytes).digest("hex") });
+    files.push({ path, kind: path.endsWith(".html") ? "html" : path.endsWith(".js") ? "runtime" : path.endsWith(".png") ? "graphics" : "asset", byteLength: String(bytes.byteLength) });
   }
-  const fingerprint = createHash("sha256");
-  for (const file of files.slice().sort((a, b) => a.path.localeCompare(b.path, "en"))) fingerprint.update(file.path, "utf8").update("\0").update(file.sha256, "ascii").update("\n");
-  await writeFile(join(root, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", mode: "standalone-full", files, payloadFingerprint: fingerprint.digest("hex"), ...extra }));
+  await writeFile(join(root, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", mode: "standalone-full", files, ...extra }));
   return root;
 }
 
 describe("offline package audit", () => {
   it("builds a dependency audit from concrete checks and leaves an empty audit unverified", () => {
-    const base = { schemaVersion: "1.0" as const, packageRoot: "/package", manifestPath: "manifest.json", payloadFingerprint: "fingerprint", discoveredPayloadFiles: [] };
+    const base = { schemaVersion: "1.0" as const, packageRoot: "/package", manifestPath: "manifest.json", discoveredPayloadFiles: [] };
     expect(createDependencyAuditReport({ ...base, checks: [
       { checkId: "OFFLINE_URL_LOCAL", result: "pass", message: "Local asset resolves", path: "index.html", evidence: { target: "assets/menu.png" } },
     ] })).toMatchObject({ status: "pass", checks: [{ path: "index.html", evidence: { target: "assets/menu.png" } }] });
@@ -60,7 +57,7 @@ describe("offline package audit", () => {
     expect(createDependencyAuditReport({ ...base, checks: [] })).toMatchObject({ status: "not-verified", checks: [] });
   });
 
-  it("audits listed runtime files without checking hashes", async () => {
+  it("audits listed runtime files", async () => {
     const imageName = "assets/海报 %图.png";
     const html = `<img src="assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png"><script src="app.js"></script>`;
     const root = await packageRoot({ "index.html": html, "app.js": "(() => { document.body.dataset.ready = 'yes'; })();", [imageName]: pngSignature });
@@ -68,8 +65,6 @@ describe("offline package audit", () => {
     await writeFile(join(root, "reports", "links.json"), JSON.stringify({ source: "https://example.test/docs" }));
     const result = await auditOutputPackage(root);
     expect(result.checks.filter((check) => check.checkId === "OFFLINE_URL_LOCAL")).toHaveLength(2);
-    expect(result.checks.some((check) => /HASH|FINGERPRINT/.test(check.checkId))).toBe(false);
-    expect(result.payloadFingerprint).toBeNull();
     expect(result.checks.some((check) => check.checkId === "OFFLINE_EXTERNAL_URL")).toBe(false);
   });
 
@@ -88,17 +83,7 @@ describe("offline package audit", () => {
     expect(result.checks.some((check) => check.checkId === "OFFLINE_EXTERNAL_URL" || check.checkId === "OFFLINE_URL_ESCAPE")).toBe(false);
   });
 
-  it("ignores missing or invalid hashes and still requires the listed startup file", async () => {
-    const root = await packageRoot({ "index.html": "<main>menu</main>" }, { payloadFingerprint: "broken" });
-    const manifestPath = join(root, "manifest.json");
-    const manifestWithInvalidHash = JSON.parse(await (await import("node:fs/promises")).readFile(manifestPath, "utf8"));
-    delete manifestWithInvalidHash.files[0].sha256;
-    delete manifestWithInvalidHash.files[0].byteLength;
-    await writeFile(manifestPath, JSON.stringify(manifestWithInvalidHash));
-    const audit = await auditOutputPackage(root);
-    expect(audit.checks.some((check) => check.result === "fail")).toBe(false);
-    expect(audit.checks.some((check) => /HASH|FINGERPRINT/.test(check.checkId))).toBe(false);
-
+  it("requires the listed startup file", async () => {
     const noIndex = await packageRoot({});
     expect((await auditOutputPackage(noIndex)).checks.some((check) => check.checkId === "PACKAGE_ENTRY_MISSING" && check.result === "fail")).toBe(true);
 
@@ -115,7 +100,6 @@ describe("offline package audit", () => {
     await writeFile(join(root, "app.js"), "changed");
     await writeFile(join(root, "extra.js"), "(() => {})();");
     const result = await auditOutputPackage(root);
-    expect(result.checks.some((check) => /HASH|FINGERPRINT|SIZE/.test(check.checkId))).toBe(false);
     expect(result.checks.some((check) => check.checkId === "PACKAGE_UNLISTED_PAYLOAD" && check.path === "extra.js")).toBe(true);
 
     const missingRoot = await packageRoot({ "index.html": `<img src="missing.png">` });
@@ -180,7 +164,7 @@ describe("delivery status and coverage", () => {
     expect(acknowledged).toMatchObject({ severity: "error", blocksComplete: true, acknowledged: true });
     expect(decideDelivery({ ...base, diagnostics: [acknowledged] }, true)).toMatchObject({ status: "partial", exitCode: 2 });
     expect(decideDelivery({ ...base, declaredEntryCount: 2, hdmvEntryCount: 0 }, false)).toMatchObject({ status: "failed", exitCode: 1 });
-    expect(decideDelivery({ ...base, checks: [{ checkId: "HASH", result: "fail", message: "mismatch" }] }, true)).toMatchObject({ status: "failed", exitCode: 1 });
+    expect(decideDelivery({ ...base, checks: [{ checkId: "ASSET_MISSING", result: "fail", message: "Required asset is missing" }] }, true)).toMatchObject({ status: "failed", exitCode: 1 });
   });
 
   it.each([
@@ -276,7 +260,7 @@ describe("delivery status and coverage", () => {
 });
 
 describe("reference comparison primitives", () => {
-  it("validates deterministic compare inputs without source hashes", () => {
+  it("validates deterministic compare inputs", () => {
     const input = {
       fixtureId: "synthetic-menu-1",
       sourceLabel: "local synthetic fixture",
@@ -286,7 +270,6 @@ describe("reference comparison primitives", () => {
     };
     expect(validateCompareInput(input)).toBe(true);
     expect(validateCompareInput({ ...input, events: [...input.events].reverse() })).toBe(false);
-    expect(validateCompareInput({ ...input, sourceFingerprint: "abc" })).toBe(false);
   });
 
   it("finds the first semantic trace divergence and ignores wall-clock/session fields", () => {

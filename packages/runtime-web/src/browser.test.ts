@@ -42,6 +42,10 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
         const handlers = events.get(type) ?? [];
         handlers.push(listener as unknown as (...args: unknown[]) => unknown); events.set(type, handlers);
       },
+      removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+        const handlers = events.get(type) ?? []; const target = listener as unknown as (...args: unknown[]) => unknown;
+        events.set(type, handlers.filter((handler) => handler !== target));
+      },
       async fire(type: string, ...args: unknown[]) {
         for (const listener of events.get(type) ?? []) await listener(...args);
       },
@@ -57,7 +61,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
       pause() {}, load() {},
     };
   };
-  for (const id of ["runtime-status", "runtime-diagnostics", "start-menu", "menu-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
+  for (const id of ["runtime-status", "runtime-diagnostics", "start-menu", "menu-canvas", "popup-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
   const document = { getElementById: (id: string) => elements.get(id) ?? null } as unknown as Document;
   const fakeWindow = {
     devicePixelRatio: 1,
@@ -65,7 +69,10 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
       const handlers = windowEvents.get(type) ?? [];
       handlers.push(listener as unknown as (...args: unknown[]) => unknown); windowEvents.set(type, handlers);
     },
-    removeEventListener() {},
+    removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      const handlers = windowEvents.get(type) ?? []; const target = listener as unknown as (...args: unknown[]) => unknown;
+      windowEvents.set(type, handlers.filter((handler) => handler !== target));
+    },
     async fire(type: string, ...args: unknown[]) { for (const listener of windowEvents.get(type) ?? []) await listener(...args); },
     listenerCount(type: string) { return windowEvents.get(type)?.length ?? 0; },
   };
@@ -100,6 +107,30 @@ async function launch(data: Record<string, unknown>, options: { assetBatches?: u
 afterEach(() => vi.unstubAllGlobals());
 
 describe("offline browser boot", () => {
+  it("opens a matching popup IGS overlay on POPUP_MENU and closes it on POPUP_OFF", async () => {
+    const mainScene = packageData().scene as Record<string, unknown>;
+    const data = packageData({
+      scene: { ...mainScene, clipId: "00001", pid: 0x1200 },
+      popupScenes: [{
+        id: "00001:4608:popup", clipId: "00001", pid: 0x1200, uiModel: 1, streamModel: 0,
+        width: 100, height: 60, compositionTimeout90k: null, selectionTimeout90k: null,
+        pages: [{ id: 0, uoMask: "0", defaultButtonId: 1, animationFrameRateCode: 0, rawEffects: { enterBytesHex: "", exitBytesHex: "", enterEffectCount: 0, exitEffectCount: 0 }, buttons: [{
+          id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+          states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo", startObjectId: 1, endObjectId: 1 } },
+          commands: [{ bytes: m3Fixtures.popupOff.bytes }],
+        }] }],
+      }],
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Escape", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("popup-canvas")?.hidden).toBe(false);
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("popup-canvas")?.hidden).toBe(true);
+  });
+
   it("shows a visible error for an unsupported schema and dangling DiscIR references", async () => {
     const unsupported = await launch(packageData({ ir: { ...validIr, schemaVersion: "2.0" } }));
     expect(unsupported.elements.get("runtime-status")?.role).toBe("alert");

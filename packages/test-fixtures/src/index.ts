@@ -7,7 +7,7 @@ const base = {
   programs: [{ id: "program-00001", title: "Synthetic Title" }],
   menus: [{ id: "menu-00001" }],
   playlists: [{ id: "playlist-00001", programIds: ["program-00001"], menuIds: ["menu-00001"], duration90k: "90000" }],
-  mediaAssets: [{ id: "sha256-" + "b".repeat(64), kind: "image", relativePath: "assets/菜单.png", mime: "image/png", byteLength: "3", sha256: "b".repeat(64), sources: [source] }],
+  mediaAssets: [{ id: "asset-image-0", kind: "image", relativePath: "assets/菜单.png", mime: "image/png", byteLength: "3", sources: [source] }],
   diagnostics: [],
 };
 

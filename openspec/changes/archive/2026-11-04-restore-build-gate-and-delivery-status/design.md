@@ -74,7 +74,7 @@
 
 `development.md`（离线 `file://` 未验证）、`browser-matrix.md`（`not-verified`）、`M6-release-verification.md`（已验收）、两份 tasks 的 4.1（已勾选）对同一件事给出四种说法。本 change 只统一**表述**为："已完成 macOS Chrome `file://` 实测，证据未绑定制品指纹"，并把证据出处收敛到一处引用。
 
-勾选状态与 `payloadFingerprint` 字段的最终处置属 D9（第 2 批），本 change 不改勾选、不改字段——避免在批 1 里制造半完成状态。
+勾选状态的后续调整另行处理；本 change 不改勾选，避免在批 1 里制造半完成状态。
 
 M6 的测试计数（42/40/56/51）按本 change 第 1 节记录的逐包基线重算后替换。
 

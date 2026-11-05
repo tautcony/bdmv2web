@@ -73,6 +73,7 @@ export function decodeInstruction(input: MovieInstruction | RawCommand | Uint8Ar
     : ["SWAP", "MOVE", "ADD", "SUB", "MUL", "DIV", "MOD", "RND", "AND", "OR", "XOR", "BITSET", "BITCLR", "SHL", "SHR", "BC", "EQ", "NE", "GE", "GT", "LE", "LT", "PLAY_PL_PI", "PLAY_PL_PM", "SET_STREAM", "SET_NV_TIMER", "SET_BUTTON_PAGE", "SET_SEC_STREAM", "SET_STREAM_SS"].includes(opcode ?? "") ? 2 : 1;
   if (opcode && opCount !== expected) issues.push("HDMV_ILLEGAL_OPERAND_COUNT");
   if (operands.some((x) => x?.kind === "immediate") && opcode && ["MOVE", "SWAP", "ADD", "SUB", "MUL", "DIV", "MOD", "AND", "OR", "XOR", "BITSET", "BITCLR", "SHL", "SHR"].includes(opcode) && operands[0]?.kind === "immediate") issues.push("HDMV_ILLEGAL_DESTINATION");
+  if (opcode === "RND" && operands[0]?.kind !== "gpr") issues.push("HDMV_ILLEGAL_DESTINATION");
   return { ...raw, source: source ?? raw.source, group, subGroup, opCount, immOp1, immOp2, branchOption, compareOption, setOption, opcode, operands, issues, status: issues.length ? "invalid" : "reference-only" };
 }
 

@@ -46,22 +46,13 @@ const DEFAULTS = {
 
 若后续要做真深度上限，必须同时改 `callStack` 结构、`MenuCheckpoint` 与 `libbluray` 单帧行为的对照结论——那是独立 change，不在本批夹带。
 
-### 2. 证据链选择"减承诺"，而不是"补实现"（D9=C）
+### 2. 证据记录保留实际执行的检查（D9=C）
 
-补实现的工作量并不大，但会牵动三处 schema、两个包的写入路径、全部既有产物的重算，且无法在没有独立参考的情况下证明"重算的指纹是对的"。相比之下，当前最大的风险是**看起来已验证**：`compatibility.json` 有 `payloadFingerprint` 字段、`M6 1.1/4.3` 已勾选、报告写"篡改会失败"。
+不实现文件内容完整性检查。DiscIR 资产不包含内容摘要，包清单只记录相对路径、类型和长度，离线审计检查 schema、引用、路径边界和依赖。
 
-因此本 change 做减法：
+浏览器证据直接保存 profile、mode、生成媒体清单、矩阵与浏览器环境，按这些值判断记录是否适用于当前场景。证据文件记录路径、类型和长度。
 
-1. 删除 `packages/test-runner/src/package-audit.ts:337` 及所有提前返回的 `payloadFingerprint: null`；从 `AuditResult` 类型、报告/汇总类型、产物输出（`compatibility.json` / `manifest.json`）中移除该字段；`bdmv-io` 的导出函数 `payloadFingerprint()` 一并删除（无调用方，留在 git 历史）。实测影响 **13 个 `.ts` 文件**，清单见 `tasks.md` B.1 表。
-   **注意**：`packages/core/schema` 下只有 `disc-ir.schema.json`，不含该字段——不存在"改 core schema"这一步。
-2. 删除 `packages/package-builder` 的 `hashGeneratedPayload` 与其写入点；不再生成"看起来像校验值"的字段。
-3. 浏览器证据：`mismatch` 列表保持 `profileFingerprint / mode / matrixFingerprint / environmentFingerprint`（即现状事实），并在 check message 中显式写 `artifact hash recorded, not re-verified`；不新增字段表达同一件事。
-4. `compatibility.json` 的 `toolVersion` / `runtimeVersion` / `diagnostics` 缺口（构建侧缺前者、validate 侧缺后两者）**只记录为实现缺口**，不修（属 D9=C 的边界），写入 `verify-offline-release` 的 tasks 未完成项。
-5. M6 tasks 1.1、4.3 取消勾选；`offline-delivery-assurance` spec 中"资产被篡改 → 失败"的场景改为"未实现完整性校验 → 记 `not-verified` 并阻止 complete"。
-
-连带影响：`packages/test-runner/src/index.test.ts:68`（断言"不检查 hash"）与 `apps/cli/src/index.test.ts:352` 需改为断言"审计结果不含该字段"。这两个断言原本把缺陷固化成了预期，必须一起改，否则减法做不干净。
-
-**为什么不保留字段只写 null**：字段存在即承诺。下游（含未来的第三方集成）会读它、会以为是校验值。删字段 + 文档说明的成本远低于"字段在但永远为 null"的解释成本。
+M6 对文件完整性与制品替换的验证任务保持未完成。文档只描述实际执行的结构检查和浏览器场景，不作字节替换检测结论。
 
 ### 3. 导航图按"上下文"而不是"opcode 黑名单"判定（D11）
 
@@ -124,7 +115,7 @@ const DEFAULTS = {
 
 ## Risks / Trade-offs
 
-- **删字段会打断既有产物**：旧包的 `manifest.json` / `compatibility.json` 仍带 `payloadFingerprint`。读取侧按"未知字段忽略"处理即可，但 `validate` 必须不再写它——需要一个迁移说明（见下）。
+- **旧包兼容**：旧包可能含有当前不再使用的清单字段；读取侧忽略未知字段，重新生成报告时使用当前格式。
 - **M6 取消勾选会让"发布完成"后退**：这是有意为之。当前勾选本身就是错的；退回去比留着假通过安全。
 - **`CALL_TITLE` 改 continuation 会动 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 的接口**：两个桥都要改，且 `browser.ts` 的 TITLE_SEARCH 分支与它语义重叠——本 change 只保证"不可用能解除等待"，不合并两处语义（合并属更大重构）。
 - **`SourceRef` 改为真实路径后输出体积上升**：每条指令带 path/offset 会让 IR 变大。用"同文件短索引 + 文件表"记路径可缓解，但会增加一层间接。先按可读性优先（逐条 path），体积问题在有实测数据后处理。
@@ -132,14 +123,14 @@ const DEFAULTS = {
 
 ## Migration Plan
 
-1. **产物兼容**：`payloadFingerprint` 移除后，旧包 `validate` 不报错（忽略未知字段），但 `compatibility.json` 会因 schema 变化重新生成；旧证据（`browserEvidence`）若引用 `payloadFingerprint` 绑定，按"绑定范围不含 payload"重新判定，不追溯失效。
+1. **产物兼容**：旧包中的未知清单字段由读取侧忽略；重新生成的报告使用当前格式。
 2. **IR schema**：`SourceRef` 的 `path` 约定从"两种写法混用"收敛为"相对 BDMV 根"。旧 IR（`source/structural`、`<MovieObject>`）在 `parseDiscIR` 时以 `SCHEMA_SOURCE_PLACEHOLDER` 警告拒绝，不静默接受——旧的空跑 IR 必须重新 `extract`。
 3. **`dist` 布局**：`runtime-web` 的 `build` 顺序变为 `tsc → build:browser`；`package-builder` 的构建依赖前者，`pnpm -r build` 的拓扑顺序由 workspace 依赖保证（两者已有依赖关系）。
 4. **测试夹具**：`IgsButton` 的 `numericSelectValue` 已在第 1 批补；本 change 若调整 `SourceRef` 形状，需同步 `packages/test-fixtures` 的 golden。
 
 ## Verification / Exit Criteria
 
-1. **一致性**：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -rn "source/structural\|<MovieObject>" packages apps` 无命中；`grep -rn "payloadFingerprint" packages apps --include=*.ts` **无命中**（代码内不保留"迁移说明"式引用）；`test-data` 内仅 `BDMV-menu.backup-2026-11-04` 保留（作为旧包兼容夹具）。
+1. **一致性**：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -rn "source/structural\|<MovieObject>" packages apps` 无命中；产品代码、测试、缓存清单和生成脚本不记录文件内容校验值。参考缓存清单只记录上游仓库地址和固定 revision，fetch 脚本按该 revision clone/check out。
 2. **行为**：见 `tasks.md` 每条的正反例，尤其 `JUMP_TITLE` 后继可达、`CALL_TITLE` 不可用能解除等待、无媒体包执行初始 VM、非循环背景 `ended` 后恢复、PSR1 随选轨更新。
-3. **诚实**：`verify-offline-release` 的 1.1 / 4.3 未勾选；`offline-delivery-assurance` 的篡改场景为 `not-verified` 语义；README 有"未实现完整性校验"与"本地桥 token 在 URL"两条已知限制。
+3. **诚实**：`verify-offline-release` 的 1.1 / 4.3 未勾选；`offline-delivery-assurance` 的篡改场景为 `not-verified` 语义；README 记录当前尚未实现的完整性检查与本地桥 token 处理限制。
 4. **基准**：`benchmark.md` 记录每项 case 的机器/版本/样本/前后数据；修复项均有对应数据。

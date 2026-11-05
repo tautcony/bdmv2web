@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { durationSeconds, exportMenuLoopMedia, MediaBudgetError, MediaJobError, MediaToolError, pidSpecifier, type MediaProcessRunner, type MenuLoopMediaInput } from "./index.js";
+import { durationSeconds, exportMenuLoopMedia, MediaBudgetError, MediaJobError, MediaToolError, pidSpecifier, resolveMenuLoopStart45k, type MediaProcessRunner, type MenuLoopMediaInput } from "./index.js";
 
 const input: MenuLoopMediaInput = {
   sourcePath: "/source/BDMV/STREAM/00004.m2ts", sourceFile: "BDMV/STREAM/00004.m2ts", playlistId: "00003",
@@ -19,9 +19,22 @@ describe("menu-loop media export", () => {
     expect(() => pidSpecifier(0x2000)).toThrow(/out of range/);
   });
 
+  it("uses a valid nonzero PlayMark as the menu loop segment start", () => {
+    const marks = [
+      { index: 0, type: 1, playItemRef: 0, time45k: 63_000 },
+      { index: 1, type: 1, playItemRef: 0, time45k: 85_522 },
+      { index: 2, type: 1, playItemRef: 1, time45k: 90_000 },
+      { index: 3, type: 1, playItemRef: 0, time45k: 110_000 },
+    ];
+    expect(resolveMenuLoopStart45k(0, 63_000, 108_045, marks)).toBe(85_522);
+    expect(resolveMenuLoopStart45k(1, 63_000, 108_045, marks)).toBe(90_000);
+    expect(durationSeconds({ ...input, loopStart45k: 85_522 })).toBeCloseTo((input.outTime45k - 85_522) / 45_000, 8);
+  });
+
   it("exports one looping H.264 background and separate AAC files for each declared language", async () => {
     const root = await mkdtemp(join(tmpdir(), "bdmv-media-export-"));
     const calls: Array<{ executable: string; args: string[] }> = [];
+    let encodedDuration = 109.190;
     const run: MediaProcessRunner = async (executable, args) => {
       calls.push({ executable, args });
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
@@ -35,9 +48,9 @@ describe("menu-loop media export", () => {
         ], format: { start_time: "11.650667", duration: "109.234" } }), stderr: "" };
         const audio = path.endsWith(".m4a");
         return { stdout: JSON.stringify({ streams: [audio
-          ? { index: 0, id: "0x0", codec_type: "audio", codec_name: "aac", duration: "109.190" }
-          : { index: 0, id: "0x0", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: "109.190" },
-        ], format: { duration: "109.190" } }), stderr: "" };
+          ? { index: 0, id: "0x0", codec_type: "audio", codec_name: "aac", duration: String(encodedDuration) }
+          : { index: 0, id: "0x0", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: String(encodedDuration) },
+        ], format: { duration: String(encodedDuration) } }), stderr: "" };
       }
       await writeFile(path, Buffer.from("encoded media"));
       return { stdout: "", stderr: "" };
@@ -77,6 +90,15 @@ describe("menu-loop media export", () => {
       expect(calls.find((call) => call.args.at(-1)?.endsWith("audio-1100-eng.m4a"))?.args).toContain("0:i:0x1100");
       expect(calls.filter((call) => call.executable === "ffmpeg" && call.args.includes("-map")).every((call) => call.args.includes("-ss") && call.args.includes("0"))).toBe(true);
       expect(JSON.parse(await readFile(join(root, "media-plan.json"), "utf8"))).toMatchObject({ repeatCount: 999, sourceFile: "BDMV/STREAM/00004.m2ts" });
+      const markedRoot = await mkdtemp(join(tmpdir(), "bdmv-media-loop-mark-"));
+      try {
+        encodedDuration = 1;
+        const markedInput = { ...input, loopStart45k: input.inTime45k + 45_000, outTime45k: input.inTime45k + 2 * 45_000 };
+        const marked = await exportMenuLoopMedia(markedInput, { outputDirectory: markedRoot, runProcess: run });
+        expect(marked.plan).toMatchObject({ sourceIn45k: markedInput.inTime45k, loopStart45k: markedInput.loopStart45k, durationSeconds: 1 });
+        const markedEncode = calls.filter((call) => call.args.at(-1)?.endsWith("background.mp4") && call.args.includes("0:i:0x1011")).at(-1)!;
+        expect(Number(markedEncode.args[markedEncode.args.indexOf("-ss") + 1])).toBeCloseTo(1, 4);
+      } finally { encodedDuration = 109.190; await rm(markedRoot, { recursive: true, force: true }); }
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

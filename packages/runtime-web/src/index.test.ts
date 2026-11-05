@@ -751,6 +751,16 @@ describe("offline menu primitives", () => {
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(true);
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(false);
   });
+  it("unblocks popup requests and explains that external title video cannot be overlaid", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
+    vm.handleEvent({ type: "POPUP_MENU", channel: "keyboard" });
+    const action = vm.drainActions()[0]!;
+    expect(action.type).toBe("MENU_CALL");
+    const messages: string[] = [];
+    new PreviewPlaybackBridge(vm, (message) => messages.push(message)).dispatch(action);
+    expect(messages).toEqual(["Popup composition is unavailable because this package does not have an in-browser title overlay context."]);
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(true);
+  });
   it("routes an activated movie button to the visible unavailable report", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [] }]);
     const menuScene = scene(); menuScene.pages[0]!.buttons[0]!.commands = [{ bytes: m3Fixtures.linkPlayItem3.bytes }];

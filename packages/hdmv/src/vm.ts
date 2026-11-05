@@ -21,10 +21,11 @@ export interface HdmvVmCheckpoint {
   pendingTitleCall: number | null; menuCheckpoint: MenuCheckpoint | null; playback: PlaybackContext;
   generation: number; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; sequence: number;
   profile: PlayerProfile; lastAction: NavigationAction | undefined; resumeAfterPlaylistStop: boolean;
+  randomSeed: number; randomState: bigint;
   consumedResponses: string[]; eventQueue: VmEvent[]; actionQueue: NavigationAction[];
   trace: TraceEntry[]; actions: NavigationAction[]; diagnostics: VmDiagnostic[];
 }
-export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; }
+export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
 export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
 export type ButtonCommandContext = "movie-object" | "ig-button";
@@ -36,11 +37,13 @@ type MenuCheckpoint = {
   callStack: Array<{ programId: number; pc: number }>; continuation: Continuation | null;
   suspendedPlaylistContinuation: Continuation | null; suspendedPlaylistPlayback: PlaybackContext | null;
   pendingTitleCall: number | null; playback: PlaybackContext; queuedActionIds: Set<string>;
-  diagnostic: VmDiagnostic | null; firstAction: number;
+  diagnostic: VmDiagnostic | null; firstAction: number; randomState: bigint;
 };
 const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
 const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
 const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "ended", PLAY_PLAYLIST_ITEM: "ended", PLAY_PLAYLIST_MARK: "ended", TOP_MENU: "started", MENU_CALL: "started" };
+const RANDOM_MULTIPLIER = 6_364_136_223_846_793_005n;
+const RANDOM_MASK = 0xffff_ffff_ffff_ffffn;
 
 function textInstruction(d: DecodedInstruction): string { return `${d.opcode ?? "UNKNOWN"} ${d.operands.filter((x) => x !== null).map((x) => x.kind === "immediate" ? `#${x.value}` : `${x.kind}[${x.value}]`).join(",")}`.trim(); }
 
@@ -55,24 +58,29 @@ export class HdmvVm {
   private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private suspendedPlaylistPlayback: PlaybackContext | null = null; private pendingTitleCall: number | null = null; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
   private readonly consumedResponses = new Set<string>(); private readonly eventQueue: VmEvent[] = []; private readonly actionQueue: NavigationAction[] = [];
   private profile: PlayerProfile; private lastAction: NavigationAction | undefined; private resumeAfterPlaylistStop = false;
+  private randomSeed: number; private randomState: bigint;
   private readonly entries: VmOptions["entries"];
   private readonly onTrace: VmOptions["onTrace"];
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
   constructor(programs: Array<VmProgram | MovieObject>, options: VmOptions = {}) {
     this.opts = { ...DEFAULTS, ...options }; this.entries = options.entries; this.onTrace = options.onTrace; this.profile = normalizeProfile(options.profile); this.registers = new RegisterFile(this.profile);
+    this.randomSeed = normalizeRandomSeed(options.randomSeed); this.randomState = BigInt(this.randomSeed);
     for (const p of programs) this.addProgram(p as VmProgram);
-    this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
+    this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)} seed=${this.randomSeed}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   addProgram(program: VmProgram | MovieObject): void {
     const p = program as VmProgram;
     if (!Number.isInteger(p.id) || p.id < 0) throw new TypeError("Program id must be a non-negative integer");
     this.programs.set(p.id, { id: p.id, instructions: p.instructions, ...(p.resumeIntention !== undefined ? { resumeIntention: p.resumeIntention } : {}), ...(p.menuCallMask !== undefined ? { menuCallMask: p.menuCallMask } : {}), ...(p.titleSearchMask !== undefined ? { titleSearchMask: p.titleSearchMask } : {}) });
   }
-  reset(programId = 0, profile: PlayerProfile = this.profile): void {
+  reset(programId = 0, profile: PlayerProfile = this.profile, randomSeed = this.randomSeed): void {
+    const seed = normalizeRandomSeed(randomSeed);
+    this.randomSeed = seed;
+    this.randomState = BigInt(seed);
     this.profile = normalizeProfile(profile); this.registers.reset(this.profile); this.programId = programId; this.pc = 0; this.status = "idle"; this.generation++;
     this.callStack.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.pendingTitleCall = null; this.menuCheckpoint = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
-    this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
+    this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)} seed=${seed}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
   /** Save all mutable execution state so a navigation branch can resume from this point. */
@@ -84,6 +92,7 @@ export class HdmvVm {
       menuCheckpoint: this.menuCheckpoint, playback: this.playback, generation: this.generation,
       instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic, sequence: this.sequence,
       profile: this.profile, lastAction: this.lastAction, resumeAfterPlaylistStop: this.resumeAfterPlaylistStop,
+      randomSeed: this.randomSeed, randomState: this.randomState,
       consumedResponses: [...this.consumedResponses], eventQueue: this.eventQueue, actionQueue: this.actionQueue,
       trace: this.trace, actions: this.actions, diagnostics: this.diagnostics,
     });
@@ -91,6 +100,7 @@ export class HdmvVm {
   /** Restore a checkpoint created by this VM's matching program set and options. */
   restoreCheckpoint(checkpoint: HdmvVmCheckpoint): void {
     if (checkpoint.registers.gpr.length !== this.registers.gpr.length || checkpoint.registers.psr.length !== this.registers.psr.length) throw new TypeError("VM checkpoint has incompatible register state");
+    normalizeRandomSeed(checkpoint.randomSeed);
     const state = structuredClone(checkpoint);
     this.status = state.status; this.programId = state.programId; this.pc = state.pc;
     this.registers.gpr.set(state.registers.gpr); this.registers.psr.set(state.registers.psr);
@@ -99,7 +109,7 @@ export class HdmvVm {
     this.suspendedPlaylistPlayback = state.suspendedPlaylistPlayback; this.pendingTitleCall = state.pendingTitleCall;
     this.menuCheckpoint = state.menuCheckpoint; this.playback = state.playback; this.generation = state.generation;
     this.instructionsThisTurn = state.instructionsThisTurn; this.diagnostic = state.diagnostic; this.sequence = state.sequence;
-    this.profile = state.profile; this.lastAction = state.lastAction; this.resumeAfterPlaylistStop = state.resumeAfterPlaylistStop;
+    this.profile = state.profile; this.lastAction = state.lastAction; this.resumeAfterPlaylistStop = state.resumeAfterPlaylistStop; this.randomSeed = state.randomSeed; this.randomState = state.randomState;
     this.consumedResponses.clear(); for (const response of state.consumedResponses) this.consumedResponses.add(response);
     this.eventQueue.splice(0, this.eventQueue.length, ...state.eventQueue);
     this.actionQueue.splice(0, this.actionQueue.length, ...state.actionQueue);
@@ -129,7 +139,7 @@ export class HdmvVm {
       callStack: this.callStack.map((frame) => ({ ...frame })), continuation: this.continuation,
       suspendedPlaylistContinuation: this.suspendedPlaylistContinuation, suspendedPlaylistPlayback: this.suspendedPlaylistPlayback ? { ...this.suspendedPlaylistPlayback } : null,
       pendingTitleCall: this.pendingTitleCall, playback: { ...this.playback },
-      queuedActionIds: new Set(this.actionQueue.map((action) => action.id)), diagnostic: this.diagnostic,
+      queuedActionIds: new Set(this.actionQueue.map((action) => action.id)), diagnostic: this.diagnostic, randomState: this.randomState,
       firstAction: this.actions.length,
     };
     this.diagnostic = null;
@@ -144,6 +154,7 @@ export class HdmvVm {
     this.continuation = saved.continuation; this.suspendedPlaylistContinuation = saved.suspendedPlaylistContinuation;
     this.suspendedPlaylistPlayback = saved.suspendedPlaylistPlayback ? { ...saved.suspendedPlaylistPlayback } : null; this.pendingTitleCall = saved.pendingTitleCall;
     this.playback = { ...saved.playback }; this.diagnostic = saved.diagnostic; this.resumeAfterPlaylistStop = false; this.lastAction = undefined;
+    this.randomState = saved.randomState;
     if (saved.continuation) this.consumedResponses.delete(`${saved.continuation.action.generation}:${saved.continuation.action.id}`);
     const retained = this.actionQueue.filter((queued) => saved.queuedActionIds.has(queued.id));
     this.actionQueue.splice(0, this.actionQueue.length, ...retained);
@@ -436,6 +447,7 @@ export class HdmvVm {
       case "MUL": this.write(a!, Math.min(0xffffffff, av * bv)); return;
       case "DIV": this.write(a!, bv ? Math.floor(av / bv) : 0xffffffff); return;
       case "MOD": this.write(a!, bv ? av % bv : 0xffffffff); return;
+      case "RND": this.write(a!, this.nextRandom(bv, d.source)); return;
       case "AND": this.write(a!, av & bv); return;
       case "OR": this.write(a!, av | bv); return;
       case "XOR": this.write(a!, av ^ bv); return;
@@ -627,6 +639,14 @@ export class HdmvVm {
     this.status = "running"; this.resumeAfterPlaylistStop = true;
   }
   private write(op: Operand, value: number): void { const ref = op.kind === "immediate" ? null : { kind: op.kind, index: op.value } as RegisterRef; if (!ref) throw new RegisterFault("HDMV_ILLEGAL_OPERAND", "Cannot write to an immediate operand"); this.registers.write(ref, value >>> 0); }
+  private nextRandom(range: number, source: SourceLocation): number {
+    this.randomState = (this.randomState * RANDOM_MULTIPLIER + 1n) & RANDOM_MASK;
+    if (range === 0) {
+      this.diagnostics.push({ code: "HDMV_RND_ZERO_RANGE", message: "RND range is zero; reference behavior returns 1", source });
+      return 1;
+    }
+    return Number((this.randomState >> 32n) & 0xffff_ffffn) % range + 1;
+  }
   private skipIf(skip: boolean): void { if (skip) this.pc++; }
   private saveCallPsrState(): void {
     for (let offset = 0; offset < 5; offset += 1) this.registers.systemWrite(36 + offset, this.registers.read({ kind: "psr", index: 4 + offset }));
@@ -722,5 +742,11 @@ function normalizeProfile(profile: PlayerProfile | undefined): PlayerProfile {
     audioProfiles: [...(profile?.audioProfiles ?? defaults.audioProfiles)],
     ...(profile?.capabilityValues ? { capabilityValues: { ...profile.capabilityValues } } : {}),
   };
+}
+
+function normalizeRandomSeed(value: number | undefined): number {
+  const seed = value ?? 1;
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new TypeError("randomSeed must be an unsigned 32-bit integer");
+  return seed;
 }
 

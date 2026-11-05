@@ -7,7 +7,7 @@ const valid = {
   entries: [{ id: "entry-0", navigation: { type: "HDMV", movieObjectId: 0 }, source }, { id: "entry-bdj", navigation: { type: "BDJ", bdjoId: "00001", status: "unsupported" }, source }],
   programs: [{ id: "program-0", title: "Title" }], menus: [{ id: "menu-0" }],
   playlists: [{ id: "playlist-0", programIds: ["program-0"], menuIds: ["menu-0"], duration90k: "9007199254740993" }],
-  mediaAssets: [{ id: "asset-0", kind: "video", relativePath: "assets/电影 #1.mp4", mime: "video/mp4", byteLength: "3", sha256: "b".repeat(64), sources: [source] }],
+  mediaAssets: [{ id: "asset-0", kind: "video", relativePath: "assets/电影 #1.mp4", mime: "video/mp4", byteLength: "3", sources: [source] }],
   diagnostics: [],
 };
 

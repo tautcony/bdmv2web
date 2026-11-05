@@ -1,9 +1,9 @@
 import { HdmvVm, type TraceEntry, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
 import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuButton, type MenuInputConfig, type MenuLoopMediaPackage, type MenuScene, type PlaybackBridge } from "./index.js";
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
-import type { SerializedMenuState, SerializedScene } from "./igs-adapter.js";
+import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 
-export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
+export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; }
 
@@ -116,6 +116,7 @@ async function boot(): Promise<void> {
     const scene = normalizeScene(data.scene, assetMap);
     const status = document.getElementById("runtime-status"); const start = document.getElementById("start-menu") as HTMLButtonElement | null;
     const canvas = document.getElementById("menu-canvas") as HTMLCanvasElement | null;
+    const popupCanvas = document.getElementById("popup-canvas") as HTMLCanvasElement | null;
     const video = document.getElementById("menu-background") as HTMLVideoElement | null;
     const audio = document.getElementById("menu-audio") as HTMLAudioElement | null;
     if (!status || !start || !canvas) throw new Error("The menu page is missing required runtime elements.");
@@ -134,6 +135,22 @@ async function boot(): Promise<void> {
       })
       : new PreviewPlaybackBridge(vm, (message) => { showStatus(message); });
     let controller: MenuController | null = null;
+    let popupController: MenuController | null = null;
+    let popupViewport: CanvasViewport | null = null;
+    let removePopupPointer: (() => void) | undefined;
+    let removeKeyboard: (() => void) | undefined;
+    let inputStarted = false;
+    const closePopup = () => {
+      const wasOpen = popupController !== null;
+      if (!wasOpen) return;
+      popupController?.pause();
+      popupController = null;
+      popupViewport = null;
+      removePopupPointer?.(); removePopupPointer = undefined;
+      if (popupCanvas) { popupCanvas.hidden = true; popupCanvas.getContext("2d")?.clearRect(0, 0, popupCanvas.width, popupCanvas.height); }
+      if (inputStarted && controller) queueMicrotask(() => { removeKeyboard?.(); removeKeyboard = installKeyboardInput(window, controller!); });
+      if (controller) { controller.syncVmContext(); redraw(); }
+    };
     const pendingActions: Array<ReturnType<HdmvVm["drainActions"]>[number]> = [];
     let externalRequestSequence = 0;
     const dispatchActions = () => {
@@ -144,13 +161,42 @@ async function boot(): Promise<void> {
       let menuPlaylistRequested = false;
       while (pendingActions.length) {
         const action = pendingActions.shift()!;
+        const inputController = popupController ?? controller;
         if (action.type === "SET_BUTTON_PAGE") {
           const packed = action.payload.packed;
-          if (typeof packed === "number") controller.applySetButtonPage(packed);
+          if (typeof packed === "number") inputController?.applySetButtonPage(packed);
           else showStatus("VM emitted SET_BUTTON_PAGE without its packed operand.");
         } else if ((action.type === "ENABLE_BUTTON" || action.type === "DISABLE_BUTTON") && typeof action.payload.button === "number") {
-          controller.setButtonEnabled(action.payload.button, action.type === "ENABLE_BUTTON");
+          inputController?.setButtonEnabled(action.payload.button, action.type === "ENABLE_BUTTON");
+        } else if (action.type === "POPUP_OFF") {
+          closePopup();
+        } else if (action.type === "MENU_CALL") {
+          const selected = data.scene?.clipId && data.scene.pid !== undefined
+            ? selectPopupScene(data.popupScenes ?? [], data.scene.clipId, data.scene.pid)
+            : { status: "not-found" as const };
+          if (selected.status !== "selected" || !popupCanvas) {
+            showStatus("No unambiguous popup IGS composition matches the active menu clip and PID.");
+            vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
+          } else {
+            closePopup();
+            const popupScene = normalizeScene(selected.scene, assetMap);
+            popupViewport = new CanvasViewport(popupScene.width, popupScene.height);
+            popupCanvas.hidden = false;
+            const drawPopup = () => {
+              if (!popupController || !popupViewport || !popupCanvas) return;
+              const rect = popupCanvas.getBoundingClientRect(); const context = popupCanvas.getContext("2d");
+              if (context) drawMenu(context, popupScene, popupController, popupViewport, rect.width, rect.height, window.devicePixelRatio || 1);
+            };
+            popupController = new MenuController(popupScene, vm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate() }, data.inputConfig);
+            const rect = popupCanvas.getBoundingClientRect(); popupViewport.resize(popupCanvas, rect.width, rect.height, window.devicePixelRatio || 1);
+            removePopupPointer = installCanvasPointerInput(popupCanvas, popupViewport, popupController, () => { const size = popupCanvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
+            popupController.start();
+            if (inputStarted) queueMicrotask(() => { removeKeyboard?.(); if (popupController) removeKeyboard = installKeyboardInput(window, popupController); });
+            vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id });
+            drawPopup();
+          }
         } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number" && data.vmEntries) {
+          closePopup();
           const selected = vm.selectTitle(action.payload.title);
           if (selected.diagnostic) {
             showStatus(selected.diagnostic.message);
@@ -158,6 +204,7 @@ async function boot(): Promise<void> {
           }
           pendingActions.push(...vm.drainActions());
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist && data.media)) {
+          closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
           if (result.status === "unavailable") { showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }
           const params = new URLSearchParams(location.hash.slice(1)); const port = params.get("bridgePort"); const token = params.get("bridgeToken");
@@ -172,13 +219,13 @@ async function boot(): Promise<void> {
           image.src = `http://127.0.0.1:${port}/open?token=${token}&clip=${encodeURIComponent(result.item.clipId)}`;
           vm.releaseExternalPlayback(action);
         } else {
+          if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "TOP_MENU", "MENU_RETURN"].includes(action.type)) closePopup();
           if (action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist) menuPlaylistRequested = true;
           mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
         }
       }
       return { menuPlaylistRequested, completion: Promise.all(mediaActions).then(() => undefined) };
     };
-    let inputStarted = false;
     const soundPlayer = new MenuSoundPlayer(data.sounds ?? {}, (url) => new Audio(url), {
       report: (kind, message) => {
         showStatus(message);
@@ -195,7 +242,7 @@ async function boot(): Promise<void> {
     };
     controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
     start.hidden = false; start.disabled = false; showStatus("Images decoded. Select Start menu preview to enable input.");
-    let removeKeyboard: (() => void) | undefined; let removePointer: (() => void) | undefined;
+    let removePointer: (() => void) | undefined;
     start.addEventListener("click", async () => {
       if (retrySound) { const retry = retrySound; retrySound = null; start.disabled = true; start.hidden = true; retry(); return; }
       if (retryMedia) { const retry = retryMedia; retryMedia = null; start.disabled = true; start.hidden = true; retry(); return; }
@@ -228,7 +275,7 @@ async function boot(): Promise<void> {
       viewport.resize(canvas, initialRect.width, initialRect.height, window.devicePixelRatio || 1);
       controller!.start();
       void dispatchActions().completion;
-      removeKeyboard = installKeyboardInput(window, controller!);
+      removeKeyboard = installKeyboardInput(window, popupController ?? controller!);
       removePointer = installCanvasPointerInput(canvas, viewport, controller!, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
       redraw();
     });

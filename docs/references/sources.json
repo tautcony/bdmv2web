@@ -59,7 +59,7 @@
       "classification": "normative international recommendation; official freely downloadable PDF",
       "version": "v10 (04/2025), in force as of 2026-11-02",
       "location": "2014 PDF table of contents checked directly: clause 2.4.3.2 Transport stream packet layer, 2.4.3.3 semantics, 2.4.3.4 adaptation field, 2.4.3.6 PES packet, 2.4.3.7 PES semantics; 2.4.4 PSI. The 2025 v10 text was not accessible anonymously and its detailed clause numbering was not independently checked.",
-      "license_or_access": "Official record available; anonymous download attempt returned TIES login HTML. PDF access requires TIES credentials in this environment. H.222.0 (10/2014) was independently downloaded (3,127,517 bytes, SHA-256 6167a8b567ba3094854a7d3e4d8d64657bee19bb6622f3283e956623971e108a) and is superseded; its clauses 2.4.3.2–2.4.3.7 cover TS packet/adaptation/PES syntax, 2.4.4 PSI. Clause 2.6 is descriptors.",
+      "license_or_access": "Official record available; anonymous download attempt returned TIES login HTML. PDF access requires TIES credentials in this environment. H.222.0 (10/2014) was independently downloaded and is superseded; its clauses 2.4.3.2–2.4.3.7 cover TS packet/adaptation/PES syntax, 2.4.4 PSI. Clause 2.6 is descriptors.",
       "used_for": [
         "M2",
         "M3",
@@ -632,6 +632,43 @@
         "M6"
       ],
       "limits": "Not a BDMV conformance suite and not a substitute for app-specific file:// packaging/browser evidence."
+    },
+    {
+      "id": "BDMVKIT-0.7.0",
+      "title": "kajisho5/bdmvkit Blu-ray authoring library",
+      "url": "https://github.com/kajisho5/bdmvkit",
+      "classification": "open reference authoring implementation; generated input corpus, not normative",
+      "version": "0.7.0 source snapshot, commit 57890760c60b3c31dacc9db1112467d4510925aa",
+      "location": [
+        "bdmvkit/hdmv.py",
+        "bdmvkit/nav.py",
+        "bdmvkit/disc.py",
+        "bdmvkit/igs.py",
+        "bdmvkit/pgs.py",
+        "bdmvkit/playlist.py",
+        "bdmvkit/clip.py",
+        "bdmvkit/m2ts.py"
+      ],
+      "license_or_access": "LGPL-3.0-or-later; COPYING and COPYING.LESSER are cached with the pinned source. Keep authoring code out of the shipped runtime and review fixture licensing before redistribution.",
+      "used_for": [
+        "M1",
+        "M2",
+        "M3",
+        "M5",
+        "M6"
+      ],
+      "limits": "Producer-side structural and behavior reference for generated synthetic BDMV cases. Does not prove BDA conformance or independent player behavior; bdmvkit generates only its documented authored subset. Generated cases are not commercial media.",
+      "reproducible_command": "git clone https://github.com/kajisho5/bdmvkit.git && cd bdmvkit && git checkout --detach 57890760c60b3c31dacc9db1112467d4510925aa && git rev-parse HEAD",
+      "source_urls": [
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/hdmv.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/nav.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/disc.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/igs.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/pgs.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/playlist.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/clip.py",
+        "https://raw.githubusercontent.com/kajisho5/bdmvkit/57890760c60b3c31dacc9db1112467d4510925aa/bdmvkit/m2ts.py"
+      ]
     }
   ]
 }

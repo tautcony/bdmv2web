@@ -59,7 +59,6 @@ function parseManifest(value: unknown, checks: AuditCheck[]): DeliveryManifest |
     ...(Array.isArray(value.diagnostics) ? { diagnostics: value.diagnostics.filter(isRecord).map((d) => ({ severity: String(d.severity ?? "unknown"), ...(typeof d.code === "string" ? { code: d.code } : {}), ...(typeof d.acknowledged === "boolean" ? { acknowledged: d.acknowledged } : {}), ...(typeof d.blocksComplete === "boolean" ? { blocksComplete: d.blocksComplete } : {}) })) } : {}),
     ...(Array.isArray(value.limitations) ? { limitations: value.limitations.filter((v): v is string => typeof v === "string") } : {}),
     ...(typeof value.status === "string" ? { status: value.status } : {}),
-    ...(typeof value.payloadFingerprint === "string" ? { payloadFingerprint: value.payloadFingerprint } : {}),
   };
 }
 
@@ -299,22 +298,22 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
     if ((await lstat(inputRoot)).isSymbolicLink()) throw new Error("Output package root symlink is not allowed");
     root = await realpath(inputRoot);
   }
-  catch { add(checks, "PACKAGE_ROOT_MISSING", "fail", "Output package directory does not exist", inputRoot); return { schemaVersion: "1.0", packageRoot: resolve(inputRoot), manifestPath: "manifest.json", checks, payloadFingerprint: null, discoveredPayloadFiles: [] }; }
-  if (!(await stat(root)).isDirectory()) { add(checks, "PACKAGE_ROOT_INVALID", "fail", "Output package root is not a directory", inputRoot); return { schemaVersion: "1.0", packageRoot: root, manifestPath: "manifest.json", checks, payloadFingerprint: null, discoveredPayloadFiles: [] }; }
+  catch { add(checks, "PACKAGE_ROOT_MISSING", "fail", "Output package directory does not exist", inputRoot); return { schemaVersion: "1.0", packageRoot: resolve(inputRoot), manifestPath: "manifest.json", checks, discoveredPayloadFiles: [] }; }
+  if (!(await stat(root)).isDirectory()) { add(checks, "PACKAGE_ROOT_INVALID", "fail", "Output package root is not a directory", inputRoot); return { schemaVersion: "1.0", packageRoot: root, manifestPath: "manifest.json", checks, discoveredPayloadFiles: [] }; }
   const files = await listFiles(root, checks);
   const manifestRel = "manifest.json";
   if (!files.includes("index.html")) add(checks, "PACKAGE_ENTRY_MISSING", "fail", "Required portable startup file index.html is missing", "index.html");
-  if (!files.includes(manifestRel)) { add(checks, "MANIFEST_MISSING", "fail", "Required manifest.json is missing", manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) }; }
+  if (!files.includes(manifestRel)) { add(checks, "MANIFEST_MISSING", "fail", "Required manifest.json is missing", manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) }; }
   const manifestAbsolute = resolve(root, manifestRel);
   try {
     if ((await lstat(manifestAbsolute)).isSymbolicLink()) throw new Error("manifest symlink is not allowed");
     if ((await stat(manifestAbsolute)).size > MAX_MANIFEST_BYTES) throw new Error("manifest exceeds bounded size");
-  } catch (error) { add(checks, "MANIFEST_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files }; }
+  } catch (error) { add(checks, "MANIFEST_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files }; }
   let parsed: unknown;
   try { parsed = JSON.parse(await readFile(manifestAbsolute, "utf8")); }
-  catch (error) { add(checks, "MANIFEST_INVALID_JSON", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files }; }
+  catch (error) { add(checks, "MANIFEST_INVALID_JSON", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files }; }
   const manifest = parseManifest(parsed, checks);
-  if (!manifest) return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files };
+  if (!manifest) return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files };
 
   // Older packages may not record a player profile. When the manifest does,
   // require it to match the exact profile embedded for the runtime VM.
@@ -378,5 +377,5 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   if (staticChecks.some((check) => check.result === "fail")) add(checks, "OFFLINE_STATIC_AUDIT", "fail", "One or more disallowed static URL, data payload, or bundle entrypoints were found");
   else if (staticChecks.some((check) => check.result === "not-verified")) add(checks, "OFFLINE_STATIC_AUDIT", "not-verified", "One or more static runtime files could not be fully audited");
   else add(checks, "OFFLINE_STATIC_AUDIT", "pass", "No disallowed static URL, data payload, or bundle entrypoint was found");
-  return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) };
+  return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) };
 }

@@ -94,6 +94,8 @@ node apps/cli/dist/index.js validate "/path/to/output/my-disc-menu" --offline
 | --- | --- | --- |
 | `inspect` | 解析并输出光盘结构和诊断 | `--out FILE`、`--allow-partial`、`--strict` |
 | `extract` | 导出结构数据和菜单图形 | `--out DIR`（必填）、`--strict` |
+| `list-assets` | 列举可达标题的 IGS 图片与 PGS SUP 字幕声明 | `--type all\|igs\|pgs` |
+| `export-assets` | 导出 IGS PNG 图片和解析验证后的 SUP 字幕，并写入资源类型、导出路径和大小清单 | `--out DIR`（必填）、`--type all\|igs\|pgs` |
 | `convert` | 生成菜单包 | `--out DIR`、`--title`、`--mode menu-only`、`--player-profile FILE`、`--strict` |
 | `validate` | 校验菜单包 | `--offline`（必填）、`--format json`、`--strict` |
 

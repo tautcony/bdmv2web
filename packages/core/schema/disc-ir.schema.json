@@ -15,7 +15,6 @@
     "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/Diagnostic" } }
   },
   "$defs": {
-    "Sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "Time90k": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
     "SourceRef": {
       "type": "object", "additionalProperties": false,
@@ -40,7 +39,7 @@
     "Program": { "type": "object", "additionalProperties": false, "required": ["id", "title"], "properties": { "id": { "type": "string", "minLength": 1 }, "title": { "type": "string" } } },
     "Menu": { "type": "object", "additionalProperties": false, "required": ["id"], "properties": { "id": { "type": "string", "minLength": 1 } } },
     "Playlist": { "type": "object", "additionalProperties": false, "required": ["id", "programIds", "menuIds"], "properties": { "id": { "type": "string", "minLength": 1 }, "programIds": { "type": "array", "items": { "type": "string" } }, "menuIds": { "type": "array", "items": { "type": "string" } }, "duration90k": { "$ref": "#/$defs/Time90k" } } },
-    "AssetReference": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "relativePath", "mime", "byteLength", "sha256", "sources"], "properties": { "id": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "minLength": 1 }, "relativePath": { "type": "string", "minLength": 1 }, "mime": { "type": "string", "minLength": 1 }, "byteLength": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }, "sha256": { "$ref": "#/$defs/Sha256" }, "sources": { "type": "array", "items": { "$ref": "#/$defs/SourceRef" } } } },
+    "AssetReference": { "type": "object", "additionalProperties": false, "required": ["id", "kind", "relativePath", "mime", "byteLength", "sources"], "properties": { "id": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "minLength": 1 }, "relativePath": { "type": "string", "minLength": 1 }, "mime": { "type": "string", "minLength": 1 }, "byteLength": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }, "sources": { "type": "array", "items": { "$ref": "#/$defs/SourceRef" } } } },
     "Diagnostic": { "type": "object", "additionalProperties": false, "required": ["severity", "code", "message", "sourcePath", "offset", "entityId", "action", "recoverable", "stage", "affectedEntryIds"], "properties": { "severity": { "enum": ["debug", "info", "warning", "error", "fatal"] }, "code": { "type": "string", "minLength": 1 }, "message": { "type": "string" }, "sourcePath": { "type": ["string", "null"] }, "offset": { "type": ["string", "null"], "pattern": "^(0|[1-9][0-9]*)$" }, "entityId": { "type": ["string", "null"] }, "action": { "type": ["string", "null"] }, "recoverable": { "type": "boolean" }, "stage": { "type": "string" }, "affectedEntryIds": { "type": "array", "items": { "type": "string" } } } }
   }
 }

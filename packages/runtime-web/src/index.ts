@@ -1,7 +1,7 @@
 import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult, type HdmvVm, type NavigationAction, type RawCommand, type VmEvent, type VmSnapshot } from "@bdmv2web/hdmv";
 import type { SourceLocation } from "@bdmv2web/bdmv-parser";
-export { adaptIgsScene } from "./igs-adapter.js";
-export type { IgsAdapterDiagnostic, IgsSceneAdapterResult, SerializedMenuButton, SerializedMenuPage, SerializedMenuState, SerializedScene } from "./igs-adapter.js";
+export { adaptIgsScene, selectPopupScene } from "./igs-adapter.js";
+export type { IgsAdapterDiagnostic, IgsSceneAdapterResult, PopupSceneSelection, SerializedMenuButton, SerializedMenuPage, SerializedMenuState, SerializedScene } from "./igs-adapter.js";
 export { LinearPlaybackBridge } from "./linear-playback.js";
 export type { LinearPlaybackAsset, LinearPlaybackHooks, LinearPlaybackMedia, LinearTimelineMapPort, LinearTimelinePosition } from "./linear-playback.js";
 export interface Bounds { x: number; y: number; width: number; height: number }
@@ -508,6 +508,9 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
     this.currentGeneration = Math.max(this.currentGeneration, action.generation);
     if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "LINK_PLAY_ITEM", "LINK_PLAY_MARK", "TITLE_SEARCH"].includes(action.type)) {
       this.report(`Playback unavailable in menu-only preview (${action.type}).`);
+      this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
+    } else if (action.type === "MENU_CALL") {
+      this.report("Popup composition is unavailable because this package does not have an in-browser title overlay context.");
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
     }
   }

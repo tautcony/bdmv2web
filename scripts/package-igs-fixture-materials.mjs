@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -33,7 +32,7 @@ for (const item of plan) {
   caseIds.add(item.id);
   const clipIds = new Set();
   for (const clip of item.clips) {
-    if (!clip || !/^\d{5}$/.test(clip.id) || clipIds.has(clip.id) || !/^([a-f\d]{64})$/i.test(clip.clpiSha256)) usage();
+    if (!clip || !/^\d{5}$/.test(clip.id) || clipIds.has(clip.id)) usage();
     clipIds.add(clip.id);
   }
 }
@@ -52,9 +51,6 @@ try {
       const clpiInfo = await lstat(clpiSource);
       if (!clpiInfo.isFile() || clpiInfo.isSymbolicLink()) throw new Error(`Expected regular file: ${item.id}/${clpiRelative}`);
       const clpiBytes = await readFile(clpiSource);
-      const clpiSha256 = createHash("sha256").update(clpiBytes).digest("hex");
-      if (clpiSha256 !== clip.clpiSha256.toLowerCase()) throw new Error(`CLPI changed for ${item.id} clip ${clip.id}: ${clpiSha256}`);
-
       const sourceRelative = `STREAM/${clip.id}.m2ts`;
       const m2tsSource = join(bdmvRoot, sourceRelative);
       const m2tsInfo = await lstat(m2tsSource);

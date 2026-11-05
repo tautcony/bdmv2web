@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -9,6 +8,7 @@ import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1Pla
 import { encodeTimestampForFixture } from "@bdmv2web/igs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const generatedDisc = resolve(root, "../../test-data/fixtures/bdmvkit-generated/BDMV");
 
 /**
  * A failed conversion must expose the same report fields as a successful one, so a
@@ -43,6 +43,46 @@ describe("menu-only convert CLI", () => {
     const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", "--format", "json"]);
     expect(result.status).toBe(1); expect(JSON.parse(result.stderr.toString()).code).toBe("CLI_MISSING_INPUT"); expect(result.stdout.toString()).toBe("");
   });
+});
+
+describe("IGS and PGS asset CLI", () => {
+  it("lists extracted IGS images and reachable PGS stream declarations", () => {
+    const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "list-assets", generatedDisc]);
+    expect(result.status).toBe(0);
+    const assets = JSON.parse(result.stdout.toString()).assets as Array<Record<string, unknown> & { type: string; path?: string; language?: string }>;
+    expect(assets.filter((asset) => asset.type === "igs").length).toBeGreaterThanOrEqual(4);
+    expect(assets.filter((asset) => asset.type === "pgs").map((asset) => asset.language)).toEqual(expect.arrayContaining(["eng", "fra"]));
+    expect(assets.filter((asset) => asset.type === "igs").every((asset) => asset.path?.startsWith("assets/graphics/"))).toBe(true);
+    expect(result.stdout.toString()).not.toMatch(/clipId|source|pid|objectId|\/BDMV/i);
+  });
+
+  it("filters listing to IGS or PGS and rejects unknown resource types", () => {
+    const run = (type: string) => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "list-assets", generatedDisc, "--type", type]);
+    expect(JSON.parse(run("igs").stdout.toString()).assets.every((asset: { type: string }) => asset.type === "igs")).toBe(true);
+    expect(JSON.parse(run("pgs").stdout.toString()).assets.every((asset: { type: string }) => asset.type === "pgs")).toBe(true);
+    const invalid = run("menu");
+    expect(invalid.status).toBe(1);
+    expect(invalid.stderr.toString()).toContain("CLI_INVALID_ASSET_TYPE");
+  });
+
+  it("exports IGS PNGs and validated SUP tracks without source details", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv asset export "));
+    const output = join(parent, "assets");
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "export-assets", generatedDisc, "--out", output]);
+      expect(result.status, result.stderr.toString()).toBe(0);
+      const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8")) as { assets: Array<Record<string, unknown> & { type: string; path: string; byteLength: number }> };
+      expect(manifest.assets.filter((asset) => asset.type === "igs").length).toBeGreaterThanOrEqual(4);
+      expect(manifest.assets.filter((asset) => asset.type === "pgs").map((asset) => asset.path)).toEqual(expect.arrayContaining([expect.stringMatching(/\.sup$/)]));
+      for (const asset of manifest.assets) {
+        const bytes = await readFile(join(output, asset.path));
+        expect(bytes.byteLength).toBe(asset.byteLength);
+      }
+      const manifestText = await readFile(join(output, "assets-manifest.json"), "utf8");
+      expect(manifestText).not.toMatch(/clipId|source|pid|objectId|\/BDMV/i);
+      expect(manifest.assets.every((asset) => !/\b\d{5}-[0-9a-f]{4}\b/i.test(asset.path) && !asset.path.includes("0x"))).toBe(true);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  }, 120_000);
 });
 
 describe("M4 menu-only convert output", () => {
@@ -336,7 +376,7 @@ describe("M1 structural CLI", () => {
   });
   it("extracts only structural artifacts through the output transaction and preserves source bytes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv extract ")); const root = await makeDisc(parent); const target = join(parent, "out");
-    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", root, "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).stageStatus).toBe("complete"); const disc = JSON.parse(await readFile(join(target, "parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); expect(disc).not.toHaveProperty("sourceFingerprint"); const commands = JSON.parse(await readFile(join(target, "raw-commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.stageStatus).toBe("complete"); expect(manifest).not.toHaveProperty("sourceFingerprint"); expect(manifest.files.find((file: { path: string }) => file.path === "raw-commands.json")).toMatchObject({ kind: "raw-command-table", sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }); expect(manifest.files.find((file: { path: string }) => file.path === "external-media-targets.json")).toMatchObject({ kind: "external-media-targets" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
+    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", root, "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).stageStatus).toBe("complete"); const disc = JSON.parse(await readFile(join(target, "parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); const commands = JSON.parse(await readFile(join(target, "raw-commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.stageStatus).toBe("complete"); expect(manifest.files.find((file: { path: string }) => file.path === "raw-commands.json")).toMatchObject({ kind: "raw-command-table" }); expect(manifest.files.find((file: { path: string }) => file.path === "external-media-targets.json")).toMatchObject({ kind: "external-media-targets" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("does not overwrite an existing inspect output target", async () => {
@@ -392,8 +432,6 @@ describe("IGS extract CLI", () => {
       expect(manifest.limitations).toContain("IGS animation and visual effects are not fully verified");
       expect(manifest.files.map((file: any) => file.path)).toEqual(expect.arrayContaining(["scenes.json", "igs-diagnostics.json", "source-map.json", mappings.assets[0].path]));
       for (const file of manifest.files) {
-        expect(file.sha256).toMatch(/^[a-f0-9]{64}$/);
-        expect(file).not.toHaveProperty("sourceFingerprint");
       }
       expect((await readFile(join(target, mappings.assets[0].path))).subarray(0, 4)).toEqual(Buffer.from([137, 80, 78, 71]));
       await expectSourceSnapshot(rootPath, before);
@@ -552,12 +590,10 @@ describe("offline validate CLI", () => {
       await mkdir(dirname(target), { recursive: true });
       const bytes = Buffer.from(content);
       await writeFile(target, bytes);
-      files.push({ path, kind: path.endsWith(".html") ? "html" : path.endsWith(".js") ? "runtime" : "asset", byteLength: String(bytes.length), sha256: createHash("sha256").update(bytes).digest("hex") });
+      files.push({ path, kind: path.endsWith(".html") ? "html" : path.endsWith(".js") ? "runtime" : "asset", byteLength: String(bytes.length) });
     }
     files.sort((a, b) => a.path.localeCompare(b.path, "en"));
-    const fingerprint = createHash("sha256");
-    for (const file of files) fingerprint.update(file.path, "utf8").update("\0").update(file.sha256, "ascii").update("\n");
-    await writeFile(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", mode: "standalone-full", status: "complete", files, payloadFingerprint: fingerprint.digest("hex") }));
+    await writeFile(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", mode: "standalone-full", status: "complete", files }));
   }
 
   it("validates a generated package offline without a BDMV or FFmpeg input", async () => {
@@ -569,9 +605,8 @@ describe("offline validate CLI", () => {
       expect(result.status).toBe(0);
       expect(result.stderr.toString()).toBe("");
       const audit = JSON.parse(result.stdout.toString());
-      expect(audit.checks.some((check: any) => /HASH|FINGERPRINT|SIZE/.test(check.checkId))).toBe(false);
       expect(JSON.parse(await readFile(join(directory, "manifest.json"), "utf8")).status).toBe("complete");
-      expect(audit.dependencyAudit).toMatchObject({ schemaVersion: "1.0", status: "pass", payloadFingerprint: null });
+      expect(audit.dependencyAudit).toMatchObject({ schemaVersion: "1.0", status: "pass" });
       expect(audit.dependencyAudit.checks.some((check: any) => check.checkId === "OFFLINE_STATIC_AUDIT" && check.result === "pass")).toBe(true);
       // Only not-verified evidence was missing, so the delivery is complete (D-2R).
       expect(audit.decision).toMatchObject({ status: "complete", strict: false, exitCode: 0 });
@@ -580,7 +615,7 @@ describe("offline validate CLI", () => {
       const report = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(report).toEqual(audit.dependencyAudit);
       const compatibility = JSON.parse(await readFile(join(directory, "compatibility.json"), "utf8"));
-      expect(compatibility).toMatchObject({ status: "complete", mode: "standalone-full", profile: "portable", payloadFingerprint: audit.payloadFingerprint, notVerified: expect.arrayContaining(["direct file:// launch", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]) });
+      expect(compatibility).toMatchObject({ status: "complete", mode: "standalone-full", profile: "portable", notVerified: expect.arrayContaining(["direct file:// launch", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]) });
       const release = JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8"));
       expect(release.release).toEqual(audit.releaseSummary.release);
       const second = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
@@ -593,21 +628,6 @@ describe("offline validate CLI", () => {
       const noStrict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--no-strict", "--format", "json"]);
       expect(noStrict.status).toBe(0);
       expect(JSON.parse(noStrict.stdout.toString()).decision.status).toBe("complete");
-    } finally { await rm(directory, { recursive: true, force: true }); }
-  });
-
-  it("ignores malformed package fingerprints", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "bdmv validate invalid "));
-    try {
-      await makePackage(directory, { "index.html": "<main>ready</main>" });
-      const manifest = JSON.parse(await readFile(join(directory, "manifest.json"), "utf8"));
-      manifest.payloadFingerprint = "broken";
-      await writeFile(join(directory, "manifest.json"), JSON.stringify(manifest));
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
-      expect(result.status).toBe(0);
-      const audit = JSON.parse(result.stdout.toString());
-      expect(audit.checks.some((check: any) => /HASH|FINGERPRINT|SIZE/.test(check.checkId))).toBe(false);
-      expect(audit.decision).toMatchObject({ status: "complete", exitCode: 0 });
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

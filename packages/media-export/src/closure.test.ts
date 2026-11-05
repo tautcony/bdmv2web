@@ -183,7 +183,6 @@ describe("media plan adaptation", () => {
     expect(first.playItems[0]).toMatchObject({ sourceIn45k: 45_000, sourceOut45k: 90_000, sourceIn90k: "90000", sourceOut90k: "180000", duration90k: "90000", streamFile: { present: true }, strategy: { grouping: "per-play-item", container: "mp4", video: "h264", audio: "aac", status: "planned" } });
     expect(first.playItems[0]?.tracks.map((track) => [track.role, track.pid])).toEqual([["video", 0x1011], ["audio", 0x1100]]);
     expect(plan.budget).toMatchObject({ status: "estimated", estimatedDuration90k: "270000", estimatedTotalBytes: "412500", deduplicationApplied: false });
-    expect(JSON.stringify(plan)).not.toMatch(/source(?:Media)?(?:Hash|Fingerprint)/i);
   });
 
   it("reports angle and SubPath limitations before transcoding and withholds a complete budget", () => {

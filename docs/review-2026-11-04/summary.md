@@ -48,7 +48,6 @@ INDX AppInfo / UHD 3.1 扩展解析抛错后，`parseIndex` 整体失败；BACKU
 - **默认分支 / 交互协议闭合**：CLI 命令分发、选项白名单、`--flag=` 空值、index object type、扩展 entry 未知 type、MPLS playbackType 非 2/3。→ 新增 `P2-P2-2`（未知选项静默）、`P2-INFO-2`（失败对象字段名）。
 - **异步失败 / 超时 / 取消 / 幂等**：`staging → report → commit`、`commit` 失败清理、`abort` 可达性、`validate` 写前校验、toast 定时器。→ 新增 `P2-P2-1`。
 - **状态写入顺序 / 半提交 / 重建窗口**：`report.json` 写在 commit 前（正确）、失败包不含 manifest（不会被误认为完成）。→ 当时判"未新增"，2026-11-05 复扫补出 `P2-P2-7`：不会被当成完成，但下游会把形态读成 `standalone-full`。
-- **渲染 / 导出 / 编码 / 时间 / 摘要**：菜单页全屏布局、canvas letterbox 与 video letterbox 的一致性、`disc-title`、`serializeSafeScriptData`、`payloadFingerprint` 覆盖面。→ 新增 `P3-P2-2`、`P3-INFO-1`、`P3-INFO-3`。
 - **高杠杆工具函数**：`lookupOption`（值以 `--` 开头）、`profileWord`（长度/ASCII）、`classifyDiagnostics`（severity 大小写）。→ 新增 `P2-P2-4`；`classifyDiagnostics` 对大小写做了 `toLowerCase()`，无问题。
 
 本轮复盘新增发现：**4 条**——复盘阶段 2 条（`P3-P2-2`、`P3-INFO-3`），2026-11-05 用户独立复扫 2 条（`P2-P2-6`、`P2-P2-7`）。

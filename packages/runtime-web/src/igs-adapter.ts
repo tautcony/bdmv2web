@@ -34,6 +34,12 @@ export interface SerializedMenuPage {
 
 /** JSON-safe shape accepted by the M4 browser bootloader. */
 export interface SerializedScene {
+  id?: string;
+  clipId?: string;
+  pid?: number;
+  streamModel?: number;
+  uiModel?: number;
+  source?: IgsSource;
   width: number;
   height: number;
   compositionTimeout90k: string | null;
@@ -57,6 +63,11 @@ export interface IgsSceneAdapterResult {
   status: "complete" | "partial";
   diagnostics: IgsAdapterDiagnostic[];
 }
+
+export type PopupSceneSelection =
+  | { status: "not-found" }
+  | { status: "ambiguous"; scenes: SerializedScene[] }
+  | { status: "selected"; scene: SerializedScene };
 
 const NO_OBJECT = 0xffff;
 
@@ -165,6 +176,12 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
 
   return {
     scene: {
+      id: scene.id,
+      clipId: scene.clipId,
+      pid: scene.pid,
+      streamModel: scene.streamModel,
+      uiModel: scene.uiModel,
+      source: scene.source,
       width: scene.width,
       height: scene.height,
       compositionTimeout90k: scene.compositionTimeout90k,
@@ -174,6 +191,24 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
     status: scene.complete && diagnostics.length === 0 ? "complete" : "partial",
     diagnostics,
   };
+}
+
+/** Resolve the active title popup by its source clip/PID and composition PTS. */
+export function selectPopupScene(scenes: readonly SerializedScene[], clipId: string, pid: number, time90k?: number, timeDomain?: number): PopupSceneSelection {
+  const candidates = scenes.filter((scene) => scene.uiModel === 1 && scene.clipId?.toLocaleLowerCase("en-US") === clipId.toLocaleLowerCase("en-US") && scene.pid === pid);
+  if (!candidates.length) return { status: "not-found" };
+  if (time90k !== undefined) {
+    if (!Number.isSafeInteger(time90k) || time90k < 0) throw new RangeError("Popup selection time must be a non-negative 90 kHz timestamp.");
+    const active = candidates.filter((scene) => {
+      const pts = scene.source?.pts90k;
+      return pts !== null && pts !== undefined && (timeDomain === undefined || scene.source?.timeDomain === timeDomain) && BigInt(pts) <= BigInt(time90k);
+    });
+    if (!active.length) return { status: "not-found" };
+    const latestPts = active.reduce((latest, scene) => BigInt(scene.source!.pts90k!), 0n);
+    const latest = active.filter((scene) => BigInt(scene.source!.pts90k!) === latestPts);
+    return latest.length === 1 ? { status: "selected", scene: latest[0]! } : { status: "ambiguous", scenes: latest };
+  }
+  return candidates.length === 1 ? { status: "selected", scene: candidates[0]! } : { status: "ambiguous", scenes: [...candidates] };
 }
 
 function resolveAsset(scene: IgsScene, paletteId: number, objectId: number, assets: readonly IgsAsset[]): IgsAsset | undefined {

@@ -54,7 +54,6 @@ export function validateCompareInput(input: unknown): input is CompareInputSeque
   if (typeof input !== "object" || input === null || Array.isArray(input)) return false;
   const value = input as Record<string, unknown>;
   if (typeof value.fixtureId !== "string" || value.fixtureId.length === 0 || typeof value.sourceLabel !== "string" || value.sourceLabel.length === 0) return false;
-  if ("sourceHash" in value || "sourceFingerprint" in value || "inputHash" in value || "inputFingerprint" in value) return false;
   if (typeof value.playerProfile !== "object" || value.playerProfile === null || Array.isArray(value.playerProfile)) return false;
   const profile = value.playerProfile as Record<string, unknown>;
   for (const key of ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "region", "outputProfile"]) if (typeof profile[key] !== "string") return false;

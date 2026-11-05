@@ -14,7 +14,7 @@
 1. 先按 [实施依赖](../../openspec/changes/DEPENDENCIES.md) 进入对应阶段，再打开该阶段索引；每行列出对应的 `tasks.md` 编号，并可直达 change 的 `tasks.md` / `design.md`。
 2. 格式/指令状态需记录固定实现来源/位置、许可、fixture、golden provenance 和验证范围。参考实现不等同规范；示例盘不构成覆盖证明。
 3. 固定环境时记录实际 Node、pnpm、FFmpeg、ffprobe、浏览器完整版本；本索引中未锁定为项目依赖的工具不能凭文档版本推定验收已通过。
-4. 参考素材只登记来源、hash 和许可，不把商业盘内容复制进仓库。参考工具不进入离线发布包。
+4. 参考素材只登记上游仓库地址和固定版本，不把商业盘内容复制进仓库。参考工具不进入离线发布包。
 
 ## 阶段入口
 
@@ -36,14 +36,13 @@
 
 ## 可复现获取
 
-ITU 当前有效的 H.222.0 v10 (04/2025) [官方记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I) 显示 PDF 条目，但本轮匿名 `curl` 获得的是要求 TIES 登录的 HTML 页面，没有取得规范 PDF。可登录 TIES 后通过该记录的 PDF 链接获取，保存本地实际 SHA-256 和访问日期。匿名可复现的历史版获取命令如下；本轮下载得 PDF 3,127,517 bytes，SHA-256 `6167a8b567ba3094854a7d3e4d8d64657bee19bb6622f3283e956623971e108a`：
+ITU 当前有效的 H.222.0 v10 (04/2025) [官方记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I) 显示 PDF 条目，但本轮匿名 `curl` 获得的是要求 TIES 登录的 HTML 页面，没有取得规范 PDF。可登录 TIES 后通过该记录的 PDF 链接获取。匿名可复现的历史版获取命令如下；本轮下载得 PDF 3,127,517 bytes：
 
 ```sh
 curl --fail --location --retry 3 \
   'https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items' \
   --output H.222.0-2014.pdf
 file H.222.0-2014.pdf
-shasum -a 256 H.222.0-2014.pdf
 ```
 
 官方入口：[ITU v10 记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I)；[2014 历史版记录](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items)。本轮目录确认 2014 文本 TS packet/PES 在 clause 2.4.3.2–2.4.3.7，PSI 在 2.4.4；clause 2.6 是 descriptors。v10 的具体 clause/文本尚未匿名下载核对，不能将旧版定位假装成 v10 的独立确认。libbluray 以 VideoLAN 上游 tag `1.5.0` 锁定源码（tag 对象 `d468a3ac8bf4d9c04739962c44d365debbea54a1`，解引用后的 commit 为 `d75c88e54c893e5cbf4c61d356477655eb435769`）：
@@ -59,17 +58,17 @@ SAPikachu/igstools 固定为已核验的 `34a133150ca8b52237284da4d47d93911bcd49
 
 ## 本地参考源码摘录
 
-为便于按固定 revision 对照，本地 `.reference-cache/` 只存少量开源文件和对应许可证文本，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将它排除在版本控制外。所选文件、原始 URL、revision、byteLength 和 SHA-256 在 [cache-manifest.json](cache-manifest.json) 中。下载缓存（不校验 SHA-256）：
+为便于按固定 revision 对照，本地 `.reference-cache/repositories/` 保存上游仓库的完整 checkout，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将缓存排除在版本控制外。来源清单只记录仓库地址、固定 revision 和许可证信息，见 [cache-manifest.json](cache-manifest.json)。下载并检出固定版本：
 
 ```sh
 python3 scripts/fetch-reference-cache.py
 ```
 
-缓存来源分别为 `.reference-cache/libbluray-1.5.0/`、`.reference-cache/igstools-2019/` 和 `.reference-cache/libhdmv-2026-03/`。该缓存是第三方代码副本，继续分发前必须逐项审查许可；source urls 指向原仓库固定 commit。H.222.0 的本地 PDF 不保留，匿名下载和核验摘要只作为获取记录。
+缓存来源包括 libbluray、igstools、libhdmv 和 bdmvkit 四个上游仓库。bdmvkit 固定在 commit `57890760c60b3c31dacc9db1112467d4510925aa`，源码与 `COPYING` / `COPYING.LESSER` 以 LGPL-3.0-or-later 授权，仅作为生成互操作测试盘的参考工具，不进入产品运行时。继续分发缓存前必须逐项审查许可证。H.222.0 的本地 PDF 不保留。
 
 ## 当前证据边界
 
 - 当前没有受限 BDA Blu-ray 规范书。该访问限制本身不阻止按固定实现开发。libbluray/libhdmv/igstools 是实现参考；公开白皮书只作补充背景。
 - 未解密/解析商业碟、未建立项目独立 golden、未验证像素/导航语义或 V1 Chrome 场景；任何源中的“支持”声明仅属该源自身范围。
 - V1 的 `file://` 与媒体播放策略使用 Google Chrome 实测，验收不限定操作系统，也不要求跨浏览器矩阵。WHATWG/MDN 文档不能代替运行证据。
-- FFmpeg 文档是滚动文档。M5 应选定可再分发构建并记录 binary hash、`ffmpeg -version`、`ffprobe -version` 和 configure flags；按任务要求在转换输入数组中调用，不能用此索引暗中锁定转码工具版本。
+- FFmpeg 文档是滚动文档。M5 应选定可再分发构建并记录 `ffmpeg -version`、`ffprobe -version` 和 configure flags；按任务要求在转换输入数组中调用，不能用此索引暗中锁定转码工具版本。

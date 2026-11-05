@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
 import { m3Fixtures } from "@bdmv2web/hdmv";
+import { parsePgsSup } from "@bdmv2web/media-export";
 
 const ir = {
   schemaVersion: "1.0" as const,
@@ -41,6 +42,31 @@ describe("menu package primitives", () => {
     } as unknown as Parameters<typeof packagedMediaMetadata>[0];
     const packaged = packagedMediaMetadata(media) as { audioTracks: Array<{ streamNumber: number; psrStreamNumber: number; path: string; pid: number }> };
     expect(packaged.audioTracks.map(({ streamNumber, psrStreamNumber, pid }) => [streamNumber, psrStreamNumber, pid])).toEqual([[0, 1, 0x1100], [1, 2, 0x1101]]);
+  });
+  it("packages validated PGS display sets, palette, pixels, source mapping and file integrity", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv-pgs-package-")); const outputDirectory = resolve(parent, "package");
+    try {
+      const fixture = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated/pgs/english.sup");
+      const displaySets = parsePgsSup(new Uint8Array(await readFile(fixture)));
+      const pgsTracks = [{ playlistId: "00001", playlistNumber: 1, playItemIndex: 0, clipId: "00001", pid: 0x1200, streamNumber: 1, language: "eng", sourceIn90k: "0", sourceOut90k: "90000", source: "BDMV/STREAM/00001.m2ts", path: "assets/subtitles/00001-1200.sup", displaySets }];
+      await mkdir(resolve(outputDirectory, "assets/subtitles"), { recursive: true });
+      await writeFile(resolve(outputDirectory, "assets/subtitles/00001-1200.sup"), await readFile(fixture));
+      await buildMenuPackage({
+        outputDirectory, title: "PGS package", ir, scene, graphics: [],
+        pgsTracks,
+      });
+      await expect(buildMenuPackage({ outputDirectory: resolve(parent, "bounded"), title: "PGS package", ir, scene, graphics: [], pgsTracks, pgsLimits: { maxRuntimeBytes: 32 } })).rejects.toThrow(/maxPgsRuntimeBytes/);
+      const embedded: { __BDMV_MENU_DATA__?: { pgsTracks?: Array<{ pid: number; streamNumber: number; displaySets: Array<{ palette: unknown[]; bitmaps: Array<{ pixels: string }> }> }> } } = {};
+      runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
+      const track = embedded.__BDMV_MENU_DATA__!.pgsTracks![0]!;
+      expect(track.pid).toBe(0x1200); expect(track.streamNumber).toBe(1); expect(Array.isArray(track.displaySets)).toBe(true);
+      const shown = track.displaySets.find((set) => set.bitmaps.length)!;
+      expect(shown.palette.length).toBeGreaterThan(0);
+      expect(typeof shown.bitmaps[0]!.pixels).toBe("string");
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; byteLength: string }>; assets: { pgsTracks: Array<{ pid: number; displaySetCount: number }> } };
+      expect(manifest.files.find((file) => file.path === "assets/subtitles/00001-1200.sup")?.byteLength).toBe(String((await stat(resolve(outputDirectory, "assets/subtitles/00001-1200.sup"))).size));
+      expect(manifest.assets.pgsTracks[0]).toMatchObject({ pid: 0x1200, displaySetCount: displaySets.length });
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("escapes script termination sequences as data and escapes HTML titles", () => {
     const maliciousTitle = "</script><script>globalThis.pwned=1</script>&\u2028\u2029";
@@ -152,7 +178,8 @@ describe("menu package primitives", () => {
         { bytes: m3Fixtures.move5.bytes, sourceOffset: "128", source: commandSource },
         { bytes: m3Fixtures.playPlaylist42.bytes, sourceOffset: "140", source: { ...commandSource, offset: "140" } },
       ];
-      await buildMenuPackage({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmEntries: [{ id: "title:0", kind: "title", source: commandSource, target: { objectType: "HDMV", playbackType: 0, target: 0, source: commandSource } }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
+      const popupScene = { ...fixtureScene, id: "popup-title-1", clipId: "00001", pid: 0x1400, streamModel: 0, uiModel: 1, source: { clipId: "00001", pid: 0x1400, packetOffset: "192", pesOffset: "208", segmentOffset: "4", segmentFileOffset: "400", pts90k: "9000", timeDomain: 0 } };
+      await buildMenuPackage({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, popupScenes: [popupScene], vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmEntries: [{ id: "title:0", kind: "title", source: commandSource, target: { objectType: "HDMV", playbackType: 0, target: 0, source: commandSource } }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
       const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");
       expect(html.indexOf('<video id="menu-background"')).toBeLessThan(html.indexOf('<canvas id="menu-canvas"'));
       const style = await readFile(resolve(outputDirectory, "runtime/style.css"), "utf8");
@@ -174,21 +201,19 @@ describe("menu package primitives", () => {
       expect(app).toContain("Images decoded"); expect(app).toContain("Unsupported DiscIR schema version"); expect(app).toContain("MEDIA_UNAVAILABLE");
       const data = await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"); expect(data).not.toContain("</script>");
       expect(data).toContain('"inputConfig":{"escapeMapping":"popup"}');
+      expect(data).toContain('"popupScenes":[{"width":1920,"height":1080');
+      expect(data).toContain('"clipId":"00001","pid":5120');
+      expect(data).toContain('"uiModel":1');
       expect(data).toContain('"vmEntries":[{"id":"title:0"');
       const report = JSON.parse(await readFile(resolve(outputDirectory, "compatibility.json"), "utf8"));
       expect(report.status).toBe("partial"); expect(report.coverage.igs).toBe("unverified");
       expect(await readFile(resolve(outputDirectory, "README.md"), "utf8")).toContain("bdmv2web validate <package-directory> --offline");
-      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string; byteLength: string; sha256: string }>; payloadFingerprint: string };
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string; byteLength: string }> };
       expect(manifest.files.map((file) => file.path)).toEqual(["index.html", "README.md", "runtime/app.bundle.js", "runtime/assets-data-000.js", "runtime/disc-data.js", "runtime/style.css"]);
-      const rows: Array<{ path: string; sha256: string }> = [];
       for (const file of manifest.files) {
-        const bytes = await readFile(resolve(outputDirectory, file.path)); const digest = createHash("sha256").update(bytes).digest("hex");
-        expect(file.byteLength).toBe(String(bytes.byteLength)); expect(file.sha256).toBe(digest);
-        if (!new Set(["readme", "compatibility", "report", "evidence", "parsed-disc", "raw-command-table", "dependency-audit", "asset-manifest"]).has(file.kind)) rows.push({ path: file.path, sha256: digest });
+        const bytes = await readFile(resolve(outputDirectory, file.path));
+        expect(file.byteLength).toBe(String(bytes.byteLength));
       }
-      const fingerprint = createHash("sha256");
-      for (const row of rows.sort((a, b) => a.path.localeCompare(b.path, "en"))) fingerprint.update(row.path, "utf8").update("\0").update(row.sha256, "ascii").update("\n");
-      expect(manifest.payloadFingerprint).toBe(fingerprint.digest("hex")); expect(report.payloadFingerprint).toBe(manifest.payloadFingerprint);
       expect(data).toContain(m3Fixtures.move5.bytes); expect(data).toContain(m3Fixtures.playPlaylist42.bytes); expect(data).toContain('"id":0'); expect(data).toContain('"vmInitialProgramId":0');
       expect(html).toContain('style="aspect-ratio:1920 / 1080"');
       // The exported page keeps no chrome of its own: the title is the document

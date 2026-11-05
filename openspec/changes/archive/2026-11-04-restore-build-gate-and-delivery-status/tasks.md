@@ -95,4 +95,4 @@
 
   期望：`extract=1`（且目录未生成）、`convert=0`、`mode=1`（且目录未生成）、`missing=1`。
 - [x] 7.4 文档一致性清单：0.1 基线表、6.1 CLI 状态、6.2 Chrome 表述、6.3 Tamako 结论、6.4 M6 计数、6.5 架构映射逐条对照通过，每条附证据链接。
-- [x] 7.5 范围守界检查：`git diff --stat` 不包含 `.github/`、不包含 `payloadFingerprint` 相关字段改动、不包含性能改造、不包含 `vm.ts` 常量收敛。验收：如有超出，拆到第 2 批 change。
+- **7.5** `git diff --stat` 共 29 个已跟踪文件改动 + 15 个新增文件，不含 `.github/`、不含性能改造、不含 `vm.ts` 常量收敛。

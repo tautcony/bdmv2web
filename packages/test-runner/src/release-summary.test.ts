@@ -4,15 +4,14 @@ import { summarizeDeliveryCoverage } from "./coverage.js";
 import type { AuditCheck, OfflinePackageAudit } from "./types.js";
 import type { DependencyAuditReport } from "./report.js";
 
-const payloadFingerprint = "a".repeat(64);
 const pass = (checkId: string, evidence?: AuditCheck["evidence"]): AuditCheck => ({ checkId, result: "pass", message: `${checkId} passed.`, ...(evidence ? { evidence } : {}) });
 
 function audit(checks: AuditCheck[] = [pass("PACKAGE_VALID")]): OfflinePackageAudit {
-  return { schemaVersion: "1.0", packageRoot: "/output", manifestPath: "/output/manifest.json", checks, payloadFingerprint, discoveredPayloadFiles: [] };
+  return { schemaVersion: "1.0", packageRoot: "/output", manifestPath: "/output/manifest.json", checks, discoveredPayloadFiles: [] };
 }
 
 function dependencyAudit(checks: AuditCheck[] = [pass("OFFLINE_DEPENDENCIES_VALID")], status: DependencyAuditReport["status"] = "pass"): DependencyAuditReport {
-  return { schemaVersion: "1.0", payloadFingerprint, status, externalReferences: [], checks };
+  return { schemaVersion: "1.0", status, externalReferences: [], checks };
 }
 
 const completeCoverage = summarizeDeliveryCoverage({
@@ -51,7 +50,7 @@ describe("release summary aggregation", () => {
   it("treats menu-only as a recorded mode rather than a gap when every independent fact passes", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })], referenceEvidence: [pass("REFERENCE_COMPARISON")],
+      browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: completeDecisionFacts,
     });
 
@@ -60,7 +59,7 @@ describe("release summary aggregation", () => {
 
     const gapped = createReleaseSummary({
       audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })], referenceEvidence: [pass("REFERENCE_COMPARISON")],
+      browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: { ...completeDecisionFacts, hasUnresolvedReachability: true },
     });
     expect(gapped.release.status).toBe("partial");
@@ -69,7 +68,7 @@ describe("release summary aggregation", () => {
   it("allows complete only from current passing tool facts and ignores persisted component statuses", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
-      coverage: completeCoverage, browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })],
+      coverage: completeCoverage, browserEvidence: [pass("BROWSER_EVIDENCE")],
       referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
     });
 
@@ -78,14 +77,4 @@ describe("release summary aggregation", () => {
     expect(summary.release.gaps).toEqual([]);
   });
 
-  it("does not gate browser evidence on payload fingerprints", () => {
-    const summary = createReleaseSummary({
-      audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint: "b".repeat(64) })],
-      referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
-    });
-
-    expect(summary.release.status).toBe("complete");
-    expect(summary.release.gaps).toEqual([]);
-  });
 });

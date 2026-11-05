@@ -5,7 +5,7 @@
 第 1 批让门禁与退出码回到事实，但 13 项评审里真正影响"产物可信度"的问题都在第 2 批：
 
 - **同一契约有两套数值**：`core` 的 `DEFAULT_LIMITS` 是 `maxCallDepth 128 / maxQueueDepth 1024`，`hdmv` 的私有 `DEFAULTS` 是 `64 / 256`；`DEFAULT_PLAYER_PROFILE` 也有两份。数值型仿真契约一旦分叉，各包测试会各自为政。
-- **证据链名义存在**：`auditOutputPackage()` 恒返回 `payloadFingerprint: null`，`validate` 又用这个 null 覆盖构建值；浏览器证据的 mismatch 列表不比较 payload/媒体，artifact 的 `sha256` 记录后不复验。结果是"有字段、有测试、有 schema"，但字节篡改与换 bundle 都拦不住。
+- **证据链与实际能力不符**：旧报告记录的制品完整性信息并未由审计重新核对，浏览器证据也没有透明记录其适用的配置范围。
 - **静态图与 VM 语义不一致**：`graph.ts` 把 `JUMP_TITLE` / `LINK_*` / `TERMINATE_PL` 当终止流，VM 在 MovieObject 上下文却继续执行；`CALL_TITLE` 不建立 continuation，桥的 `MEDIA_UNAVAILABLE` 被当作可丢弃事件。
 - **源位置在交付层丢失**：`createMenuDiscIR` 写入占位的 `source/structural` + offset 0，`vmPrograms` 改写为 `<MovieObject>`，IGS 结构诊断落到 `BDMV/STREAM/.m2ts`。这直接使"首分歧可定位""诊断可回到源文件"两条验收失效。
 - **运行时生命周期缺口**：无媒体包不执行初始 `runTurn`/First Play；非循环背景没有 `ended`/`error` 监听，VM 永久 suspended；菜单音轨选择不写回 PSR1，按钮程序读到 `0xff`。
@@ -15,7 +15,7 @@
 ## What Changes
 
 - **契约常量收敛（D3）**：`core` 成为 `Limits` 与 `PlayerProfile` 的唯一来源；`hdmv` 的私有默认值改为派生；`VmOptions` 接收 `limits?: Limits`，让 `--limits` 有落地路径；明确 `maxCallDepth` 当前语义并在基线注明。
-- **证据链降级（D9=C）**：不实现字节级完整性校验，改为**删除虚假承诺**——移除 `payloadFingerprint` 字段与其派生逻辑、"字节篡改/换 bundle 会失效"的表述；M6 的 1.1 / 4.3 取消勾选；证据绑定范围写明为 profile / mode / matrix / environment。
+- **证据链降级（D9=C）**：移除文件内容校验和关联字段，清单保留文件路径和长度。浏览器证据直接记录 profile / mode / generated media / matrix / environment 值；M6 对应的完整性任务取消勾选。
 - **图与 VM 语义（D11）**：`JUMP_TITLE` 补后继边；`LINK_*` / `TERMINATE_PL` 按上下文判定；`CALL_TITLE` 建立可关联的等待与回执；被上下文忽略的指令必须留诊断。
 - **源位置保真（D12）**：IR entry、trace 指令、IGS 结构诊断统一使用原始 `SourceRef`（相对 BDMV 根的 path + origin + 文件字节偏移），删除全部占位值。
 - **运行时生命周期（D13）**：初始 VM 与媒体解耦；媒体桥补齐 `ended` / `error` / `abort` 回执；音轨选择写回 PSR1；命中几何与按钮可用性判定统一。
@@ -48,7 +48,7 @@
 
 1. **一致性**：`core` 的默认值被 `hdmv` 派生引用，仓库内不再存在第二份同名默认常量；`SourceRef` 在全链路上无占位值（`grep` 可验证）。
 2. **行为**：`JUMP_TITLE` 后继可达、`CALL_TITLE` 的不可用能解除等待、无媒体包执行初始 VM、非循环背景结束能恢复 VM、PSR1 随选轨更新——每条都有失败前后可对比的测试。
-3. **诚实**：`payloadFingerprint` 从产物、报告、schema 中消失；M6 的 1.1 / 4.3 未勾选；文档不再声称可检测篡改。
+3. **诚实**：产物、报告和 schema 不再声明未经审计的完整性信息；M6 对应任务未勾选；文档不再声称可检测内容篡改。
 
 `distribution-budget` 的基准须在提交中给出机器/版本/样本与前后对比，否则视为未验证。
 

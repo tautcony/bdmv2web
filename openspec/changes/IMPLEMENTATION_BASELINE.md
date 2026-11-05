@@ -24,7 +24,7 @@ M1 只建立容器结构和明确声明的引用，不声称已得到完整控�
 - `SourceRef` 至少含相对 BDMV 根的 `path`、`origin: primary|backup`、文件字节偏移（十进制字符串），以及可用的 entityId/packetOffset/pid/instructionIndex。偏移从文件起点 0 计；实际备份路径不得伪装成主路径。
 - 原始数值 ID 保留，跨 Clip/页面的全局 ID 带父作用域。局部 buttonId 不能成为全碟唯一键；反汇编行号不能替代原始指令索引。
 - `Time90k` 持久化为匹配 `^(0|[1-9][0-9]*)$` 的字符串，计算用 bigint；45k 原值乘 2 归一化，同时保留原值、单位、时间戳 epoch。时间差可有符号，但不是合法绝对 Time90k。
-- `AssetReference` 至少含 id/kind/relativePath/mime/byteLength/sha256/sources。SHA-256 只用于本工具生成并打包的资产；不为外部 BDMV 输入记录哈希或承诺其完整性。路径是解码后的包内相对 POSIX 路径，统一生成 URL，正确处理中文、空格、`#`、`%`。业务以资产 ID 关联，不用盘片文件名直接充当 DOM URL。
+- `AssetReference` 至少含 id/kind/relativePath/mime/byteLength/sources。包内清单记录路径和长度，不计算内容校验和，也不承诺完整性。路径是解码后的包内相对 POSIX 路径，统一生成 URL，正确处理中文、空格、`#`、`%`。业务以资产 ID 关联，不用盘片文件名直接充当 DOM URL。
 - 分阶段校验：ParsedDisc 可带 unresolved 引用；归一化菜单可带 unavailable 动作；运行包必须逐项声明可用性。partial 保留不可用实体，禁止用空 programs/menus 冒充解析成功。
 - Diagnostic 必有 severity/code/message/sourcePath/offset/entityId/action/recoverable，另含 stage/affectedEntryIds；无位置取 null。acknowledged Error 仍保留原严重性和功能影响。
 
@@ -66,11 +66,11 @@ interface EventEnvelope<T> {
 
 ## 4. 状态统一判定
 
-compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/payloadFingerprint/mode/profile/status/diagnostics/coverage/browserEvidence。payloadFingerprint 只绑定本工具生成的交付内容，不记录原始 BDMV 指纹。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
+compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profile/status/diagnostics/coverage/browserEvidence。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |
-| 关键入口/解析损坏、不能启动、离线边界违规、必需包内资产缺失或被篡改 | failed | 非零，不发布新正式包 |
+| 关键入口/解析损坏、不能启动、离线边界违规、必需包内资产缺失 | failed | 非零，不发布新正式包 |
 | 可启动但有 BD-J、可达不支持能力、影片交接或可达性未证明、验证缺失/失败 | partial | 退出 2，可保留审阅包 |
 | 统一产物在声明范围内资源/菜单/影片交接闭环，矩阵及对照证据通过，无阻断诊断 | complete | 退出 0 |
 
@@ -102,6 +102,6 @@ Limits 的工程初值为：maxReadWindowBytes=8 MiB、maxSegmentBytes=16 MiB、
 
 每个格式/指令在 `docs/protocol-support.md` 登记：格式/版本或 opcode、字段/语义、可用规范章节或参考实现仓库与固定 revision/源码位置、fixture ID、预期结果、supported/unsupported/unverified。未验证不进入 supported；原始位和来源不代替正确语义。采用第三方代码时记录许可；参考工具不进入离线包。
 
-fixture 统一在 packages/test-fixtures 登记构建器、字节来源、manifest、golden JSON/像素/trace、生成命令和许可。expected 来自已核验字段或独立参考，不由待测实现重新生成后直接作为基准。完整商业碟片不入库，本地参考素材以受控标识/hash 登记。
+fixture 统一在 packages/test-fixtures 登记构建器、字节来源、manifest、golden JSON/像素/trace、生成命令和许可。expected 来自已核验字段或独立参考，不由待测实现重新生成后直接作为基准。完整商业碟片不入库，本地参考素材按上游仓库和固定版本引用。
 
 M0–M3 可先用合成样本开发；M2/M3 宣称保真和 M6 发布需要独立参考证据。M4 使用模拟媒体桥，M5 接入系统文件打开；没有外部播放回传时不得伪造播放或结束事件。

@@ -4,13 +4,12 @@ import { decideDelivery } from "./decisions.js";
 import type { BrowserEvidenceContext } from "./browser-evidence.js";
 
 const context: BrowserEvidenceContext = {
-  payloadFingerprint: "a".repeat(64),
   mode: "standalone-full",
   profile: { audioLanguage: "eng", outputProfile: "portable", region: "A" },
   generatedFiles: [
-    { path: "media/background.mp4", kind: "media", byteLength: "120", sha256: "b".repeat(64) },
-    { path: "assets/sound.wav", kind: "audio", byteLength: "64", sha256: "c".repeat(64) },
-    { path: "runtime/app.js", kind: "runtime", byteLength: "20", sha256: "d".repeat(64) },
+    { path: "media/background.mp4", kind: "media", byteLength: "120" },
+    { path: "assets/sound.wav", kind: "audio", byteLength: "64" },
+    { path: "runtime/app.js", kind: "runtime", byteLength: "20" },
   ],
   matrix: [{ caseId: "J-file-chrome", expected: { launch: true, offline: true } }],
   environment: { browser: "Google Chrome", browserVersion: "156.0.8078.76" },
@@ -26,15 +25,11 @@ function record(overrides: Partial<BrowserEvidenceContext> = {}) {
 }
 
 describe("browser evidence binding", () => {
-  it("binds package, generated media, profile, mode, matrix and browser environment", () => {
+  it("binds profile, mode, matrix and browser environment", () => {
     const evidence = record();
     expect(evaluateBrowserEvidence(evidence, context)).toMatchObject({ checkId: "BROWSER_EVIDENCE_BINDING", result: "pass" });
-    expect(evidence.binding).toMatchObject({ payloadFingerprint: "a".repeat(64), mode: "standalone-full" });
-    expect(evidence.binding.generatedMediaFingerprint).toMatch(/^[a-f0-9]{64}$/);
-    expect(evidence.binding.profileFingerprint).toMatch(/^[a-f0-9]{64}$/);
-    expect(evidence.binding.matrixFingerprint).toMatch(/^[a-f0-9]{64}$/);
-    expect(evidence.binding.environmentFingerprint).toMatch(/^[a-f0-9]{64}$/);
-    expect(evidence.artifacts[0]).toMatchObject({ path: "reports/evidence/J-file-chrome/screenshot.png", kind: "screenshot", sha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(evidence.binding).toMatchObject({ profile: context.profile, mode: "standalone-full", matrix: context.matrix, environment: context.environment, generatedMedia: [context.generatedFiles[1], context.generatedFiles[0]] });
+    expect(evidence.artifacts[0]).toMatchObject({ path: "reports/evidence/J-file-chrome/screenshot.png", kind: "screenshot", byteLength: "3" });
   });
 
   it.each([
@@ -88,10 +83,10 @@ describe("browser evidence binding", () => {
     expect(checks.find((check) => check.entityId === "A-menu-static")?.message).toContain("No browser evidence");
   });
 
-  it("uses stable profile serialization without requiring package fingerprints", () => {
+  it("uses stable profile serialization", () => {
     const left = createBrowserEvidenceBinding({ ...context, profile: { region: "A", outputProfile: "portable", audioLanguage: "eng" } });
     const right = createBrowserEvidenceBinding({ ...context, profile: { audioLanguage: "eng", region: "A", outputProfile: "portable" } });
-    expect(left.profileFingerprint).toBe(right.profileFingerprint);
-    expect(evaluateBrowserEvidence(record(), { ...context, payloadFingerprint: null }).result).toBe("pass");
+    expect(left.profile).toEqual(right.profile);
+    expect(evaluateBrowserEvidence(record(), context).result).toBe("pass");
   });
 });

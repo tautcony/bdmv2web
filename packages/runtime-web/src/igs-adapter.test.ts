@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IgsAsset, IgsScene, IgsSource } from "@bdmv2web/igs";
-import { adaptIgsScene } from "./index.js";
+import { adaptIgsScene, selectPopupScene } from "./index.js";
 
 const source: IgsSource = { clipId: "00001", pid: 0x18, packetOffset: "192", pesOffset: "208", segmentOffset: "4", segmentFileOffset: "400", pts90k: "9000", timeDomain: 0 };
 
@@ -43,6 +43,7 @@ describe("adaptIgsScene", () => {
     expect(result.status).toBe("complete");
     expect(result.diagnostics).toEqual([]);
     expect(result.scene).toEqual({
+      id: scene.id, clipId: scene.clipId, pid: scene.pid, streamModel: 0, uiModel: 0, source,
       width: 1920, height: 1080, compositionTimeout90k: "90000", selectionTimeout90k: "4500",
       pages: [{
         id: 2, uoMask: "0", defaultButtonId: 11, defaultActivatedButtonId: 12, bogDefaults: [{ bog: 0, defaultButtonId: 11 }],
@@ -60,6 +61,18 @@ describe("adaptIgsScene", () => {
         }],
       }],
     });
+  });
+
+  it("selects the latest popup composition for the active clip, PID, time and domain", () => {
+    const { scene, assets } = fixture();
+    scene.uiModel = 1;
+    const first = adaptIgsScene(scene, assets).scene;
+    const later = structuredClone(first); later.id = "later"; later.source = { ...source, pts90k: "18000" };
+    const before = selectPopupScene([first, later], "00001", 0x18, 17_999, 0);
+    const atMark = selectPopupScene([first, later], "00001", 0x18, 18_000, 0);
+    expect(before.status).toBe("selected"); if (before.status === "selected") expect(before.scene).toEqual(first);
+    expect(atMark.status).toBe("selected"); if (atMark.status === "selected") expect(atMark.scene).toEqual(later);
+    expect(selectPopupScene([first, later], "00001", 0x18, 18_000, 1).status).toBe("not-found");
   });
 
   it("preserves dynamic-selection and activate-current-selection sentinels", () => {

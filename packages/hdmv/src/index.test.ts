@@ -22,6 +22,38 @@ describe("M3 HDMV fixtures", () => {
     expect(vm.trace.flatMap((x) => Object.entries(x.registerDelta.gpr))).toContainEqual(["0", 12]);
     expect(vm.trace.find((x) => x.decoded?.startsWith("MOVE"))?.pc).toBe(0);
   });
+  it("uses the pinned libbluray LCG sequence for RND and restores it with checkpoints", () => {
+    const rnd = rawCommand(0x50400008, 0, 5);
+    const vm = new HdmvVm([{ id: 0, instructions: [rnd, rnd, rnd, m3Fixtures.break] }], { randomSeed: 1 });
+    vm.runTurn();
+    const outputs = vm.trace.filter((entry) => entry.decoded?.startsWith("RND")).map((entry) => entry.registerDelta.gpr[0]);
+    expect(outputs).toEqual([4, 2, 1]);
+
+    vm.reset();
+    vm.runTurn();
+    expect(vm.trace.filter((entry) => entry.decoded?.startsWith("RND")).slice(-3).map((entry) => entry.registerDelta.gpr[0])).toEqual([4, 2, 1]);
+
+    const checkpointVm = new HdmvVm([{ id: 0, instructions: [rnd, rnd, rnd, m3Fixtures.break] }], { randomSeed: 1 });
+    checkpointVm.runTurn();
+    const checkpoint = checkpointVm.saveCheckpoint();
+    checkpointVm.reset();
+    checkpointVm.restoreCheckpoint(checkpoint);
+    expect(checkpointVm.snapshot()).toEqual(expect.objectContaining({ status: "stopped" }));
+    expect(checkpointVm.trace.filter((entry) => entry.decoded?.startsWith("RND")).map((entry) => entry.registerDelta.gpr[0])).toEqual([4, 2, 1]);
+
+    const overrideVm = new HdmvVm([{ id: 0, instructions: [rnd, rnd, rnd, m3Fixtures.break] }], { randomSeed: 1 });
+    overrideVm.reset(0, undefined, 7); overrideVm.runTurn();
+    const seedSeven = overrideVm.trace.filter((entry) => entry.decoded?.startsWith("RND")).slice(-3).map((entry) => entry.registerDelta.gpr[0]);
+    overrideVm.reset(); overrideVm.runTurn();
+    expect(overrideVm.trace.filter((entry) => entry.decoded?.startsWith("RND")).slice(-3).map((entry) => entry.registerDelta.gpr[0])).toEqual(seedSeven);
+  });
+  it("returns one and records the reference diagnostic for a zero RND range", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [rawCommand(0x50400008, 0, 0), m3Fixtures.break] }]);
+    const result = vm.runTurn();
+    expect(result.status).toBe("stopped");
+    expect(result.registers.gpr[0]).toBe(1);
+    expect(vm.diagnostics.map((diagnostic) => diagnostic.code)).toContain("HDMV_RND_ZERO_RANGE");
+  });
   it("restores VM execution state and history from a checkpoint", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.move5] }]);
     vm.runTurn();
@@ -825,7 +857,7 @@ describe("M3 HDMV fixtures", () => {
   });
   it("normalizes shared defaults and preserves raw profile words in reset traces", () => {
     const vm = new HdmvVm([]);
-    const resetProfile = (entry: typeof vm.trace[number]) => JSON.parse(entry.decoded!.slice("RESET profile=".length));
+    const resetProfile = (entry: typeof vm.trace[number]) => JSON.parse(entry.decoded!.slice("RESET profile=".length, entry.decoded!.lastIndexOf("}" ) + 1));
     expect(resetProfile(vm.trace[0]!)).toEqual({
       audioLanguage: "eng", audioProfiles: [], country: "US", menuLanguage: "eng",
       outputProfile: "portable", region: "A", subtitleLanguage: "eng", videoProfiles: [],
@@ -849,12 +881,12 @@ describe("M3 HDMV fixtures", () => {
       outputProfile: "portable",
     } });
     expect([...vm.registers.psr.slice(16, 22)]).toEqual([0x667261, 0x646575, 0x6a706e, 0x4a50, 2, 0]);
-    const profile = JSON.parse(vm.trace[0]!.decoded!.slice("RESET profile=".length));
+    const profile = JSON.parse(vm.trace[0]!.decoded!.slice("RESET profile=".length, vm.trace[0]!.decoded!.lastIndexOf("}") + 1));
     expect(profile).toMatchObject({ audioLanguage: "fra", subtitleLanguage: "deu", menuLanguage: "jpn", country: "JP", region: "B" });
 
     vm.reset(0, { menuLanguage: 0x656e67, audioLanguage: "jpn", subtitleLanguage: "fra", country: 0x5553, region: "C", outputPreference: 1 });
     expect([...vm.registers.psr.slice(16, 22)]).toEqual([0x6a706e, 0x667261, 0x656e67, 0x5553, 4, 1]);
-    const resetProfile = JSON.parse(vm.trace.at(-1)!.decoded!.slice("RESET profile=".length));
+    const resetProfile = JSON.parse(vm.trace.at(-1)!.decoded!.slice("RESET profile=".length, vm.trace.at(-1)!.decoded!.lastIndexOf("}") + 1));
     expect(resetProfile).toMatchObject({ audioLanguage: "jpn", subtitleLanguage: "fra", menuLanguage: 0x656e67, country: 0x5553, region: "C", outputPreference: 1 });
   });
   it("keeps dynamic graph edges unresolved and unknown commands visible", () => {

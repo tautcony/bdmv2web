@@ -4,6 +4,7 @@ node_modules/
 **/dist/
 *.m2ts
 !test-data/fixtures/igs-parser/synthetic-single-object.m2ts
+!test-data/fixtures/bdmvkit-generated/BDMV/STREAM/*.m2ts
 test-data/bdmv/
 test-data/output/
 __pycache__/

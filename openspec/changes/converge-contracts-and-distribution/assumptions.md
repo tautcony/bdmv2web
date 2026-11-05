@@ -14,7 +14,7 @@
 | R2-4 | `loop=false` 结束时回 `MEDIA_ENDED`，不引入 `MEDIA_HELD` | E.2、E.5 | 中（新增等待语义与 UI 约定） | 待确认 |
 | R2-5 | `@bdmv2web/package-builder` 会随 CLI 发布，必须解耦源码路径 | F.1–F.4 | 中（若确定永不发布，可退化为 `files` 白名单 + 文档声明） | 待确认 |
 | R2-6 | `standalone-full` 长期做、近期不做 | 不在本 change 实现 | 低（若近期要做，需单独立项） | 待确认 |
-| R2-7 | `payloadFingerprint` 的导出函数一并删除（不仅是字段） | B.1 | 低（从 git 历史恢复该函数） | 待确认 |
+| R2-7 | `内容摘要字段` 的导出函数一并删除（不仅是字段） | B.1 | 低（从 git 历史恢复该函数） | 待确认 |
 
 ---
 
@@ -84,9 +84,9 @@
 
 ---
 
-## R2-7 `payloadFingerprint` 的删除范围
+## R2-7 `内容摘要字段` 的删除范围
 
-**假设**：不仅删除产物/报告/类型里的字段，也删除 `packages/bdmv-io/src/index.ts:124-147` 的导出函数 `payloadFingerprint()`。
+**假设**：不仅删除产物/报告/类型里的字段，也删除 `packages/bdmv-io/src/index.ts:124-147` 的导出函数 `内容摘要字段()`。
 
 **依据**：仓库内无其它调用方（实测仅 `index.ts` 定义与 `index.test.ts` 使用）。一个能算出哈希的导出函数同样是"承诺"——保留它会让人以为校验能力还在，将来做 A 方案时从 git 历史恢复即可。
 

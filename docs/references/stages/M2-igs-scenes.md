@@ -4,7 +4,7 @@
 
 | 来源 | 任务 | 精确入口 | 用途和限制 |
 | --- | --- | --- | --- |
-| `ITU-H222-2025` | 1.1–1.3 | [当前 v10 记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I)；匿名 PDF 下载被 TIES 登录拦截。匿名可取得的[已替代 2014 PDF](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items)之 hash 与章节见 [README](../README.md#可复现获取)。 | 2014 版仅作适用的基础 TS/PES 语法对照。目录确认 TS packet/PES syntax 在 2.4.3.2–2.4.3.7，PSI 在 2.4.4；v10 章节未核实。任何版本均不定义 Blu-ray 192-byte M2TS、IG/PG PID 或 IGS ICS/PDS/ODS。 |
+| `ITU-H222-2025` | 1.1–1.3 | [当前 v10 记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I)；匿名 PDF 下载被 TIES 登录拦截。匿名可取得的[已替代 2014 PDF](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items)章节定位见 [README](../README.md#可复现获取)。 | 2014 版仅作适用的基础 TS/PES 语法对照。目录确认 TS packet/PES syntax 在 2.4.3.2–2.4.3.7，PSI 在 2.4.4；v10 章节未核实。任何版本均不定义 Blu-ray 192-byte M2TS、IG/PG PID 或 IGS ICS/PDS/ODS。 |
 | `LIBBLURAY-1.5.0` | 1.1–1.4, 2.1–2.4, 3.1–3.5 | 固定 commit 文件：[`m2ts_demux.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/m2ts_demux.c), [`m2ts_filter.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/m2ts_filter.c), [`pes_buffer.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/pes_buffer.c), [`ig_decode.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/ig_decode.c), [`graphics_processor.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/graphics_processor.c), [`pg_decode.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/pg_decode.c), [`rle.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/rle.c), [`graphics_controller.c`](https://code.videolan.org/videolan/libbluray/-/blob/d75c88e54c893e5cbf4c61d356477655eb435769/src/libbluray/decoders/graphics_controller.c). | LGPL-2.1 上游实现；不是规范性语法，也不保证输出完全正确。`pg_decode_palette()` zero-initializes all 256 slots before applying sparse PDS entries; the shared PDS path accepts both IG and PG composition sets. This is implementation evidence for transparent-zero handling of omitted IGS entries, not a normative BDA specification. |
 | `IGSTOOLS-2019` | 1.1, 1.3, 2.1–2.4, 3.5 | 固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`：[`ts_reader.py`](https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/ts_reader.py)、[`parser.py`](https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/parser.py)、[`model.py`](https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/model.py)、[`export.py`](https://github.com/SAPikachu/igstools/blob/34a133150ca8b52237284da4d47d93911bcd4954/igstools/export.py)。 | 已确认可访问的 IGS 解析/导出工具；README 表明解析器/解码器移植自 libav patches，且有速度慢、已知问题。仓库含 GPL-3.0 与 LGPL-3.0 许可证文本；复用前按文件核验来源与许可。不是规范。 |
 | `LIBHDMV-2026-03` | 2.1–2.4, 3.1–3.5 | 固定 commit [`igs/decode.rs`](https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/igs/src/decode.rs)、[`igs/types.rs`](https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/igs/src/types.rs)、[`pgs/decode.rs`](https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/pgs/src/decode.rs)、[`pgs/palette.rs`](https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/pgs/src/palette.rs)、[`pgs/rle.rs`](https://github.com/liminal-hq/libhdmv/blob/ec0e5b27d2852ca6b008719f66aa3324c0b43f28/crates/pgs/src/rle.rs)。 | Apache-2.0；README 标为 Alpha，仅供交叉核对。IGS 和 PGS 是不同路径；PG PID 不等于 IG，PGS 字幕解码不等于菜单提取。 |
@@ -13,7 +13,7 @@
 
 字段逐项登记、解析表示和固定 libbluray revision 见 [IGS 字段与版本依据](M2-igs-field-register.md)。
 
-像素预期必须独立建立并记录 fixture ID、工具版本和色彩转换约定；不为外部原盘素材生成哈希。libbluray 与 igstools 的来源可能重合（后者 README 明确提及 libav patches），不能把两者导出简单计作两份独立验证。来源完整 URL 和 revision 见 [`sources.json`](../sources.json)。
+像素预期必须独立建立并记录 fixture ID、工具版本和色彩转换约定。libbluray 与 igstools 的来源可能重合（后者 README 明确提及 libav patches），不能把两者导出简单计作两份独立验证。来源完整 URL 和 revision 见 [`sources.json`](../sources.json)。
 
 ## MenuScene 场景验收拆分
 
@@ -59,13 +59,13 @@
 - **Fixture / evidence / source:** 用户提供的 `test-data/bdmv/tamako-love-story-bd/BDMV/CLIPINF/00005.clpi` 与 `STREAM/00005.m2ts`；证据测试 `packages/igs/test/tamako-real-smoke.test.ts`（仅在本地 STREAM 存在时运行）。测试命令：`pnpm --filter @bdmv2web/igs exec vitest run test/tamako-real-smoke.test.ts`。本次运行结果：1 test passed。
 - **Expected:** smoke 只检查结构提取事实和 partial/unverified 状态，不把合成预期或人工猜测填入真实 disc 观察。
 - **Actual:** CLPI 声明 IGS PID `0x1400`；菜单 playlist `00003` 有 999 个 play item，主项只引用 Clip `00004`，SubPath 含 Clip `00005`。Clip `00005` 得到一个 `1920×1080` scene，7 pages、168 objects、7 palettes，存在对应 PNG assets。当前阶段记录观察到 page 2 和 3 的默认按钮均为 `65534`；smoke 自动断言的是两条 `IGS_INVALID_BUTTON_REFERENCE`，没有断言具体 page/button ID。extract 为 `partial`、support 为 `unverified`。CLPI `00043` 也声明 IGS，但 workspace 缺少匹配 `STREAM/00043.m2ts`，报告 `BDMV_MISSING_STREAM`。
-- **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。真实 smoke 不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材，本记录不添加内容 hash。
+- **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。真实 smoke 不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材。
 - **独立参考记录：** 此处记录的是 2026-11-03 当时的状态；随后已对 Tamako `00005`、`00043` 及其他 packet fixture 完成同类工具逐元素/逐像素对照，详见下方 2026-11-04 记录。动画帧在本次输入中没有可比较的多帧对象范围。
 
 
 ## 2026-11-03 — Tamako 00005 逐元素同类工具对照
 
-- **输入：** workspace-local `test-data/bdmv/tamako-love-story-bd/BDMV/STREAM/00005.m2ts`（IG PID 0x1400）；不记录原盘素材 hash。
+- **输入：** workspace-local `test-data/bdmv/tamako-love-story-bd/BDMV/STREAM/00005.m2ts`（IG PID 0x1400）。
 - **参考工具：** `SAPikachu/igstools` 0.9.3，固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python 3.15.0、pypng 0.20220715.0、Pillow 13.0.0。工具解码器源自 libav patches，属于实现对照，不能等同规范。
 - **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
 - **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项结果见 [comparison.json](../../evidence/tamako-00005-igstools-comparison.json)。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。

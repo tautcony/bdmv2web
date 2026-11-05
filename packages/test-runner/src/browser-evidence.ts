@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { AuditCheck, CheckResult, ManifestFile } from "./types.js";
 
 export interface BrowserMatrixCase {
@@ -12,11 +11,10 @@ export interface BrowserEnvironment {
 }
 
 export interface BrowserEvidenceContext {
-  payloadFingerprint: string | null;
   mode: "menu-only" | "standalone-full";
   profile: unknown;
   /** Rows from this tool's output manifest only; never pass source-disc files. */
-  generatedFiles: readonly (ManifestFile & { byteLength: string; sha256?: string })[];
+  generatedFiles: readonly (ManifestFile & { byteLength: string })[];
   matrix: readonly BrowserMatrixCase[];
   environment: BrowserEnvironment;
 }
@@ -25,7 +23,6 @@ export interface BrowserEvidenceArtifact {
   path: string;
   kind: string;
   byteLength: string;
-  sha256: string;
 }
 
 export interface BrowserEvidence {
@@ -37,12 +34,11 @@ export interface BrowserEvidence {
   observedAt: string;
   environment: BrowserEnvironment;
   binding: {
-    payloadFingerprint: string | null;
-    generatedMediaFingerprint: string;
-    profileFingerprint: string;
+    profile: unknown;
     mode: "menu-only" | "standalone-full";
-    matrixFingerprint: string;
-    environmentFingerprint: string;
+    generatedMedia: Array<{ path: string; kind: string; byteLength: string }>;
+    matrix: BrowserMatrixCase[];
+    environment: BrowserEnvironment;
   };
   artifacts: BrowserEvidenceArtifact[];
 }
@@ -59,7 +55,7 @@ export interface BrowserEvidenceObservation {
 
 const EVIDENCE_PATH = /^reports\/evidence\/(?:[A-Za-z0-9._ -]|%[0-9A-Fa-f]{2}|[^/])+\/(?:[A-Za-z0-9._ -]|%[0-9A-Fa-f]{2}|[^/])+$/;
 
-/** Create reproducible binding digests using JSON data only. */
+/** Capture the current browser-test inputs directly so stale evidence can be compared. */
 export function createBrowserEvidenceBinding(context: BrowserEvidenceContext): BrowserEvidence["binding"] {
   if (context.mode !== "menu-only" && context.mode !== "standalone-full") throw new TypeError("A supported package mode is required to bind browser evidence");
   const matrix = normalizedMatrix(context.matrix);
@@ -72,27 +68,26 @@ export function createBrowserEvidenceBinding(context: BrowserEvidenceContext): B
     throw new TypeError("Generated media manifest rows need safe paths");
   }
   return {
-    payloadFingerprint: context.payloadFingerprint,
-    generatedMediaFingerprint: digest(mediaRows),
-    profileFingerprint: digest(context.profile),
+    profile: context.profile,
     mode: context.mode,
-    matrixFingerprint: digest(matrix),
-    environmentFingerprint: digest(environment),
+    generatedMedia: mediaRows,
+    matrix,
+    environment,
   };
 }
 
-/** Record hashes only for generated evidence artifacts, never for source-disc files. */
+/** Record generated evidence artifact paths and sizes, never source-disc files. */
 export function createBrowserEvidence(observation: BrowserEvidenceObservation, context: BrowserEvidenceContext): BrowserEvidence {
   const matrix = normalizedMatrix(context.matrix);
   if (!matrix.some((entry) => entry.caseId === observation.caseId)) throw new TypeError(`Browser case '${observation.caseId}' is not in the supplied matrix`);
   if (!observation.observedAt.trim()) throw new TypeError("Browser evidence observedAt must be non-empty");
   if (!["pass", "fail", "not-verified"].includes(observation.result)) throw new TypeError("Browser evidence result is invalid");
   const environment = normalizedEnvironment(observation.environment);
-  if (digest(environment) !== digest(normalizedEnvironment(context.environment))) throw new TypeError("Observation environment does not match the evidence binding context");
+  if (canonicalJson(environment) !== canonicalJson(normalizedEnvironment(context.environment))) throw new TypeError("Observation environment does not match the evidence binding context");
   const artifacts = observation.artifacts.map(({ path, kind, bytes }) => {
     if (!isEvidencePath(path)) throw new TypeError(`Evidence artifact path must be under reports/evidence/: ${path}`);
     if (!kind.trim()) throw new TypeError("Evidence artifact kind must be non-empty");
-    return { path, kind, byteLength: String(bytes.byteLength), sha256: createHash("sha256").update(bytes).digest("hex") };
+    return { path, kind, byteLength: String(bytes.byteLength) };
   });
   return {
     schemaVersion: "1.0", caseId: observation.caseId, expected: observation.expected, actual: observation.actual,
@@ -118,10 +113,10 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
   let expectedMismatch = false;
   let environmentMismatch = false;
   try {
-    expectedMismatch = digest(evidence.expected) !== digest(matrixCase.expected);
-    environmentMismatch = digest(normalizedEnvironment(evidence.environment)) !== current.environmentFingerprint;
+    expectedMismatch = canonicalJson(evidence.expected) !== canonicalJson(matrixCase.expected);
+    environmentMismatch = canonicalJson(normalizedEnvironment(evidence.environment)) !== canonicalJson(current.environment);
   } catch { expectedMismatch = true; environmentMismatch = true; }
-  const mismatches: string[] = (["profileFingerprint", "mode", "matrixFingerprint", "environmentFingerprint"] as const).filter((key) => evidence.binding?.[key] !== current[key]);
+  const mismatches: string[] = (["profile", "mode", "generatedMedia", "matrix", "environment"] as const).filter((key) => canonicalJson(evidence.binding?.[key]) !== canonicalJson(current[key]));
   if (expectedMismatch) mismatches.push("matrixCase.expected");
   if (environmentMismatch) mismatches.push("recordedEnvironment");
   if (mismatches.length) {
@@ -133,7 +128,7 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
   if (!artifactsValid) return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser evidence for case ${id} has no valid generated artifact record.`, entityId: id };
   if (evidence.result === "fail") return { checkId: "BROWSER_EVIDENCE_BINDING", result: "fail", message: `Browser case ${id} failed.`, entityId: id };
   if (evidence.result !== "pass") return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser case ${id} has not been verified.`, entityId: id };
-  return { checkId: "BROWSER_EVIDENCE_BINDING", result: "pass", message: `Browser evidence for case ${id} is bound to the current profile, mode, matrix, and environment.`, entityId: id, evidence: { payloadFingerprint: current.payloadFingerprint, generatedMediaFingerprint: current.generatedMediaFingerprint, profileFingerprint: current.profileFingerprint, mode: current.mode, matrixFingerprint: current.matrixFingerprint, environmentFingerprint: current.environmentFingerprint, artifacts: evidence.artifacts.map(({ path, sha256 }) => ({ path, sha256 })) } };
+  return { checkId: "BROWSER_EVIDENCE_BINDING", result: "pass", message: `Browser evidence for case ${id} matches the current profile, mode, generated media, matrix, and environment.`, entityId: id, evidence: { profile: current.profile, mode: current.mode, generatedMedia: current.generatedMedia, matrix: current.matrix, environment: current.environment, artifacts: evidence.artifacts.map(({ path, kind, byteLength }) => ({ path, kind, byteLength })) } };
 }
 
 /** Produce one gate check per matrix row so omitted cases cannot disappear from the denominator. */
@@ -163,7 +158,6 @@ function normalizedEnvironment(environment: BrowserEnvironment): BrowserEnvironm
 
 function isEvidencePath(path: string): boolean { return EVIDENCE_PATH.test(path) && isSafeRelativePath(path); }
 function isSafeRelativePath(path: string): boolean { return path.length > 0 && !path.includes("\\") && !path.includes("\0") && !path.startsWith("/") && !path.split("/").some((part) => part === "" || part === "." || part === ".."); }
-function digest(value: unknown): string { return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex"); }
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "number" && Number.isFinite(value)) return JSON.stringify(value);

@@ -2,11 +2,11 @@
 
 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
 
-共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。M6 原语位于 `packages/test-runner/src`；`validate --offline` 生成当前 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`，缺失的浏览器、覆盖率或参考证据列为 actionable gap。payload 指纹沿用 M0 的 locale `en` 排序相对路径、NUL、SHA-256、LF 契约，字节长度另行校验。浏览器、跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
+共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列行为案例及结果；未取得参考或环境证据不得勾选对应验收。M6 原语位于 `packages/test-runner/src`；`validate --offline` 生成当前 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`，缺失的浏览器、覆盖率或参考证据列为 actionable gap。浏览器、跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
 
 ## 1. 独立包检查
 
-- [x] 1.1 实现validate的schema/引用/manifest/大小/hash与payloadFingerprint重算；验收：无原碟/FFmpeg可验证，指纹缺失/格式错误/不匹配、启动文件`index.html`缺失或未列入manifest、字节篡改和缺必需资产均失败。
+- [ ] 1.1 按现行契约实现validate的schema/引用/manifest与启动资产检查；验收：无原碟/FFmpeg可验证，启动文件`index.html`缺失或未列入manifest、缺必需资产均失败。
 - [x] 1.2 解析HTML/CSS/数据/JS资源入口并统一URL/realpath检查；验收：远程/协议相对/file原盘/编码逃逸/外symlink均定位，合法中文/百分号路径和说明链接不误报。
 - [ ] 1.2a 更新资源与影片目标审计；仅允许经过验证的源 BDMV STREAM 内 M2TS 作为外部交接目标，其他外部运行资源、路径逃逸和外部 symlink 仍拒绝。
 - [x] 1.3 限制data MIME并检查嵌套依赖和bundle禁用入口；验收：HTML/SVG执行载荷与远程嵌套拒绝，已生成PNG data允许。
@@ -30,6 +30,6 @@
 ## 4. 浏览器与发布
 
 - [x] 4.1 锁定 V1 Google Chrome 完整版本并执行断网 `file://`；验收：无后台/原盘，记录 Chrome 版本、console/资源/有声结果，缺席不假通过。验收不限定操作系统，也不要求跨浏览器矩阵。实测记录见 [M6 验收证据](../../../docs/references/stages/M6-release-verification.md#v1-chrome-file-验收-2026-11-03)。
-- [ ] 4.2 按新边界完成适用的 A–J 场景及系统默认播放器交接证据；涵盖双击、移动、中文空格、DPI、源缺失和播放策略恢复，记录 expected/actual/result、版本及生成制品 hash。
-- [x] 4.3 实现证据与payload/profile/mode/矩阵绑定和失效；验收：换bundle/媒体/profile不能复用旧截图过门槛。
+- [ ] 4.2 按新边界完成适用的 A–J 场景及系统默认播放器交接证据；涵盖双击、移动、中文空格、DPI、源缺失和播放策略恢复，记录 expected/actual/result 和工具版本。
+- [ ] 4.3 记录浏览器证据的 profile/mode/媒体清单/矩阵/环境，变化时重新执行对应场景。
 - [x] 4.4 生成最终compatibility/audit/manifest/发布摘要和README；验收：只有全部门槛满足可complete，失败/未验证列具体缺口，完整包无开发/参考工具依赖。

@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- 实现输出包独立 validate、hash/引用/URL/脚本依赖审计及完整度/strict 决策。
+- 实现输出包独立 validate、文件引用/URL/脚本依赖审计及完整度/strict 决策。
 - 建立有分母的支持统计、VM/IG 独立参考对照和安全回归。
 - V1 在 Google Chrome 执行直接 `file://` 及 A–J 适用场景，记录 Chrome 完整版本并绑定制品指纹后形成发布摘要；不按操作系统限定验收范围。
 - 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。可基于稳定契约先开发，集成验收须等待相应上游结果。

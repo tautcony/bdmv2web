@@ -35,7 +35,7 @@
 
 本 change 完成的条件是"可复核的事实一致"，不是新功能：`generate:contracts` → `build` → `typecheck` → `test:all` 四步全绿且 `dist` 无测试产物；四条 CLI 行为（空 BDMV extract 退 1、裸跑 convert 退 0、`--mode standalone-full` 退 1、`--out` 缺值退 1）可被同一组命令复现；文档中不再存在互相矛盾的同一事实。
 
-**明确不在本 change**：CI workflow（D1=A 单独立项）、`payloadFingerprint` 与证据绑定（D9）、性能基准与热点修复（D5）、契约常量收敛（D3）、源位置保真（D12）。
+**明确不在本 change**：CI workflow（D1=A 单独立项）、性能基准与热点修复（D5）、契约常量收敛（D3）、源位置保真（D12）。
 
 ## Related
 

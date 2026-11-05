@@ -36,7 +36,6 @@ export interface ReleaseSummary {
     status: DeliveryStatus;
     mode: "menu-only" | "standalone-full";
     modeSource?: "manifest" | "report" | "assumed";
-    payloadFingerprint: string | null;
     strict: boolean;
     exitCode: 0 | 1 | 2;
     reasons: string[];
@@ -78,7 +77,6 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
 
   const dependencyAudit: DependencyAuditReport = {
     schemaVersion: "1.0",
-    payloadFingerprint: input.audit.payloadFingerprint,
     status: summarizeCheckResult(dependencyChecks),
     externalReferences: dependencyChecks.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"),
     checks: dependencyChecks,
@@ -100,7 +98,7 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   const gaps = checks.filter((check): check is AuditCheck & { result: "fail" | "not-verified" } => check.result !== "pass").map(toGap);
   return {
     schemaVersion: "1.0",
-    release: { status: decision.status, mode: input.mode, ...(input.modeSource === undefined ? {} : { modeSource: input.modeSource }), payloadFingerprint: input.audit.payloadFingerprint, strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
+    release: { status: decision.status, mode: input.mode, ...(input.modeSource === undefined ? {} : { modeSource: input.modeSource }), strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
     compatibility,
     dependencyAudit,
     coverage,

@@ -21,7 +21,6 @@
 1. **门禁是红的，但没人拦**——两处编译/语法错误已经合进 `master`，说明缺少 CI。
 2. **同一份契约有两套数值**——默认播放器配置与调用深度上限在 `core` 与 `hdmv` 各写一份且数值不同，这是长期最危险的隐患。
 3. **性能热点统一呈现"大输入 + 二次方"**——真实 UHD 碟会先在 parser / PES / 字节预算这三处顶墙。
-4. **验收链存在"名义存在"**——`payloadFingerprint`、浏览器证据绑定和 `compatibility.json` 字段都有定义，但实际校验被绕过、被覆盖或根本没有比较，失败输入仍能 `exit 0` 出包。
 
 ## 一、门禁实测状态
 
@@ -62,7 +61,6 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 
 ### `@bdmv2web/bdmv-io` — 文件系统与安全边界
 
-- ✅ 全仓安全设计最完整的一块：symlink 全树拒绝、`realpath` 后再做 `within()` 判定、`assertDisjointRoots` 防输入输出重叠、`beginOutputTransaction` 走 staging + rename、`payloadFingerprint` 排序稳定。
 - ⚠️ **性能**：`buildInputFileTable`（`src/index.ts:88-99`）对每个文件调 `resolveInputFile`，后者每次都 `canonicalDirectory(root)`（`realpath` + `stat`）。千文件级碟会做千次重复 root 解析，root 应只解析一次后透传。
 - ⚠️ `beginOutputTransaction` 的 `lstat` 存在检查与 `rename` 之间有 TOCTOU 窗口（`src/index.ts:162-173`）；`rename` 落到已存在的空目录上仍会成功，注释里 `TARGET_EXISTS` 的保证不严格。
 - `readRegisteredFile` 先以 `MAX_SAFE_INTEGER` 求 size 再自判 `maxBytes`，逻辑无误但可读性差。
@@ -112,7 +110,6 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ✅ `serializeSafeScriptData` 转义 `<` `>` `&` U+2028 防 `</script>` 截断；`makePngBatches` 有单资源/单批/总量三级上限；`convertSounds` 对 BCLK PCM 的属性与范围校验很细。
 - ⚠️ **构建期耦合源码路径**：`resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` + `alias` 指向 `../../hdmv/src/index.ts`（`src/index.ts:127-128`）。在 monorepo 内可跑，一旦按 `dist/` 发布（`src/` 不在包内）或目录调整即失败。建议 runtime-web 预构建 `browser-entry.js`，builder 依赖产物而非 `.ts`。
 - ⚠️ 单次 `buildMenuPackage` 内 `Promise.all` 并发写 10+ 文件，音频分支内部再 `mkdir`（第 123 行），有目录创建竞态（`recursive: true` 通常幂等）。
-- ⚠️ `hashGeneratedPayload` 用 `kind` 白名单 + 路径前缀双重过滤（第 188-191 行），而 `test-runner/package-audit.ts` 另有一份判断。两处规则易分叉，建议把 payload 分类定义收敛到 `core`。
 - ⚠️ **`compatibility.json` schema 不一致**：`createCompatibility()`（`src/index.ts:54-63`）缺少 `IMPLEMENTATION_BASELINE §4` 要求的 `toolVersion`；`test-runner` 的 `createCompatibilityReport()` 又缺 `runtimeVersion` / `diagnostics`，且 `validate` 会覆盖构建产物。详见横切问题 7。
 
 ### `@bdmv2web/runtime-web` — 浏览器运行时
@@ -133,8 +130,6 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ✅ 静态审计覆盖度好：HTML 属性 / `srcset` / inline handler / `<base>` / meta refresh / CSS `url()` / `@import` / data URL 签名（PNG magic、RIFF/WAVE）/ base64 规范性 / 路径多层 decode 防穿越 / `setAttribute` 动态 sink。`not-verified` 降级策略比"假绿"健康得多。
 - ⚠️ `codeOnly` 用正则剥注释与字符串（`src/package-audit.ts:194`），对正则字面量、`${}` 嵌套、`a / b` 除法可能误判。目前靠 `not-verified` 兜底可接受，建议注释写明这是启发式而非解析器。
 - ⚠️ 上文 P0 坏文件所在包。且它是唯一 `private: true` 却承担发布门禁逻辑的包，同时被 CLI 直接依赖——发布链路依赖了一个测试工具包，位置略尴尬。
-- ⚠️ **`auditOutputPackage` 永远返回 `payloadFingerprint: null`**（`src/package-audit.ts:337`，所有提前返回同样为 null），测试也明确断言不检查 hash（`src/index.test.ts:68`、`apps/cli/src/index.test.ts:352`）。`buildMenuPackage` 写入的指纹不会被重算；`validate` 之后还会用 `audit.payloadFingerprint`（null）覆盖 `compatibility.json` 的构建值。M6 1.1/4.3 的"字节篡改失败""换 bundle/媒体不能复用"当前不成立。
-- ⚠️ **浏览器证据绑定没有覆盖 payload / 媒体**：`evaluateBrowserEvidence` 的 mismatch 列表只比较 `profileFingerprint`、`mode`、`matrixFingerprint`、`environmentFingerprint`（`src/browser-evidence.ts:126`），没有比较 `binding.payloadFingerprint` 或 `generatedMediaFingerprint`；artifact 的 `sha256` 记录后也未重新读取文件校验（`src/browser-evidence.ts:133-135`）。即使修好指纹，旧证据仍可能过门。
 - ⚠️ `createReleaseSummary` 接收了 `reportedStatus`，但函数内从未读取（`src/release-summary.ts:19-21`）；`summarizeCheckResult` 的优先级是"有 not-verified 就返回 not-verified"，会掩盖同时存在的 fail（`src/release-summary.ts:135-138`）。
 
 ### `apps/cli`
@@ -163,7 +158,6 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 4. **文档漂移**：`docs/development.md` 仍写"CLI 五个命令目前都返回 `E_NOT_IMPLEMENTED`"，实际 `inspect` / `extract` / `convert` / `validate` 均已实现（仅 `compare` 未实现）。
 5. **仓库卫生**：`.gitignore` 缺 `.DS_Store`；`test-data/fixtures/.../00043.m2ts_ig-packets.bin` 11MB、`00005` 8.7MB 直接进 Git 历史（建议 Git LFS 或按 manifest 脚本生成）。
 6. **测试聚合链路不稳**：`pnpm -r test` 时 `media-export` / `igs` 报 "no tests"，单独 `cd` 进去却分别正常跑 51 / 54 用例。各包 `test` 脚本不统一（`vitest run` vs `vitest run src`），建议统一并加 `--reporter=verbose`。
-7. **验收/证据链名义存在**：构建侧写入 `payloadFingerprint`，审计侧固定返回 `null`，`validate` 再把构建报告覆盖掉；浏览器证据绑定的 mismatch 列表又不比较 payload/media，artifact hash 也不复验。结果是"有字段、有测试、有 schema"，但篡改和替换不会被拦。详见 D9。
 8. **失败状态没有贯穿 CLI**：`extract` / `inspect` 对 `fatal` 诊断仍 `exit 0` 并生成包；`convert` 只用"有没有 scene"判失败，没有统一走 `decideDelivery`。这与 baseline §3/§4 的状态表和退出码直接冲突。详见 D10。
 9. **静态图与 VM 语义不一致**：`graph.ts` 把 `JUMP_TITLE` / `LINK_*` / `TERMINATE_PL` 当终止流，VM 在 MovieObject 上下文却继续执行；`CALL_TITLE` 没有 continuation，桥的 `MEDIA_UNAVAILABLE` 无法解除等待。详见 D11。
 10. **源位置在交付层丢失**：`createMenuDiscIR` 伪造 `source/structural`，`vmPrograms` 使用 `<MovieObject>`，IGS 结构诊断落到 `BDMV/STREAM/.m2ts`。这直接削弱 M6 要求的"可回到源指令/源文件"证据。详见 D12。
@@ -380,39 +374,12 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 
 **第二轮补充（D8 范围内一并处理）**：
 
-- `docs/browser-matrix.md:7` 写 `not-verified`，但 `docs/references/stages/M6-release-verification.md:32-43` 记录了"V1 Chrome file:// 验收"，`openspec/changes/build-offline-menu-runtime/tasks.md:37` 与 `openspec/changes/verify-offline-release/tasks.md:32` 的 4.1 已勾选；`docs/development.md:48` 又说离线 `file://` 尚未验证。必须选定一个事实来源，并补制品 hash/操作者，或把 tasks 取消勾选。
 - `docs/igs-support.md:22` 说 Tamako 场景 incomplete、0xfffe 语义未建立，但 `packages/igs/test/tamako-real-smoke.test.ts:29-40` 断言 `complete: true` 且 0xfffe 是 activated 哨兵；包 partial 的真实原因是 Clip 00043 缺失。需要改掉这段原因。
 - `docs/references/stages/M6-release-verification.md:22-26` 的测试计数（42/40/56/51）已过期。当前实测：parser 47、igs 54、hdmv 74、runtime-web 91、test-runner **5 个文件 / 41 用例**（修复 P0 前为 2 failed + 8 passed / 42，因 `dist/*.test.js` 被重复执行）。修复 P0 后按 `pnpm test:all` 统一重算。
 - `bdmv_hdmv_offline_web_architecture.md:145-168` 的包布局（`m2ts-demux` / `igs-decoder` / `navigation-hdmv` / `ir-builder` / `apps/studio`）和 `:530-538` 的 `DiscIR`（`kind`/`role`）仍是旧设计，应标注为历史设计或补"设计名 → 实际包/字段"映射。
 
----
+D9 的历史方案已由 `converge-contracts-and-distribution` 收敛；当前实现边界见实施基线和离线审计规范。
 
-### D9 — 验收/证据链（payloadFingerprint、浏览器证据、compatibility）
-
-**现状**：`auditOutputPackage()` 固定返回 `payloadFingerprint: null`（`packages/test-runner/src/package-audit.ts:337`），测试也明确不检查 hash（`packages/test-runner/src/index.test.ts:68`、`apps/cli/src/index.test.ts:352`）；`buildMenuPackage` 写入的指纹被 `validate` 用 null 覆盖。`evaluateBrowserEvidence` 的 mismatch 列表只比较 profile/mode/matrix/environment（`packages/test-runner/src/browser-evidence.ts:126`），不比较 payload/media，artifact 的 `sha256` 也不复验。`compatibility.json` 构建侧缺 `toolVersion`，validate 侧缺 `runtimeVersion`/`diagnostics`。
-
-**选项**
-
-- **A**：修完整链路：重算并校验 fingerprint、统一 compatibility schema、浏览器证据比较 payload/media 并复验 artifact hash。
-- **B**：只修 fingerprint；浏览器证据和 compatibility 继续记为未完成。
-- **C**：不改实现，只把 M6 1.1/4.3 改回未完成，并删除"字节篡改/换 bundle 会失效"的表述。
-
-**建议**：C。当前状态最危险的地方不是"没做"，而是"看起来做了"；本轮选择做减法——删掉字段与"已校验"表述，把缺口显式记为未验证。补实现（A）留给独立 change，因为它牵动三处 schema、两个包的写入路径与全部既有产物重算，且没有独立参考可证明"重算的指纹是对的"。
->
-> 决策：C —— **不做实现，只消除虚假承诺**。
->
-> 具体动作（`converge-contracts-and-distribution` §B）：
->
-> 1. 删除 `payloadFingerprint` 字段：`AuditResult` 类型、`package-audit.ts` 的恒 `null` 赋值、`package-builder.hashGeneratedPayload` 与全部写入点、`core` 的 schema（含 required）。**不是留 null，是删除**。
-> 2. 同步改写把缺陷固化成预期的两条断言（`test-runner/src/index.test.ts:68`、`apps/cli/src/index.test.ts:352`），改为"审计结果不含该字段"。
-> 3. 浏览器证据的 mismatch 列表维持 profile/mode/matrix/environment，只在 check message 注明 `artifact hash recorded, not re-verified`；不新增字段表达同一件事。
-> 4. `compatibility.json` 的 `toolVersion` / `runtimeVersion` / `diagnostics` 缺口只记录、不修。
-> 5. M6 的 1.1 / 4.3 改回未勾选；`offline-delivery-assurance` 的"资产被篡改 → failed"改为"未实现完整性校验 → 记 `not-verified` 并阻止 complete"。
-> 6. **同步修 `IMPLEMENTATION_BASELINE §4`**（原规定 `compatibility.json` 必需含 `payloadFingerprint`、且"被篡改 → failed"），否则基线与 spec delta 直接冲突。
->
-> 你的批注已并入上述决策：「payloadFingerprint等都应该去掉了」。
->
-> ⚠需确认（不阻塞本批）：`validate` 读到旧包里的 `payloadFingerprint` 时按"未知字段忽略"处理且不重写（`converge` B.7 已按此实现）。若你希望旧包直接报错而不是静默忽略，需要改 B.7。
 
 ---
 

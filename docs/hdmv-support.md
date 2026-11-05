@@ -24,8 +24,8 @@ The field layout below is the layout implemented by the pinned `libbluray` MOBJ 
 
 Evidence references:
 
-- `LIBBLURAY-1.5.0`, commit `d75c88e54c893e5cbf4c61d356477655eb435769`: `src/libbluray/hdmv/mobj_parse.c` parses the 12-byte fields; `hdmv_insn.h` enumerates options; `hdmv_vm.c` dispatches and performs a subset of semantics; `register.h` and `register.c` define implementation register counts, PSR names, and defaults. Local cache: `.reference-cache/libbluray-1.5.0/`.
-- `LIBHDMV-2026-03`, commit `ec0e5b27d2852ca6b008719f66aa3324c0b43f28`, is Alpha and is **not used as a golden**: its decoder field layout and PSR index names conflict with libbluray. Local cache: `.reference-cache/libhdmv-2026-03/`.
+- `LIBBLURAY-1.5.0`, commit `d75c88e54c893e5cbf4c61d356477655eb435769`: `src/libbluray/hdmv/mobj_parse.c` parses the 12-byte fields; `hdmv_insn.h` enumerates options; `hdmv_vm.c` dispatches and performs a subset of semantics; `register.h` and `register.c` define implementation register counts, PSR names, and defaults. Local checkout: `.reference-cache/repositories/libbluray-1.5.0/`.
+- `LIBHDMV-2026-03`, commit `ec0e5b27d2852ca6b008719f66aa3324c0b43f28`, is Alpha and is **not used as a golden**: its decoder field layout and PSR index names conflict with libbluray. Local checkout: `.reference-cache/repositories/libhdmv-2026-03/`.
 - BDA historical public whitepapers are supplementary architecture/background sources only; applicable title/version/pages are recorded in `docs/references/sources.json`. They do not define the VM opcodes/PSRs used here. No licensed BDA book is required to implement pinned-reference behavior.
 - M3 test-only synthetic vectors are in `packages/hdmv/src/fixtures.ts`. They test this implementation’s parser/executor contracts; they are not independent protocol goldens or media-derived evidence.
 
@@ -63,7 +63,7 @@ Evidence references:
 | g2/s0/set5 | MUL | 2 | next; libbluray saturates at uint32 max | none | executes; no independent golden |
 | g2/s0/set6 | DIV | 2 | next; zero divisor yields uint32 max in libbluray | none | executes; no independent golden |
 | g2/s0/set7 | MOD | 2 | next; zero divisor yields uint32 max in libbluray | none | executes; no independent golden |
-| g2/s0/set8 | RND | 2 | random state/seed contract absent | none | records `HDMV_UNVERIFIED_OPCODE` and stops the current VM turn |
+| g2/s0/set8 | RND | 2 | deterministic 32-bit configured seed; pinned libbluray 64-bit LCG; output is upper word modulo N plus one | writes the selected value to a GPR and records the register delta; zero range returns one with `HDMV_RND_ZERO_RANGE` | fixed-seed vector and bdmvkit shuffle fixture cover all three playlist branches; distribution uniformity is not claimed |
 | g2/s0/set9 | AND | 2 | next | none | executes; no independent golden |
 | g2/s0/set10 | OR | 2 | next | none | executes; no independent golden |
 | g2/s0/set11 | XOR | 2 | next | none | executes; no independent golden |
