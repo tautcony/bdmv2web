@@ -1,6 +1,6 @@
 # Tasks
 
-> 范围调整记录：以下原任务和完成证据按原样保留，用于追踪已完成工作；其中涉及正片的浏览器播放、正片转码和完整播放包要求由当前范围替代；菜单背景和菜单音轨的 FFmpeg 转码、FFprobe 检验及其完成记录仍然适用。既有勾选不代表新的系统播放器接入已完成。当前实施任务见文末。
+> 当前交付包括离线菜单、菜单背景媒体和通过 URL Protocol 打开源 M2TS。下方按章节记录实现状态和验证证据。
 
 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
 
@@ -15,7 +15,7 @@
 ## 2. 转码与时间表
 
 - [x] 2.1 接入FFprobe/FFmpeg探测及参数数组spawn；验收：记录版本/参数，无shell拼接，缺工具/编码器和特殊路径负例正确。
-- [x] 2.2 实现线性预合成、分支独立片段及背景循环资产；验收：H.264/AAC/faststart/比例/帧率/质量参数明确，不引用原M2TS。
+- [x] 2.2 实现线性预合成、分支独立片段及菜单背景资产；验收：AVC/H.264 与 HEVC 源均转成 H.264/AAC/faststart，循环条件和单次 PlayItem 播放模式明确，比例/帧率/质量参数明确，不引用原 M2TS。
 - [ ] 2.3 实现job取消/超时/进程失败/缓存key及输出探测；验收：半成品不入manifest，坏缓存不复用，ffprobe失败不以退出0判成功。
 - [x] 2.4 实现MediaTimelineMap双向映射/半开边界/45k/epoch；验收：设计中225000→PI1源495000和线性2.5秒数值准确，重复Clip不碰撞。
 - [x] 2.5 实现章节seek/loadedmetadata/seeked校准；验收：跨PlayItem和非零PTS seek误差不超过一帧，实际成功后才反馈。
@@ -36,7 +36,7 @@
 
 ## Completed evidence notes
 
-- 3.4 explicitly maps zero-based package STN stream order to one-based PSR stream numbers in runtime data and asset metadata. Runtime tests route the extracted Tamako language-menu button commands for English and Japanese through `MenuController` and `MenuLoopPlaybackBridge`, then verify the selected local audio asset, page transition, pause/play behavior, logical-time restoration, failure rollback, and stale switch cancellation. The source `test-data/**` remains unchanged.
+- 3.4 explicitly maps zero-based package STN stream order to one-based PSR stream numbers in runtime data and asset metadata. Runtime tests exercise extracted language-menu commands through `MenuController` and `MenuLoopPlaybackBridge`, then verify local audio selection, page transition, pause/play behavior, logical-time restoration, failure rollback, and stale switch cancellation. The source fixtures remain unchanged.
 
 ## Remaining work
 
@@ -50,7 +50,7 @@
 
 ## 当前范围：默认关联播放器接入
 
-本清单按新的默认关联播放器接入边界重写。旧任务的勾选和验证仅证明当时的组件行为，不能转移为新需求的完成证据；既有转码、时间轴、PGS 和浏览器影片桥代码暂不因本变更自动删除。
+影片动作使用前端 URL Protocol；Node 本地播放桥不属于当前实现。
 
 ## 5. 单一产物与目标映射
 
@@ -62,10 +62,10 @@
 
 ## 6. 默认关联播放器接入
 
-- [ ] 6.1 在 Google Chrome 的直接 `file://` 环境验证可行交接机制；如需本地接入，设计其安装、调用、安全边界及失败回退，不假定网页可直接调用外部程序；验收不限定操作系统。
-- [ ] 6.2 由用户动作请求默认关联程序打开实际 M2TS；验证中文、空格、#、% 路径、无关联、用户取消及启动失败。
-- [ ] 6.3 安全校验 BDMV STREAM 来源、文件存在及路径/符号链接边界；若调用本地进程使用安全参数传递。
-- [ ] 6.4 区分请求、可证实交接、不可用与失败；无播放状态回传时不伪造 started/ended，解除 VM 等待并保持菜单可操作。
+- [ ] 6.1 在 Google Chrome 的直接 `file://` 环境实测 macOS/IINA 与 Windows/PotPlayer URL Protocol；实现只使用前端协议导航，不启动本地服务或扩展。
+- [ ] 6.2 由用户动作请求对应 URL Protocol 打开实际 M2TS；将 Playlist mark 的 90 kHz 时间戳以 `mpv_start` 秒数传给 IINA；验证中文、空格、#、% 路径、IINA 跳转、PotPlayer 跳转能力、未注册协议、用户取消及启动失败。
+- [ ] 6.3 保证目标仅由已声明 BDMV STREAM 中的 Clip 映射生成，并正确编码路径；该纯前端方案不访问文件系统验证源文件/符号链接状态。
+- [ ] 6.4 区分协议请求与实际播放；无播放状态回传时不伪造 started/ended，解除 VM 等待并保持菜单可操作。
 
 ## 7. 集成与验证
 
@@ -77,8 +77,16 @@
 ## 2026-11-03 implementation evidence
 
 - 5.2/5.3: `extract` now emits `external-media-targets.json` from structural, MovieObject, and IGS button graphs. Known immediate playlist and HDMV title operands and later MovieObject continuation are represented; unresolved paths conservatively widen the set. A source target resolver retains each PlayItem occurrence, half-open 90 kHz bounds, and mark offsets; it reports missing or invalid targets and does not claim the system player will enforce ranges or continue automatically.
-- Remaining: integrate the mapping with the unified menu conversion and system-player bridge, verify actual opening and presentation of range limitations, and test an available real feature stream. The existing Tamako input has no such feature stream. Therefore 5.2 and 5.3 stay open.
+- Remaining: integrate the mapping with unified menu conversion and URL Protocol handoff, then verify actual opening and source-time mapping with an available feature stream. Tasks 5.2 and 5.3 remain open.
 
 - Reference: pinned libbluray 1.5.0 `src/libbluray/hdmv/hdmv_vm.c` `_play_at` and `src/libbluray/bluray.c` `_process_hdmv_vm_event`, PSR8 and clip interval handling; the system default player is not assumed to implement the same playlist timeline.
 
-- 本地 Chrome 实测：主菜单影片按钮经动态标题进入 Playlist 00042，再由仅监听 127.0.0.1 的 Node 桥调用系统默认 IINA 打开用户提供的 `00006.m2ts` 替身；证据范围见 M6 记录。桥的完整安全审计、多片段连续播放和章节定位仍未完成。
+## 8. 覆盖现有菜单包
+
+- [x] 8.1 `convert --overwrite` 事务性替换已存在菜单目录；匹配媒体计划时复制背景和音轨，跳过媒体转码。验证：`npm run build` 通过；对用户提供的 BDMV 输入执行真实覆盖成功，输出 `media-plan.json` 记录复用，资产路径和大小与覆盖前一致。
+- [ ] 8.2 验证媒体计划不匹配/资产缺失时重新导出，以及提交失败时旧包恢复。
+
+## 9. 菜单静音控制
+
+- [x] 9.1 增加右下角静音切换，控制菜单背景视频、音轨和按钮音效；外部影片请求发起前自动静音。验证：`npm run build` 通过。
+- [ ] 9.2 在 Chrome `file://` 菜单中验证按钮状态、各音源静音和外部播放器请求时自动静音。

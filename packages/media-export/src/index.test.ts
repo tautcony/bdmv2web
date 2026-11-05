@@ -59,7 +59,7 @@ describe("menu-loop media export", () => {
     try {
       const result = await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, crf: 22, preset: "fast" });
       expect(result.plan).toMatchObject({ status: "partial", playlistId: "00003", playItemIndex: 0, clipId: "00004", repeatCount: 999, backgroundMode: "loop-one-clip" });
-      expect(result.plan.limitations).toContain("Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu-loop export contract.");
+      expect(result.plan.limitations).toContain("Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.");
       expect(result.plan.encoding).toEqual({
         video: { codec: "h264", pixelFormat: "yuv420p", preset: "fast", crf: 22, aspectRatioPolicy: "preserve-source-display-aspect", frameRatePolicy: "passthrough", evenDimensions: true },
         audio: { codec: "aac", bitrate: "192k" }, container: { video: "mp4", audio: "m4a", faststart: true },

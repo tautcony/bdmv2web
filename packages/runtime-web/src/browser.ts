@@ -5,7 +5,7 @@ import { selectPopupScene, type SerializedMenuState, type SerializedScene } from
 
 export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
-declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; }
+declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; }
 
 /** Build the menu VM from packaged data. The packaged player profile must reach the
  * VM here: the conversion-time VM already ran with it, and PSR-dependent button
@@ -97,6 +97,37 @@ function summarizeLabels(values: string[]): string {
   return [...counts].map(([value, count]) => count === 1 ? value : `${value} x${count}`).join(",");
 }
 
+function fileUrlFromBdmvPath(bdmvPath: string, streamPath: string): string {
+  const normalize = (path: string) => path.replace(/\\/g, "/").split("/").map((part, index) => index === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)).join("/");
+  const base = bdmvPath.replace(/\\/g, "/");
+  let bdmvUrl: URL;
+  if (/^[A-Za-z]:\//.test(base)) bdmvUrl = new URL(`file:///${normalize(base)}/`);
+  else if (base.startsWith("/")) bdmvUrl = new URL(`file://${normalize(base)}/`);
+  else bdmvUrl = new URL(`${normalize(base.replace(/\/$/, ""))}/`, location.href);
+  return new URL(normalize(streamPath), bdmvUrl).href;
+}
+
+function format90kSeconds(ticks: string): string {
+  const value = BigInt(ticks);
+  if (value < 0n) throw new RangeError("Playback offset cannot be negative.");
+  const whole = value / 90_000n;
+  const fraction = ((value % 90_000n) * 1_000_000n / 90_000n).toString().padStart(6, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+function openExternalVideo(bdmvPath: string, streamPath: string, seekTime90k: string | null): string {
+  const videoUrl = fileUrlFromBdmvPath(bdmvPath, streamPath);
+  const platform = navigator.userAgent;
+  if (/Macintosh|Mac OS X/i.test(platform)) {
+    if (seekTime90k === null) throw new Error("The selected chapter position is unavailable.");
+    // Always provide an explicit offset. IINA versions that apply mpv_start to
+    // a reused player core can otherwise carry the previous chapter position.
+    return `iina://open?url=${encodeURIComponent(videoUrl)}&mpv_start=${format90kSeconds(seekTime90k)}`;
+  }
+  if (/Windows/i.test(platform)) return `potplayer://${videoUrl}`;
+  throw new Error("External playback is available on macOS and Windows.");
+}
+
 async function boot(): Promise<void> {
   try {
     const data = globalThis.__BDMV_MENU_DATA__;
@@ -115,11 +146,12 @@ async function boot(): Promise<void> {
     if (!data.scene) throw new Error("The package contains no supported menu scene.");
     const scene = normalizeScene(data.scene, assetMap);
     const status = document.getElementById("runtime-status"); const start = document.getElementById("start-menu") as HTMLButtonElement | null;
+    const muteToggle = document.getElementById("audio-mute-toggle") as HTMLButtonElement | null;
     const canvas = document.getElementById("menu-canvas") as HTMLCanvasElement | null;
     const popupCanvas = document.getElementById("popup-canvas") as HTMLCanvasElement | null;
     const video = document.getElementById("menu-background") as HTMLVideoElement | null;
     const audio = document.getElementById("menu-audio") as HTMLAudioElement | null;
-    if (!status || !start || !canvas) throw new Error("The menu page is missing required runtime elements.");
+    if (!status || !start || !muteToggle || !canvas) throw new Error("The menu page is missing required runtime elements.");
     const viewport = new CanvasViewport(scene.width, scene.height);
     const vm = createMenuVm(data, vmConsoleLogger());
     if (data.vmInitialProgramId !== undefined) {
@@ -152,9 +184,7 @@ async function boot(): Promise<void> {
       if (controller) { controller.syncVmContext(); redraw(); }
     };
     const pendingActions: Array<ReturnType<HdmvVm["drainActions"]>[number]> = [];
-    let externalRequestSequence = 0;
     const dispatchActions = () => {
-      const requestSequence = ++externalRequestSequence;
       pendingActions.push(...vm.drainActions());
       if (!controller) return { menuPlaylistRequested: false, completion: Promise.resolve() };
       const mediaActions: Promise<void>[] = [];
@@ -207,16 +237,16 @@ async function boot(): Promise<void> {
           closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
           if (result.status === "unavailable") { showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }
-          const params = new URLSearchParams(location.hash.slice(1)); const port = params.get("bridgePort"); const token = params.get("bridgeToken");
-          if (!port || !token || !/^\d{1,5}$/.test(port) || !/^[0-9a-f]{48}$/.test(token)) {
-            // The user has to copy this path or launch the helper: keep it on screen.
-            showStatus(`Open ${result.item.streamPath} manually, or launch start-menu.sh to use the default media player.`, { persist: true });
-            vm.releaseExternalPlayback(action); continue;
+          const bdmvPath = globalThis.__BDMV_BDMV_PATH__;
+          if (!bdmvPath) { showStatus("The package is missing runtime/bdmv-config.js; set the BDMV path and reload.", { persist: true, error: true }); vm.releaseExternalPlayback(action); continue; }
+          try {
+            const protocolUrl = openExternalVideo(bdmvPath, result.item.streamPath, result.seekTime90k);
+            setMenuMuted(true);
+            showStatus(`Requested ${result.item.streamPath} in the external player.`);
+            location.href = protocolUrl;
+          } catch (error) {
+            showStatus(error instanceof Error ? error.message : String(error), { persist: true, error: true });
           }
-          const image = new Image();
-          image.onload = () => { if (requestSequence === externalRequestSequence) showStatus(`Default media player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`); };
-          image.onerror = () => { if (requestSequence === externalRequestSequence) showStatus(`Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`, { persist: true }); };
-          image.src = `http://127.0.0.1:${port}/open?token=${token}&clip=${encodeURIComponent(result.item.clipId)}`;
           vm.releaseExternalPlayback(action);
         } else {
           if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "TOP_MENU", "MENU_RETURN"].includes(action.type)) closePopup();
@@ -235,6 +265,17 @@ async function boot(): Promise<void> {
       offerRetry: (retry) => { retrySound = retry; start.textContent = "Retry sound"; start.hidden = false; start.disabled = false; },
       isCurrent: (_soundId, buttonId) => !!controller && controller.button?.id === buttonId && controller.activatedButtonId === buttonId,
     });
+    let menuMuted = false;
+    const setMenuMuted = (muted: boolean) => {
+      menuMuted = muted;
+      if (video) video.muted = muted;
+      if (audio) audio.muted = muted;
+      soundPlayer.setMuted(muted);
+      muteToggle.setAttribute("aria-pressed", String(muted));
+      muteToggle.setAttribute("aria-label", muted ? "Unmute menu audio" : "Mute menu audio");
+      muteToggle.title = muted ? "Unmute menu audio" : "Mute menu audio";
+    };
+    muteToggle.addEventListener("click", () => setMenuMuted(!menuMuted));
     const redraw = () => {
       if (!controller) return;
       const rect = canvas.getBoundingClientRect(); const context = canvas.getContext("2d");

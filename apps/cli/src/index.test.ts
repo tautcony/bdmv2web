@@ -125,7 +125,7 @@ describe("M4 menu-only convert output", () => {
         const readme = await readFile(join(output, "README.md"), "utf8");
         const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
         const html = await readFile(join(output, "index.html"), "utf8");
-        expect(compatibility).toMatchObject({ mode: "menu-only", status: "complete", externalDependencies: ["Node.js local playback bridge", "configured BDMV STREAM files", "system M2TS player"] });
+        expect(compatibility).toMatchObject({ mode: "menu-only", status: "complete", externalDependencies: ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] });
         expect(manifest).toMatchObject({ mode: "menu-only", status: "complete", declaredEntryCount: 2, hdmvEntryCount: 2 });
         // The three conclusion sources must agree, and the report must carry only
         // facts, not a "no checks were supplied" reason.
@@ -133,8 +133,8 @@ describe("M4 menu-only convert output", () => {
         expect(report.reasons.join(" ")).not.toContain("No audit checks were supplied.");
         expect(report.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS"]));
         expect(assetManifest.schemaVersion).toBe("1.0");
-        expect(readme).toMatch(/menu-only preview.*delivery status is \*\*complete\*\*/s);
-      expect(readme).toContain("Run start-menu.sh");
+        expect(readme).toMatch(/Menu-only preview\. Delivery status: \*\*complete\*\*/);
+        expect(readme).toContain("External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows.");
         const localReferences = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!);
         expect(localReferences.length).toBeGreaterThan(0);
         for (const path of localReferences) {
@@ -147,11 +147,11 @@ describe("M4 menu-only convert output", () => {
           readFile(join(output, "compatibility.json")), readFile(join(output, "asset-manifest.json")), readFile(join(output, "manifest.json")),
         ])).map((bytes) => bytes.toString("utf8")).join("\n");
         expect(packageText).not.toContain(await realpath(disc));
-        expect(JSON.parse(await readFile(join(output, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
+        expect(await readFile(join(output, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
         expect(packageText).toContain("STREAM/00002.m2ts");
         expect(discData).toContain("igs-00002-");
         expect(discData).not.toContain("igs-00001-");
-        expect(packageText).toContain("http://127.0.0.1:");
+        expect(packageText).toContain("iina://open?url=");
       }
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
@@ -216,25 +216,23 @@ describe("M4 menu-only convert output", () => {
       expect(result.status).toBe(0);
       const output = join(parent, "BDMV-menu");
       expect(JSON.parse(result.stdout.toString()).output).toBe(await realpath(output));
-      expect(JSON.parse(await readFile(join(output, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
+      expect(await readFile(join(output, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
       const parentOutput = join(parent, "parent-input-menu");
       const parentResult = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", parent, "--out", parentOutput, "--no-strict"]);
       expect(parentResult.status).toBe(0);
-      expect(JSON.parse(await readFile(join(parentOutput, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
-      await access(join(output, "start-menu.sh"));
+      expect(await readFile(join(parentOutput, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
       const verify = () => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", output, "--offline", "--format", "json"]);
       const initialAudit = verify(); expect(initialAudit.status).toBe(0);
       const checks = JSON.parse(initialAudit.stdout.toString()).checks as Array<{ checkId: string; result: string }>;
       expect(checks.filter((item) => item.result === "fail")).toEqual([]);
-      expect(checks).toContainEqual(expect.objectContaining({ checkId: "BUNDLE_LOCAL_PLAYER_BRIDGE", result: "not-verified" }));
-      await writeFile(join(output, "bdmv-config.json"), JSON.stringify({ bdmvPath: "../moved BDMV" }));
+      await writeFile(join(output, "runtime", "bdmv-config.js"), 'globalThis.__BDMV_BDMV_PATH__="../moved BDMV";\n');
       const changedAudit = verify(); expect(changedAudit.status).toBe(0);
       expect(JSON.parse(changedAudit.stdout.toString()).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified" }));
       const other = join(parent, "other"); await mkdir(other);
       const externalOutput = join(other, "menu");
       const separate = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", externalOutput, "--no-strict"]);
       expect(separate.status).toBe(0);
-      expect(JSON.parse(await readFile(join(externalOutput, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: await realpath(disc) });
+      expect(await readFile(join(externalOutput, "runtime", "bdmv-config.js"), "utf8")).toContain(`globalThis.__BDMV_BDMV_PATH__=${JSON.stringify(await realpath(disc))}`);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

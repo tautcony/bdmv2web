@@ -10,6 +10,7 @@ function fixture(): { disc: ParsedDisc; closure: MediaClosure } {
     multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams: [], source,
   });
   const disc = {
+    clips: ["00004", "00005"].map((id) => ({ id, sequence: [{ offsetStcId: 0, stcs: [{ presentationStartPts: 0 }] }] })),
     playlists: [{ id: "00001", version: "0200", source, playItems: [item(0, "00004", 45000, 135000), item(1, "00005", 90000, 225000), item(2, "00004", 270000, 315000)],
       marks: [{ index: 0, type: 1, playItemRef: 1, time45k: 112500, entryEsPid: 0, duration45k: 0, source }] }],
     graph: { nodes: [{ id: "clip:00004", type: "clip", state: "present", source }, { id: "clip:00005", type: "clip", state: "present", source }], edges: [] },
@@ -24,9 +25,9 @@ describe("external source playlist boundaries", () => {
     expect(map.playlists[0]?.items.map((item) => [item.clipId, item.sourceIn90k, item.sourceOut90k, item.playlistStart90k, item.playlistEnd90k])).toEqual([
       ["00004", "90000", "270000", "0", "180000"], ["00005", "180000", "450000", "180000", "450000"], ["00004", "540000", "630000", "450000", "540000"],
     ]);
-    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST", playlist: 1 })).toMatchObject({ status: "available", item: { index: 0 }, remainingItems: [{ index: 1 }, { index: 2 }], limitations: expect.arrayContaining([expect.stringContaining("not played automatically")]) });
-    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 2 })).toMatchObject({ status: "available", item: { clipId: "00004", index: 2 }, sourceStart90k: "540000", remainingItems: [] });
-    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_MARK", playlist: 1, playMark: 0 })).toMatchObject({ status: "available", item: { index: 1 }, sourceStart90k: "225000" });
+    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST", playlist: 1 })).toMatchObject({ status: "available", item: { index: 0 }, remainingItems: [{ index: 1 }, { index: 2 }] });
+    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 2 })).toMatchObject({ status: "available", item: { clipId: "00004", index: 2 }, clipTime90k: "540000", seekTime90k: "540000", remainingItems: [] });
+    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_MARK", playlist: 1, playMark: 0 })).toMatchObject({ status: "available", item: { index: 1 }, clipTime90k: "225000", seekTime90k: "225000" });
   });
   it("reports missing files, unknown items and out-of-range marks without guessing", () => {
     const { disc, closure } = fixture(); disc.graph.nodes[1]!.state = "missing";

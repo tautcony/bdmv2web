@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
-import { access, mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { readFile } from "node:fs/promises";
 import { parsePgsSup } from "./pgs.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates, MediaBudgetError } from "./budget.js";
 
@@ -50,6 +49,8 @@ export interface MenuLoopMediaInput {
   outTime45k: number;
   stillMode: number;
   repeatCount: number;
+  /** Whether the declared menu segment repeats; ordinary single PlayItems play once. */
+  loopBackground?: boolean;
   videoPid: number;
   audioTracks: MediaAudioTrackInput[];
 }
@@ -71,6 +72,8 @@ export class MediaJobError extends Error {
 }
 export interface MenuLoopMediaOptions {
   outputDirectory: string;
+  /** Reuse encoded assets only when the previous package media plan matches this input. */
+  reuseFromDirectory?: string;
   ffmpegPath?: string;
   ffprobePath?: string;
   timeoutMs?: number;
@@ -97,7 +100,7 @@ export interface MediaPlan {
   loopStart45k?: number;
   durationSeconds: number;
   repeatCount: number;
-  backgroundMode: "loop-one-clip" | "still-last-frame";
+  backgroundMode: "single-clip" | "loop-one-clip" | "still-last-frame";
   videoPid: number;
   audioTracks: MediaAudioTrackInput[];
   encoding: {
@@ -175,6 +178,10 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const mediaDirectory = resolve(output, "assets/media");
   const planAbsolute = resolve(output, "media-plan.json");
   await ensureAbsent(planAbsolute);
+  if (options.reuseFromDirectory) {
+    const reused = await reuseMenuLoopMedia(input, options, resolve(options.reuseFromDirectory), output, mediaDirectory, planAbsolute, crf, preset);
+    if (reused) return reused;
+  }
 
   validateOptionalByteLimit("maxAssetBytes", options.maxAssetBytes);
   validateOptionalByteLimit("maxOutputBytes", options.maxOutputBytes);
@@ -223,7 +230,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const rawSeekSeconds = (input.loopStart45k ?? input.inTime45k) / 45_000 - sourceStart;
   const seekSeconds = rawSeekSeconds < 0.000001 ? 0 : rawSeekSeconds;
   const videoStream = findPidStream(sourceProbe, input.videoPid, "video", input.sourcePath);
-  if (videoStream.codec_name !== "h264") throw new Error(`Menu loop Clip ${input.clipId} video PID ${input.videoPid} is ${videoStream.codec_name ?? "unknown"}; H.264 is required for this export.`);
+  if (!new Set(["h264", "hevc"]).has(videoStream.codec_name ?? "")) throw new Error(`Top Menu Clip ${input.clipId} video PID ${input.videoPid} uses unsupported codec ${videoStream.codec_name ?? "unknown"}; H.264 and HEVC inputs are supported.`);
   const audioStreams = input.audioTracks.map((track) => ({ track, stream: findPidStream(sourceProbe, track.pid, "audio", input.sourcePath) }));
   const aspectRatio = displayAspectRatio(videoStream);
 
@@ -288,7 +295,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Complete output directory exceeded maxOutputBytes while publishing media-plan.json." });
     return {
       plan, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
-      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: "h264", pid: input.videoPid, width: outputVideo.width!, height: outputVideo.height!, durationSeconds: videoDuration, loop: input.stillMode !== 2 },
+      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: "h264", pid: input.videoPid, width: outputVideo.width!, height: outputVideo.height!, durationSeconds: videoDuration, loop: loopBackground(input) },
       audioTracks, files,
     };
   } catch (error) {
@@ -297,7 +304,106 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   }
 }
 
+async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions, sourceDirectory: string, output: string, mediaDirectory: string, planPath: string, crf: number, preset: string): Promise<MenuLoopMediaResult | null> {
+  let priorPlan: MediaPlan;
+  let priorManifest: Record<string, unknown>;
+  try {
+    priorPlan = JSON.parse(await readFile(resolve(sourceDirectory, "media-plan.json"), "utf8")) as MediaPlan;
+    priorManifest = JSON.parse(await readFile(resolve(sourceDirectory, "asset-manifest.json"), "utf8")) as Record<string, unknown>;
+  } catch { return null; }
+  if (!matchesReusablePlan(priorPlan, input, preset, crf)) return null;
+  const media = priorManifest.media as { background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> } | undefined;
+  const priorBackground = media?.background;
+  const priorAudioTracks = media?.audioTracks;
+  const backgroundPath = "assets/media/background.mp4";
+  if (!priorBackground || priorBackground.path !== backgroundPath || priorBackground.codec !== "h264" || priorBackground.pid !== input.videoPid
+    || !positive(priorBackground.width) || !positive(priorBackground.height)
+    || typeof priorBackground.durationSeconds !== "number" || !Number.isFinite(priorBackground.durationSeconds)
+    || priorBackground.loop !== loopBackground(input) || !Array.isArray(priorAudioTracks) || priorAudioTracks.length !== input.audioTracks.length) return null;
+  const audioRecords = input.audioTracks.map((track) => {
+    const path = `assets/media/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
+    const previous = priorAudioTracks.find((candidate) => candidate.pid === track.pid && candidate.streamNumber === track.streamNumber && candidate.language === track.language && candidate.path === path && candidate.codec === "aac");
+    if (!previous || typeof previous.durationSeconds !== "number" || !Number.isFinite(previous.durationSeconds)) return null;
+    return { track, path, previous };
+  });
+  if (audioRecords.some((record) => record === null)) return null;
+  const sourceFiles = [backgroundPath, ...audioRecords.map((record) => record!.path)];
+  const sourceSizes = new Map<string, number>();
+  try {
+    for (const path of sourceFiles) {
+      const info = await stat(resolve(sourceDirectory, path));
+      if (!info.isFile()) return null;
+      sourceSizes.set(path, info.size);
+    }
+  } catch { return null; }
+
+  validateOptionalByteLimit("maxAssetBytes", options.maxAssetBytes);
+  validateOptionalByteLimit("maxOutputBytes", options.maxOutputBytes);
+  const rates: MenuLoopBudgetRates = {
+    estimatedVideoBitsPerSecond: options.estimatedVideoBitsPerSecond ?? 8_000_000,
+    estimatedAudioBitsPerSecond: options.estimatedAudioBitsPerSecond ?? 192_000,
+    containerOverheadPercent: options.containerOverheadPercent ?? 5,
+  };
+  validateBudgetRates(rates);
+  const estimate = estimateMenuLoopBudget(input.outTime45k - (input.loopStart45k ?? input.inTime45k), input.audioTracks.length, rates);
+  for (const path of sourceFiles) assertActualWithinLimit({ scope: "asset", actualBytes: BigInt(sourceSizes.get(path)!), limitBytes: options.maxAssetBytes, message: `Reused media asset '${path}' exceeds maxAssetBytes.` });
+  const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
+  await mkdir(mediaDirectory, { recursive: true });
+  const copied: string[] = [];
+  try {
+    for (const path of sourceFiles) {
+      const destination = resolve(output, path);
+      await ensureAbsent(destination);
+      await copyFile(resolve(sourceDirectory, path), destination);
+      copied.push(destination);
+    }
+    const estimatedMediaBytes = BigInt(estimate.totalMediaBytes);
+    let estimatedPackageBytes = existingOutputBytes + estimatedMediaBytes;
+    let plan = makePlan(input, estimate, existingOutputBytes, estimatedPackageBytes, options.maxAssetBytes ?? null, options.maxOutputBytes ?? null, crf, preset, true);
+    for (let pass = 0; pass < 4; pass++) {
+      const next = existingOutputBytes + estimatedMediaBytes + BigInt(Buffer.byteLength(`${JSON.stringify(plan, null, 2)}\n`));
+      if (next === estimatedPackageBytes) break;
+      estimatedPackageBytes = next;
+      plan = makePlan(input, estimate, existingOutputBytes, estimatedPackageBytes, options.maxAssetBytes ?? null, options.maxOutputBytes ?? null, crf, preset, true);
+    }
+    assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedPackageBytes, limitBytes: options.maxOutputBytes, message: "Estimated reused media package exceeds maxOutputBytes." });
+    const files = sourceFiles.map((path) => ({ path, absolutePath: resolve(output, path), byteLength: sourceSizes.get(path)! }));
+    const backgroundFile = files[0]!;
+    const audioTracks = audioRecords.map((record, index) => {
+      const file = files[index + 1]!;
+      return { ...file, codec: "aac" as const, pid: record!.track.pid, streamNumber: record!.track.streamNumber, language: record!.track.language, durationSeconds: record!.previous.durationSeconds as number };
+    });
+    await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
+    copied.push(planPath);
+    assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Reused media package exceeds maxOutputBytes." });
+    return {
+      plan, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
+      background: { ...backgroundFile, codec: "h264", pid: input.videoPid, width: priorBackground.width as number, height: priorBackground.height as number, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input) },
+      audioTracks, files,
+    };
+  } catch (error) {
+    await Promise.all(copied.map((path) => unlink(path).catch(() => undefined)));
+    throw error;
+  }
+}
+
+function matchesReusablePlan(plan: MediaPlan, input: MenuLoopMediaInput, preset: string, crf: number): boolean {
+  const loop = loopBackground(input);
+  const mode = input.stillMode === 2 ? "still-last-frame" : loop ? "loop-one-clip" : "single-clip";
+  return plan.playlistId === input.playlistId && plan.playItemIndex === input.playItemIndex && plan.clipId === input.clipId
+    && plan.sourceFile === input.sourceFile && plan.sourceIn45k === input.inTime45k && plan.sourceOut45k === input.outTime45k
+    && plan.loopStart45k === input.loopStart45k && plan.repeatCount === input.repeatCount && plan.backgroundMode === mode
+    && plan.videoPid === input.videoPid && plan.encoding?.video?.codec === "h264" && plan.encoding.video.preset === preset && plan.encoding.video.crf === crf
+    && plan.audioTracks.length === input.audioTracks.length && plan.audioTracks.every((track, index) => {
+      const current = input.audioTracks[index]!;
+      return track.streamNumber === current.streamNumber && track.pid === current.pid && track.language === current.language;
+    });
+}
+
 export function pidSpecifier(pid: number): string { validatePid(pid); return `0:i:0x${pid.toString(16)}`; }
+function loopBackground(input: Pick<MenuLoopMediaInput, "stillMode" | "repeatCount" | "loopBackground">): boolean {
+  return input.loopBackground ?? (input.stillMode !== 2 && input.repeatCount > 1);
+}
 export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "outTime45k" | "loopStart45k">): number { return (input.outTime45k - (input.loopStart45k ?? input.inTime45k)) / 45_000; }
 export function resolveMenuLoopStart45k(playItemIndex: number, inTime45k: number, outTime45k: number, marks: readonly { type: number; playItemRef: number; time45k: number }[]): number | undefined {
   return marks.filter((mark) => mark.type === 1 && mark.playItemRef === playItemIndex && mark.time45k > inTime45k && mark.time45k < outTime45k).at(-1)?.time45k;
@@ -375,7 +481,7 @@ function streamDuration(stream: ProbeStream, probe: ProbeResult): number {
   return duration;
 }
 function assertDuration(actual: number, expected: number, path: string): void { if (Math.abs(actual - expected) > 0.25) throw new Error(`Encoded media '${path}' duration ${actual.toFixed(3)}s differs from planned ${expected.toFixed(3)}s by more than 0.25s.`); }
-function positive(value: number | undefined): value is number { return Number.isSafeInteger(value) && value! > 0; }
+function positive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 async function ensureAbsent(path: string): Promise<void> {
   try { await access(path); throw new Error(`Media export target already exists: '${path}'.`); }
   catch (error) { if (error instanceof Error && error.message.startsWith("Media export target already exists:")) throw error; if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
@@ -415,12 +521,13 @@ async function runProcess(executable: string, args: string[], timeoutMs: number,
 
 export const runMediaProcess: MediaProcessRunner = runProcess;
 
-function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, plannedPackageBytes: bigint, maxAssetBytes: number | null, maxOutputBytes: number | null, crf: number, preset: string): MediaPlan {
+function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, plannedPackageBytes: bigint, maxAssetBytes: number | null, maxOutputBytes: number | null, crf: number, preset: string, reused = false): MediaPlan {
   return {
     status: "partial", playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId,
     sourceFile: input.sourceFile, sourceIn45k: input.inTime45k, sourceOut45k: input.outTime45k,
     ...(input.loopStart45k !== undefined ? { loopStart45k: input.loopStart45k } : {}),
-    durationSeconds: durationSeconds(input), repeatCount: input.repeatCount, backgroundMode: input.stillMode === 2 ? "still-last-frame" : "loop-one-clip", videoPid: input.videoPid,
+    durationSeconds: durationSeconds(input), repeatCount: input.repeatCount,
+    backgroundMode: input.stillMode === 2 ? "still-last-frame" : loopBackground(input) ? "loop-one-clip" : "single-clip", videoPid: input.videoPid,
     audioTracks: input.audioTracks.map((track) => ({ ...track })),
     encoding: {
       video: { codec: "h264", pixelFormat: "yuv420p", preset, crf, aspectRatioPolicy: "preserve-source-display-aspect", frameRatePolicy: "passthrough", evenDimensions: true },
@@ -428,7 +535,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
       container: { video: "mp4", audio: "m4a", faststart: true },
     },
     budget: { ...estimate, existingOutputBytes: existingOutputBytes.toString(), plannedPackageBytes: plannedPackageBytes.toString(), maxAssetBytes, maxOutputBytes },
-    limitations: [input.stillMode === 2 ? "This output covers the single infinite-still menu PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : "This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete HDMV playlist timeline.", "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu-loop export contract.", "Persistent cache reuse is disabled because this export contract does not validate source-content identity.", "PGS subtitle streams are not exported by this background-loop path."],
+    limitations: [input.stillMode === 2 ? "This output covers the single infinite-still menu PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : loopBackground(input) ? "This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : "This output covers one non-repeating Top Menu PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline.", "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.", reused ? "H.264/AAC assets were reused from a prior package because its media plan matched; source content changes at the same path are not fingerprinted." : "On overwrite, prior media assets are reused only when playlist, clip, time bounds, stream declarations, and encoding settings match; source content changes at the same path are not fingerprinted."],
   };
 }
 

@@ -1,6 +1,6 @@
 # bdmv2web
 
-解析 Blu-ray 光盘目录，生成可在浏览器中交互的菜单，并通过本地播放器打开原始视频流。
+解析 Blu-ray 光盘目录，生成可在浏览器中交互的菜单，并通过系统播放器打开原始视频流。
 
 ## 能力
 
@@ -8,7 +8,7 @@
 - 解析 M2TS 中的 IGS 菜单，提取按钮、图形、调色板和指令。
 - 执行 HDMV 导航指令，支持寄存器、分支、比较、MovieObject 和播放列表调用。
 - 导出菜单背景视频、音轨和按钮音效，生成可在 Chrome 中打开的菜单包。
-- 通过 shell 启动器调用默认媒体播放器，播放菜单关联的原始 M2TS 文件。
+- 通过操作系统 URL Protocol 调用 IINA 或 PotPlayer，打开菜单关联的原始 M2TS 文件。
 - 导出结构数据、菜单图形与诊断信息，校验生成的菜单包。
 
 ## 环境配置
@@ -65,20 +65,19 @@ node apps/cli/dist/index.js convert "/path/to/Disc/BDMV" \
 
 省略 `--out` 时，输出到 `<BDMV 父目录>/BDMV-menu`。`--title` 默认为 BDMV 父目录名。
 
+输出目录已存在时，添加 `--overwrite` 替换现有菜单包。若旧包中的 `media-plan.json` 与本次 Playlist、Clip、时间范围、流声明和编码设置一致，会复制并复用 H.264/AAC 媒体，跳过转码；不匹配或媒体文件缺失时会重新生成媒体。媒体复用依据媒体计划元数据，不检测源文件内容是否在相同路径下被替换。
+
 ### 打开菜单包
 
 在 Chrome 中打开生成的 `index.html`，即可使用菜单、背景视频和音效。
 
-需要从菜单播放原始视频流时，运行 shell 启动器：
+右下角的静音按钮控制菜单背景视频、音轨和按钮音效。请求外部播放器打开影片时，菜单音频自动静音。
 
-```sh
-cd "/path/to/output/my-disc-menu"
-./start-menu.sh
-```
+菜单影片动作通过 URL Protocol 打开源 M2TS：macOS 使用 IINA 1.4.4 或更新版本，并通过 `mpv_start` 跳转到所选章节；Windows 使用 PotPlayer 打开对应 M2TS。
 
-启动器需要 Node.js。它会启动并用 Google Chrome 打开菜单；菜单触发播放时，默认关联的媒体播放器会打开对应的 `STREAM/*.m2ts`。关闭终端窗口即可停止回环桥。
+菜单包不包含影片 PGS 字幕。需要单独导出时，使用 `export-assets --type pgs`。
 
-移动菜单包后，可修改 `bdmv-config.json` 中原始 BDMV 的绝对路径或相对包目录的路径，重启启动器后生效。
+移动菜单包后，可修改 `runtime/bdmv-config.js` 中的 `__BDMV_BDMV_PATH__`，设置原始 BDMV 的绝对路径或相对菜单包的路径，然后重新加载菜单。
 
 ### 校验菜单包
 
@@ -96,7 +95,7 @@ node apps/cli/dist/index.js validate "/path/to/output/my-disc-menu" --offline
 | `extract` | 导出结构数据和菜单图形 | `--out DIR`（必填）、`--strict` |
 | `list-assets` | 列举可达标题的 IGS 图片与 PGS SUP 字幕声明 | `--type all\|igs\|pgs` |
 | `export-assets` | 导出 IGS PNG 图片和解析验证后的 SUP 字幕，并写入资源类型、导出路径和大小清单 | `--out DIR`（必填）、`--type all\|igs\|pgs` |
-| `convert` | 生成菜单包 | `--out DIR`、`--title`、`--mode menu-only`、`--player-profile FILE`、`--strict` |
+| `convert` | 生成或覆盖菜单包 | `--out DIR`、`--title`、`--overwrite`、`--mode menu-only`、`--player-profile FILE`、`--strict` |
 | `validate` | 校验菜单包 | `--offline`（必填）、`--format json`、`--strict` |
 
 `inspect` 和 `extract` 使用 `stageStatus` 表示解析状态，`convert` 和 `validate` 使用 `status` 表示交付状态。状态为 `partial` 时默认退出码为 0，使用 `--strict` 时退出码为 2；失败时退出码为 1。`inspect --allow-partial` 在解析失败时也返回 0，报告仍保留 `failed` 状态。
@@ -139,11 +138,9 @@ my-disc-menu/
 ├── runtime/                   # 浏览器运行时、光盘数据和菜单图形
 ├── assets/media/              # 菜单背景视频和音轨
 ├── assets/audio/              # 支持的按钮音效
-├── bdmv-config.json           # 原始 BDMV 路径
+├── runtime/bdmv-config.js    # 可编辑的原始 BDMV 路径
 ├── external-targets.json      # 可外部播放的 playlist/clip
-├── local-player-bridge.mjs    # 本地播放桥
-├── start-menu.sh              # shell 启动器
-├── manifest.json              # 文件清单和指纹
+├── manifest.json              # 文件清单与交付状态
 ├── asset-manifest.json        # 音频和媒体资产元数据
 ├── media-plan.json            # 媒体导出计划
 ├── compatibility.json         # 兼容性声明

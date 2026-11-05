@@ -19,7 +19,7 @@ const supported = new Set(["inspect", "extract", "convert", "validate", "compare
 const commandOptions: Record<string, { flags: ReadonlySet<string>; values: ReadonlySet<string> }> = {
   inspect: { flags: new Set(["--strict", "--no-strict", "--allow-partial"]), values: new Set(["--out", "--format"]) },
   extract: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--out", "--format"]) },
-  convert: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--out", "--mode", "--player-profile", "--limits", "--title", "--format"]) },
+  convert: { flags: new Set(["--strict", "--no-strict", "--overwrite"]), values: new Set(["--out", "--mode", "--player-profile", "--limits", "--title", "--format"]) },
   validate: { flags: new Set(["--strict", "--no-strict", "--offline"]), values: new Set(["--format"]) },
   compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--mode", "--format"]) },
   "list-assets": { flags: new Set([]), values: new Set(["--type", "--format"]) },
@@ -456,8 +456,13 @@ function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; cl
 
 function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile): ParsedDisc["playlists"][number] | undefined {
   const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV");
-  if (typeof firstPlay?.target.target !== "number") return undefined;
+  const topMenu = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV");
+  if (typeof firstPlay?.target.target !== "number" || typeof topMenu?.target.target !== "number") return undefined;
   const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, profile });
+  // First Play may initialize PSRs/GPRs before it jumps to a feature title.
+  // Run that initialization, then enter the explicit index.bdmv Top Menu entry
+  // via selectTitle(0). The playlist emitted there is the menu playlist; do not
+  // infer menu identity from playlist repetition, duration, or filename.
   vm.reset(firstPlay.target.target);
   const startup = vm.runTurn();
   if (startup.waiting) vm.releaseExternalPlayback(startup.waiting);
@@ -474,26 +479,50 @@ function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile): ParsedDi
   return undefined;
 }
 
-async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
-  const first = playlist?.playItems.at(-1);
-  if (!playlist || !first || first.multiAngle) return null;
+async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
+  if (!playlist || playlist.playItems.length === 0) return null;
+  const playItems = playlist.playItems;
+  const first = playItems[0]!;
+  const last = playItems.at(-1)!;
+  if (playItems.some((item) => item.multiAngle)) return null;
   let repeatCount = 0;
   for (const item of [...playlist.playItems].reverse()) {
-    if (item.clipId !== first.clipId || item.inTime45k !== first.inTime45k || item.outTime45k !== first.outTime45k || item.multiAngle) break;
+    if (item.clipId !== last.clipId || item.inTime45k !== last.inTime45k || item.outTime45k !== last.outTime45k || item.multiAngle) break;
     repeatCount++;
   }
-  const loopStart45k = resolveMenuLoopStart45k(first.index, first.inTime45k, first.outTime45k, playlist.marks);
-  const singleItemInfiniteStill = playlist.playItems.length === 1 && first.stillMode === 2;
-  if (repeatCount < 2 && !singleItemInfiniteStill && loopStart45k === undefined) return null;
-  const video = first.streams.find((stream) => stream.pid !== null && stream.codingType === 0x1b && stream.streamType === 1);
+  const repeatedTail = repeatCount >= 2;
+  const tailStart = playItems.length - (repeatedTail ? repeatCount : 1);
+  const timelineItems = repeatedTail ? [last] : playItems;
+  const loopItem = repeatedTail ? last : first;
+  // A Top Menu playlist is identified by the HDMV command chain above. Its
+  // background topology is derived from the selected timeline: a complete
+  // single item, adjacent intervals in the same source clip, an explicit loop
+  // mark, or an identical repeated tail. Playlist repetition is not a menu test.
+  const sameSourceContinuous = timelineItems.every((item, index) => item.clipId === first.clipId
+    && (index === 0 || timelineItems[index - 1]!.outTime45k === item.inTime45k));
+  const oneTimelineSpan = repeatedTail || sameSourceContinuous;
+  if (!oneTimelineSpan || (repeatedTail && tailStart > 0)) return null;
+  const spanStart = repeatedTail ? last.inTime45k : first.inTime45k;
+  const spanEnd = last.outTime45k;
+  const loopStart45k = (repeatedTail ? [last] : timelineItems)
+    .map((item) => resolveMenuLoopStart45k(item.index, item.inTime45k, item.outTime45k, playlist.marks))
+    .filter((time): time is number => time !== undefined)
+    .at(-1);
+  const streamDeclarationsMatch = playItems.every((item) => item.streams.length === first.streams.length
+    && item.streams.every((stream, index) => {
+      const initial = first.streams[index]!;
+      return stream.pid === initial.pid && stream.codingType === initial.codingType && stream.streamType === initial.streamType && stream.language === initial.language;
+    }));
+  if (!streamDeclarationsMatch) return null;
+  const video = first.streams.find((stream) => stream.pid !== null && (stream.codingType === 0x1b || stream.codingType === 0x24) && stream.streamType === 1);
   const audioCodingTypes = new Set([0x03, 0x04, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0xa1, 0xa2]);
   const audioStreams = first.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType !== null && audioCodingTypes.has(stream.codingType) && stream.language !== null);
   if (!video?.pid || audioStreams.length === 0 || audioStreams.some((stream) => !/^[A-Za-z]{3}$/.test(stream.language!))) return null;
   const sourceFile = `BDMV/STREAM/${first.clipId}.m2ts`;
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
   return {
-    sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: first.index, clipId: first.clipId,
-    inTime45k: first.inTime45k, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: first.outTime45k, stillMode: first.stillMode, repeatCount: Math.max(1, repeatCount), videoPid: video.pid,
+    sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: repeatedTail ? last.index : first.index, clipId: first.clipId,
+    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: Math.max(1, repeatCount), loopBackground: loopItem.stillMode !== 2 && (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
     audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
   };
 }
@@ -512,6 +541,7 @@ async function convert(): Promise<void> {
   const profile = await loadPlayerProfile(optionValue("--player-profile"));
   const outOption = optionValue("--out");
   const titleOption = optionValue("--title");
+  const overwrite = argv.includes("--overwrite");
   const disc = await parseBdmv(input);
   const fatalDiagnostics = classifyDiagnostics(disc.diagnostics);
   if (fatalDiagnostics.hasFatal) {
@@ -524,9 +554,8 @@ async function convert(): Promise<void> {
   const extraction = await extractIgsScenes(disc);
   const menuPlaylist = findTopMenuPlaylist(disc, profile);
   const menuMedia = await menuLoopMediaInput(disc, menuPlaylist);
-  const transaction = await beginOutputTransaction(roots.output);
+  const transaction = await beginOutputTransaction(roots.output, { overwrite });
   try {
-    const pgsTracks = await extractReachablePgsTracks(disc, extraction.scenes, transaction.stagingPath);
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
       await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu-only preview\n\n${message}\n\nStatus: **failed**.\n`);
       // The failure report keeps the same shape as the success report so a consumer
@@ -584,7 +613,7 @@ async function convert(): Promise<void> {
       ...popupAdaptations.flatMap((result) => result.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity }))),
     ];
     if (popupScenes.length) diagnostics.push({ code: "M4_POPUP_RENDER_PARTIAL", message: "Popup IGS compositions are overlaid when POPUP_MENU has an unambiguous match for the active packaged menu clip/PID. Title playback delegated to the external player cannot be overlaid.", severity: "warning" });
-    if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "No supported repeated menu clip with video and primary-audio streams was found.", severity: "warning" });
+    if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "The HDMV Top Menu command selected a playlist, but its background timeline could not be represented as one continuous source-clip span or a repeated tail with supported video and primary audio streams.", severity: "warning" });
     if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands.", severity: "warning" });
     let soundBytes: Uint8Array | null = null;
     const soundPath = disc.sounds[0]?.source.path;
@@ -614,12 +643,13 @@ async function convert(): Promise<void> {
     await buildMenuPackage({
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
-      scene, popupScenes, pgsTracks, vmPrograms, vmEntries: disc.entries,
+      scene, popupScenes, vmPrograms, vmEntries: disc.entries,
       externalTargets: buildExternalTargets(disc, extraction.scenes),
       bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
       ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }),
       graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile,
+      ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });

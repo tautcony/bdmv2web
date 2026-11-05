@@ -12,7 +12,7 @@ M1 提供结构及 PlayItem 与 Clip 引用，M2/M3 提供菜单和导航。M5 �
 
 ### 输出位置和源路径配置
 
-发现输入的 BDMV 目录后，默认将 HTML 输出目录与该 BDMV 目录并排。例如 `影片/BDMV/` 对应 `影片/BDMV-menu/`。用户可通过 `--out` 指定其他输出路径，包括本地目录；输出不得与源目录重叠或覆盖已有目录。非同级输出的可编辑配置默认使用发现的 BDMV 绝对路径。输入是 BDMV 自身还是其直接父目录，均以发现的 BDMV 为基准。
+发现输入的 BDMV 目录后，默认将 HTML 输出目录与该 BDMV 目录并排。例如 `影片/BDMV/` 对应 `影片/BDMV-menu/`。用户可通过 `--out` 指定其他输出路径，包括本地目录；输出不得与源目录重叠。默认拒绝已存在的输出，只有显式传入 `--overwrite` 才替换现有菜单包。替换使用 staging/backup 事务，生成失败时保留原包。若旧包的媒体计划与本次 Playlist、Clip、时间范围、流声明和编码设置一致，复制并复用 H.264/AAC 文件；不匹配或文件缺失时重新转码。此复用比较计划元数据，不对源 M2TS 做内容指纹校验。非同级输出的可编辑配置默认使用发现的 BDMV 绝对路径。输入是 BDMV 自身还是其直接父目录，均以发现的 BDMV 为基准。
 
 产物包含可编辑的独立配置文件，声明指向 BDMV 的路径；默认使用相对 HTML 输出目录的 `../BDMV`，以实际目录名生成。允许用户调整为相对路径或绝对本地路径；相对路径始终以 HTML 输出目录为基准，不以当前工作目录为基准。浏览器及可能需要的本地启动接入必须使用同一配置，并在重新加载后生效。浏览器 `file://` 限制下配置格式和加载方式应经验证，不能假设可 fetch 本地 JSON；README 须给出可编辑示例及重载方式。
 
@@ -22,11 +22,17 @@ M1 提供结构及 PlayItem 与 Clip 引用，M2/M3 提供菜单和导航。M5 �
 
 保守合并入口、对象及按钮导航边，保留 Playlist、PlayItem、Clip、源路径和 IN/OUT 等来源信息。条件分支取并集；动态目标无法确定时保留 unknown。播放动作只能打开已解析且实际存在的 M2TS，不靠文件排序猜测。对多个 PlayItem、重复 Clip、分支或非零 IN/OUT，单独打开某个文件不等同于播放整个 Playlist；展示实际交接范围和限制，无法确定目标时提供可见诊断，不声称等价播放。
 
+### Top Menu 背景媒体识别
+
+菜单 Playlist 由 `index.bdmv` 的 Top Menu 入口及 HDMV MovieObject 执行结果确定。转换时运行 First Play MovieObject 读取初始化状态，再通过 `selectTitle(0)` 进入 Top Menu；Top Menu MovieObject 发出的 `PLAY_PL` 指定菜单 Playlist。背景媒体按 Playlist 的 PlayItem 和 mark 生成：单片、同源 Clip 的连续区间作为完整时间线；重复尾段或有效 loop mark 设置循环。跨 Clip、时间间隙、流声明变化和多角度序列记录为媒体不可用。无循环背景播放完后保留末帧，并把 `MEDIA_ENDED` 交给 VM。AVC/H.264 与 HEVC 视频统一转成包内 H.264。
+
 ### 系统交接与能力边界
 
-以用户触发的播放动作为入口，将经过验证的本地文件交给可用的默认关联程序。随包生成的 `start-menu.sh` 启动 Node.js 本地桥并打开 `file://` 菜单：桥仅监听 127.0.0.1 的随机端口，验证随机会话令牌，只允许打开已声明的 BDMV STREAM 文件；关闭启动终端结束桥。启动器使用 Google Chrome，可通过 `BROWSER` 指定其可执行文件。README 明确本地进程及 Node.js 依赖。直接打开 index.html 时显示手动打开提示。`file://` 菜单与媒体交接须在实际 Chrome 环境验证；若浏览器策略不允许，需设计并验证明确的本地启动接入及其安装/运行和安全边界，不能假设网页具备直接调用外部程序的权限，也不能悄悄要求后台服务。若无法完成接入，提供可复制或手动打开的文件路径及清晰提示，记为未完成/partial。验收不限定操作系统。
+用户触发影片动作后，前端将已映射的 M2TS 转成 `file://` URL 并调用操作系统 URL Protocol。macOS 使用 `iina://open?url=<encoded-file-url>`；Windows 使用 `potplayer://<file-url>`。运行时按操作系统选择协议。`runtime/bdmv-config.js` 保存 BDMV 路径；移动菜单包或源目录后可修改配置并重新加载。播放动作发出协议请求后，VM 继续处理菜单导航；外部播放器负责影片播放。
 
-播放请求、交接成功（仅当机制能证实）、不可用和失败必须区分。不能把用户点击、链接导航或启动请求成功当作播放器已播放；没有可靠回传时不能生成 MEDIA_STARTED、MEDIA_ENDED 或虚构自动返回。VM 等待应明确解除或转入可恢复状态，避免挂死；浏览器菜单在返回焦点后仍可操作。真实的播放、暂停、章节、音轨、字幕、播放完成和播放器关闭由外部程序负责，本系统不承诺能控制或获知这些状态。
+`PLAY_PLAYLIST_MARK` 的 `time45k` 是所指 PlayItem 的 Clip 时间戳。系统将 mark/PlayItem 时间转换为 90 kHz，再减去 CLPI 中与 PlayItem `stc_id` 对应的 STC `presentation_start_time`，得到 M2TS 内相对跳转位置。IINA 1.4.4 或更新版本通过 `mpv_start` 接收秒数；Windows 上的 PotPlayer 打开目标 M2TS。页面记录协议请求，VM 随后恢复菜单导航；播放、暂停、章节、音轨、字幕与播放结束由外部播放器处理。
+
+对 IGS 页面，Escape 优先沿当前焦点按钮的导航邻接关系执行唯一的隐藏 auto-action 按钮（若存在），使光盘脚本定义的返回命令可用；否则使用配置的 Escape 映射。
 
 ### 安全与资源
 
@@ -36,4 +42,4 @@ M1 提供结构及 PlayItem 与 Clip 引用，M2/M3 提供菜单和导航。M5 �
 
 ## Verification / Exit Criteria
 
-验证单 Clip 映射、多个 PlayItem/重复 Clip、未知目标、缺失文件、特殊路径、默认关联程序打开失败；核对交接的实际文件。记录 Chrome/默认播放器版本、用户动作、实际被打开文件、观察结果和制品证据；同时验证断网、菜单包移动和外部源可用/不可用。验收不限定操作系统。独立播放器行为只记录观察，不能作为浏览器同步能力的承诺。
+验证单 Clip 映射、多个 PlayItem/重复 Clip、未知目标、缺失文件、中文/空格/`#`/`%` 特殊路径和协议请求；核对实际打开的文件。macOS/IINA 与 Windows/PotPlayer 分别记录 Chrome、播放器版本、用户动作、观察结果和制品证据，并验证断网、菜单包移动和外部源可用状态。

@@ -71,7 +71,7 @@ function safeManifestPath(path: string): string | null {
 
 function isReportPath(path: string): boolean { return REPORT_FILES.has(path) || path.startsWith("reports/"); }
 function isPayloadEntry(path: string, kind?: string): boolean {
-  return !(path === "bdmv-config.json" && kind === "external-config") && !isReportPath(path) && !NON_RUNTIME_KINDS.has(kind?.toLowerCase() ?? "") && PAYLOAD_EXTENSIONS.has(extname(path).toLowerCase());
+  return !(path === "runtime/bdmv-config.js" && kind === "external-config") && !isReportPath(path) && !NON_RUNTIME_KINDS.has(kind?.toLowerCase() ?? "") && PAYLOAD_EXTENSIONS.has(extname(path).toLowerCase());
 }
 
 async function listFiles(root: string, checks: AuditCheck[]): Promise<string[]> {
@@ -266,8 +266,7 @@ async function auditRuntimeFiles(root: string, files: string[], checks: AuditChe
     } catch (error) { add(checks, "RUNTIME_FILE_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), path); continue; }
     if (ext === ".html" || ext === ".htm") auditHtml(text, path, checks, refs);
     if (ext === ".css") auditCss(text, path, checks, refs);
-    if (path === "local-player-bridge.mjs") add(checks, "BUNDLE_LOCAL_PLAYER_BRIDGE", "not-verified", "The local playback helper requires a separate native and loopback audit", path);
-    else if (ext === ".js" || ext === ".mjs") auditScript(text, path, checks, refs);
+    if (ext === ".js" || ext === ".mjs") auditScript(text, path, checks, refs);
     if (ext === ".json" && !["manifest.json", "compatibility.json", "dependency-audit.json"].includes(path)) auditJsonUrls(text, path, checks, refs);
   }
   for (const ref of refs) {
@@ -359,11 +358,16 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
       if (fileStat.isSymbolicLink() || !fileStat.isFile()) { add(checks, "PACKAGE_FILE_INVALID", "fail", "Expected a regular package file (symlinks are not accepted)", path); continue; }
       const canonical = await realpath(absolute);
       if (!within(root, canonical)) { add(checks, "PACKAGE_PATH_ESCAPE", "fail", "Resolved file escapes package root", path); continue; }
-      if (path === "bdmv-config.json" && entry.kind === "external-config") {
-        let config: unknown;
-        try { config = JSON.parse(await readFile(canonical, "utf8")); } catch { config = null; }
-        if (!isRecord(config) || typeof config.bdmvPath !== "string" || !config.bdmvPath || config.bdmvPath.includes("\0")) add(checks, "EXTERNAL_CONFIG_INVALID", "fail", "BDMV path configuration is invalid", path);
-        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV and external-player evidence must be verified in the current environment", path);
+      if (path === "runtime/bdmv-config.js" && entry.kind === "external-config") {
+        let bdmvPath: unknown;
+        try {
+          const source = await readFile(canonical, "utf8");
+          const match = source.match(/^globalThis\.__BDMV_BDMV_PATH__=(.+);\s*$/);
+          const encodedPath = match?.[1];
+          if (encodedPath !== undefined) bdmvPath = JSON.parse(encodedPath);
+        } catch { bdmvPath = undefined; }
+        if (typeof bdmvPath !== "string" || !bdmvPath || bdmvPath.includes("\0")) add(checks, "EXTERNAL_CONFIG_INVALID", "fail", "BDMV path configuration is invalid", path);
+        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV path and URL Protocol playback must be verified in the current environment", path);
         continue;
       }
     } catch { add(checks, entry.required === false ? "PACKAGE_OPTIONAL_ASSET_MISSING" : "PACKAGE_MISSING_ASSET", entry.required === false ? "not-verified" : "fail", "Manifest asset is missing or unreadable", path); }

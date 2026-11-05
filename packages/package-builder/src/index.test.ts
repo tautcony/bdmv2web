@@ -95,7 +95,7 @@ describe("menu package primitives", () => {
   });
   it("marks every generated preview partial with no browser evidence", () => {
     const report = createCompatibility({ schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Preview", mode: "menu-only", status: "partial", diagnostics: [] });
-    expect(report.status).toBe("partial"); expect(report.browserEvidence).toEqual([]); expect(report.coverage).toMatchObject({ browser: "Chrome only; direct file:// not yet verified", igs: "unverified" });
+    expect(report.status).toBe("partial"); expect(report.browserEvidence).toEqual([]); expect(report.coverage).toMatchObject({ browser: "Chrome only; direct file:// evidence not collected", igs: "unverified" });
     expect(report.notVerified).toEqual(expect.arrayContaining(["direct file:// launch", "offline directory relocation", "browser support matrix", "media timeline and seek accuracy"]));
   });
   it("converts only M1-declared 48 kHz 16-bit PCM ranges into WAV and reports affected sound references", () => {

@@ -119,13 +119,16 @@ export interface MenuControllerCheckpoint {
 
 export interface RuntimeHooks { playSound?: (soundId: number, buttonId: number) => void; invalidateSound?: () => void; activateButton?: (pageId: number, button: MenuButton) => void; dispatchActions?: () => void; diagnostic?: (message: string) => void; render?: () => void; popup?: () => void; topMenu?: () => void; escape?: () => void }
 
-export interface SoundAudioPort { play(): Promise<void> | void; addEventListener?(type: "error", listener: () => void, options?: { once?: boolean }): void }
+export interface SoundAudioPort { muted?: boolean; play(): Promise<void> | void; addEventListener?(type: "error" | "ended", listener: () => void, options?: { once?: boolean }): void }
 export interface SoundPlayerHooks { report: (kind: "blocked" | "unsupported" | "asset" | "playback", message: string) => void; offerRetry: (retry: () => void) => void; isCurrent: (soundId: number, buttonId: number) => boolean }
 
 /** Plays package-local WAVs and exposes an explicit, correlated gesture retry for autoplay blocks. */
 export class MenuSoundPlayer {
   private requestId = 0;
+  private muted = false;
+  private readonly activeAudio = new Set<SoundAudioPort>();
   constructor(private readonly sounds: Readonly<Record<number, string>>, private readonly createAudio: (url: string) => SoundAudioPort, private readonly hooks: SoundPlayerHooks) {}
+  setMuted(muted: boolean): void { this.muted = muted; for (const audio of this.activeAudio) audio.muted = muted; }
   invalidate(): void { this.requestId++; }
   play(soundId: number, buttonId: number): void {
     const requestId = ++this.requestId; const url = this.sounds[soundId];
@@ -133,8 +136,11 @@ export class MenuSoundPlayer {
     let audio: SoundAudioPort;
     try { audio = this.createAudio(url); }
     catch (error) { this.hooks.report("asset", `Could not load sound ${soundId}: ${errorMessage(error)}`); return; }
+    audio.muted = this.muted;
+    this.trackAudio(audio);
     audio.addEventListener?.("error", () => { if (requestId === this.requestId) this.hooks.report("asset", `Sound ${soundId} asset failed to load (${url}).`); }, { once: true });
     const start = (retry: boolean) => {
+      audio.muted = this.muted;
       let result: Promise<void> | void;
       try { result = audio.play(); } catch (error) { this.handleFailure(error, soundId, buttonId, url, requestId, audio, retry); return; }
       Promise.resolve(result).catch((error: unknown) => this.handleFailure(error, soundId, buttonId, url, requestId, audio, retry));
@@ -142,6 +148,7 @@ export class MenuSoundPlayer {
     start(false);
   }
   private handleFailure(error: unknown, soundId: number, buttonId: number, url: string, requestId: number, audio: SoundAudioPort, retry: boolean): void {
+    this.activeAudio.delete(audio);
     if (requestId !== this.requestId) return;
     const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name: unknown }).name) : "";
     if (name === "NotAllowedError") {
@@ -152,9 +159,18 @@ export class MenuSoundPlayer {
     else this.hooks.report("playback", `Sound ${soundId} ${retry ? "retry" : "playback"} failed: ${errorMessage(error)}`);
   }
   private handleRetry(audio: SoundAudioPort, soundId: number, buttonId: number, url: string, requestId: number): void {
+    this.trackAudio(audio);
+    audio.muted = this.muted;
     let result: Promise<void> | void;
     try { result = audio.play(); } catch (error) { this.handleFailure(error, soundId, buttonId, url, requestId, audio, true); return; }
     Promise.resolve(result).catch((error: unknown) => this.handleFailure(error, soundId, buttonId, url, requestId, audio, true));
+  }
+  private trackAudio(audio: SoundAudioPort): void {
+    if (!audio.addEventListener) return;
+    this.activeAudio.add(audio);
+    const release = () => this.activeAudio.delete(audio);
+    audio.addEventListener("ended", release, { once: true });
+    audio.addEventListener("error", release, { once: true });
   }
 }
 
@@ -269,6 +285,17 @@ export class MenuController {
   handle(kind: InputKind): void {
     if (kind === "escape") {
       if (!this.isUoAllowed(25)) return;
+      const current = this.button;
+      const hiddenAutoActions = current
+        ? [...new Set(Object.values(current.neighbors))]
+          .map((id) => this.page.buttons.find((button) => button.id === id))
+          .filter((button): button is MenuButton => !!button && this.isUsable(button) && button.autoAction === true && button.commands.length > 0 && button.states.selected?.bounds === undefined)
+        : [];
+      // Some authored pages (including this disc's Special Features page) encode
+      // their return control as a non-rendered auto-action in the selected
+      // button's neighbor graph. Escape should execute that real HDMV command,
+      // not route to an unavailable popup and leave the VM stopped.
+      if (hiddenAutoActions.length === 1) { this.selectButton(hiddenAutoActions[0]!.id); return; }
       if (this.inputConfig.escapeMapping === "popup") this.handle("popup");
       else if (this.inputConfig.escapeMapping === "topMenu") this.handle("topMenu");
       else if (this.inputConfig.escapeMapping === "custom") this.hooks.escape?.();
@@ -541,6 +568,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   private started = false;
   private startPromise: Promise<boolean> | null = null;
   private retryGeneration = 0;
+  private activePlaylistResponse: { id: string; generation: number } | null = null;
   constructor(
     private readonly vm: HdmvVm,
     private readonly video: HTMLVideoElement,
@@ -551,6 +579,13 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   ) {
     this.confirmedPrimaryAudioStream = vm.registers.read({ kind: "psr", index: 1 });
     this.selectedAudioStream = media.audioTracks.find((track) => this.psrStreamNumber(track) === this.confirmedPrimaryAudioStream)?.streamNumber ?? [...media.audioTracks].sort((left, right) => left.streamNumber - right.streamNumber)[0]?.streamNumber ?? 0;
+    this.video.addEventListener?.("ended", () => {
+      if (this.media.background.loop) return;
+      const response = this.activePlaylistResponse;
+      if (!response) return;
+      this.activePlaylistResponse = null;
+      this.vm.handleEvent({ type: "MEDIA_ENDED", generation: response.generation, responseTo: response.id });
+    });
   }
 
   async dispatch(action: PlaybackAction): Promise<void> {
@@ -573,7 +608,10 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
       return;
     }
-    await this.startMedia({ id: action.id, generation: action.generation });
+    const response = { id: action.id, generation: action.generation };
+    this.activePlaylistResponse = response;
+    const started = await this.startMedia(response);
+    if (!started && this.activePlaylistResponse === response) this.activePlaylistResponse = null;
   }
 
   isCurrent(generation: number): boolean { return generation === this.currentGeneration; }

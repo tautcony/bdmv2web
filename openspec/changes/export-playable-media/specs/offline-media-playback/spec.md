@@ -6,6 +6,20 @@
 
 ## ADDED Requirements
 
+### Requirement: 覆盖已有菜单包
+
+系统 SHALL 默认保留已存在的输出目录；仅在 `convert --overwrite` 时事务性替换整个菜单包。覆盖时，若旧媒体计划与新输入的 Playlist、Clip、时间边界、流声明及编码参数匹配，系统 SHALL 复用已有 H.264/AAC 资源而不重新转码；不匹配或资源缺失时重新生成。该匹配不对源 M2TS 内容作哈希或指纹验证。
+
+#### Scenario: 覆盖并复用媒体
+
+- **WHEN** 用户对已存在的输出目录运行 `convert --overwrite`，且旧媒体计划及所需文件与当前输入匹配
+- **THEN** 新菜单包替换旧包，菜单/诊断/清单文件更新，背景视频和音轨从旧包复制，媒体计划记录本次复用，不运行媒体转码
+
+#### Scenario: 覆盖但媒体计划不匹配
+
+- **WHEN** 用户运行 `convert --overwrite`，但旧媒体计划不匹配或旧媒体文件缺失
+- **THEN** 重新生成媒体后替换旧包；若生成失败，旧包仍保留
+
 ### Requirement: 保守映射影片文件
 
 系统 SHALL 将可达影片动作映射到实际 M2TS，保留播放列表、PlayItem、源路径及时间范围；不可确定时保留诊断。
@@ -27,17 +41,27 @@
 
 ### Requirement: 交给默认关联程序
 
-系统 SHALL 在用户触发影片动作时，通过可用并经验证的接入方式请求打开对应 M2TS，由默认关联程序处理；验收不限定操作系统。
+系统 SHALL 在用户触发影片动作时，通过前端 URL Protocol 请求打开对应 M2TS。macOS SHALL 使用 IINA 的 `iina://open?url=` 协议，Windows SHALL 使用 PotPlayer 的 `potplayer://` 协议。系统不得要求本地服务、浏览器扩展或额外后台进程。
 
-#### Scenario: 成功交接
+#### Scenario: 发起协议请求
 
-- **WHEN** 目标文件存在且系统接入可用
-- **THEN** 请求打开正确的实际 M2TS，并区分请求已发起与可证实的系统交接结果
+- **WHEN** 已解析到影片 M2TS 且用户点击影片动作
+- **THEN** 按操作系统生成对应的播放器协议 URL 并发起导航，状态只报告已发起请求
 
 #### Scenario: 浏览器限制或无关联
 
 - **WHEN** 浏览器限制直接打开、系统无关联程序或打开失败
-- **THEN** 显示原因和可操作的手动打开路径，不伪报播放成功；未实现自动交接时状态不得为 complete
+- **THEN** 页面保留可操作菜单和目标文件路径
+
+#### Scenario: 跳转到所选章节
+
+- **WHEN** HDMV 请求播放 Playlist mark，且该 mark 已映射到目标 Clip 的 90 kHz 时间戳
+- **THEN** 以 mark/PlayItem 时间减去匹配 `stc_id` 的 CLPI STC 起始时间，macOS/IINA 1.4.4+ URL 以 `mpv_start` 秒数传递 M2TS 内相对偏移；Windows/PotPlayer 打开目标 M2TS
+
+#### Scenario: 特别收录页返回
+
+- **WHEN** 当前 IGS 按钮的邻接关系唯一指向一个无图形但带命令的 auto-action 按钮，且用户按 Escape
+- **THEN** 沿该光盘定义的导航边执行按钮命令，使菜单返回由 HDMV/IGS 脚本决定；没有唯一候选时使用配置的 Escape 映射
 
 #### Scenario: 未知外部播放状态
 
@@ -46,7 +70,7 @@
 
 ### Requirement: 单一离线菜单产物
 
-系统 SHALL 提供统一的 convert 产物，不将 menu-only 与 standalone-full 作为不同交付模式；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。
+系统 SHALL 提供统一的 convert 产物，不将 menu-only 与 standalone-full 作为不同交付模式；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。影片 PGS 字幕由外部播放器处理，不嵌入菜单运行时。
 
 #### Scenario: 移动菜单包
 
@@ -57,6 +81,11 @@
 
 - **WHEN** 外部程序打开影片
 - **THEN** 播放、章节、音轨、字幕及停止由该程序负责，网页不承诺对其控制、同步或结束回调
+
+#### Scenario: 菜单音频静音
+
+- **WHEN** 用户操作右下角静音按钮，或页面请求外部播放器打开影片
+- **THEN** 按钮切换菜单音频静音状态；外部播放请求自动静音菜单背景视频、菜单音轨和按钮音效
 
 ### Requirement: 受限本地引用
 
@@ -78,8 +107,8 @@
 
 #### Scenario: 动态背景与菜单音轨
 
-- **WHEN** 菜单引用受支持的动态背景和音轨
-- **THEN** 将其转换为本地可播放资源并随菜单打包，校验结果后才登记资产
+- **WHEN** index.bdmv 的 Top Menu 入口经 HDMV 执行选中菜单 Playlist，其背景由单 PlayItem、同一源 Clip 中连续且流声明一致的区间组成，或是明确的循环尾段，且视频编码为 AVC/H.264 或 HEVC
+- **THEN** 按完整背景时间线导出 H.264 视频和 AAC 主音轨；仅在重复尾段或有效 loop mark 存在时设置循环，并在 FFprobe 校验后随菜单打包
 
 #### Scenario: 转换或校验失败
 

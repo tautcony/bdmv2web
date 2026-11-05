@@ -3,9 +3,12 @@ import type { MediaClosure } from "./closure.js";
 
 export interface ExternalPlayItem {
   index: number;
+  stcId: number;
   clipId: string;
   streamPath: string;
   present: boolean;
+  /** Start of the PlayItem's CLPI STC clock, in 90 kHz ticks; null when unresolved. */
+  sourceOrigin90k: string | null;
   sourceIn90k: string;
   sourceOut90k: string;
   playlistStart90k: string;
@@ -29,7 +32,7 @@ export type ExternalPlayRequest =
   | { type: "PLAY_PLAYLIST_ITEM"; playlist: number; playItem: number }
   | { type: "PLAY_PLAYLIST_MARK"; playlist: number; playMark: number };
 export type ExternalPlayTarget =
-  | { status: "available"; playlistId: string; item: ExternalPlayItem; sourceStart90k: string; remainingItems: ExternalPlayItem[]; limitations: string[] }
+  | { status: "available"; playlistId: string; item: ExternalPlayItem; clipTime90k: string; seekTime90k: string | null; remainingItems: ExternalPlayItem[] }
   | { status: "unavailable"; code: string; message: string };
 
 /** Preserve the playlist order and source-time bounds without exporting or joining source clips. */
@@ -43,11 +46,17 @@ export function createExternalMediaTargets(disc: ParsedDisc, closure: MediaClosu
     const items = playlist.playItems.map((item): ExternalPlayItem => {
       const start = BigInt(item.inTime45k) * 2n;
       const end = BigInt(item.outTime45k) * 2n;
+      const clipInfo = disc.clips.find((candidate) => candidate.id.toLowerCase() === item.clipId.toLowerCase());
+      const stc = clipInfo?.sequence.flatMap((atc) => atc.stcs.map((sequence, index) => ({
+        id: atc.offsetStcId + index,
+        presentationStartPts: sequence.presentationStartPts,
+      }))).find((sequence) => sequence.id === item.stcId);
       const playlistStart = cursor;
       if (end > start) cursor += end - start;
       return {
-        index: item.index, clipId: item.clipId, streamPath: `STREAM/${item.clipId}.m2ts`,
+        index: item.index, stcId: item.stcId, clipId: item.clipId, streamPath: `STREAM/${item.clipId}.m2ts`,
         present: clips.get(`clip:${item.clipId}`.toLowerCase())?.state === "present",
+        sourceOrigin90k: stc ? (BigInt(stc.presentationStartPts) * 2n).toString() : null,
         sourceIn90k: start.toString(), sourceOut90k: end.toString(),
         playlistStart90k: playlistStart.toString(), playlistEnd90k: cursor.toString(), source: item.source,
       };
@@ -75,7 +84,7 @@ export function resolveExternalPlayTarget(targets: ExternalMediaTargets, request
   if (end <= BigInt(item.sourceIn90k) || start < BigInt(item.sourceIn90k) || start >= end) return unavailable("EXTERNAL_TIME_INVALID", `Playlist ${playlistId} PlayItem ${itemIndex} has an invalid interval or mark.`);
   if (!item.present) return unavailable("EXTERNAL_STREAM_MISSING", `Source ${item.streamPath} is missing.`);
   const remainingItems = playlist.items.slice(position + 1);
-  const limitations = ["The default media player opens the entire M2TS file; PlayItem IN/OUT and mark offsets are not enforced."];
-  if (remainingItems.length) limitations.push("Subsequent PlayItems require separate handling and are not played automatically.");
-  return { status: "available", playlistId, item, sourceStart90k: start.toString(), remainingItems, limitations };
+  const sourceOrigin = item.sourceOrigin90k === null ? null : BigInt(item.sourceOrigin90k);
+  if (sourceOrigin !== null && start < sourceOrigin) return unavailable("EXTERNAL_TIME_BEFORE_STC", `Playlist ${playlistId} target time precedes the selected Clip STC start time.`);
+  return { status: "available", playlistId, item, clipTime90k: start.toString(), seekTime90k: sourceOrigin === null ? null : (start - sourceOrigin).toString(), remainingItems };
 }

@@ -62,7 +62,7 @@ interface EventEnvelope<T> {
 
 `--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
 
-使用 `start-menu.sh` 启动受会话令牌保护的 127.0.0.1 本地播放桥并打开 `file://` 菜单；桥依赖 Node.js，明确告知用户并随终端关闭。启动器调用 Google Chrome；可用 `BROWSER` 指定浏览器可执行文件。HTML 包含可编辑的 BDMV 路径配置，同级输出默认相对指向 BDMV，其他输出默认使用 BDMV 绝对路径；支持改为相对或绝对路径，重新加载后由菜单与接入程序一致使用。输入只读。realpath 检查后拒绝输入与输出/缓存重叠及 symlink 逃逸。经验证的源 BDMV STREAM 中 M2TS 是影片交接的明确外部依赖，不属于包内生成资产；菜单运行资源仍须包内闭合。目标已存在时首期拒绝覆盖；在输出目标同父目录 staging，校验后 rename 到不存在的目标。中断/失败清理临时媒体，诊断写独立报告；不能留下貌似 complete 的目录。strict 的 partial 可保留审阅包，但必须显著标识且不能替代旧包。
+菜单直接以 `file://` 打开；影片动作由前端按操作系统调用 URL Protocol：macOS/IINA 使用 `iina://open?url=`，Windows/PotPlayer 使用 `potplayer://`。`runtime/bdmv-config.js` 保存可编辑的 BDMV 路径，修改后重新加载菜单生效。输入只读；CLI 转换拒绝输入与输出/缓存重叠及 symlink 逃逸。源 BDMV STREAM 中的 M2TS 是影片交接的外部依赖；菜单运行资源保存在包内。默认拒绝已存在的输出目录；`--overwrite` 使用 staging/backup 事务替换菜单包，并在媒体计划匹配时复用背景视频和音轨。strict 模式拒绝 partial 交付。
 
 ## 4. 状态统一判定
 

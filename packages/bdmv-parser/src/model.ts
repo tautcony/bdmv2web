@@ -42,7 +42,7 @@ export interface ClipProgram { sequenceStartSpn: number; programMapPid: number; 
 export interface CpiEntry { pid: number; epStreamType: number; pts45k: number; spn: number; angleChange: boolean; source: SourceLocation; }
 /** CLPI ClipInfo header fields; the 128 reserved bytes and font table are not retained. */
 export interface ClipHeader { streamType: number; applicationType: number; tsRecordingRate: number; sourcePacketCount: number; atcDelta: boolean; tsTypeId: string | null; source: SourceLocation; }
-/** CLPI STC presentation times are stored as 32-bit PTS values; the unit is not independently verified here. */
+/** CLPI STC presentation times are 32-bit 45 kHz Clip timestamps (as used by libbluray clpi_lookup_spn). */
 export interface StcSequence { pcrPid: number; spnStcStart: number; presentationStartPts: number; presentationEndPts: number; }
 export interface AtcSequence { spnAtcStart: number; offsetStcId: number; stcs: StcSequence[]; source: SourceLocation; }
 export interface ClipInfo { id: string; version: string; header: ClipHeader | null; sequence: AtcSequence[]; programs: ClipProgram[]; cpi: CpiEntry[]; source: SourceLocation; }
