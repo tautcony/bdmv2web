@@ -1,0 +1,331 @@
+docs/code-review.md
+  s_f463fe72520371::t_1f47eb80fccdde 381
+openspec/changes/bdmvkit-interoperability/specs/hdmv-navigation/spec.md
+  s_f463fe72520371::t_7cd3a73d92a435 7,22,24,27
+  s_f463fe72520371::t_fa098d38e3c064 1-6,8-21,23,25-26,28-32
+openspec/changes/verify-offline-release/design.md
+  s_f463fe72520371::t_ac1c408d1ba255 17,19,56,64
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_f463fe72520371::t_d0bb13b0f3476c 76,80
+  s_f463fe72520371::t_b5eaef42bf7a56 18-20,22-24
+  s_f463fe72520371::t_ede4d9ab71d5f0 21,25
+docs/references/sources.json
+  s_f463fe72520371::t_fd1273249fb16a 62
+  s_f463fe72520371::t_649c067ec98a26 635-671
+packages/hdmv/src/bdmvkit-rnd.test.ts
+  s_f463fe72520371::t_2064de6d0a1f2f 1-11,13,15,17-18,31-32
+  s_f463fe72520371::t_a63964c3b4d52b 14,19-28
+  s_f463fe72520371::t_bd870df86d1c2a 29
+  s_f463fe72520371::t_515dde72f6c2d0 12,16
+  s_f463fe72520371::t_29201618c2a7cc 30
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/verification.md
+  s_f463fe72520371::t_95a95eb1f15dc9 236
+packages/runtime-web/src/igs-adapter.test.ts
+  s_f463fe72520371::t_bc136ad5e17321 66-70,75
+  s_f463fe72520371::t_87dc1c78405732 3
+  s_f463fe72520371::t_600582195f17af 46
+  s_f463fe72520371::t_4534c1e855fe0d 71-74
+  s_f463fe72520371::t_c62d651b37bcab 76-77
+packages/media-export/src/index.ts
+  s_f463fe72520371::t_c2ac332cf3cdac 5
+  s_f463fe72520371::t_71373cfc93c7f8 97,187,310,422
+  s_f463fe72520371::t_9c7da619139014 302-304
+  s_f463fe72520371::t_5cb53b0539a1c5 416
+  s_f463fe72520371::t_5121418d3bc955 4,17-38
+  s_f463fe72520371::t_f55201f485aa6a 48-49,223,301
+  s_f463fe72520371::t_fecf9357ff1996 39,417
+openspec/changes/bdmvkit-interoperability/specs/menu-media-playback/spec.md
+  s_f463fe72520371::t_9be9c1c8a1d0f7 1-26
+openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md
+  s_f463fe72520371::t_44c4580c3d18a5 11,18,20-21,73
+packages/bdmv-io/src/index.test.ts
+  s_f463fe72520371::t_ff18591c3fe6c0 5,55
+AGENTS.md
+  s_2c116c93f0b27d::t_63d04ecf05ec4c 1-33
+docs/protocol-support.md
+  s_f463fe72520371::t_1ee428c3dd57d0 25-29
+apps/cli/src/bdmvkit-loop.test.ts
+  s_f463fe72520371::t_218fc1377b2489 1-10,12-18
+  s_f463fe72520371::t_74c556cfe3e7f5 11
+docs/hdmv-support.md
+  s_f463fe72520371::t_ac72d4dfe9141d 27-28
+  s_f463fe72520371::t_153752b5cf2ad6 66
+docs/igs-support.md
+  s_f463fe72520371::t_9401fedf0486ad 12,19
+  s_f463fe72520371::t_3e602641ebdc26 25
+  s_f463fe72520371::t_6c682dd6d68b7c 20
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/design.md
+  s_f463fe72520371::t_95a95eb1f15dc9 77
+packages/runtime-web/src/browser.ts
+  s_f463fe72520371::t_f65b3729215ff0 6
+  s_f463fe72520371::t_72e366fbedbc99 119,138-143,146-150,152-153,164,167,170-173,177-193,195-197,199,207,222,245,278
+  s_f463fe72520371::t_6d7d98846c7d70 4,174-176
+  s_f463fe72520371::t_d0920965faf514 144-145,151,194
+packages/test-runner/src/release-summary.ts
+  s_f463fe72520371::t_38b3798b7aaf3e 101
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/proposal.md
+  s_f463fe72520371::t_95a95eb1f15dc9 38
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_f463fe72520371::t_b9223de72713f1 49,51,53,55,118,126,133,135
+apps/cli/src/index.ts
+  s_f463fe72520371::t_4a73df36730b9e 185,191-197,203-206,209-210
+  s_f463fe72520371::t_ce38d3bd5b169d 775,781-782
+  s_f463fe72520371::t_865f27304bdb23 2,4,355-357
+  s_f463fe72520371::t_cde54d690c717a 243,277
+  s_f463fe72520371::t_53875bf5e0dc40 529
+  s_f463fe72520371::t_06a1dd50820e64 614-616,618-625
+  s_f463fe72520371::t_6e9508d6e96947 200-201,208,211-213
+  s_f463fe72520371::t_1eb1d6a7b517b1 16,25-26,79,199,214-223,226-239,244-258,262-264,266-267,275-276,278-281
+  s_f463fe72520371::t_2465b2801e26ae 198,202,207,240-242,259-261,265,268-274,282-288
+  s_f463fe72520371::t_52cd503ed3fb67 477
+  s_f463fe72520371::t_e287304fee03c7 9,617
+  s_f463fe72520371::t_9c7da619139014 485,487,496
+  s_f463fe72520371::t_fe5e5de9acb614 586
+  s_f463fe72520371::t_aaafbafd83ea62 465-474
+  s_f463fe72520371::t_983f08c1335345 566-567,578,584
+  s_f463fe72520371::t_d2874c74a444be 289
+packages/core/src/contracts.test.ts
+  s_f463fe72520371::t_4ae4629af8768d 10
+packages/test-runner/src/package-audit.ts
+  s_f463fe72520371::t_a4174165b175be 301-302,306,311,314,316,380
+packages/igs/test/bdmvkit-fixture.test.ts
+  s_f463fe72520371::t_044e44e02c755c 18
+  s_f463fe72520371::t_8e180a241dd801 1-13,15-16,19-21
+  s_f463fe72520371::t_1c01f4484c730c 14,17
+openspec/changes/bdmvkit-interoperability/design.md
+  s_f463fe72520371::t_95a2ee8f67c724 14
+  s_f463fe72520371::t_ac2468b14f6fe9 13,15,35
+  s_f463fe72520371::t_2f1196f5f83265 25,42
+  s_f463fe72520371::t_23c7bfed82455e 37
+  s_f463fe72520371::t_fe4edfeef7f390 27
+  s_f463fe72520371::t_5f5c840b6b6801 38
+  s_f463fe72520371::t_9cf4e5be9963fa 19
+  s_f463fe72520371::t_0cffdc80ee8621 11
+  s_f463fe72520371::t_82c874507b884c 1-10,12,16-18,20-24,26,28-34,36,39-41
+packages/test-fixtures/src/index.ts
+  s_f463fe72520371::t_b218ca27b8cc3f 10
+packages/runtime-web/src/index.ts
+  s_f463fe72520371::t_90056bd76cb896 3
+  s_f463fe72520371::t_845a780490915a 4
+  s_f463fe72520371::t_600582195f17af 512,514
+  s_f463fe72520371::t_464a4dab1223c0 513
+openspec/changes/bdmvkit-interoperability/tasks.md
+  s_f463fe72520371::t_781f9038996813 8
+  s_f463fe72520371::t_77a06e08f75840 37
+  s_f463fe72520371::t_c4378c45a9fd34 20-21
+  s_f463fe72520371::t_f238fb0b010676 38,43-44
+  s_f463fe72520371::t_82c874507b884c 1-4,10-12,16-18,23-25,28-30,34-36
+  s_f463fe72520371::t_c1c60d0ce0a723 5-6
+  s_f463fe72520371::t_cb696542767bc8 7,9,40-42
+  s_f463fe72520371::t_35cf57e5b696d5 13-15
+  s_f463fe72520371::t_0a0f4209befc70 26-27
+  s_f463fe72520371::t_220a2fa1fb9233 33,39
+  s_f463fe72520371::t_e61f8cc0ad5eba 45
+  s_f463fe72520371::t_153752b5cf2ad6 19,22,31-32
+.gitignore
+  s_f463fe72520371::t_4a55d345d7400d 7
+packages/media-export/src/pgs.test.ts
+  s_f463fe72520371::t_5adf8375995888 2-3,6,9,24-34,116
+  s_f463fe72520371::t_96f541f32e9621 1,4-5,12-16,18-23
+  s_f463fe72520371::t_8eee492ba1cc67 76-88
+  s_f463fe72520371::t_86d12b618d61ba 17
+  s_f463fe72520371::t_7391afc0cb6b8d 117
+packages/core/schema/disc-ir.schema.json
+  s_f463fe72520371::t_512496772491e0 42
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  s_f463fe72520371::t_1044c4ef34be04 8,18,51
+docs/references/cache-manifest.json
+  s_f463fe72520371::t_f01cdc5b19b9a9 5,10,15,17-20
+  s_f463fe72520371::t_15017dd7e5a8e1 6,11,16,21
+packages/runtime-web/src/bdmvkit-popup.test.ts
+  s_f463fe72520371::t_4b40c68a3ee213 1-5,7-16,19-20
+  s_f463fe72520371::t_3c77342b2de885 6,17-18
+packages/test-runner/src/report.ts
+  s_f463fe72520371::t_8807e6029a07d3 42
+  s_f463fe72520371::t_a190ed0efb2731 76
+packages/package-builder/src/index.test.ts
+  s_f463fe72520371::t_9fb78a265517b9 9,46-50,52-55,57,59-61,68-69
+  s_f463fe72520371::t_5fc9e39c5b7a89 62
+  s_f463fe72520371::t_f1670fd54df679 51,56,58
+  s_f463fe72520371::t_6073efefbd3ca1 2,5-6
+  s_f463fe72520371::t_b2ea467980422e 66-67,211,214-215
+  s_f463fe72520371::t_b277726231d957 181-182,204-206
+  s_f463fe72520371::t_f39085080fd2e1 63-65
+  s_f463fe72520371::t_cde38614c08d80 70
+packages/bdmv-parser/src/bdmvkit-fixture.test.ts
+  s_f463fe72520371::t_8e180a241dd801 1-12,14,16-18
+  s_f463fe72520371::t_65ade8f462e13f 15
+  s_f463fe72520371::t_7671b9a527306b 13
+scripts/fetch-reference-cache.py
+  s_f463fe72520371::t_71474961b6ce52 10
+  s_f463fe72520371::t_2c2fe634bef5bc 28
+  s_f463fe72520371::t_175b36eb7339a6 2,4,13-14,18-27,29-37
+openspec/changes/READINESS_REVIEW.md
+  s_f463fe72520371::t_3abcdf32ab38c0 28
+apps/cli/src/index.test.ts
+  s_f463fe72520371::t_6a517691d189b9 83
+  s_f463fe72520371::t_0b3cebbac2094a 11,48-51,53-55,57-58,69-73,75-80,84-85
+  s_f463fe72520371::t_63985216a8400c 56,82
+  s_f463fe72520371::t_2ca10122326099 52,74
+  s_f463fe72520371::t_a22b966d367acb 379
+  s_f463fe72520371::t_5ff532293e3369 59-67
+  s_f463fe72520371::t_0144dbab00eeb2 68
+  s_f463fe72520371::t_a11f9f06fad127 81
+  s_f463fe72520371::t_382bd44d4568d6 593,596,609,618
+  s_f463fe72520371::t_1e5bdfef866cd2 86-87
+docs/browser-matrix.md
+  s_f463fe72520371::t_2fab9dc3c86d2e 5,7,9
+  s_f463fe72520371::t_fe1bf84d3b6e06 14
+openspec/changes/verify-offline-release/proposal.md
+  s_f463fe72520371::t_059497e023444e 9
+skills-lock.json
+  s_f463fe72520371::t_7ff02e224be6f1 7
+docs/development.md
+  s_f463fe72520371::t_72294dd012ffdd 60-61
+  s_f463fe72520371::t_062ed003892cbd 143
+  s_f463fe72520371::t_c4fbceee218b35 53
+openspec/changes/archive/2026-11-04-establish-core-contracts/tasks.md
+  s_f463fe72520371::t_95a95eb1f15dc9 20
+scripts/generate-bdmvkit-fixtures.py
+  s_f463fe72520371::t_a5bb7a6af9047e 51-60,68-70,74-76,79,82-84,86-92
+  s_f463fe72520371::t_f68b599e5b795d 101
+  s_f463fe72520371::t_d275a6c008a7ac 63
+  s_f463fe72520371::t_acb4ba82c6d901 1-13,15-47,49-50,61-62,64-67,71-73,77-78,80,93-96,100,102-105
+  s_f463fe72520371::t_4417f71b860b4d 14,81,85
+  s_f463fe72520371::t_84a79865affd44 97-99
+  s_f463fe72520371::t_bda9fa19695a55 48
+packages/package-builder/src/index.ts
+  s_f463fe72520371::t_983f08c1335345 79-80
+  s_f463fe72520371::t_7f1bf6434c7d23 8,14,81-82,113-114,149
+  s_f463fe72520371::t_aae0957aca9367 51,217,221-222
+  s_f463fe72520371::t_75a65d01ee809f 2,18,155,158-159,164
+  s_f463fe72520371::t_65dcd9105cf7e2 138
+  s_f463fe72520371::t_d48b4d02d4c551 163
+  s_f463fe72520371::t_2757278148485c 251-267
+  s_f463fe72520371::t_bf65ebb9bbaf93 83,115-117
+  s_f463fe72520371::t_c2bbd43c0ad2d0 132
+docs/references/stages/M5-media-playback.md
+  s_f463fe72520371::t_ac58c215ab87a7 19
+  s_f463fe72520371::t_220a2fa1fb9233 16-18,20-21
+  s_f463fe72520371::t_25490f06221c82 7-8
+openspec/changes/bdmvkit-interoperability/.openspec.yaml
+  s_f463fe72520371::t_a4021eae896047 1-2
+docs/references/README.md
+  s_f463fe72520371::t_2e14dd9d4744e3 39
+  s_f463fe72520371::t_be6c7ed723b718 61,67,74
+  s_f463fe72520371::t_bf2656b4894284 17
+openspec/changes/bdmvkit-interoperability/specs/asset-cli/spec.md
+  s_f463fe72520371::t_0e832072d435a0 10
+  s_f463fe72520371::t_2a1daa27ce5c4b 1-5,7-9,11-12,14-21
+  s_f463fe72520371::t_95573530b3fa08 6,13
+packages/runtime-web/src/index.test.ts
+  s_f463fe72520371::t_0210dd58dc9d92 754-760,762-763
+  s_f463fe72520371::t_464a4dab1223c0 761
+packages/test-runner/src/browser-evidence.ts
+  s_f463fe72520371::t_7f01355fe58b08 119,131
+  s_f463fe72520371::t_62ae3a1f17a131 39,73
+  s_f463fe72520371::t_322d295ebaeecc 17,37,40-41,58,71,74-75,79,86,90,116-117
+packages/test-runner/src/browser-evidence.test.ts
+  s_f463fe72520371::t_df3e8f14812164 89
+  s_f463fe72520371::t_97a69fce2668ce 10-12,28,32,86,90
+  s_f463fe72520371::t_25e9c77473dd98 31
+packages/test-runner/src/index.test.ts
+  s_f463fe72520371::t_677836999b0088 39,41,47,60,86
+  s_f463fe72520371::t_f49dc10695f476 167,263
+openspec/changes/bdmvkit-interoperability/proposal.md
+  s_f463fe72520371::t_b7a2b83dcdedd9 1-10,12,16-19,22-28
+  s_f463fe72520371::t_dd1975497a27d8 13
+  s_f463fe72520371::t_9d6519fd8f480a 15
+  s_f463fe72520371::t_fa098d38e3c064 21
+  s_f463fe72520371::t_3f4db81cc3ac37 11,20,29
+  s_f463fe72520371::t_728d75fcaf9c4c 14
+openspec/changes/verify-offline-release/tasks.md
+  s_f463fe72520371::t_2ab16e5e14a7ea 5,9,33-34
+openspec/changes/DEPENDENCIES.md
+  s_f463fe72520371::t_05ed9674cd4fcd 56
+docs/references/stages/M0-core-contracts.md
+  s_f463fe72520371::t_ec871149b82aee 9
+docs/references/stages/M2-igs-scenes.md
+  s_f463fe72520371::t_a51ab9d333ca4a 7,16,68
+  s_f463fe72520371::t_3e602641ebdc26 62
+packages/runtime-web/src/igs-adapter.ts
+  s_f463fe72520371::t_3c77342b2de885 67-71,196-211
+  s_f463fe72520371::t_600582195f17af 37-42,179-184
+  s_f463fe72520371::t_b2342d10938124 212-213
+packages/media-export/src/pgs.ts
+  s_f463fe72520371::t_a7c43fc868d0bf 21,154-155,158-161
+openspec/changes/converge-contracts-and-distribution/specs/offline-delivery-assurance/spec.md
+  s_f463fe72520371::t_0aa0f7414d61b8 11,26
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  s_f463fe72520371::t_d0bb13b0f3476c 17,87,89
+README.md
+  s_f463fe72520371::t_de1342934529da 97
+  s_f463fe72520371::t_e7cde1aefcddde 98
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/tasks.md
+  s_f463fe72520371::t_95a95eb1f15dc9 98
+packages/hdmv/src/vm.ts
+  s_f463fe72520371::t_00bc9892d99d4b 24,28,40,45-46,142,157,450,642-649
+  s_f463fe72520371::t_a6857bb65fa3cd 61,67,69,76,78,95,103,112
+  s_f463fe72520371::t_336f74bc340767 83
+  s_f463fe72520371::t_db2df773cc5112 77,79,747-750
+  s_f463fe72520371::t_49ee60125cecc0 751-752
+packages/media-export/src/index.test.ts
+  s_f463fe72520371::t_942a627859d4ba 5,22-31
+  s_f463fe72520371::t_952a2c5c161a7a 37,51-53,93-98,101
+  s_f463fe72520371::t_ce9abd66d4f6c6 99-100
+  s_f463fe72520371::t_068941cd54fb0d 32-33
+openspec/changes/bdmvkit-interoperability/specs/interactive-graphics-extraction/spec.md
+  s_f463fe72520371::t_7cb9525340d086 1-27
+docs/bdmv_hdmv_offline_web_architecture.md
+  s_f463fe72520371::t_9811de193fcc00 489,532,717
+openspec/changes/bdmvkit-interoperability/specs/pgs-subtitle-playback/spec.md
+  s_f463fe72520371::t_9be1b6854daf19 1-45
+scripts/package-igs-fixture-materials.mjs
+  s_f463fe72520371::t_d69ae7f199de24 35
+packages/test-runner/src/release-summary.test.ts
+  s_f463fe72520371::t_d9fcfd1ddb409a 10,14,53,62,71
+docs/references/stages/M6-release-verification.md
+  s_f463fe72520371::t_8e6c2d3245097a 8,30,37,48,56
+packages/runtime-web/src/browser.test.ts
+  s_f463fe72520371::t_4ebc899c8ae8cc 45-48,72-74
+  s_f463fe72520371::t_0194266e5733e2 64,110-133
+  s_f463fe72520371::t_295a50a1a90023 75
+packages/hdmv/src/decode.ts
+  s_f463fe72520371::t_1b8bdaf255036c 76
+packages/hdmv/src/index.test.ts
+  s_f463fe72520371::t_5435db1401b0d7 25-33,35-42,49-56
+  s_f463fe72520371::t_336f74bc340767 34,860,884,889
+  s_f463fe72520371::t_ec753c1ac9af6c 43-48
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  s_f463fe72520371::t_ea938819bb0cca 105
+  s_f463fe72520371::t_f2108c75009d6a 27,69,73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "10c7aa4ebc5819b575479379141b6d5f13bf3403",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_2c116c93f0b27d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1abeb-99dc-7fd2-b713-86a09fdb09c8",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_f463fe72520371": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aa7e-8018-7a21-8e53-a5c714f8cbf2",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
