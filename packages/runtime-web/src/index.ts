@@ -88,6 +88,13 @@ export class EventScheduler {
   }
   pause(): void { this.pausedAt = this.nowValue; }
   resume(): void { this.pausedAt = null; }
+  saveCheckpoint(): { now: number; nextId: number; pausedAt: number | null; events: Array<[number, { due: number; scope: string; callback: () => void }]> } {
+    return { now: this.nowValue, nextId: this.nextId, pausedAt: this.pausedAt, events: [...this.events].map(([id, event]) => [id, { ...event }]) };
+  }
+  restoreCheckpoint(checkpoint: ReturnType<EventScheduler["saveCheckpoint"]>): void {
+    this.nowValue = checkpoint.now; this.nextId = checkpoint.nextId; this.pausedAt = checkpoint.pausedAt;
+    this.events.clear(); for (const [id, event] of checkpoint.events) this.events.set(id, { ...event });
+  }
   private pausedAt: number | null = null;
   advanceWhileRunning(deltaMs: number): void { if (this.pausedAt === null) this.advance(deltaMs); }
 }
@@ -99,6 +106,15 @@ export interface MenuScheduler {
   pause(): void;
   resume(): void;
   advanceWhileRunning(deltaMs: number): void;
+  saveCheckpoint?(): unknown;
+  restoreCheckpoint?(checkpoint: unknown): void;
+}
+
+export interface MenuControllerCheckpoint {
+  pageIndex: number; selectedButtonId: number | null; activatedButtonId: number | null;
+  disabled: number[]; bogSelections: Array<[string, number]>; invalidUoMaskPages: number[];
+  unsupportedTimeoutActivationPages: number[]; started: boolean; autoActionDepth: number;
+  scheduler: unknown;
 }
 
 export interface RuntimeHooks { playSound?: (soundId: number, buttonId: number) => void; invalidateSound?: () => void; activateButton?: (pageId: number, button: MenuButton) => void; dispatchActions?: () => void; diagnostic?: (message: string) => void; render?: () => void; popup?: () => void; topMenu?: () => void; escape?: () => void }
@@ -159,6 +175,27 @@ export class MenuController {
   }
   get page(): MenuPage { return this.scene.pages[this.pageIndex]!; }
   get button(): MenuButton | null { return this.page.buttons.find((b) => b.id === this.selectedButtonId) ?? null; }
+  saveCheckpoint(): MenuControllerCheckpoint {
+    if (!this.scheduler.saveCheckpoint || !this.scheduler.restoreCheckpoint) throw new TypeError("Menu scheduler does not support checkpoints");
+    return {
+      pageIndex: this.pageIndex, selectedButtonId: this.selectedButtonId, activatedButtonId: this.activatedButtonId,
+      disabled: [...this.disabled], bogSelections: [...this.bogSelections], invalidUoMaskPages: [...this.invalidUoMaskPages],
+      unsupportedTimeoutActivationPages: [...this.unsupportedTimeoutActivationPages], started: this.started,
+      autoActionDepth: this.autoActionDepth, scheduler: this.scheduler.saveCheckpoint(),
+    };
+  }
+  restoreCheckpoint(checkpoint: MenuControllerCheckpoint): void {
+    if (!Number.isInteger(checkpoint.pageIndex) || checkpoint.pageIndex < 0 || checkpoint.pageIndex >= this.scene.pages.length) throw new TypeError("Menu checkpoint has an invalid page index");
+    if (!this.scheduler.restoreCheckpoint) throw new TypeError("Menu scheduler does not support checkpoints");
+    const { scheduler: schedulerCheckpoint, ...state } = checkpoint;
+    this.pageIndex = state.pageIndex; this.selectedButtonId = state.selectedButtonId; this.activatedButtonId = state.activatedButtonId;
+    this.disabled.clear(); for (const id of state.disabled) this.disabled.add(id);
+    this.bogSelections.clear(); for (const [key, button] of state.bogSelections) this.bogSelections.set(key, button);
+    this.invalidUoMaskPages.clear(); for (const page of state.invalidUoMaskPages) this.invalidUoMaskPages.add(page);
+    this.unsupportedTimeoutActivationPages.clear(); for (const page of state.unsupportedTimeoutActivationPages) this.unsupportedTimeoutActivationPages.add(page);
+    this.started = state.started; this.autoActionDepth = state.autoActionDepth;
+    this.scheduler.restoreCheckpoint(schedulerCheckpoint);
+  }
   schedulePageEffect(delayMs: number, callback: () => void): number { return this.scheduler.schedule(delayMs, `page:${this.page.id}`, callback); }
   pause(): void { this.scheduler.pause(); }
   resume(): void { this.scheduler.resume(); }

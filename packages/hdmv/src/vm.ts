@@ -14,6 +14,16 @@ export interface VmDiagnostic { code: string; message: string; source: SourceLoc
 export interface PlaybackContext { status: "idle" | "requested" | "playing" | "ended" | "error" | "unavailable"; playlist: number | null; playItem: number | null; presentationTime: number | null; pendingActionId: string | null; }
 export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; status: VmStatus; diagnostic?: VmDiagnostic; }
 export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
+export interface HdmvVmCheckpoint {
+  status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>;
+  callStack: Array<{ programId: number; pc: number }>; continuation: Continuation | null;
+  suspendedPlaylistContinuation: Continuation | null; suspendedPlaylistPlayback: PlaybackContext | null;
+  pendingTitleCall: number | null; menuCheckpoint: MenuCheckpoint | null; playback: PlaybackContext;
+  generation: number; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; sequence: number;
+  profile: PlayerProfile; lastAction: NavigationAction | undefined; resumeAfterPlaylistStop: boolean;
+  consumedResponses: string[]; eventQueue: VmEvent[]; actionQueue: NavigationAction[];
+  trace: TraceEntry[]; actions: NavigationAction[]; diagnostics: VmDiagnostic[];
+}
 export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
 export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
@@ -65,6 +75,38 @@ export class HdmvVm {
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
+  /** Save all mutable execution state so a navigation branch can resume from this point. */
+  saveCheckpoint(): HdmvVmCheckpoint {
+    return structuredClone({
+      status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(),
+      callStack: this.callStack, continuation: this.continuation, suspendedPlaylistContinuation: this.suspendedPlaylistContinuation,
+      suspendedPlaylistPlayback: this.suspendedPlaylistPlayback, pendingTitleCall: this.pendingTitleCall,
+      menuCheckpoint: this.menuCheckpoint, playback: this.playback, generation: this.generation,
+      instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic, sequence: this.sequence,
+      profile: this.profile, lastAction: this.lastAction, resumeAfterPlaylistStop: this.resumeAfterPlaylistStop,
+      consumedResponses: [...this.consumedResponses], eventQueue: this.eventQueue, actionQueue: this.actionQueue,
+      trace: this.trace, actions: this.actions, diagnostics: this.diagnostics,
+    });
+  }
+  /** Restore a checkpoint created by this VM's matching program set and options. */
+  restoreCheckpoint(checkpoint: HdmvVmCheckpoint): void {
+    if (checkpoint.registers.gpr.length !== this.registers.gpr.length || checkpoint.registers.psr.length !== this.registers.psr.length) throw new TypeError("VM checkpoint has incompatible register state");
+    const state = structuredClone(checkpoint);
+    this.status = state.status; this.programId = state.programId; this.pc = state.pc;
+    this.registers.gpr.set(state.registers.gpr); this.registers.psr.set(state.registers.psr);
+    this.callStack.splice(0, this.callStack.length, ...state.callStack);
+    this.continuation = state.continuation; this.suspendedPlaylistContinuation = state.suspendedPlaylistContinuation;
+    this.suspendedPlaylistPlayback = state.suspendedPlaylistPlayback; this.pendingTitleCall = state.pendingTitleCall;
+    this.menuCheckpoint = state.menuCheckpoint; this.playback = state.playback; this.generation = state.generation;
+    this.instructionsThisTurn = state.instructionsThisTurn; this.diagnostic = state.diagnostic; this.sequence = state.sequence;
+    this.profile = state.profile; this.lastAction = state.lastAction; this.resumeAfterPlaylistStop = state.resumeAfterPlaylistStop;
+    this.consumedResponses.clear(); for (const response of state.consumedResponses) this.consumedResponses.add(response);
+    this.eventQueue.splice(0, this.eventQueue.length, ...state.eventQueue);
+    this.actionQueue.splice(0, this.actionQueue.length, ...state.actionQueue);
+    this.trace.splice(0, this.trace.length, ...state.trace);
+    this.actions.splice(0, this.actions.length, ...state.actions);
+    this.diagnostics.splice(0, this.diagnostics.length, ...state.diagnostics);
+  }
   /** Synchronize the active interactive-graphics page and focus into PSR11/PSR10. */
   applyMenuContext(pageId: number, selectedButtonId: number | null): void {
     if (!Number.isInteger(pageId) || pageId < 0 || pageId > 0xff) throw new RangeError("Menu page ID must be an 8-bit unsigned integer");

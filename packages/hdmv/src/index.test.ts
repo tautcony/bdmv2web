@@ -22,6 +22,24 @@ describe("M3 HDMV fixtures", () => {
     expect(vm.trace.flatMap((x) => Object.entries(x.registerDelta.gpr))).toContainEqual(["0", 12]);
     expect(vm.trace.find((x) => x.decoded?.startsWith("MOVE"))?.pc).toBe(0);
   });
+  it("restores VM execution state and history from a checkpoint", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.move5] }]);
+    vm.runTurn();
+    const checkpoint = vm.saveCheckpoint();
+    const snapshot = vm.snapshot();
+    const trace = structuredClone(vm.trace);
+
+    vm.registers.write({ kind: "gpr", index: 0 }, 99);
+    vm.handleEvent({ type: "MENU_INPUT", input: "right", channel: "keyboard" });
+    expect(vm.snapshot()).not.toEqual(snapshot);
+    vm.restoreCheckpoint(checkpoint);
+
+    expect(vm.snapshot()).toEqual(snapshot);
+    expect(vm.trace).toEqual(trace);
+    vm.registers.write({ kind: "gpr", index: 0 }, 12);
+    vm.restoreCheckpoint(checkpoint);
+    expect(vm.snapshot()).toEqual(snapshot);
+  });
   it("keeps unsupported semantics diagnostic and allows later menu commands", () => {
     const observed: Array<{ decoded: string | null; status: string; diagnostic?: { code: string } }> = [];
     const vm = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21830000, 1), m3Fixtures.move5] }], {

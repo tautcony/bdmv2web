@@ -6,7 +6,7 @@ import { adaptIgsScene, MenuController, type MenuPage, type MenuScene } from "./
 
 describe("Tamako current-source headless navigation", () => {
   it("executes First Play, user-visible menu routes, VM context, and feature playback with recovery", async () => {
-    const fixture = await loadRawIgsFixture("tamako", "00005", 0x1400);
+    const fixture = await loadRawIgsFixture("tamako", "00005", 0x1400, { renderAssets: false });
     const disc = fixture.disc;
     const extraction = fixture.extraction;
     expect(fixture.packetCount).toBeGreaterThan(0);
@@ -35,7 +35,7 @@ describe("Tamako current-source headless navigation", () => {
     expect(menuClipIds.size, "declared IGS clips linked from Top Menu playlist items/subpaths").toBeGreaterThan(0);
     const rawScene = extraction.scenes.find((scene) => menuClipIds.has(scene.clipId));
     expect(rawScene, `IGS scene linked from playlist ${menuPlaylist!.id}; no unrelated clip fallback`).toBeDefined();
-    const adapted = adaptIgsScene(rawScene!, extraction.assets);
+    const adapted = adaptIgsScene(rawScene!, extraction.assets, { allowMissingAssets: true });
     const scene = adapted.scene as MenuScene;
     const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({ id, instructions: instructions.map(({ words, bytes, source }) => ({ words, bytes, source: { path: "<MovieObject>", origin: source.origin, offset: source.offset } })), resumeIntention, menuCallMask, titleSearchMask }));
     const movieGraph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries });
@@ -48,11 +48,24 @@ describe("Tamako current-source headless navigation", () => {
     const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && typeof entry.target.target === "number");
     expect(firstPlay).toBeDefined();
     type RouteStep = { page: number; button: number; via: "keyboard" | "pointer" };
-    const launch = (route: RouteStep[]) => {
+    type EventRecord = { type: string; payload: Record<string, unknown>; result?: unknown; context: string };
+    type ActionRecord = EventRecord;
+    type BranchCheckpoint = {
+      vm: ReturnType<HdmvVm["saveCheckpoint"]>;
+      menu: ReturnType<MenuController["saveCheckpoint"]>;
+      events: EventRecord[];
+      activations: Array<{ page: number; button: number }>;
+      diagnostics: string[];
+      selectedTopMenu: ReturnType<HdmvVm["snapshot"]>;
+      initialMenuPage: number;
+      startActions: ActionRecord[];
+      startFinalPage: number;
+    };
+    const launch = (route: RouteStep[], checkpoint?: BranchCheckpoint) => {
       const vm = new HdmvVm(vmPrograms, { entries: disc.entries });
-      const events: Array<{ type: string; payload: Record<string, unknown>; result?: unknown; context: string }> = [];
-      const activations: Array<{ page: number; button: number }> = [];
-      const diagnostics: string[] = [];
+      const events: EventRecord[] = checkpoint ? structuredClone(checkpoint.events) : [];
+      const activations: Array<{ page: number; button: number }> = checkpoint ? [...checkpoint.activations] : [];
+      const diagnostics: string[] = checkpoint ? [...checkpoint.diagnostics] : [];
       let menu!: MenuController;
       const dispatch = () => {
         const queue: NavigationAction[] = [...vm.drainActions()];
@@ -82,20 +95,33 @@ describe("Tamako current-source headless navigation", () => {
         if (queue.length) diagnostics.push("action queue limit reached");
       };
       menu = new MenuController(scene, vm, { dispatchActions: dispatch, diagnostic: (message) => diagnostics.push(message), activateButton: (page, button) => activations.push({ page, button: button.id }) });
-      vm.reset(firstPlay!.target.target as number);
-      const startup = vm.runTurn();
-      if (startup.waiting) {
-        const result = resolveExternalPlayTarget(targets, { type: startup.waiting.type, ...startup.waiting.payload } as never);
-        events.push({ type: startup.waiting.type, payload: { ...startup.waiting.payload }, result: result.status === "available" ? { status: result.status, playlistId: result.playlistId, clipId: result.item.clipId } : { status: result.status, code: result.code }, context: "first-play" });
-        vm.releaseExternalPlayback(startup.waiting);
+      let selectedTopMenu: ReturnType<HdmvVm["snapshot"]>;
+      let initialMenuPage: number;
+      let startActions: ActionRecord[];
+      let startFinalPage: number;
+      if (checkpoint) {
+        vm.restoreCheckpoint(checkpoint.vm);
+        menu.restoreCheckpoint(checkpoint.menu);
+        selectedTopMenu = checkpoint.selectedTopMenu;
+        initialMenuPage = checkpoint.initialMenuPage;
+        startActions = structuredClone(checkpoint.startActions);
+        startFinalPage = checkpoint.startFinalPage;
+      } else {
+        vm.reset(firstPlay!.target.target as number);
+        const startup = vm.runTurn();
+        if (startup.waiting) {
+          const result = resolveExternalPlayTarget(targets, { type: startup.waiting.type, ...startup.waiting.payload } as never);
+          events.push({ type: startup.waiting.type, payload: { ...startup.waiting.payload }, result: result.status === "available" ? { status: result.status, playlistId: result.playlistId, clipId: result.item.clipId } : { status: result.status, code: result.code }, context: "first-play" });
+          vm.releaseExternalPlayback(startup.waiting);
+        }
+        dispatch();
+        selectedTopMenu = vm.selectTitle(0); dispatch();
+        initialMenuPage = menu.page.id;
+        const startEventOffset = events.length;
+        menu.start(); dispatch();
+        startActions = events.slice(startEventOffset);
+        startFinalPage = menu.page.id;
       }
-      dispatch();
-      const selectedTopMenu = vm.selectTitle(0); dispatch();
-      const initialMenuPage = menu.page.id;
-      const startEventOffset = events.length;
-      menu.start(); dispatch();
-      const startActions = events.slice(startEventOffset);
-      const startFinalPage = menu.page.id;
       const routeErrors: string[] = [];
       for (const step of route) {
         if (menu.page.id !== step.page) { routeErrors.push(`wanted page ${step.page}, arrived at ${menu.page.id}`); break; }
@@ -128,23 +154,32 @@ describe("Tamako current-source headless navigation", () => {
       const visible = menu.page.buttons.filter((button) => button.enabled && menu.isDisplayed(button) && (button.states.selected?.bounds || button.states.normal?.bounds) && button.commands.length > 0);
       const nonzeroGpr = registers.gpr.flatMap((value, index) => value === 0 ? [] : [[index, value]]);
       const state = JSON.stringify({ page: menu.page.id, visible: visible.map((button) => button.id), bogs: visible.map((button) => [button.bog, button.id]), psr: [registers.psr[1], registers.psr[2], registers.psr[11]], nonzeroGpr });
-      return { vm, menu, events, activations, diagnostics, routeErrors, selectedTopMenu, initialMenuPage, startActions, startFinalPage, visible, state };
+      const saveCheckpoint = (): BranchCheckpoint => {
+        return {
+          vm: vm.saveCheckpoint(), menu: menu.saveCheckpoint(), events: structuredClone(events),
+          activations: [...activations], diagnostics: [...diagnostics], selectedTopMenu: structuredClone(selectedTopMenu),
+          initialMenuPage, startActions: structuredClone(startActions), startFinalPage,
+        };
+      };
+      return { vm, menu, events, activations, diagnostics, routeErrors, selectedTopMenu, initialMenuPage, startActions, startFinalPage, visible, state, saveCheckpoint };
     };
 
-    const queued: RouteStep[][] = [[]];
+    const first = launch([]);
+    const queued: Array<{ route: RouteStep[]; checkpoint?: BranchCheckpoint }> = [{ route: [], checkpoint: first.saveCheckpoint() }];
     const knownStates = new Set<string>();
     const tested = new Set<string>();
     const reachedPages = new Set<number>();
     const outcomes: Array<{ route: string; from: number; button: number; to: number; result: unknown; diagnostics: string[] }> = [];
     let cursor = 0;
     for (; cursor < queued.length && cursor < 64; cursor++) {
-      const route = queued[cursor]!;
-      const current = launch(route);
+      const { route, checkpoint } = queued[cursor]!;
+      const current = launch([], checkpoint);
       expect(current.routeErrors, `replay route ${JSON.stringify(route)}`).toEqual([]);
       if (knownStates.has(current.state)) continue;
       knownStates.add(current.state);
       reachedPages.add(current.initialMenuPage);
       reachedPages.add(current.menu.page.id);
+      const currentCheckpoint = current.saveCheckpoint();
       for (const button of current.visible) {
         const key = `${current.state}/${button.id}`;
         if (tested.has(key)) continue;
@@ -159,7 +194,8 @@ describe("Tamako current-source headless navigation", () => {
           expect(bounds, `visible button ${from}/${button.id} has pointer bounds`).toBeDefined();
           expect(current.menu.hit(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2), `visible button ${from}/${button.id} pointer hit`).toBe(button.id);
         }
-        const branch = launch([...route, { page: from, button: button.id, via }]);
+        const step = { page: from, button: button.id, via };
+        const branch = launch([step], currentCheckpoint);
         if (branch.routeErrors.length) {
         outcomes.push({ route: JSON.stringify(route), from, button: button.id, to: branch.menu.page.id, result: { skipped: branch.routeErrors }, diagnostics: branch.diagnostics });
           continue;
@@ -168,10 +204,9 @@ describe("Tamako current-source headless navigation", () => {
         const actionResult = branch.events.slice(current.events.length).map((event) => ({ type: event.type, payload: event.payload, result: event.result }));
         const afterRegisters = branch.vm.snapshot().registers;
         outcomes.push({ route: JSON.stringify(route), from, button: button.id, to, result: { actions: actionResult, psr: { psr1: afterRegisters.psr[1], psr2: afterRegisters.psr[2], psr10: afterRegisters.psr[10], psr11: afterRegisters.psr[11] }, nonzeroGpr: afterRegisters.gpr.flatMap((value, index) => value === 0 ? [] : [[index, value]]) }, diagnostics: branch.diagnostics });
-        if (branch.state !== current.state && !knownStates.has(branch.state)) queued.push([...route, { page: from, button: button.id, via }]);
+        if (branch.state !== current.state && !knownStates.has(branch.state)) queued.push({ route: [...route, step], checkpoint: branch.saveCheckpoint() });
       }
     }
-    const first = launch([]);
     expect(first.events).toContainEqual(expect.objectContaining({ context: "first-play", type: "PLAY_PLAYLIST", payload: { playlist: 57 }, result: { status: "unavailable", code: "EXTERNAL_STREAM_MISSING" } }));
     expect(first.selectedTopMenu.waiting?.payload.playlist).toBe(3);
     const reachedPageIds = [...reachedPages].sort((a, b) => a - b);

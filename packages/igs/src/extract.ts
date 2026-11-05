@@ -3,7 +3,7 @@ import { discoverBdmvInput, readFileChunks, resolveFileReference, type InputFile
 import type { ClipInfo, ParsedDisc, SourceLocation, StreamDeclaration } from "@bdmv-web/bdmv-parser";
 import type { IgsDiagnostic, IgsExtraction, IgsOptions, IgsScene, PtsValue, TsPacket } from "./types.js";
 import { consumeSegment, createIgsState, parseSegments } from "./igs.js";
-import { renderSceneAssets } from "./png.js";
+import { renderIgsAssets } from "./png.js";
 import { M2tsPacketReader, PesAssembler, PsiAssembler, source, type PesPacket } from "./transport.js";
 
 export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & { table?: InputFileTable } = {}): Promise<IgsExtraction> {
@@ -142,7 +142,11 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   diagnostics.push(...state.diagnostics);
   const scenes = state.scenes;
   const assets = [] as IgsExtraction["assets"];
-  for (const scene of scenes) { const result = renderSceneAssets(scene); assets.push(...result.assets); diagnostics.push(...result.diagnostics); }
+  if (options.renderAssets !== false) {
+    const rendered = renderIgsAssets(scenes);
+    assets.push(...rendered.assets);
+    diagnostics.push(...rendered.diagnostics);
+  }
   const errors = diagnostics.some((d) => d.severity === "error");
   const warnings = diagnostics.some((d) => d.severity === "warning");
   if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [] });

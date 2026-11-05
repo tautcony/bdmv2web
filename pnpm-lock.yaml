@@ -105,6 +105,10 @@ importers:
       '@bdmv-web/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/igs:
     dependencies:
@@ -178,6 +182,9 @@ importers:
       '@bdmv-web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
+      '@types/node':
+        specifier: 24.10.0
+        version: 24.10.0
 
   packages/test-fixtures:
     dependencies:

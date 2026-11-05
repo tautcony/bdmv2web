@@ -60,8 +60,8 @@ export interface IgsSceneAdapterResult {
 
 const NO_OBJECT = 0xffff;
 
-/** Convert one decoded M2 scene and its rendered PNGs to the M4 browser scene contract. */
-export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[]): IgsSceneAdapterResult {
+/** Convert one decoded IGS scene to the M4 browser scene contract. */
+export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], options: { allowMissingAssets?: boolean } = {}): IgsSceneAdapterResult {
   const diagnostics: IgsAdapterDiagnostic[] = [];
   const pages = scene.pages.map((page) => {
     const bogByButton = new Map<number, number[]>();
@@ -85,8 +85,19 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[]): Igs
 
         const asset = resolveAsset(scene, page.paletteId, visual.startObjectId, assets);
         if (!asset) {
-          diagnostic("IGS_UNRESOLVED_VISUAL_ASSET", `Button ${button.id} ${name} visual references object ${visual.startObjectId} without a matching rendered asset`, scene, diagnostics, page.id, button.id);
-          return undefined;
+          const object = options.allowMissingAssets ? resolveObject(scene, visual.startObjectId) : undefined;
+          const palette = options.allowMissingAssets ? resolvePalette(scene, page.paletteId) : undefined;
+          if (!object || !palette) {
+            diagnostic("IGS_UNRESOLVED_VISUAL_ASSET", `Button ${button.id} ${name} visual references object ${visual.startObjectId} without a matching rendered asset`, scene, diagnostics, page.id, button.id);
+            return undefined;
+          }
+          return {
+            bounds: { x: button.x, y: button.y, width: object.width, height: object.height },
+            startObjectId: visual.startObjectId,
+            endObjectId: visual.endObjectId,
+            ...("repeat" in visual ? { repeat: visual.repeat } : {}),
+            ...(name === "selected" ? { soundId: button.visuals.selected.soundId } : name === "activated" ? { soundId: button.visuals.activated.soundId } : {}),
+          };
         }
 
         if (visual.endObjectId !== visual.startObjectId || ("repeat" in visual && visual.repeat)) {
@@ -166,10 +177,18 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[]): Igs
 }
 
 function resolveAsset(scene: IgsScene, paletteId: number, objectId: number, assets: readonly IgsAsset[]): IgsAsset | undefined {
-  const object = [...scene.objects].reverse().find((item) => item.id === objectId);
-  const palette = [...scene.palettes].reverse().find((item) => item.id === paletteId);
+  const object = resolveObject(scene, objectId);
+  const palette = resolvePalette(scene, paletteId);
   if (!object || !palette) return undefined;
   return assets.find((asset) => asset.objectId === objectId && asset.objectVersion === object.version && asset.paletteId === paletteId && asset.paletteVersion === palette.version && sameSource(asset.source, object.source));
+}
+
+function resolveObject(scene: IgsScene, objectId: number): IgsScene["objects"][number] | undefined {
+  return [...scene.objects].reverse().find((item) => item.id === objectId);
+}
+
+function resolvePalette(scene: IgsScene, paletteId: number): IgsScene["palettes"][number] | undefined {
+  return [...scene.palettes].reverse().find((item) => item.id === paletteId);
 }
 
 function sameSource(a: IgsSource, b: IgsSource): boolean {

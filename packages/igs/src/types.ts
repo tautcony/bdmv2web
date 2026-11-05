@@ -134,4 +134,9 @@ export interface IgsAsset {
   colorConversion: "bt709-limited-round-nearest";
 }
 
-export interface IgsOptions { limits?: Limits; chunkSize?: number; }
+export interface IgsOptions {
+  limits?: Limits;
+  chunkSize?: number;
+  /** Skip PNG asset generation so callers can parse/navigation-process scenes separately. Defaults to true. */
+  renderAssets?: boolean;
+}

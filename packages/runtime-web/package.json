@@ -16,6 +16,7 @@
     "@bdmv-web/media-export": "workspace:*"
   },
   "devDependencies": {
-    "@bdmv-web/test-fixtures": "workspace:*"
+    "@bdmv-web/test-fixtures": "workspace:*",
+    "@types/node": "24.10.0"
   }
 }

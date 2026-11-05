@@ -48,6 +48,18 @@ export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagno
   return { assets, diagnostics };
 }
 
+/** Render package-ready PNG assets for scenes that were extracted without assets. */
+export function renderIgsAssets(scenes: readonly IgsScene[]): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
+  const assets: IgsAsset[] = [];
+  const diagnostics: IgsDiagnostic[] = [];
+  for (const scene of scenes) {
+    const rendered = renderSceneAssets(scene);
+    assets.push(...rendered.assets);
+    diagnostics.push(...rendered.diagnostics);
+  }
+  return { assets, diagnostics };
+}
+
 export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): Uint8Array {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new RangeError("RGBA dimensions do not match pixel data");
   const scanlines = new Uint8Array((width * 4 + 1) * height);

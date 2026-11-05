@@ -8,7 +8,7 @@ import { DEFAULT_LIMITS } from "@bdmv-web/core";
 import type { ParsedDisc } from "@bdmv-web/bdmv-parser";
 import { extractIgsFromChunks, extractIgsScenes } from "../src/extract.js";
 import { consumeSegment, createIgsState, parseSegments } from "../src/igs.js";
-import { renderSceneAssets } from "../src/png.js";
+import { renderIgsAssets, renderSceneAssets } from "../src/png.js";
 import type { IgsSegment } from "../src/igs.js";
 import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "./fixtures.js";
 
@@ -30,6 +30,19 @@ describe("synthetic IGS extraction", () => {
     expect(result.assets[0]).toMatchObject({ objectId: 5, paletteId: 0, colorConversion: "bt709-limited-round-nearest", relativePath: expect.stringMatching(/^assets\/graphics\//) });
     expect(scene.source).toMatchObject({ clipId: "00001", pid: IG_PID, packetOffset: "384", pts90k: "90000" });
     expect(result.support.status).toBe("unverified");
+  });
+
+  it("extracts navigation scenes independently from PNG asset rendering", async () => {
+    const bytes = syntheticClip();
+    const extracted = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }], { renderAssets: false });
+    expect(extracted.scenes).toHaveLength(1);
+    expect(extracted.assets).toEqual([]);
+    expect(extracted.scenes[0]?.pages[0]?.buttons[0]?.commands).toHaveLength(1);
+
+    const rendered = renderIgsAssets(extracted.scenes);
+    expect(rendered.assets).toHaveLength(1);
+    expect([...rendered.assets[0]!.pngBytes.slice(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(rendered.diagnostics).toEqual([]);
   });
 
   it("is invariant to read block boundaries across packet, PES and segment bytes", async () => {

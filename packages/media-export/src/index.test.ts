@@ -359,7 +359,10 @@ describe("menu-loop media export", () => {
       ], format: { start_time: "11.650667", duration: "109.234" } }), stderr: "" };
       if (executable === "ffmpeg") {
         await writeFile(path, Buffer.alloc(9_000));
-        await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted) { resolve(); return; }
+          signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
       }
       return { stdout: "", stderr: "" };
     };
