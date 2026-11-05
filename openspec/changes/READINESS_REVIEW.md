@@ -4,7 +4,7 @@
 
 评估日期：2026-11-02。范围为根目录架构基线与全部 7 个 active change，评估的是实施文档是否足以启动和组织开发，不是实现完成度或发布就绪性。
 
-首版验收范围按后续产品决策收敛为 macOS Google Chrome；跨系统和其它浏览器测试不作为 V1 门槛。
+首版浏览器验收使用 Google Chrome，不限定操作系统；跨浏览器测试不作为 V1 门槛。
 
 协议、工具链和浏览器参考资料已另建[分阶段开发参考索引](../../docs/references/README.md)；其中受限规范和未核验实现边界均有注明。
 
@@ -112,7 +112,7 @@
 
 ## 剩余工作的性质
 
-没有把“协议全部已知”“任意碟片完整兼容”“V1 Chrome 验收已通过”作为本轮结论。实施者仍需完成：M0锁定实际工具版本和schema；M1/M2/M3按参考证据逐项实现协议；M2/M3取得独立golden；M4–M6在实际 macOS Google Chrome 执行 `file://`、有声媒体和对照。跨系统和其它浏览器不阻断 V1。每类工作已有所有者、输入、任务和完成门槛，可随阶段推进。
+没有把“协议全部已知”“任意碟片完整兼容”“V1 Chrome 验收已通过”作为本轮结论。实施者仍需完成：M0锁定实际工具版本和schema；M1/M2/M3按参考证据逐项实现协议；M2/M3取得独立golden；M4–M6在 Google Chrome 执行 `file://`、有声媒体和对照。V1 验收不限定操作系统，也不要求跨浏览器矩阵。每类工作已有所有者、输入、任务和完成门槛，可随阶段推进。
 
 本轮外部核对仅用于确认接口/浏览器策略的参考入口：[libbluray公开API](https://videolan.videolan.me/libbluray/bluray_8h.html) 与 [MDN自动播放处理](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay)。它们不等同于完整指令/位域规范，固定revision的具体协议证据仍由对应任务提交。
 

@@ -37,7 +37,7 @@
 
 ### Requirement: 对照与浏览器证据
 
-系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并记录真实浏览器/OS版本与证据的适用边界；证据的失效判定只覆盖其实际比较过的维度（profile、模式、矩阵、环境），不得声称覆盖制品内容。
+系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并记录 Google Chrome 版本与证据的适用边界；浏览器证据绑定 Chrome 版本和其实际比较过的维度（profile、模式、矩阵），不得声称覆盖制品内容。
 
 #### Scenario: 首个行为分歧
 
@@ -51,8 +51,8 @@
 
 #### Scenario: V1 Chrome 证据缺席
 
-- **WHEN** V1 macOS Chrome 环境无实际版本记录或场景证据
-- **THEN** 记not-verified并阻止complete，不假设另一个平台结果可代替
+- **WHEN** V1 Google Chrome 版本记录或场景证据缺失
+- **THEN** 记not-verified并阻止complete，不以其他浏览器的结果代替
 
 #### Scenario: 环境或配置变动
 

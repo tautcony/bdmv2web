@@ -163,11 +163,11 @@ async function boot(): Promise<void> {
           const params = new URLSearchParams(location.hash.slice(1)); const port = params.get("bridgePort"); const token = params.get("bridgeToken");
           if (!port || !token || !/^\d{1,5}$/.test(port) || !/^[0-9a-f]{48}$/.test(token)) {
             // The user has to copy this path or launch the helper: keep it on screen.
-            showStatus(`Open ${result.item.streamPath} manually, or launch start-menu.command to use the system player.`, { persist: true });
+            showStatus(`Open ${result.item.streamPath} manually, or launch start-menu.sh to use the default media player.`, { persist: true });
             vm.releaseExternalPlayback(action); continue;
           }
           const image = new Image();
-          image.onload = () => { if (requestSequence === externalRequestSequence) showStatus(`System player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`); };
+          image.onload = () => { if (requestSequence === externalRequestSequence) showStatus(`Default media player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`); };
           image.onerror = () => { if (requestSequence === externalRequestSequence) showStatus(`Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`, { persist: true }); };
           image.src = `http://127.0.0.1:${port}/open?token=${token}&clip=${encodeURIComponent(result.item.clipId)}`;
           vm.releaseExternalPlayback(action);

@@ -16,8 +16,8 @@ describe("local system player bridge", () => {
     await writeFile(join(menu, "bdmv-config.json"), JSON.stringify({ bdmvPath: "../BDMV" }));
     await writeFile(join(menu, "external-targets.json"), JSON.stringify({ playlists: [{ items: [{ clipId: "00006" }, { clipId: "00007" }] }] }));
     const source = LOCAL_PLAYER_BRIDGE.replace('console.log("BDMV menu local playback bridge is running. Close this window to stop it.");', 'console.log(url.href);')
-      .replace('spawn("/usr/bin/open", [path]', 'spawn("/usr/bin/true", []')
-      .replace('spawn("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", [url.href]', 'spawn("/usr/bin/true", []');
+      .replace('spawn(opener, openerArgs, { stdio: "ignore" })', 'spawn("/usr/bin/true", []')
+      .replace('spawn(executable, args, { stdio: "ignore" })', 'spawn("/usr/bin/true", [])');
     await writeFile(join(menu, "local-player-bridge.mjs"), source);
     const child = spawn(process.execPath, [join(menu, "local-player-bridge.mjs")], { stdio: ["ignore", "pipe", "pipe"] });
     try {

@@ -13,7 +13,7 @@ const context: BrowserEvidenceContext = {
     { path: "runtime/app.js", kind: "runtime", byteLength: "20", sha256: "d".repeat(64) },
   ],
   matrix: [{ caseId: "J-file-chrome", expected: { launch: true, offline: true } }],
-  environment: { os: "macOS", osBuild: "27.2 (26B123)", browser: "Google Chrome", browserVersion: "156.0.8078.76" },
+  environment: { browser: "Google Chrome", browserVersion: "156.0.8078.76" },
 };
 
 function record(overrides: Partial<BrowserEvidenceContext> = {}) {

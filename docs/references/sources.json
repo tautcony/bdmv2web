@@ -616,7 +616,7 @@
       "used_for": [
         "M6"
       ],
-      "limits": "V1 requires actual branded Google Chrome on macOS for direct file:// evidence; Playwright's bundled Chromium is supplementary and does not replace that run. Other systems and browsers are outside the V1 gate."
+      "limits": "V1 requires actual branded Google Chrome for direct file:// evidence; Playwright's bundled Chromium is supplementary and does not replace that run. Acceptance does not specify an operating system or require a cross-browser matrix."
     },
     {
       "id": "WPT",

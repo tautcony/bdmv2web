@@ -94,7 +94,7 @@ describe("M4 menu-only convert output", () => {
         expect(report.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS"]));
         expect(assetManifest.schemaVersion).toBe("1.0");
         expect(readme).toMatch(/menu-only preview.*delivery status is \*\*complete\*\*/s);
-        expect(readme).toContain("Run start-menu.command");
+      expect(readme).toContain("Run start-menu.sh");
         const localReferences = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!);
         expect(localReferences.length).toBeGreaterThan(0);
         for (const path of localReferences) {
@@ -181,7 +181,7 @@ describe("M4 menu-only convert output", () => {
       const parentResult = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", parent, "--out", parentOutput, "--no-strict"]);
       expect(parentResult.status).toBe(0);
       expect(JSON.parse(await readFile(join(parentOutput, "bdmv-config.json"), "utf8"))).toEqual({ bdmvPath: "../BDMV" });
-      await access(join(output, "start-menu.command"));
+      await access(join(output, "start-menu.sh"));
       const verify = () => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", output, "--offline", "--format", "json"]);
       const initialAudit = verify(); expect(initialAudit.status).toBe(0);
       const checks = JSON.parse(initialAudit.stdout.toString()).checks as Array<{ checkId: string; result: string }>;

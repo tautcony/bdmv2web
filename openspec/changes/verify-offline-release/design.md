@@ -38,7 +38,7 @@ VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随�
 
 ### 5. 矩阵与 A–J 证据
 
-V1 唯一必测环境为 macOS Google Chrome。M0 建立单行模板，M4/M5 记录冒烟，M6 锁定实际 macOS build、Chrome 完整版本及自动化工具版本；不在没有机器时编造通过。菜单直接 `file://`、断网、无未声明后台、复制到中文/空格新路径；影片交接另在源 M2TS 可用时验证，移走原碟后应报告影片不可用；人工双击测试也保存可复查记录，HTTP 冒烟不能替代。跨系统和其它浏览器的覆盖留给后续版本，不阻断 V1。
+V1 验收使用 Google Chrome，不限定操作系统。M0 建立单行模板，M4/M5 记录冒烟，M6 锁定 Chrome 完整版本及自动化工具版本；不在没有实际浏览器时编造通过。菜单直接 `file://`、断网、无未声明后台、复制到中文/空格新路径；影片交接另在源 M2TS 可用时验证，移走原盘后应报告影片不可用；人工双击测试也保存可复查记录，HTTP 冒烟不能替代。V1 不要求跨浏览器矩阵。
 
 | 场景 | 验收主责与证据 |
 | --- | --- |
@@ -53,7 +53,7 @@ V1 唯一必测环境为 macOS Google Chrome。M0 建立单行模板，M4/M5 记
 | I 破损/缺失/循环 | 各模块/M6；预算内终止与准确诊断 |
 | J Chrome 环境/分辨率/路径 | M4–M6；Chrome 版本、DPI、移动包证据 |
 
-每份证据含 caseId/fixtureId/inputSequence/profile/payloadFingerprint/browser OS版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。
+每份证据含 caseId/fixtureId/inputSequence/profile/payloadFingerprint/Chrome版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。
 
 ### 6. 发布与失败保留
 

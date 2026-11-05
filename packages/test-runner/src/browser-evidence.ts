@@ -7,8 +7,6 @@ export interface BrowserMatrixCase {
 }
 
 export interface BrowserEnvironment {
-  os: string;
-  osBuild: string;
   browser: string;
   browserVersion: string;
 }
@@ -159,8 +157,8 @@ function normalizedMatrix(matrix: readonly BrowserMatrixCase[]): BrowserMatrixCa
 
 function normalizedEnvironment(environment: BrowserEnvironment): BrowserEnvironment {
   for (const [key, value] of Object.entries(environment ?? {})) if (typeof value !== "string" || !value.trim()) throw new TypeError(`Browser environment ${key} must be non-empty`);
-  for (const key of ["os", "osBuild", "browser", "browserVersion"] as const) if (!(key in environment)) throw new TypeError(`Browser environment ${key} is required`);
-  return { os: environment.os.trim(), osBuild: environment.osBuild.trim(), browser: environment.browser.trim(), browserVersion: environment.browserVersion.trim() };
+  for (const key of ["browser", "browserVersion"] as const) if (!(key in environment)) throw new TypeError(`Browser environment ${key} is required`);
+  return { browser: environment.browser.trim(), browserVersion: environment.browserVersion.trim() };
 }
 
 function isEvidencePath(path: string): boolean { return EVIDENCE_PATH.test(path) && isSafeRelativePath(path); }

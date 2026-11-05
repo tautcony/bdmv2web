@@ -25,9 +25,9 @@
 - **WHEN** 无法确定对应文件或源 M2TS 不存在
 - **THEN** 不猜测其他文件，显示具体诊断并使导航等待可恢复
 
-### Requirement: 交给系统默认程序
+### Requirement: 交给默认关联程序
 
-系统 SHALL 在用户触发影片动作时，通过目标环境实际支持并经验证的接入方式请求操作系统打开对应 M2TS，由系统默认关联程序处理。
+系统 SHALL 在用户触发影片动作时，通过可用并经验证的接入方式请求打开对应 M2TS，由默认关联程序处理；验收不限定操作系统。
 
 #### Scenario: 成功交接
 
@@ -46,7 +46,7 @@
 
 ### Requirement: 单一离线菜单产物
 
-系统 SHALL 提供统一的 convert 产物，不将 menu-only 与 standalone-full 作为不同交付模式；菜单资源自包含，影片显式依赖源 M2TS 和系统关联程序。
+系统 SHALL 提供统一的 convert 产物，不将 menu-only 与 standalone-full 作为不同交付模式；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。
 
 #### Scenario: 移动菜单包
 

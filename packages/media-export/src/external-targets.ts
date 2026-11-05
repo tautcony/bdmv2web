@@ -75,7 +75,7 @@ export function resolveExternalPlayTarget(targets: ExternalMediaTargets, request
   if (end <= BigInt(item.sourceIn90k) || start < BigInt(item.sourceIn90k) || start >= end) return unavailable("EXTERNAL_TIME_INVALID", `Playlist ${playlistId} PlayItem ${itemIndex} has an invalid interval or mark.`);
   if (!item.present) return unavailable("EXTERNAL_STREAM_MISSING", `Source ${item.streamPath} is missing.`);
   const remainingItems = playlist.items.slice(position + 1);
-  const limitations = ["The system player opens the entire M2TS file; PlayItem IN/OUT and mark offsets are not enforced."];
+  const limitations = ["The default media player opens the entire M2TS file; PlayItem IN/OUT and mark offsets are not enforced."];
   if (remainingItems.length) limitations.push("Subsequent PlayItems require separate handling and are not played automatically.");
   return { status: "available", playlistId, item, sourceStart90k: start.toString(), remainingItems, limitations };
 }

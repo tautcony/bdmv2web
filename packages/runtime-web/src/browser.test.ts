@@ -190,7 +190,7 @@ describe("offline browser boot", () => {
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await Promise.resolve();
     expect(host.imageUrls).toContain(`http://127.0.0.1:12345/open?token=${"a".repeat(48)}&clip=00006`);
-    expect(host.elements.get("runtime-status")?.textContent).toContain("System player requested for STREAM/00006.m2ts");
+    expect(host.elements.get("runtime-status")?.textContent).toContain("Default media player requested for STREAM/00006.m2ts");
   });
 
   it("writes one concise summary for a complete VM command sequence", async () => {
@@ -280,7 +280,7 @@ describe("offline browser boot", () => {
       expect(classes.has("is-visible")).toBe(true);
 
       // A user-facing instruction stays on screen and accepts selection, but is not an error.
-      toast("Open STREAM/00006.m2ts manually, or launch start-menu.command.", { persist: true });
+      toast("Open STREAM/00006.m2ts manually, or launch start-menu.sh.", { persist: true });
       expect(classes.has("is-error")).toBe(false);
       expect(classes.has("is-persistent")).toBe(true);
       vi.advanceTimersByTime(60_000);

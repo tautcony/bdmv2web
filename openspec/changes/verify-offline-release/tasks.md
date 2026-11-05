@@ -29,7 +29,7 @@
 
 ## 4. 浏览器与发布
 
-- [x] 4.1 锁定 V1 macOS Google Chrome 实际版本并执行断网 `file://`；验收：无后台/原碟，记录 macOS build、Chrome 完整版本、console/资源/有声结果，缺席不假通过。跨系统和其它浏览器不作为 V1 门槛。实测记录见 [M6 验收证据](../../../docs/references/stages/M6-release-verification.md#v1-chrome-file-验收-2026-11-03)。
+- [x] 4.1 锁定 V1 Google Chrome 完整版本并执行断网 `file://`；验收：无后台/原盘，记录 Chrome 版本、console/资源/有声结果，缺席不假通过。验收不限定操作系统，也不要求跨浏览器矩阵。实测记录见 [M6 验收证据](../../../docs/references/stages/M6-release-verification.md#v1-chrome-file-验收-2026-11-03)。
 - [ ] 4.2 按新边界完成适用的 A–J 场景及系统默认播放器交接证据；涵盖双击、移动、中文空格、DPI、源缺失和播放策略恢复，记录 expected/actual/result、版本及生成制品 hash。
 - [x] 4.3 实现证据与payload/profile/mode/矩阵绑定和失效；验收：换bundle/媒体/profile不能复用旧截图过门槛。
 - [x] 4.4 生成最终compatibility/audit/manifest/发布摘要和README；验收：只有全部门槛满足可complete，失败/未验证列具体缺口，完整包无开发/参考工具依赖。

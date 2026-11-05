@@ -51,7 +51,7 @@
 
 #### Scenario: 所有门槛满足
 
-- **WHEN** 统一产物的菜单资源、声明范围内的系统交接、支持/对照及 V1 macOS Chrome 场景全部通过
+- **WHEN** 统一产物的菜单资源、声明范围内的媒体交接、支持/对照及 V1 Chrome 场景全部通过
 - **THEN** 才可 complete，strict 退出 0；外部播放器能力和未证明的 Playlist 语义不得冒充已验证
 
 ### Requirement: 覆盖统计与未知项
@@ -70,7 +70,7 @@
 
 ### Requirement: 对照与浏览器证据
 
-系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并绑定制品指纹与真实浏览器/OS版本。
+系统 SHALL 保存指定profile/输入路径的参考VM及IG对照，并将浏览器证据绑定到制品指纹、Google Chrome 版本和测试场景。
 
 #### Scenario: 首个行为分歧
 
@@ -84,8 +84,8 @@
 
 #### Scenario: V1 Chrome 证据缺席
 
-- **WHEN** V1 macOS Chrome 环境无实际版本记录或场景证据
-- **THEN** 记not-verified并阻止complete，不假设另一个平台结果可代替
+- **WHEN** V1 Google Chrome 版本记录或场景证据缺失
+- **THEN** 记not-verified并阻止complete，不以其他浏览器的结果代替
 
 #### Scenario: 制品变动
 
@@ -94,12 +94,12 @@
 
 ### Requirement: 直接打开与便携性
 
-系统 SHALL 在 V1 macOS Google Chrome 环境中断网直接 `file://` 验证菜单，并在源 M2TS 可用且满足已声明接入条件时验证系统默认程序交接。跨系统和其它浏览器不属于 V1 发布门槛。
+系统 SHALL 使用 Google Chrome 在断网条件下直接打开 `file://` 菜单并记录 Chrome 版本；验收不限定操作系统，也不要求跨浏览器矩阵。源 M2TS 可用且满足已声明接入条件时，还须验证默认关联程序的媒体交接。
 
 #### Scenario: 移动断网播放
 
 - **WHEN** 整目录复制到含中文/空格的新路径并直接打开
-- **THEN** 记录脚本/图形/菜单声音及系统打开实际 M2TS 的结果和版本；源不可用时记录缺口，不能以 HTTP 测试代替
+- **THEN** 记录脚本/图形/菜单声音及默认关联程序打开实际 M2TS 的结果；源不可用时记录缺口，不能以 HTTP 测试代替
 
 #### Scenario: 播放被拒后的恢复
 

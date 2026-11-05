@@ -8,7 +8,7 @@
 - 解析 M2TS 中的 IGS 菜单，提取按钮、图形、调色板和指令。
 - 执行 HDMV 导航指令，支持寄存器、分支、比较、MovieObject 和播放列表调用。
 - 导出菜单背景视频、音轨和按钮音效，生成可在 Chrome 中打开的菜单包。
-- 通过 macOS 启动器调用系统默认播放器，播放菜单关联的原始 M2TS 文件。
+- 通过 shell 启动器调用默认媒体播放器，播放菜单关联的原始 M2TS 文件。
 - 导出结构数据、菜单图形与诊断信息，校验生成的菜单包。
 
 ## 环境配置
@@ -69,14 +69,14 @@ node apps/cli/dist/index.js convert "/path/to/Disc/BDMV" \
 
 在 Chrome 中打开生成的 `index.html`，即可使用菜单、背景视频和音效。
 
-需要从菜单播放原始视频流时，在 macOS 上运行启动器：
+需要从菜单播放原始视频流时，运行 shell 启动器：
 
 ```sh
 cd "/path/to/output/my-disc-menu"
-./start-menu.command
+./start-menu.sh
 ```
 
-启动器需要 Node.js。它会启动本地回环桥并用 Chrome 打开菜单；菜单触发播放时，系统默认播放器会打开对应的 `STREAM/*.m2ts`。关闭终端窗口即可停止回环桥。
+启动器需要 Node.js。它会启动本地回环桥并用 Google Chrome 打开菜单；菜单触发播放时，默认关联的媒体播放器会打开对应的 `STREAM/*.m2ts`。关闭终端窗口即可停止回环桥。若 Chrome 不在可搜索的位置，可通过 `BROWSER` 环境变量指定其可执行文件路径。
 
 移动菜单包后，可修改 `bdmv-config.json` 中原始 BDMV 的绝对路径或相对包目录的路径，重启启动器后生效。
 
@@ -144,7 +144,7 @@ my-disc-menu/
 ├── bdmv-config.json           # 原始 BDMV 路径
 ├── external-targets.json      # 可外部播放的 playlist/clip
 ├── local-player-bridge.mjs    # 本地播放桥
-├── start-menu.command         # macOS 启动器
+├── start-menu.sh              # shell 启动器
 ├── manifest.json              # 文件清单和指纹
 ├── asset-manifest.json        # 音频和媒体资产元数据
 ├── media-plan.json            # 媒体导出计划
