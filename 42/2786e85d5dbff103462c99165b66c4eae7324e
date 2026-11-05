@@ -1,0 +1,24 @@
+packages/package-builder/src/local-player-bridge.test.ts
+  s_8eebca7982bb93::t_3f64c07b2e6866 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "422786e85d5dbff103462c99165b66c4eae7324e",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_8eebca7982bb93": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aa7c-8994-7ca1-a54d-5e7d32823e0b",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
