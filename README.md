@@ -15,9 +15,9 @@
 
 | 依赖 | 版本或要求 | 用途 |
 | --- | --- | --- |
-| Node.js | `>=24.18.0 <25`（自带 corepack） | 构建和运行命令 |
-| pnpm | `11.25.0`，由 `corepack pnpm` 按 `packageManager` 取用；不要求全局安装 | 安装依赖和运行脚本 |
-| ffmpeg / ffprobe | 可从 `PATH` 调用 | 导出菜单媒体 |
+| Node.js | `>=24.18.0 <25` | 构建和运行命令 |
+| pnpm | `>=11.25.0` | 安装依赖和运行脚本 |
+| ffmpeg / ffprobe |  | 导出菜单媒体 |
 
 ## 安装
 
@@ -27,7 +27,7 @@ corepack pnpm generate:contracts
 corepack pnpm build
 ```
 
-包内脚本统一写 `corepack pnpm`：根脚本里的嵌套调用（如 `build` = `generate:contracts` + `-r build`）因此不依赖全局 `pnpm`，版本也由 `packageManager` 锁定。若已全局安装 pnpm，`pnpm install` 之类的等价写法仍可用。
+包内脚本统一写 `corepack pnpm`：根脚本里的嵌套调用（如 `build` = `generate:contracts` + `-r build`）因此不依赖全局 `pnpm`，版本也由 `packageManager` 锁定。
 
 命令行入口为 `apps/cli/dist/index.js`，包内 bin 名为 `bdmv2web`。
 
@@ -63,7 +63,7 @@ node apps/cli/dist/index.js convert "/path/to/Disc/BDMV" \
   --out "/path/to/output/my-disc-menu"
 ```
 
-省略 `--out` 时，输出到 `<BDMV 父目录>/BDMV-menu`。输出目录与输入目录不能互为父子目录。`--title` 默认为 BDMV 父目录名。
+省略 `--out` 时，输出到 `<BDMV 父目录>/BDMV-menu`。`--title` 默认为 BDMV 父目录名。
 
 ### 打开菜单包
 
@@ -76,7 +76,7 @@ cd "/path/to/output/my-disc-menu"
 ./start-menu.sh
 ```
 
-启动器需要 Node.js。它会启动本地回环桥并用 Google Chrome 打开菜单；菜单触发播放时，默认关联的媒体播放器会打开对应的 `STREAM/*.m2ts`。关闭终端窗口即可停止回环桥。若 Chrome 不在可搜索的位置，可通过 `BROWSER` 环境变量指定其可执行文件路径。
+启动器需要 Node.js。它会启动并用 Google Chrome 打开菜单；菜单触发播放时，默认关联的媒体播放器会打开对应的 `STREAM/*.m2ts`。关闭终端窗口即可停止回环桥。
 
 移动菜单包后，可修改 `bdmv-config.json` 中原始 BDMV 的绝对路径或相对包目录的路径，重启启动器后生效。
 
@@ -99,11 +99,7 @@ node apps/cli/dist/index.js validate "/path/to/output/my-disc-menu" --offline
 | `convert` | 生成菜单包 | `--out DIR`、`--title`、`--mode menu-only`、`--player-profile FILE`、`--strict` |
 | `validate` | 校验菜单包 | `--offline`（必填）、`--format json`、`--strict` |
 
-`inspect` 和 `extract` 使用 `stageStatus` 表示解析状态（成功和失败都用这个字段），`convert` 和 `validate` 使用 `status` 表示交付状态。状态为 `partial` 时默认退出码为 0，使用 `--strict` 时退出码为 2；失败时退出码为 1。`inspect --allow-partial` 在解析失败时也返回 0，报告仍保留 `failed` 状态。
-
-`status` 只由失败证据决定：`complete` 表示"没有已知失败"，不等于"全部已验证"。没有执行检查、覆盖率未测量、浏览器证据缺失或过期都不会降低状态，而是列在 `report.json` 的 `notVerified` 与 `release-summary.json` 的 `gaps` 中；只有 `fail` 检查、`error`/`fatal` 诊断、缺失必需资产、未解析可达路径与可达但不支持的能力会降低状态。
-
-拼错的选项不会被忽略：命令不支持的 `--*` 会以 `CLI_UNKNOWN_OPTION` 退出 1，多余的位置参数报 `CLI_USAGE`。
+`inspect` 和 `extract` 使用 `stageStatus` 表示解析状态，`convert` 和 `validate` 使用 `status` 表示交付状态。状态为 `partial` 时默认退出码为 0，使用 `--strict` 时退出码为 2；失败时退出码为 1。`inspect --allow-partial` 在解析失败时也返回 0，报告仍保留 `failed` 状态。
 
 ## 播放器档案
 
@@ -133,7 +129,7 @@ node apps/cli/dist/index.js validate "/path/to/output/my-disc-menu" --offline
 | `videoProfiles` | 否 | 字符串数组 | `[]` |
 | `audioProfiles` | 否 | 字符串数组 | `[]` |
 
-省略档案时使用默认值。语言码统一转小写、国家码统一转大写；长度不符或含非 ASCII 字符会以 `CLI_INVALID_PROFILE` 退出 1，而不会等到运行期才报错。档案会写入菜单包的 `manifest.json` 与 `runtime/disc-data.js`。
+省略档案时使用默认值。语言码统一转小写、国家码统一转大写；长度不符或含非 ASCII 字符会以 `CLI_INVALID_PROFILE` 退出 1。档案会写入菜单包的 `manifest.json` 与 `runtime/disc-data.js`。
 
 ## 输出包结构
 
@@ -161,7 +157,7 @@ corepack pnpm build         # 编译运行时代码
 corepack pnpm typecheck     # 类型检查，包括测试文件
 corepack pnpm test          # 运行各包测试
 corepack pnpm test:all      # 运行各包测试，不加 --bail
-bash scripts/ci.sh          # 安装、生成契约、构建、类型检查和测试（内部同样走 corepack）
+bash scripts/ci.sh          # 安装、生成契约、构建、类型检查和测试
 ```
 
 运行单个包的测试：
@@ -170,7 +166,7 @@ bash scripts/ci.sh          # 安装、生成契约、构建、类型检查和�
 corepack pnpm --filter @bdmv2web/igs test
 ```
 
-拉取本地参考源码缓存（需要网络和 Python 3）：
+拉取本地参考源码缓存：
 
 ```sh
 python3 scripts/fetch-reference-cache.py

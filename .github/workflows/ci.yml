@@ -18,5 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
+      - name: Install FFmpeg for PGS asset tests
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Run workspace gate
         run: bash scripts/ci.sh
