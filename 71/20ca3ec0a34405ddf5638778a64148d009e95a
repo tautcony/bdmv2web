@@ -1,0 +1,186 @@
+packages/media-export/src/media-plan.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/package-builder/package.json
+  s_52a5700c13e940::t_0d2bcd07688341 2,9
+  s_52a5700c13e940::t_df3c61485c4702 4
+packages/runtime-web/src/browser.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1,3
+packages/runtime-web/src/linear-playback.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+docs/references/stages/M2-igs-scenes.md
+  s_52a5700c13e940::t_0d2bcd07688341 59
+README.md
+  s_52a5700c13e940::t_0d2bcd07688341 1,32,168
+  s_52a5700c13e940::t_c2099d7c85dbe7 209
+packages/hdmv/src/graph.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/media-export/src/closure.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2-3
+packages/media-export/src/external-targets.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  s_52a5700c13e940::t_0d2bcd07688341 15,71
+packages/core/schema/disc-ir.schema.json
+  s_52a5700c13e940::t_0d2bcd07688341 3
+packages/igs/test/tamako-external-navigation.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 5-6
+packages/runtime-web/src/index.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2-3
+packages/bdmv-io/package.json
+  s_52a5700c13e940::t_df3c61485c4702 4
+  s_52a5700c13e940::t_0d2bcd07688341 2,9
+packages/runtime-web/src/index.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1-2
+packages/igs/test/m1-m2-m3.integration.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 5-7
+package.json
+  s_52a5700c13e940::t_df3c61485c4702 4
+  s_52a5700c13e940::t_0d2bcd07688341 2,12
+packages/hdmv/src/decode.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+docs/review-2026-11-04/fix-checklist.md
+  s_52a5700c13e940::t_0d2bcd07688341 51,69,86,101,116,163,178,193,209,242,311
+packages/media-export/src/linear.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 5
+apps/cli/src/index.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 8-9
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/tasks.md
+  s_52a5700c13e940::t_0d2bcd07688341 25-26,29,43,78
+packages/igs/src/types.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/igs/test/transport.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+packages/bdmv-io/src/bdmv-candidate.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/package-builder/src/index.ts
+  s_52a5700c13e940::t_0d2bcd07688341 5-6,8,142,238
+docs/bdmv_hdmv_offline_web_architecture.md
+  s_52a5700c13e940::t_1a565d08d202f9 7
+  s_52a5700c13e940::t_0d2bcd07688341 148,684,687,690,697,702,705
+packages/bdmv-io/src/index.ts
+  s_52a5700c13e940::t_0d2bcd07688341 5-6
+packages/bdmv-parser/src/parser.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1-2
+packages/runtime-web/src/browser.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 4-5
+packages/runtime-web/src/headless-navigation-fixture.ts
+  s_52a5700c13e940::t_0d2bcd07688341 4-5
+LICENSE
+  s_52a5700c13e940::t_b7744a9dd1ec39 1-674
+packages/package-builder/src/index.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 8,180
+docs/code-review.md
+  s_52a5700c13e940::t_0d2bcd07688341 8,55,63,70,82,93,103,110,118,131,143,357,528-533
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_52a5700c13e940::t_0d2bcd07688341 105
+packages/hdmv/src/vm.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1-3
+packages/igs/src/igs.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/igs/test/tamako-real-smoke.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 5
+packages/igs/package.json
+  s_52a5700c13e940::t_0d2bcd07688341 2,14-16,20-21
+  s_52a5700c13e940::t_df3c61485c4702 4
+packages/media-export/package.json
+  s_52a5700c13e940::t_0d2bcd07688341 2,10
+  s_52a5700c13e940::t_df3c61485c4702 4
+packages/media-export/src/linear.ts
+  s_52a5700c13e940::t_0d2bcd07688341 3
+packages/runtime-web/src/headless-menu-synthetic.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+apps/cli/src/index.ts
+  s_52a5700c13e940::t_0d2bcd07688341 4-12,653
+packages/igs/test/extraction.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 6-8
+apps/cli/package.json
+  s_52a5700c13e940::t_df3c61485c4702 4
+  s_52a5700c13e940::t_0d2bcd07688341 2,8,16-24,27
+packages/media-export/src/external-targets.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+packages/test-fixtures/src/index.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+packages/runtime-web/src/linear-playback.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+openspec/changes/archive/2026-11-04-establish-core-contracts/design.md
+  s_52a5700c13e940::t_0d2bcd07688341 17
+packages/igs/src/extract.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1-3
+scripts/ci.sh
+  s_52a5700c13e940::t_0d2bcd07688341 2
+packages/runtime-web/src/tamako-headless-navigation.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2-3
+packages/test-runner/package.json
+  s_52a5700c13e940::t_0d2bcd07688341 2
+  s_52a5700c13e940::t_df3c61485c4702 4
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_52a5700c13e940::t_0d2bcd07688341 9-10,58,75,79-80,82
+packages/bdmv-parser/package.json
+  s_52a5700c13e940::t_0d2bcd07688341 2,14-15,19
+  s_52a5700c13e940::t_df3c61485c4702 4
+packages/runtime-web/package.json
+  s_52a5700c13e940::t_df3c61485c4702 4
+  s_52a5700c13e940::t_0d2bcd07688341 2,14-17,20
+packages/test-fixtures/package.json
+  s_52a5700c13e940::t_0d2bcd07688341 2,10
+  s_52a5700c13e940::t_df3c61485c4702 4
+packages/runtime-web/src/igs-adapter.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2
+openspec/changes/archive/2026-11-04-parse-bdmv-structure/tasks.md
+  s_52a5700c13e940::t_0d2bcd07688341 38
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/verification.md
+  s_52a5700c13e940::t_0d2bcd07688341 15-16,22,24,44,47,65,68,100,103,111,115
+packages/hdmv/package.json
+  s_52a5700c13e940::t_df3c61485c4702 4
+  s_52a5700c13e940::t_0d2bcd07688341 2,9
+packages/hdmv/src/registers.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/igs/src/transport.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+docs/development.md
+  s_52a5700c13e940::t_0d2bcd07688341 22,77-87,141
+docs/references/stages/M6-release-verification.md
+  s_52a5700c13e940::t_0d2bcd07688341 22-26,46,52
+packages/media-export/src/closure.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1-2
+packages/core/package.json
+  s_52a5700c13e940::t_df3c61485c4702 4
+  s_52a5700c13e940::t_0d2bcd07688341 2
+packages/bdmv-parser/src/parser.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 6
+docs/review-2026-11-04/phases/phase-0-baseline.md
+  s_52a5700c13e940::t_0d2bcd07688341 11
+packages/hdmv/src/fixtures.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/runtime-web/src/baja-studio-headless-navigation.test.ts
+  s_52a5700c13e940::t_0d2bcd07688341 2-3
+packages/runtime-web/src/igs-adapter.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1
+packages/test-fixtures/src/index.ts
+  s_52a5700c13e940::t_0d2bcd07688341 1-2
+pnpm-lock.yaml
+  s_52a5700c13e940::t_9b229f7b747ce0 29,32,35,38,41,44,47,50,53,57,66,76,79,83,102,105,115,118,121,125,128,137,140,150,153,156,169,172,175,178,182,191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7120ca3ec0a34405ddf5638778a64148d009e95a",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_52a5700c13e940": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aa6e-b2cd-7970-a3e7-f940449b5211",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
