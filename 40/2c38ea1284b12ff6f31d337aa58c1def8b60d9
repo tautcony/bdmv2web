@@ -1,0 +1,27 @@
+README.md
+  h_3705811fa4502c 19,79,169
+  h_3705811fa4502c 18,20,30,66,102,132,160
+.github/workflows/ci.yml
+  s_f463fe72520371::t_c55b72a94c63dc 21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "402c38ea1284b12ff6f31d337aa58c1def8b60d9",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_f463fe72520371": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aa7e-8018-7a21-8e53-a5c714f8cbf2",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
