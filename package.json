@@ -5,11 +5,11 @@
   "packageManager": "pnpm@11.25.0",
   "engines": { "node": ">=24.18.0 <25", "pnpm": "11.25.0" },
   "scripts": {
-    "build": "pnpm generate:contracts && pnpm -r build",
-    "typecheck": "pnpm build && pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "test:all": "pnpm -r --no-bail test",
-    "generate:contracts": "pnpm --filter @bdmv-web/core generate"
+    "build": "corepack pnpm generate:contracts && corepack pnpm -r build",
+    "typecheck": "corepack pnpm build && corepack pnpm -r typecheck",
+    "test": "corepack pnpm -r test",
+    "test:all": "corepack pnpm -r --no-bail test",
+    "generate:contracts": "corepack pnpm --filter @bdmv-web/core generate"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

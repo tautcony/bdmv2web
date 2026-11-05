@@ -42,7 +42,7 @@ describe("browser evidence binding", () => {
     ["mode", { mode: "menu-only" as const }],
     ["matrix", { matrix: [{ caseId: "J-file-chrome", expected: { launch: true, offline: false } }] }],
     ["browser version", { environment: { ...context.environment, browserVersion: "157.0.0.0" } }],
-  ])("marks old evidence stale after a %s change and the decision cannot pass", (_label, changed) => {
+  ])("marks old evidence stale after a %s change and records it as not verified", (_label, changed) => {
     const stale = evaluateBrowserEvidence(record(), { ...context, ...changed });
     expect(stale).toMatchObject({ checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", evidence: { stale: true } });
     const decision = decideDelivery({
@@ -50,7 +50,10 @@ describe("browser evidence binding", () => {
       hasMissingRequiredAsset: false, hasUnresolvedReachability: false, hasUnsupportedReachableCapability: false,
       requiredEvidenceComplete: true, coverageComplete: true,
     }, true);
-    expect(decision).toMatchObject({ status: "partial", exitCode: 2 });
+    // Stale evidence is missing evidence, not a failure: the status stays complete
+    // and the gap is carried in notVerified (D-2R).
+    expect(decision).toMatchObject({ status: "complete", exitCode: 0 });
+    expect(decision.notVerified).toContain("BROWSER_EVIDENCE_BINDING");
   });
 
   it("does not pass missing, malformed, failed, or matrix-orphaned evidence", () => {

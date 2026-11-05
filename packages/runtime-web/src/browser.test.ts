@@ -57,7 +57,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
       pause() {}, load() {},
     };
   };
-  for (const id of ["runtime-status", "runtime-diagnostics", "disc-title", "start-menu", "menu-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
+  for (const id of ["runtime-status", "runtime-diagnostics", "start-menu", "menu-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
   const document = { getElementById: (id: string) => elements.get(id) ?? null } as unknown as Document;
   const fakeWindow = {
     devicePixelRatio: 1,
@@ -138,7 +138,6 @@ describe("offline browser boot", () => {
     for (let reload = 0; reload < 2; reload++) {
       const host = await launch(packageData(), { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
       const start = host.elements.get("start-menu")!;
-      expect(host.elements.get("disc-title")?.textContent).toBe("Boot test");
       expect(host.elements.get("runtime-status")?.textContent).toContain("Images decoded");
       expect(host.elements.get("runtime-status")?.classes.has("is-visible")).toBe(true);
       expect(start.hidden).toBe(false);
@@ -249,7 +248,7 @@ describe("offline browser boot", () => {
     expect(host.mediaPlayCalls).toEqual(["menu-background", "menu-audio"]);
   });
 
-  it("fades ordinary status toasts out but keeps a fatal one visible until the next update", async () => {
+  it("fades ordinary status toasts out but keeps a persistent one visible until the next update", async () => {
     vi.resetModules();
     const { createStatusToast } = await import("./browser.js");
     vi.useFakeTimers();
@@ -273,14 +272,23 @@ describe("offline browser boot", () => {
       vi.advanceTimersByTime(1);
       expect(classes.has("is-visible")).toBe(false);
 
-      toast("Menu preview could not start.", { persist: true });
+      toast("Menu preview could not start.", { persist: true, error: true });
       expect(classes.has("is-visible")).toBe(true);
       expect(classes.has("is-error")).toBe(true);
+      expect(classes.has("is-persistent")).toBe(true);
+      vi.advanceTimersByTime(60_000);
+      expect(classes.has("is-visible")).toBe(true);
+
+      // A user-facing instruction stays on screen and accepts selection, but is not an error.
+      toast("Open STREAM/00006.m2ts manually, or launch start-menu.command.", { persist: true });
+      expect(classes.has("is-error")).toBe(false);
+      expect(classes.has("is-persistent")).toBe(true);
       vi.advanceTimersByTime(60_000);
       expect(classes.has("is-visible")).toBe(true);
 
       toast("Menu preview ready.");
       expect(classes.has("is-error")).toBe(false);
+      expect(classes.has("is-persistent")).toBe(false);
       vi.advanceTimersByTime(1000);
       expect(classes.has("is-visible")).toBe(false);
     } finally { vi.useRealTimers(); }

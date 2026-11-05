@@ -10,6 +10,7 @@
 # byte-level integrity is out of scope for this gate.
 #
 # Usage: bash scripts/ci.sh
+#        PNPM=pnpm bash scripts/ci.sh     # only if pnpm is installed globally
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -32,12 +33,18 @@ run() {
   fi
 }
 
-PNPM="${PNPM:-pnpm}"
+# `package.json` pins `packageManager: pnpm@11.25.0`, so `corepack pnpm` selects
+# exactly that version. Corepack ships with Node, which means the gate does not
+# depend on a globally installed pnpm - and the nested `pnpm` calls that
+# `pnpm -r ...` makes inside package scripts resolve through the same shim.
+# `PNPM` stays overridable for images that install pnpm themselves.
+PNPM_CMD=()
+read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
 
-run "install" "$PNPM" install --frozen-lockfile
-run "generate:contracts" "$PNPM" generate:contracts
-run "build" "$PNPM" -r build
-run "typecheck" "$PNPM" -r typecheck
-run "test:all" "$PNPM" test:all
+run "install" "${PNPM_CMD[@]}" install --frozen-lockfile
+run "generate:contracts" "${PNPM_CMD[@]}" generate:contracts
+run "build" "${PNPM_CMD[@]}" -r build
+run "typecheck" "${PNPM_CMD[@]}" -r typecheck
+run "test:all" "${PNPM_CMD[@]}" test:all
 
 printf '\nGate passed.\n'

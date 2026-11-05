@@ -31,19 +31,21 @@ const completeDecisionFacts = {
 };
 
 describe("release summary aggregation", () => {
-  it("recomputes status and lists missing browser, reference, dependency, and coverage evidence as actionable gaps", () => {
+  it("keeps status complete while listing missing browser, reference, dependency, and coverage evidence as gaps", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([], "pass"), coverage: null,
-      browserEvidence: [], referenceEvidence: [], decisionFacts: completeDecisionFacts, reportedStatus: "complete",
+      browserEvidence: [], referenceEvidence: [], decisionFacts: completeDecisionFacts,
     });
 
-    expect(summary.release.status).toBe("partial");
+    // Missing evidence is reported, not treated as a failure (D-2R).
+    expect(summary.release.status).toBe("complete");
+    expect(summary.release.notVerified).toEqual(expect.arrayContaining(["DEPENDENCY_AUDIT_REQUIRED", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]));
     expect(summary.release.gaps.map((gap) => gap.checkId)).toEqual(expect.arrayContaining([
       "DEPENDENCY_AUDIT_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS",
       "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED",
     ]));
     expect(summary.release.gaps.every((gap) => gap.result === "not-verified" && gap.action.length > 0)).toBe(true);
-    expect(summary.compatibility.status).toBe("partial");
+    expect(summary.compatibility.status).toBe("complete");
   });
 
   it("treats menu-only as a recorded mode rather than a gap when every independent fact passes", () => {
@@ -68,7 +70,7 @@ describe("release summary aggregation", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
       coverage: completeCoverage, browserEvidence: [pass("BROWSER_EVIDENCE", { payloadFingerprint })],
-      referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts, reportedStatus: "failed",
+      referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
     });
 
     expect(summary.release.status).toBe("complete");

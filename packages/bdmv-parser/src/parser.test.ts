@@ -383,21 +383,73 @@ describe("M1 BDMV discovery and structure", () => {
     const disc = await parseBdmv(root);
     expect(disc.discInfo.uhd).toMatchObject({ discType: 5, exists4k: true, hdrFlags: 3, hdr10Plus: false, dolbyVision: true });
     expect(disc.discInfo.appInfo).toMatchObject({ userDataBytes: 32, initialOutputModePreference: false, contentExistFlag: false });
+    // The 0x24 attribute path must be observable, not just "does not crash": these
+    // values come from the real MPLS/CLPI records in the fixture (P1-INFO-3).
+    const playlist = disc.playlists.find((item) => item.id === "00006");
+    expect(playlist?.playItems[0]?.streams.find((stream) => stream.codingType === 0x24)).toMatchObject({ pid: 4113, dynamicRangeType: 0, colorSpace: 1 });
+    const clip = disc.clips.find((item) => item.id === "00011");
+    expect(clip?.programs[0]?.streams.find((stream) => stream.codingType === 0x24)).toMatchObject({ pid: 4113, dynamicRangeType: 0, colorSpace: 1 });
+    expect(disc.clips.length).toBeGreaterThanOrEqual(13);
   });
 
-  it("rejects an INDEX UHD extension whose declared length or entry bounds cross the file", async () => {
+  it("keeps navigation entries when the optional INDEX UHD metadata is damaged", async () => {
     const parent = await temp(); const root = await skeleton(parent, buildM1Index({ uhd: { discType: 5 } })); const path = join(root, "index.bdmv");
     try {
+      // Declared extension length points past the file: recorded, not fatal.
       const truncated = buildM1Index({ uhd: { discType: 5 } }); truncated[121] = 0xff;
       await writeFile(path, truncated);
       const truncatedDisc = await parseBdmv(root);
-      expect(truncatedDisc.entries).toHaveLength(0);
-      expect(truncatedDisc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/index.bdmv")).toBe(true);
+      expect(truncatedDisc.entries).toHaveLength(2);
+      expect(truncatedDisc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning", sourcePath: "BDMV/index.bdmv" }));
+
+      // An entry whose bounds leave the file is dropped with a warning; navigation survives.
       const outOfRange = buildM1Index({ uhd: { discType: 5 } }); outOfRange[134] = 0x02;
       await writeFile(path, outOfRange);
       const outOfRangeDisc = await parseBdmv(root);
-      expect(outOfRangeDisc.entries).toHaveLength(0);
-      expect(outOfRangeDisc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/index.bdmv")).toBe(true);
+      expect(outOfRangeDisc.entries).toHaveLength(2);
+      expect(outOfRangeDisc.discInfo.uhd).toBeNull();
+      expect(outOfRangeDisc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", severity: "warning", sourcePath: "BDMV/index.bdmv" }));
+
+      // A truncated UHD payload is also optional.
+      const payload = buildM1Index({ uhd: { discType: 5 } }); payload[145] = 0xff;
+      await writeFile(path, payload);
+      const payloadDisc = await parseBdmv(root);
+      expect(payloadDisc.entries).toHaveLength(2);
+      expect(payloadDisc.discInfo.uhd).toBeNull();
+      expect(payloadDisc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.severity === "warning")).toBe(true);
+
+      // An unknown entry type is skipped without discarding the index.
+      const unknown = buildM1Index({ uhd: { discType: 5 } }); unknown[131] = 9;
+      await writeFile(path, unknown);
+      const unknownDisc = await parseBdmv(root);
+      expect(unknownDisc.entries).toHaveLength(2);
+      expect(unknownDisc.discInfo.uhd).toBeNull();
+      expect(unknownDisc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION")).toBe(false);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("keeps navigation entries when AppInfoBDMV is malformed", async () => {
+    const parent = await temp(); const bytes = buildM1Index(); bytes.set([0x00, 0x00, 0x01, 0x00], 40);
+    const root = await skeleton(parent, bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.entries).toHaveLength(2);
+      expect(disc.discInfo.appInfo).toBeNull();
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", severity: "warning", sourcePath: "BDMV/index.bdmv" }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("bounds the INDEX extension by the file length, not the declared length", async () => {
+    const parent = await temp();
+    const bytes = buildM1Index({ uhd: { discType: 5 } });
+    const extension = 118;
+    new DataView(bytes.buffer).setUint32(extension, 20, false); // Under-reported; the entry still ends at the file boundary.
+    const root = await skeleton(parent, bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.entries).toHaveLength(2);
+      expect(disc.discInfo.uhd).toMatchObject({ discType: 5, dolbyVision: false });
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning" }));
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -480,16 +532,38 @@ describe("M1 BDMV discovery and structure", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("bounds-checks CLPI TS type info and ATC sequence counts against their sections", async () => {
+  it("records an out-of-range CLPI TS type length instead of dropping the clip", async () => {
     const parent = await temp(); const root = await skeleton(parent);
     const tsType = buildM1ClipInfoWithSequence(); tsType[189] = 0xff;
     await writeFile(join(root, "CLIPINF", "00001.clpi"), tsType);
     try {
-      const badTsType = await parseBdmv(root);
-      expect(badTsType.clips).toHaveLength(0);
-      expect(badTsType.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true);
-      const atc = buildM1ClipInfoWithSequence(); atc[200] = 0xff;
-      await writeFile(join(root, "CLIPINF", "00001.clpi"), atc);
+      const disc = await parseBdmv(root);
+      expect(disc.clips).toHaveLength(1);
+      expect(disc.clips[0]?.header).toMatchObject({ tsTypeId: null });
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning", sourcePath: "BDMV/CLIPINF/00001.clpi" }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses a CLPI whose ATC sequence length field under-reports the records", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    const bytes = buildM1ClipInfoWithSequence();
+    const sequenceStart = 195;
+    new DataView(bytes.buffer).setUint32(sequenceStart, 1, false); // Declared length 1, records still in the file.
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.clips).toHaveLength(1);
+      expect(disc.clips[0]?.sequence).toHaveLength(1);
+      expect(disc.clips[0]?.sequence[0]?.stcs).toHaveLength(2);
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning" }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("still rejects a CLPI whose ATC count exceeds the file", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    const atc = buildM1ClipInfoWithSequence(); atc[200] = 0xff;
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), atc);
+    try {
       const badAtc = await parseBdmv(root);
       expect(badAtc.clips).toHaveLength(0);
       expect(badAtc.diagnostics.some((d) => d.code === "BDMV_INVALID_COUNT" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true);

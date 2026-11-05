@@ -11,13 +11,13 @@ export type ReleaseDecisionFacts = Omit<DeliveryDecisionInput, "mode" | "checks"
 export interface ReleaseSummaryInput {
   audit: OfflinePackageAudit;
   mode: "menu-only" | "standalone-full";
+  /** Where `mode` came from; `assumed` means neither manifest nor report declared it (D-13). */
+  modeSource?: "manifest" | "report" | "assumed";
   dependencyAudit: DependencyAuditReport;
   coverage: CoverageReport | null;
   browserEvidence: readonly AuditCheck[];
   referenceEvidence: readonly AuditCheck[];
   decisionFacts: ReleaseDecisionFacts;
-  /** A prior report status may be supplied for comparison; it is never trusted. */
-  reportedStatus?: string;
   strict?: boolean;
 }
 
@@ -35,10 +35,13 @@ export interface ReleaseSummary {
   release: {
     status: DeliveryStatus;
     mode: "menu-only" | "standalone-full";
+    modeSource?: "manifest" | "report" | "assumed";
     payloadFingerprint: string | null;
     strict: boolean;
     exitCode: 0 | 1 | 2;
     reasons: string[];
+    /** Evidence that was not collected or not verified; informational only. */
+    notVerified: string[];
     gaps: ReleaseGap[];
   };
   compatibility: CompatibilityReport;
@@ -97,7 +100,7 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   const gaps = checks.filter((check): check is AuditCheck & { result: "fail" | "not-verified" } => check.result !== "pass").map(toGap);
   return {
     schemaVersion: "1.0",
-    release: { status: decision.status, mode: input.mode, payloadFingerprint: input.audit.payloadFingerprint, strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, gaps },
+    release: { status: decision.status, mode: input.mode, ...(input.modeSource === undefined ? {} : { modeSource: input.modeSource }), payloadFingerprint: input.audit.payloadFingerprint, strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
     compatibility,
     dependencyAudit,
     coverage,

@@ -11,7 +11,10 @@ export interface PngPayload { id: string; bytes: Uint8Array }
 export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
 export interface SoundMetadata { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number }
 export interface SoundPayload { index: number; path: string; byteLength: number; format: "wav-pcm" }
-export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; mode: "menu-only"; status: "partial"; diagnostics: Array<{ code: string; message: string }>; payloadFingerprint?: string }
+/** Delivery status as decided by the caller; the package must not invent one. */
+export type MenuPackageStatus = "failed" | "partial" | "complete";
+export interface MenuPackageDiagnostic { code: string; message: string; severity?: string }
+export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; mode: "menu-only"; status: MenuPackageStatus; diagnostics: MenuPackageDiagnostic[]; payloadFingerprint?: string }
 
 /** Serialize data for a classic script. Escaping '<' also prevents HTML script termination. */
 export function serializeSafeScriptData(value: unknown): string {
@@ -36,9 +39,9 @@ export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: 
   return batches;
 }
 
-/** The stage fills the viewport and letterboxes the scene inside itself, so the
- * header carries the title and the page keeps no chrome of its own. The inline
- * aspect-ratio is only a fallback hint if the full-viewport sizing is disabled. */
+/** The stage fills the viewport and letterboxes the scene inside itself: the
+ * page shows no chrome of its own, and the disc title is only the document title.
+ * The inline aspect-ratio is a fallback hint if the full-viewport sizing is disabled. */
 export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSize?: { width: number; height: number }): string {
   const safeTitle = escapeHtml(title);
   const assets = Array.from({ length: assetBatchCount }, (_, i) => `<script defer src="runtime/assets-data-${String(i).padStart(3, "0")}.js"></script>`).join("");
@@ -72,6 +75,10 @@ export interface MenuPackageInput {
   title: string;
   ir: DiscIR;
   scene: unknown;
+  /** Delivery status decided by the caller. Defaults to `partial` for library callers. */
+  status?: MenuPackageStatus;
+  /** Entry counts recorded for report consumers; they never decide the status. */
+  entryCounts?: { declared: number; hdmv: number };
   playerProfile?: PlayerProfile;
   vmPrograms?: VmProgram[];
   vmEntries?: VmOptions["entries"];
@@ -100,7 +107,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
   const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, preset: "veryfast" }) : undefined;
-  const metadata: MenuPackageMetadata = { schemaVersion: "1.0", runtimeVersion: input.runtimeVersion ?? "0.1.0", title: input.title, mode: "menu-only", status: "partial", diagnostics };
+  const metadata: MenuPackageMetadata = { schemaVersion: "1.0", runtimeVersion: input.runtimeVersion ?? "0.1.0", title: input.title, mode: "menu-only", status: input.status ?? "partial", diagnostics };
   const files: Array<{ path: string; kind: string; required?: boolean }> = [
     { path: "index.html", kind: "html", required: true },
     { path: "runtime/disc-data.js", kind: "runtime", required: true },
@@ -118,7 +125,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize)),
     writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}) })),
     writeFile(resolve(runtimeDirectory, "style.css"), MENU_STYLE),
-    writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets) + (input.externalTargets ? "\nThe launcher starts a local-only playback bridge. Close its terminal window to stop it. Node.js is required. The menu skips any First Play media while retaining initialization performed before it. The default system player opens the entire M2TS; playlist boundaries and chapter offsets are not enforced.\n" : "")),
+    writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status) + (input.externalTargets ? "\nThe launcher starts a local-only playback bridge. Close its terminal window to stop it. Node.js is required. The menu skips any First Play media while retaining initialization performed before it. The default system player opens the entire M2TS; playlist boundaries and chapter offsets are not enforced.\n" : "")),
     ...(input.externalTargets ? [
       writeFile(resolve(output, "bdmv-config.json"), `${JSON.stringify({ bdmvPath: input.bdmvPath ?? "../BDMV" }, null, 2)}\n`),
       writeFile(resolve(output, "external-targets.json"), `${JSON.stringify(input.externalTargets)}\n`),
@@ -142,12 +149,12 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
   const menuMediaLimitation = input.externalTargets ? "Feature playback requires start-menu.command and the local player bridge; PlayItem ranges and chapters are not enforced" : exportedMedia ? exportedMedia.background.loop ? "Menu background is a partial single-clip loop; complete HDMV playlist navigation and PGS are unsupported" : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem; complete HDMV playlist navigation and PGS are unsupported" : "Menu-only preview; media playback unavailable";
-  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: "partial", files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
+  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, payloadFingerprint, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}) }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 /** Convert only M1-declared 48 kHz, signed 16-bit mono/stereo PCM sample ranges. BCLK words are big-endian. */
-export function convertSounds(entries: SoundMetadata[], source: Uint8Array | null, scene: unknown): { assets: SoundPayload[]; diagnostics: Array<{ code: string; message: string }>; files: Array<{ path: string; bytes: Uint8Array }> } {
+export function convertSounds(entries: SoundMetadata[], source: Uint8Array | null, scene: unknown): { assets: SoundPayload[]; diagnostics: MenuPackageDiagnostic[]; files: Array<{ path: string; bytes: Uint8Array }> } {
   const references = getSoundReferences(scene); const declared = new Map(entries.map((entry) => [entry.index, entry]));
   const assets: SoundPayload[] = []; const diagnostics: Array<{ code: string; message: string }> = []; const files: Array<{ path: string; bytes: Uint8Array }> = [];
   const affected = (soundId: number) => references.get(soundId)?.map((ref) => `page ${ref.pageId}, button ${ref.buttonId}`).join("; ") ?? "no menu buttons";
@@ -213,12 +220,13 @@ main{position:fixed;inset:0}
 #runtime-status{position:fixed;top:max(1rem,env(safe-area-inset-top));right:max(1rem,env(safe-area-inset-right));z-index:30;box-sizing:border-box;max-width:min(30rem,calc(100vw - 2rem));margin:0;padding:.55rem .85rem;border-radius:.6rem;background:rgba(18,18,22,.55);color:#f4f4f6;font-size:.85rem;line-height:1.35;text-align:left;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transform:translateY(-.4rem);transition:opacity .4s ease,transform .4s ease;pointer-events:none}
 #runtime-status.is-visible{opacity:1;transform:translateY(0)}
 #runtime-status.is-error{background:rgba(96,20,26,.7);color:#ffe2df;border:1px solid rgba(255,140,130,.35)}
+#runtime-status.is-persistent{pointer-events:auto;cursor:text;-webkit-user-select:text;user-select:text}
 #start-menu{position:fixed;left:50%;bottom:max(2rem,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;box-sizing:border-box;padding:.65rem 1.15rem;font:inherit;font-size:.95rem;color:#f4f4f6;background:rgba(18,18,22,.55);border:1px solid rgba(255,255,255,.22);border-radius:.6rem;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer}
 #start-menu:hover{background:rgba(32,32,38,.72)}
 #start-menu:focus-visible{outline:2px solid #7cc4ff;outline-offset:2px}
 #runtime-diagnostics{position:fixed;left:max(1rem,env(safe-area-inset-left));right:max(1rem,env(safe-area-inset-right));bottom:max(1rem,env(safe-area-inset-bottom));z-index:40;box-sizing:border-box;max-height:40vh;margin:0;padding:.75rem .9rem;border-radius:.6rem;overflow:auto;background:rgba(10,10,12,.75);color:#ffb4a9;font:.8rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 `;
-export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean): string {
+export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean, status: MenuPackageStatus = "partial"): string {
   const playbackNote = backgroundLoops === true
     ? "The detected menu playlist uses a repeated single-clip background loop with its declared primary audio tracks."
     : backgroundLoops === false
@@ -226,7 +234,7 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
       : "No menu background media was exported.";
   return [
     `# ${title.replace(/[\r\n]/g, " ")}`,
-    `This is a menu-only preview. Its compatibility status is always **partial**. ${playbackNote} Browser/file:// verification is not included in this package.`,
+    `This is a menu-only preview. Its delivery status is **${status}**. \`complete\` means no known failure was found, not that every scenario has been verified. ${playbackNote} Browser/file:// verification is not included in this package.`,
     "Run `bdmv-web validate <package-directory> --offline` to generate `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json` from current package evidence. Missing browser or reference evidence remains unverified.",
     externalPlayback ? "Run start-menu.command to open the menu and enable external playback. You can edit bdmv-config.json and restart the launcher to change the BDMV path." : "Open index.html in Chrome while offline.",
   ].join("\n\n") + "\n";

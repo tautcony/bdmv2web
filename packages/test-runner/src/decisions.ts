@@ -12,6 +12,7 @@ export interface DeliveryDiagnostic {
 }
 
 export interface DeliveryDecisionInput {
+  /** Recorded for the caller and the report; `decideDelivery` never branches on it. */
   mode: "menu-only" | "standalone-full";
   checks: readonly AuditCheck[];
   diagnostics?: readonly DeliveryDiagnostic[];
@@ -30,6 +31,11 @@ export interface DeliveryDecision {
   strict: boolean;
   exitCode: 0 | 1 | 2;
   reasons: string[];
+  /**
+   * Evidence that was not collected or not verified. Reported for information
+   * only: `complete` means "no known failure", not "fully verified" (D-2R).
+   */
+  notVerified: string[];
   blockingChecks: AuditCheck[];
 }
 
@@ -42,6 +48,7 @@ const STAGE_STATUS_BRAND: unique symbol = Symbol("StageStatus");
 export type StageStatus = ("complete" | "partial" | "failed") & { readonly [STAGE_STATUS_BRAND]: true };
 
 export interface StageOutcomeInput {
+  /** Recorded for the caller; the verdict only depends on the diagnostics. */
   stage: "inspect" | "extract";
   diagnostics?: readonly DeliveryDiagnostic[];
   strict: boolean;
@@ -85,6 +92,7 @@ export function acknowledgeDiagnostic<T extends DeliveryDiagnostic>(diagnostic: 
 
 export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): DeliveryDecision {
   const reasons: string[] = [];
+  const notVerified: string[] = [];
   const blockingChecks = input.checks.filter((check) => check.result === "fail");
   const diagnosticFacts = classifyDiagnostics(input.diagnostics);
   const failedDiagnostic = diagnosticFacts.hasFatal;
@@ -96,33 +104,35 @@ export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): D
   if (onlyBdj) reasons.push("No valid HDMV entry is available for this release profile.");
   if (input.hasMissingRequiredAsset) reasons.push("A required package asset is missing.");
 
+  // Absence of evidence is not evidence of failure: checks that were never run,
+  // counts that were never supplied and evidence that was not verified are
+  // collected here instead of downgrading the status (D-2R).
   const unverifiedChecks = input.checks.filter((check) => check.result === "not-verified");
+  notVerified.push(...unverifiedChecks.map((check) => check.checkId));
+  if (input.checks.length === 0) notVerified.push("NO_AUDIT_CHECKS");
+  if (input.declaredEntryCount === undefined || input.hdmvEntryCount === undefined) notVerified.push("ENTRY_COUNTS_MISSING");
+  if (input.hasMissingRequiredAsset === undefined || input.hasUnresolvedReachability === undefined || input.hasUnsupportedReachableCapability === undefined) notVerified.push("CAPABILITY_FACTS_INCOMPLETE");
+  if (input.requiredEvidenceComplete !== true) notVerified.push("REQUIRED_EVIDENCE_INCOMPLETE");
+  if (input.coverageComplete !== true) notVerified.push("COVERAGE_INCOMPLETE");
+
+  // Only failure evidence blocks `complete`: unresolved reachability, unsupported
+  // reachable capabilities, blocking errors and unrecognised severities.
+  const unknownSeverity = input.diagnostics?.some((diagnostic) => !["debug", "info", "warning", "error", "fatal"].includes(diagnostic.severity.toLowerCase())) ?? false;
   const partialConditions: boolean[] = [
-    input.checks.length === 0,
-    input.declaredEntryCount === undefined || input.hdmvEntryCount === undefined,
-    input.hasMissingRequiredAsset === undefined,
-    input.hasUnresolvedReachability !== false,
-    input.hasUnsupportedReachableCapability !== false,
-    errorDiagnostic,
-    input.diagnostics?.some((d) => !["debug", "info", "warning", "error", "fatal"].includes(d.severity.toLowerCase())) ?? false,
     input.hasUnresolvedReachability === true,
     input.hasUnsupportedReachableCapability === true,
-    input.requiredEvidenceComplete !== true,
-    input.coverageComplete !== true,
-    unverifiedChecks.length > 0,
+    errorDiagnostic && !failedDiagnostic,
+    unknownSeverity,
   ];
-  if (input.checks.length === 0) reasons.push("No audit checks were supplied.");
-  if (input.declaredEntryCount === undefined || input.hdmvEntryCount === undefined) reasons.push("Entry counts are missing.");
-  if (input.hasMissingRequiredAsset === undefined || input.hasUnresolvedReachability === undefined || input.hasUnsupportedReachableCapability === undefined) reasons.push("Capability and asset facts are incomplete.");
-  if (errorDiagnostic && !failedDiagnostic) reasons.push("An error diagnostic blocks complete status even when acknowledged.");
   if (input.hasUnresolvedReachability) reasons.push("Reachability contains unresolved or unknown paths.");
   if (input.hasUnsupportedReachableCapability) reasons.push("A reachable capability is unsupported.");
-  if (input.requiredEvidenceComplete === false || unverifiedChecks.length > 0) reasons.push("Required evidence is missing or not verified.");
-  if (input.coverageComplete !== true) reasons.push("Coverage is incomplete or contains unknown items.");
+  if (errorDiagnostic && !failedDiagnostic) reasons.push("An error diagnostic blocks complete status even when acknowledged.");
+  if (unknownSeverity) reasons.push("A diagnostic uses an unrecognised severity.");
+  // Limitations are explanatory only; they are listed but never decide the status.
   if (input.limitations?.length) reasons.push(...input.limitations.map((item) => `Limitation: ${item}`));
-  const status: DeliveryStatus = deliveryStatus(hardFailure ? "failed" : partialConditions.some(Boolean) || input.limitations?.length ? "partial" : "complete");
+  const status: DeliveryStatus = deliveryStatus(hardFailure ? "failed" : partialConditions.some(Boolean) ? "partial" : "complete");
   const exitCode: 0 | 1 | 2 = status === "failed" ? 1 : status === "partial" && strict ? 2 : 0;
-  return { status, strict, exitCode, reasons: [...new Set(reasons)], blockingChecks };
+  return { status, strict, exitCode, reasons: [...new Set(reasons)], notVerified: [...new Set(notVerified)], blockingChecks };
 }
 
 /**

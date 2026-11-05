@@ -86,7 +86,7 @@ export class RegisterFile {
   }
 }
 
-function profileWord(value: string | number, width: number, name: string): number {
+export function profileWord(value: string | number, width: number, name: string): number {
   if (typeof value === "number") return uint32(value, name);
   if (value.length !== width || !/^[A-Za-z]+$/.test(value)) throw new TypeError(`${name} must be ${width} ASCII letters or an encoded uint32 PSR word`);
   let word = 0;

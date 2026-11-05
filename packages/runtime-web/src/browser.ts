@@ -15,17 +15,24 @@ export function createMenuVm(data: PackageData, onTrace?: (entry: TraceEntry) =>
   return new HdmvVm(data.vmPrograms ?? [], { ...(onTrace ? { onTrace } : {}), ...(data.vmEntries ? { entries: data.vmEntries } : {}), ...(data.profile ? { profile: data.profile } : {}) });
 }
 
-export interface StatusToastOptions { persist?: boolean }
+export interface StatusToastOptions {
+  /** Keep the message until the next update. Use it whenever the user must act on it. */
+  persist?: boolean;
+  /** Error styling; independent of persistence so a hint can stay without turning red. */
+  error?: boolean;
+}
 type StatusToastHost = { textContent: string | null; classList?: { add(name: string): void; remove(name: string): void; toggle(name: string, force?: boolean): unknown } };
 
 /** Render status updates as a translucent toast in the top-right corner. Ordinary
- * updates fade out again; persistent (fatal) ones stay until the next update. */
+ * updates fade out again; persistent ones stay until the next update and accept
+ * text selection, because instructions the user has to copy must not vanish. */
 export function createStatusToast(host: StatusToastHost, timeoutMs = 4500): (message: string, options?: StatusToastOptions) => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return (message, options = {}) => {
     host.textContent = message;
     host.classList?.add("is-visible");
-    host.classList?.toggle("is-error", options.persist === true);
+    host.classList?.toggle("is-error", options.error === true);
+    host.classList?.toggle("is-persistent", options.persist === true);
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
     if (options.persist) return;
@@ -45,7 +52,7 @@ function showStatus(message: string, options?: StatusToastOptions): void {
 function visibleError(error: unknown): void {
   const status = document.getElementById("runtime-status"); const detail = document.getElementById("runtime-diagnostics");
   if (status) status.role = "alert";
-  showStatus("Menu preview could not start.", { persist: true });
+  showStatus("Menu preview could not start.", { persist: true, error: true });
   if (detail) { detail.hidden = false; detail.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error); }
 }
 
@@ -94,9 +101,7 @@ async function boot(): Promise<void> {
   try {
     const data = globalThis.__BDMV_MENU_DATA__;
     if (!data || typeof data !== "object" || !("ir" in data)) throw new Error("Missing or invalid embedded menu data.");
-    const ir = validateEmbeddedDiscIR(data.ir);
-    const title = data.title ?? ir.programs[0]?.title ?? "Blu-ray menu preview";
-    const heading = document.getElementById("disc-title"); if (heading) heading.textContent = title;
+    validateEmbeddedDiscIR(data.ir);
     const assetMap = new Map<string, HTMLImageElement>();
     for (const batch of globalThis.__BDMV_MENU_ASSETS__ ?? []) {
       if (!Array.isArray(batch)) throw new Error("Invalid embedded image batch.");
@@ -154,15 +159,16 @@ async function boot(): Promise<void> {
           pendingActions.push(...vm.drainActions());
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist && data.media)) {
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
-          if (result.status === "unavailable") { showStatus(result.message); vm.releaseExternalPlayback(action); continue; }
+          if (result.status === "unavailable") { showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }
           const params = new URLSearchParams(location.hash.slice(1)); const port = params.get("bridgePort"); const token = params.get("bridgeToken");
           if (!port || !token || !/^\d{1,5}$/.test(port) || !/^[0-9a-f]{48}$/.test(token)) {
-            showStatus(`Open ${result.item.streamPath} manually, or launch start-menu.command to use the system player.`);
+            // The user has to copy this path or launch the helper: keep it on screen.
+            showStatus(`Open ${result.item.streamPath} manually, or launch start-menu.command to use the system player.`, { persist: true });
             vm.releaseExternalPlayback(action); continue;
           }
           const image = new Image();
           image.onload = () => { if (requestSequence === externalRequestSequence) showStatus(`System player requested for ${result.item.streamPath}. ${result.limitations.join(" ")}`); };
-          image.onerror = () => { if (requestSequence === externalRequestSequence) showStatus(`Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`); };
+          image.onerror = () => { if (requestSequence === externalRequestSequence) showStatus(`Could not open ${result.item.streamPath}; check the local bridge and BDMV path.`, { persist: true }); };
           image.src = `http://127.0.0.1:${port}/open?token=${token}&clip=${encodeURIComponent(result.item.clipId)}`;
           vm.releaseExternalPlayback(action);
         } else {
@@ -218,6 +224,8 @@ async function boot(): Promise<void> {
       const vmStatus = vm.snapshot().status;
       if (vmStatus === "faulted" || vmStatus === "stopped" || (vmStatus === "suspended" && !pending.menuPlaylistRequested)) return;
       if (menuMediaStarted !== false) showStatus("Menu preview ready. Use arrow keys and Enter, or select a visible button.");
+      const initialRect = canvas.getBoundingClientRect();
+      viewport.resize(canvas, initialRect.width, initialRect.height, window.devicePixelRatio || 1);
       controller!.start();
       void dispatchActions().completion;
       removeKeyboard = installKeyboardInput(window, controller!);

@@ -1,4 +1,5 @@
 import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
+import { DEFAULT_PLAYER_PROFILE } from "@bdmv-web/core/defaults";
 import type { PlayerProfile as CorePlayerProfile } from "@bdmv-web/core";
 import { decodeInstruction, type DecodedInstruction, type Operand, type RawCommand } from "./decode.js";
 import { RegisterFile, RegisterFault, type PlayerProfile, type RegisterRef } from "./registers.js";
@@ -28,11 +29,6 @@ type MenuCheckpoint = {
   diagnostic: VmDiagnostic | null; firstAction: number;
 };
 const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
-const DEFAULT_PLAYER_PROFILE: Readonly<CorePlayerProfile> = Object.freeze({
-  menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng",
-  country: "US", region: "A", outputProfile: "portable",
-  videoProfiles: [], audioProfiles: [],
-});
 const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
 const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "ended", PLAY_PLAYLIST_ITEM: "ended", PLAY_PLAYLIST_MARK: "ended", TOP_MENU: "started", MENU_CALL: "started" };
 

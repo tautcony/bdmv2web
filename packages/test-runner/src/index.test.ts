@@ -190,7 +190,7 @@ describe("delivery status and coverage", () => {
     ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, true, "failed", 1],
     ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, true, "partial", 2],
     ["missing required media", { ...base, hasMissingRequiredAsset: true }, false, "failed", 1],
-    ["missing required evidence", { ...base, requiredEvidenceComplete: false }, true, "partial", 2],
+    ["missing required evidence", { ...base, requiredEvidenceComplete: false }, true, "complete", 0],
   ])("applies delivery policy to %s", (_label, input, strict, status, exitCode) => {
     expect(decideDelivery(input, strict)).toMatchObject({ status, strict, exitCode });
   });
@@ -199,6 +199,24 @@ describe("delivery status and coverage", () => {
     const menuOnly = decideDelivery({ ...base, mode: "menu-only" }, false);
     expect(menuOnly.status).toBe("complete");
     expect(menuOnly.reasons.join(" ")).not.toContain("menu-only output is always partial.");
+  });
+
+  it("treats unverified checks and limitations as missing evidence rather than a partial delivery", () => {
+    const decision = decideDelivery({
+      mode: "menu-only",
+      checks: [passing, { checkId: "BROWSER_EVIDENCE", result: "not-verified", message: "not supplied" }],
+      diagnostics: [],
+      declaredEntryCount: 1,
+      hdmvEntryCount: 1,
+      hasMissingRequiredAsset: false,
+      hasUnresolvedReachability: false,
+      hasUnsupportedReachableCapability: false,
+      limitations: ["Direct file:// browser acceptance remains unverified"],
+    }, true);
+    expect(decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
+    expect(decision.notVerified).toEqual(expect.arrayContaining(["BROWSER_EVIDENCE", "REQUIRED_EVIDENCE_INCOMPLETE", "COVERAGE_INCOMPLETE"]));
+    expect(decision.reasons.join(" ")).toContain("Limitation:");
+    expect(decision.reasons.join(" ")).not.toContain("No audit checks were supplied.");
   });
 
   it("classifies diagnostics by severity and acknowledgement", () => {
@@ -230,15 +248,17 @@ describe("delivery status and coverage", () => {
   it("keeps delivery status and stage status mutually unassignable", () => {
     const outcome = decideStageOutcome({ stage: "inspect", diagnostics: [], strict: false });
     expect(outcome).toMatchObject({ status: "complete", exitCode: 0, blockingDiagnostics: [] });
+    // No checks were supplied: that is missing evidence, not a failure (D-2R).
     const delivery = decideDelivery({ mode: "menu-only", checks: [], diagnostics: [] }, false);
-    expect(delivery.status).toBe("partial");
+    expect(delivery.status).toBe("complete");
+    expect(delivery.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS", "REQUIRED_EVIDENCE_INCOMPLETE"]));
 
     // @ts-expect-error a delivery status must not be usable where a stage status is required
     const stageFromDelivery: StageStatus = delivery.status;
     // @ts-expect-error a stage status must not be usable where a delivery status is required
     const deliveryFromStage: DeliveryStatus = outcome.status;
 
-    expect(stageFromDelivery).toBe("partial");
+    expect(stageFromDelivery).toBe("complete");
     expect(deliveryFromStage).toBe("complete");
   });
 

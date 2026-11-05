@@ -10,6 +10,17 @@ import { encodeTimestampForFixture } from "@bdmv-web/igs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/**
+ * A failed conversion must expose the same report fields as a successful one, so a
+ * consumer reads one schema regardless of how the conversion ended (P2-P2-5).
+ */
+function expectFailureReportSchema(report: Record<string, unknown>, code: string): void {
+  expect(report).toMatchObject({ status: "failed", code, mode: "menu-only", auditScope: "convert" });
+  expect((report.reasons as string[]).length).toBeGreaterThan(0);
+  expect((report.blockingDiagnostics as Array<{ severity?: string; code?: string }>)[0]).toMatchObject({ severity: "error", code });
+  expect((report.diagnostics as Array<{ severity?: string }>).every((item) => typeof item.severity === "string")).toBe(true);
+}
+
 describe("menu-only convert CLI", () => {
   it("requires a BDMV input", () => {
     const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert"]);
@@ -53,18 +64,18 @@ describe("M4 menu-only convert output", () => {
     return disc;
   }
 
-  it("writes a local offline menu package that stays partial in default and strict modes", async () => {
+  it("writes a local offline menu package with a complete delivery status in default and strict modes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert "));
     const disc = await makeMenuDisc(parent);
     const regular = join(parent, "regular output"); const strict = join(parent, "strict output");
     try {
       for (const [output, args, exitCode] of [
         [regular, [], 0],
-        [strict, ["--strict"], 2],
+        [strict, ["--strict"], 0],
       ] as const) {
         const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output, "--title", "Offline Menu", ...args]);
         expect(result.status).toBe(exitCode);
-        expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "partial", mode: "menu-only", output: await realpath(output) });
+        expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "complete", mode: "menu-only", output: await realpath(output) });
         expect(result.stderr.toString()).toBe("");
 
         const compatibility = JSON.parse(await readFile(join(output, "compatibility.json"), "utf8"));
@@ -72,11 +83,17 @@ describe("M4 menu-only convert output", () => {
         const assetManifest = JSON.parse(await readFile(join(output, "asset-manifest.json"), "utf8"));
         const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
         const readme = await readFile(join(output, "README.md"), "utf8");
+        const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
         const html = await readFile(join(output, "index.html"), "utf8");
-        expect(compatibility).toMatchObject({ mode: "menu-only", status: "partial", externalDependencies: ["Node.js local playback bridge", "configured BDMV STREAM files", "system M2TS player"] });
-        expect(manifest).toMatchObject({ mode: "menu-only", status: "partial" });
+        expect(compatibility).toMatchObject({ mode: "menu-only", status: "complete", externalDependencies: ["Node.js local playback bridge", "configured BDMV STREAM files", "system M2TS player"] });
+        expect(manifest).toMatchObject({ mode: "menu-only", status: "complete", declaredEntryCount: 2, hdmvEntryCount: 2 });
+        // The three conclusion sources must agree, and the report must carry only
+        // facts, not a "no checks were supplied" reason.
+        expect(report).toMatchObject({ status: "complete", auditScope: "convert" });
+        expect(report.reasons.join(" ")).not.toContain("No audit checks were supplied.");
+        expect(report.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS"]));
         expect(assetManifest.schemaVersion).toBe("1.0");
-        expect(readme).toMatch(/menu-only preview.*always \*\*partial\*\*/s);
+        expect(readme).toMatch(/menu-only preview.*delivery status is \*\*complete\*\*/s);
         expect(readme).toContain("Run start-menu.command");
         const localReferences = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!);
         expect(localReferences.length).toBeGreaterThan(0);
@@ -124,6 +141,31 @@ describe("M4 menu-only convert output", () => {
       const broken = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", join(parent, "broken.json"), "--out", join(parent, "menu-broken")]);
       expect(broken.status).toBe(1);
       expect(broken.stderr.toString()).toContain("CLI_INVALID_PROFILE");
+
+      // Profile words follow the PSR rules, so a semantically invalid value fails
+      // here instead of surfacing later as an opaque E_IO (P2-P2-4).
+      const caseBase = { menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng", country: "US", region: "A", outputProfile: "portable" };
+      for (const [index, profile] of [
+        { ...caseBase, country: "USA" },
+        { ...caseBase, menuLanguage: "jp" },
+        { ...caseBase, subtitleLanguage: "eng " },
+        { ...caseBase, audioLanguage: "日本語" },
+      ].entries()) {
+        const path = join(parent, `invalid-${index}.json`);
+        await writeFile(path, JSON.stringify(profile));
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", path, "--out", join(parent, `menu-invalid-${index}`)]);
+        expect(result.status, JSON.stringify(profile)).toBe(1);
+        expect(result.stderr.toString()).toContain("CLI_INVALID_PROFILE");
+        expect(result.stderr.toString()).not.toContain("E_IO");
+        await expect(access(join(parent, `menu-invalid-${index}`))).rejects.toThrow();
+      }
+
+      // Case is normalised rather than rejected, so `ENG`/`us` mean `eng`/`US`.
+      const mixedCase = join(parent, "profile-mixed.json");
+      await writeFile(mixedCase, JSON.stringify({ ...caseBase, menuLanguage: "ENG", country: "us" }));
+      const normalised = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", mixedCase, "--out", join(parent, "menu-mixed")]);
+      expect(normalised.status).toBe(0);
+      expect(JSON.parse(await readFile(join(parent, "menu-mixed", "manifest.json"), "utf8")).profile).toMatchObject({ menuLanguage: "eng", country: "US" });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -168,6 +210,11 @@ describe("M4 menu-only convert output", () => {
       expect(readme).toContain("Status: **failed**.");
       expect(readme).toContain("No extracted IGS scene matches the stream and clip declarations in Top Menu playlist 00007");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
+      // The failure report keeps the success schema: reasons, blocking diagnostics
+      // and per-diagnostic severity must be readable the same way (P2-P2-5).
+      const failureReport = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
+      expectFailureReportSchema(failureReport, "MENU_SCENE_NOT_FOUND");
+      expect(failureReport.reasons).toEqual([expect.stringContaining("No extracted IGS scene matches")]);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -178,7 +225,7 @@ describe("M4 menu-only convert output", () => {
       const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" });
-      expect(JSON.parse(await readFile(join(output, "report.json"), "utf8"))).toMatchObject({ status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" });
+      expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_PLAYLIST_NOT_RESOLVED");
       expect(await readFile(join(output, "README.md"), "utf8")).toContain("no IGS scene was selected");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -203,7 +250,7 @@ describe("M4 menu-only convert output", () => {
       const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
-      expect(JSON.parse(await readFile(join(output, "report.json"), "utf8"))).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
+      expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
       expect(await readFile(join(output, "README.md"), "utf8")).toContain("maps to multiple extracted IGS scenes");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -231,7 +278,7 @@ describe("M4 menu-only convert output", () => {
       const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
-      expect(JSON.parse(await readFile(join(output, "report.json"), "utf8"))).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
+      expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
       expect(await readFile(join(output, "README.md"), "utf8")).toContain("maps to multiple extracted IGS scenes");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -389,12 +436,12 @@ describe("stage and argument contracts", () => {
       const target = join(parent, "extract-out");
       const extracted = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "extract", disc, "--out", target]);
       expect(extracted.status).toBe(1);
-      expect(JSON.parse(extracted.stdout.toString())).toMatchObject({ status: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
+      expect(JSON.parse(extracted.stdout.toString())).toMatchObject({ stageStatus: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
       await expect(access(target)).rejects.toThrow();
 
       const converted = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", join(parent, "convert-out")]);
       expect(converted.status).toBe(1);
-      expect(JSON.parse(converted.stdout.toString())).toMatchObject({ status: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
+      expect(JSON.parse(converted.stdout.toString())).toMatchObject({ stageStatus: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
       await expect(access(join(parent, "convert-out"))).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
@@ -405,7 +452,7 @@ describe("stage and argument contracts", () => {
       const disc = await emptyDisc(parent);
       const failed = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc]);
       expect(failed.status).toBe(1);
-      expect(JSON.parse(failed.stdout.toString())).toMatchObject({ status: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
+      expect(JSON.parse(failed.stdout.toString())).toMatchObject({ stageStatus: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
 
       const allowed = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, "--allow-partial"]);
       expect(allowed.status).toBe(0);
@@ -461,6 +508,42 @@ describe("stage and argument contracts", () => {
   });
 });
 
+describe("argument contract", () => {
+  it("rejects misspelled options and extra positionals instead of ignoring them", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv cli unknown option "));
+    const disc = join(parent, "BDMV"); await mkdir(disc);
+    try {
+      const inspect = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, "--stric"]);
+      expect(inspect.status).toBe(1);
+      expect(inspect.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
+      expect(inspect.stdout.toString()).toBe("");
+
+      const output = join(parent, "typo-output");
+      const convert = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--ou", output]);
+      expect(convert.status).toBe(1);
+      expect(convert.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
+      await expect(access(output)).rejects.toThrow();
+
+      const extra = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, "extra"]);
+      expect(extra.status).toBe(1);
+      expect(extra.stderr.toString()).toContain("CLI_USAGE");
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("keeps every accepted option of each command working", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv cli allowed options "));
+    const disc = join(parent, "BDMV");
+    await mkdir(join(disc, "PLAYLIST"), { recursive: true }); await mkdir(join(disc, "CLIPINF"), { recursive: true }); await mkdir(join(disc, "STREAM"), { recursive: true });
+    await writeFile(join(disc, "index.bdmv"), buildM1Index()); await writeFile(join(disc, "MovieObject.bdmv"), buildM1MovieObject());
+    try {
+      for (const args of [["--strict"], ["--no-strict"], ["--allow-partial"], ["--format", "json"]]) {
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, ...args]);
+        expect(result.status, args.join(" ")).toBe(0);
+      }
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+});
+
 describe("offline validate CLI", () => {
   async function makePackage(directory: string, payload: Record<string, string>): Promise<void> {
     const files = [];
@@ -490,24 +573,26 @@ describe("offline validate CLI", () => {
       expect(JSON.parse(await readFile(join(directory, "manifest.json"), "utf8")).status).toBe("complete");
       expect(audit.dependencyAudit).toMatchObject({ schemaVersion: "1.0", status: "pass", payloadFingerprint: null });
       expect(audit.dependencyAudit.checks.some((check: any) => check.checkId === "OFFLINE_STATIC_AUDIT" && check.result === "pass")).toBe(true);
-      expect(audit.decision).toMatchObject({ status: "partial", strict: false, exitCode: 0 });
+      // Only not-verified evidence was missing, so the delivery is complete (D-2R).
+      expect(audit.decision).toMatchObject({ status: "complete", strict: false, exitCode: 0 });
+      expect(audit.decision.modeSource).toBe("manifest");
       expect(audit.releaseSummary.release.gaps.map((gap: any) => gap.checkId)).toEqual(expect.arrayContaining(["BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS"]));
       const report = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(report).toEqual(audit.dependencyAudit);
       const compatibility = JSON.parse(await readFile(join(directory, "compatibility.json"), "utf8"));
-      expect(compatibility).toMatchObject({ status: "partial", mode: "standalone-full", profile: "portable", payloadFingerprint: audit.payloadFingerprint, notVerified: expect.arrayContaining(["direct file:// launch", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]) });
+      expect(compatibility).toMatchObject({ status: "complete", mode: "standalone-full", profile: "portable", payloadFingerprint: audit.payloadFingerprint, notVerified: expect.arrayContaining(["direct file:// launch", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]) });
       const release = JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8"));
       expect(release.release).toEqual(audit.releaseSummary.release);
       const second = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
       expect(second.status).toBe(0);
       expect(JSON.parse(second.stdout.toString()).checks.some((check: any) => check.checkId === "PACKAGE_UNLISTED_PAYLOAD")).toBe(false);
-      expect(JSON.parse(second.stdout.toString()).releaseSummary.release.status).toBe("partial");
+      expect(JSON.parse(second.stdout.toString()).releaseSummary.release.status).toBe("complete");
       const strict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--strict", "--format", "json"]);
-      expect(strict.status).toBe(2);
-      expect(JSON.parse(strict.stdout.toString()).decision).toMatchObject({ status: "partial", strict: true, exitCode: 2 });
+      expect(strict.status).toBe(0);
+      expect(JSON.parse(strict.stdout.toString()).decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
       const noStrict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--no-strict", "--format", "json"]);
       expect(noStrict.status).toBe(0);
-      expect(JSON.parse(noStrict.stdout.toString()).decision.status).toBe("partial");
+      expect(JSON.parse(noStrict.stdout.toString()).decision.status).toBe("complete");
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
@@ -522,7 +607,57 @@ describe("offline validate CLI", () => {
       expect(result.status).toBe(0);
       const audit = JSON.parse(result.stdout.toString());
       expect(audit.checks.some((check: any) => /HASH|FINGERPRINT|SIZE/.test(check.checkId))).toBe(false);
-      expect(audit.decision).toMatchObject({ status: "partial", exitCode: 0 });
+      expect(audit.decision).toMatchObject({ status: "complete", exitCode: 0 });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("does not write any report when validate arguments are invalid", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "bdmv validate args "));
+    try {
+      await makePackage(directory, { "index.html": "<main>ready</main>" });
+      const before = await readFile(join(directory, "manifest.json"));
+      for (const args of [["--format"], ["--format", "xml"], ["--format="]]) {
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", ...args]);
+        expect(result.status, args.join(" ")).toBe(1);
+        expect(result.stdout.toString()).toBe("");
+        expect(result.stderr.toString()).toMatch(/CLI_(?:MISSING_VALUE|INVALID_FORMAT)/);
+      }
+      expect(await readFile(join(directory, "manifest.json"))).toEqual(before);
+      await expect(access(join(directory, "dependency-audit.json"))).rejects.toThrow();
+      await expect(access(join(directory, "compatibility.json"))).rejects.toThrow();
+      await expect(access(join(directory, "reports"))).rejects.toThrow();
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("writes the same dependency audit to disk as to stdout for a package without static payload", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "bdmv validate no payload "));
+    try {
+      // A failed conversion package: only README.md and report.json exist.
+      await writeFile(join(directory, "README.md"), "# Menu-only preview\n\nStatus: **failed**.\n");
+      await writeFile(join(directory, "report.json"), JSON.stringify({ schemaVersion: "1.0", status: "failed", code: "MENU_SCENE_NOT_FOUND", mode: "menu-only", auditScope: "convert", reasons: ["no scene"], notVerified: [], diagnostics: [], blockingDiagnostics: [] }));
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
+      const audit = JSON.parse(result.stdout.toString());
+      const disk = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
+      expect(disk).toEqual(audit.dependencyAudit);
+      expect(disk.checks.map((check: { checkId: string }) => check.checkId)).toEqual(["DEPENDENCY_AUDIT_REQUIRED"]);
+      // No manifest.json, so the mode comes from report.json instead of a silent default (P2-P2-7).
+      expect(audit.decision).toMatchObject({ mode: "menu-only", modeSource: "report" });
+      expect(JSON.parse(await readFile(join(directory, "compatibility.json"), "utf8")).mode).toBe("menu-only");
+      expect(JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8")).release.mode).toBe("menu-only");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("reports an assumed mode when neither manifest nor report declares one", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "bdmv validate no mode "));
+    try {
+      await makePackage(directory, { "index.html": "<main>ready</main>" });
+      const manifest = JSON.parse(await readFile(join(directory, "manifest.json"), "utf8"));
+      delete manifest.mode;
+      await writeFile(join(directory, "manifest.json"), JSON.stringify(manifest));
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
+      const audit = JSON.parse(result.stdout.toString());
+      expect(audit.decision).toMatchObject({ mode: "standalone-full", modeSource: "assumed" });
+      expect(audit.checks).toContainEqual(expect.objectContaining({ checkId: "PACKAGE_MODE_ASSUMED", result: "not-verified" }));
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 });

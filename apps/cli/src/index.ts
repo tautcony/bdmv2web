@@ -5,7 +5,7 @@ import { assertDisjointRoots, beginOutputTransaction, hashFile, resolveInputFile
 import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv-web/core";
 import { parseBdmv, type ParsedDisc } from "@bdmv-web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv-web/igs";
-import { buildNavigationGraph, HdmvVm } from "@bdmv-web/hdmv";
+import { buildNavigationGraph, HdmvVm, profileWord } from "@bdmv-web/hdmv";
 import { computeMediaClosure, createExternalMediaTargets } from "@bdmv-web/media-export";
 import { buildMenuPackage } from "@bdmv-web/package-builder";
 import { adaptIgsScene } from "@bdmv-web/runtime-web";
@@ -14,6 +14,37 @@ import { auditOutputPackage, classifyDiagnostics, createDependencyAuditReport, c
 const argv = process.argv.slice(2);
 const command = argv[0];
 const supported = new Set(["inspect", "extract", "convert", "validate", "compare"]);
+
+/** Per-command option contract. Anything else is a typo, not a silent no-op. */
+const commandOptions: Record<string, { flags: ReadonlySet<string>; values: ReadonlySet<string> }> = {
+  inspect: { flags: new Set(["--strict", "--no-strict", "--allow-partial"]), values: new Set(["--out", "--format"]) },
+  extract: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--out", "--format"]) },
+  convert: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--out", "--mode", "--player-profile", "--limits", "--title", "--format"]) },
+  validate: { flags: new Set(["--strict", "--no-strict", "--offline"]), values: new Set(["--format"]) },
+  compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--mode", "--format"]) },
+};
+
+/**
+ * Validate the raw argument vector before any command runs. A misspelled flag
+ * (`--stric`, `--ou`) must fail instead of silently changing behaviour, and an
+ * extra positional argument must not be dropped.
+ */
+function validateCommandLine(): void {
+  const spec = commandOptions[command!];
+  if (!spec) return;
+  let positionals = 0;
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (!arg.startsWith("--")) { positionals++; continue; }
+    const name = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
+    if (!spec.flags.has(name) && !spec.values.has(name)) fail("CLI_UNKNOWN_OPTION", `Unknown option ${name} for '${command}'`);
+    if (spec.values.has(name) && !arg.includes("=")) {
+      const next = argv[i + 1];
+      if (next !== undefined && next !== "" && !next.startsWith("--")) i++;
+    }
+  }
+  if (positionals > 1) fail("CLI_USAGE", `The '${command}' command accepts one input path but received ${positionals} arguments`);
+}
 function lookupOption(name: string): { found: boolean; value: string | undefined } {
   const index = argv.findIndex((value) => value === name || value.startsWith(`${name}=`));
   if (index < 0) return { found: false, value: undefined };
@@ -55,8 +86,6 @@ function fail(code: string, message: string, path?: string): never {
   throw new ContractError(code, path ?? "/", message);
 }
 
-const PLAYER_PROFILE_KEYS = ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "region", "outputProfile", "videoProfiles", "audioProfiles"] as const;
-
 /** Read and validate a `PlayerProfile` JSON file; a profile is either fully declared or absent. */
 async function loadPlayerProfile(path: string | undefined): Promise<PlayerProfile> {
   if (path === undefined) return { ...DEFAULT_PLAYER_PROFILE, videoProfiles: [], audioProfiles: [] };
@@ -68,9 +97,14 @@ async function loadPlayerProfile(path: string | undefined): Promise<PlayerProfil
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new ContractError("CLI_INVALID_PROFILE", "/", "--player-profile must contain a JSON object");
   const record = parsed as Record<string, unknown>;
-  for (const key of ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "outputProfile"] as const) {
-    if (typeof record[key] !== "string" || record[key] === "") throw new ContractError("CLI_INVALID_PROFILE", `/${key}`, `--player-profile requires a non-empty string '${key}'`);
-  }
+  // Reuse the PSR word rules instead of accepting any non-empty string: these
+  // values become PSR16-19, and a semantically invalid value can only fail later
+  // as an opaque E_IO when the VM is constructed (D-11).
+  const menuLanguage = profileWordField(record, "menuLanguage", 3);
+  const audioLanguage = profileWordField(record, "audioLanguage", 3);
+  const subtitleLanguage = profileWordField(record, "subtitleLanguage", 3);
+  const country = profileWordField(record, "country", 2, true);
+  if (typeof record.outputProfile !== "string" || record.outputProfile === "") throw new ContractError("CLI_INVALID_PROFILE", "/outputProfile", "--player-profile requires a non-empty string 'outputProfile'");
   if (!["A", "B", "C"].includes(record.region as string)) throw new ContractError("CLI_INVALID_PROFILE", "/region", "--player-profile requires region A, B, or C");
   if (record.outputProfile !== "portable") throw new ContractError("CLI_INVALID_PROFILE", "/outputProfile", "--player-profile supports only the 'portable' output profile");
   for (const key of ["videoProfiles", "audioProfiles"] as const) {
@@ -78,15 +112,32 @@ async function loadPlayerProfile(path: string | undefined): Promise<PlayerProfil
     if (value !== undefined && (!Array.isArray(value) || !value.every((item) => typeof item === "string"))) throw new ContractError("CLI_INVALID_PROFILE", `/${key}`, `--player-profile requires '${key}' to be a string array`);
   }
   return {
-    menuLanguage: record.menuLanguage as string,
-    audioLanguage: record.audioLanguage as string,
-    subtitleLanguage: record.subtitleLanguage as string,
-    country: record.country as string,
+    menuLanguage,
+    audioLanguage,
+    subtitleLanguage,
+    country,
     region: record.region as PlayerProfile["region"],
     outputProfile: "portable",
     videoProfiles: (record.videoProfiles as string[] | undefined) ?? [],
     audioProfiles: (record.audioProfiles as string[] | undefined) ?? [],
   };
+}
+
+/**
+ * Validate one profile word with the same rules the register file applies
+ * (exact ASCII letter length), normalising case so `ENG`/`us` behave like
+ * `eng`/`US` instead of producing a different PSR word.
+ */
+function profileWordField(record: Record<string, unknown>, key: string, width: number, uppercase = false): string {
+  const value = record[key];
+  if (typeof value !== "string" || value === "") throw new ContractError("CLI_INVALID_PROFILE", `/${key}`, `--player-profile requires a non-empty string '${key}'`);
+  const normalized = uppercase ? value.toUpperCase() : value.toLowerCase();
+  try {
+    profileWord(normalized, width, key);
+  } catch {
+    throw new ContractError("CLI_INVALID_PROFILE", `/${key}`, `--player-profile requires '${key}' to be ${width} ASCII letters`);
+  }
+  return normalized;
 }
 
 function deliveryDiagnostics(diagnostics: ReadonlyArray<{ code: string; message: string; severity?: string }>): DeliveryDiagnostic[] {
@@ -102,7 +153,9 @@ function firstBlockingCode(diagnostics: DeliveryDiagnostic[]): string {
 }
 
 function stageFailure(code: string, diagnostics: DeliveryDiagnostic[]): void {
-  process.stdout.write(`${JSON.stringify({ status: "failed", code, diagnostics })}\n`);
+  // `status` is reserved for delivery conclusions (convert/validate); a stage only
+  // reports whether its own goal was reached (D-5).
+  process.stdout.write(`${JSON.stringify({ stageStatus: "failed", code, diagnostics })}\n`);
   process.exitCode = 1;
 }
 
@@ -139,10 +192,14 @@ function buildExternalTargets(disc: ParsedDisc, scenes: Awaited<ReturnType<typeo
 async function extract(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "extract requires an input path");
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "extract requires --out DIR");
+  const strict = strictDefault();
   const disc = await parseBdmv(input);
   const roots = await assertDisjointRoots(disc.root, resolve(out));
+  // Fail on fatal parse diagnostics before scanning STREAM data (P2-INFO-3).
+  const parseFacts = classifyDiagnostics(disc.diagnostics);
+  if (parseFacts.hasFatal) { stageFailure(firstBlockingCode(parseFacts.blocking), parseFacts.blocking); return; }
   const igs = await extractIgsScenes(disc);
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict });
   if (outcome.status === "failed") {
     stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics);
     return;
@@ -365,12 +422,15 @@ async function convert(): Promise<void> {
   try {
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
       await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu-only preview\n\n${message}\n\nStatus: **failed**.\n`);
-      const diagnostics = [
-        { code, message },
-        ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
-        ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input) })),
-      ];
-      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify({ schemaVersion: "1.0", status: "failed", code, mode: "menu-only", diagnostics }, null, 2)}\n`);
+      // The failure report keeps the same shape as the success report so a consumer
+      // can read one schema regardless of how the conversion ended (P2-P2-5).
+      const diagnostics = deliveryDiagnostics([
+        { code, message, severity: "error" },
+        ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+        ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+      ]);
+      const report = { schemaVersion: "1.0", status: "failed", code, mode: "menu-only", auditScope: "convert", reasons: [message], notVerified: [], diagnostics, blockingDiagnostics: classifyDiagnostics(diagnostics).blocking };
+      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
       await transaction.commit();
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
@@ -426,8 +486,8 @@ async function convert(): Promise<void> {
       }
     }
     const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null);
-    await buildMenuPackage({ outputDirectory: transaction.stagingPath, title, ir, scene, vmPrograms, vmEntries: disc.entries, externalTargets: buildExternalTargets(disc, extraction.scenes), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root, ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }), ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }), graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, ...(menuMedia ? { menuLoopMedia: menuMedia } : {}), diagnostics: diagnostics.map(({ code, message }) => ({ code, message })) });
-    // Delivery status is decided from facts, not from the fact that packaging succeeded.
+    // Delivery status is decided from facts that are all known before packaging, so
+    // the package can record the same conclusion instead of inventing its own (D-2R).
     const decisionFacts = deliveryDiagnostics(diagnostics);
     const decision = decideDelivery({
       mode: "menu-only",
@@ -435,11 +495,13 @@ async function convert(): Promise<void> {
       diagnostics: decisionFacts,
       declaredEntryCount: disc.entries.length,
       hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
+      // `buildMenuPackage` reached this point, so no required asset can be missing.
       hasMissingRequiredAsset: false,
       limitations: menuMedia ? [] : ["Menu loop media is unavailable; the menu background holds its final frame."],
     }, strictDefault());
     const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
-    const report = { schemaVersion: "1.0", status: decision.status, mode: "menu-only", reasons: decision.reasons, diagnostics: decisionFacts, blockingDiagnostics };
+    await buildMenuPackage({ outputDirectory: transaction.stagingPath, title, ir, status: decision.status, entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length }, scene, vmPrograms, vmEntries: disc.entries, externalTargets: buildExternalTargets(disc, extraction.scenes), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root, ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }), ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }), graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, ...(menuMedia ? { menuLoopMedia: menuMedia } : {}), diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })) });
+    const report = { schemaVersion: "1.0", status: decision.status, mode: "menu-only", auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
     await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
     process.stdout.write(`${JSON.stringify({ status: decision.status, mode: "menu-only", output: roots.output })}\n`);
@@ -450,27 +512,33 @@ async function convert(): Promise<void> {
 async function validate(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "validate requires an output package directory");
   if (!argv.includes("--offline")) fail("CLI_OFFLINE_REQUIRED", "validate currently requires --offline");
+  // Argument contract first: a rejected command must not rewrite the package (P2-P2-1).
+  const format = optionValue("--format");
+  if (format !== undefined && format !== "json") fail("CLI_INVALID_FORMAT", `validate supports only 'json' for --format, got '${format}'`);
+  const strict = strictDefault();
   const audit = await auditOutputPackage(resolve(input));
-  let dependencyAudit = createDependencyAuditReport(audit);
-  if (!audit.checks.some((check) => check.checkId === "PACKAGE_ROOT_MISSING" || check.checkId === "PACKAGE_ROOT_INVALID")) {
-    try {
-      await writeGeneratedReport(audit.packageRoot, "dependency-audit.json", `${JSON.stringify(dependencyAudit, null, 2)}\n`);
-    } catch (error) {
-      audit.checks.push({ checkId: "DEPENDENCY_AUDIT_WRITE_FAILED", result: "fail", message: error instanceof Error ? error.message : String(error), path: "dependency-audit.json" });
-    }
-  }
-  let manifest: Record<string, unknown> = {};
-  try {
-    const parsed: unknown = JSON.parse(await readFile(resolve(audit.packageRoot, audit.manifestPath), "utf8"));
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) manifest = parsed as Record<string, unknown>;
-  } catch { /* The package audit already reports missing or invalid manifest data. */ }
-  let previousCompatibility: Record<string, unknown> = {};
-  try {
-    const parsed: unknown = JSON.parse(await readFile(resolve(audit.packageRoot, "compatibility.json"), "utf8"));
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) previousCompatibility = parsed as Record<string, unknown>;
-  } catch { /* A missing or malformed prior report is replaced by the fresh summary. */ }
-  const mode = manifest.mode === "menu-only" ? "menu-only" : "standalone-full";
+  const writable = !audit.checks.some((check) => check.checkId === "PACKAGE_ROOT_MISSING" || check.checkId === "PACKAGE_ROOT_INVALID");
+  const manifest = await readJsonObject(resolve(audit.packageRoot, audit.manifestPath));
+  const previousCompatibility = await readJsonObject(resolve(audit.packageRoot, "compatibility.json"));
+  const reportedReport = await readJsonObject(resolve(audit.packageRoot, "report.json"));
+  // A failed conversion only writes README.md and report.json. That report still
+  // declares the intended shape, so it is the fallback source for `mode`; its
+  // `status` is never trusted (D-13).
+  const manifestMode = packageMode(manifest.mode);
+  const reportMode = packageMode(reportedReport.mode);
+  const modeSource = manifestMode !== undefined ? "manifest" as const : reportMode !== undefined ? "report" as const : "assumed" as const;
+  const mode = manifestMode ?? reportMode ?? "standalone-full";
+  if (modeSource === "assumed") audit.checks.push({ checkId: "PACKAGE_MODE_ASSUMED", result: "not-verified", message: "Neither manifest.json nor report.json declares a supported mode; 'standalone-full' was assumed.", path: "manifest.json" });
   const limitations = Array.isArray(manifest.limitations) ? manifest.limitations.filter((item): item is string => typeof item === "string") : [];
+  // A package records the diagnostics that decided its own conversion. Re-reading
+  // them keeps convert and validate on the same evidence instead of two verdicts.
+  const manifestDiagnostics: DeliveryDiagnostic[] = (Array.isArray(manifest.diagnostics) ? manifest.diagnostics : [])
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item))
+    .map((item) => ({
+      severity: typeof item.severity === "string" ? item.severity : "warning",
+      ...(typeof item.code === "string" ? { code: item.code } : {}),
+      ...(typeof item.message === "string" ? { message: item.message } : {}),
+    }));
   const declaredEntryCount = Number.isSafeInteger(manifest.declaredEntryCount) && (manifest.declaredEntryCount as number) >= 0 ? manifest.declaredEntryCount as number : undefined;
   const hdmvEntryCount = Number.isSafeInteger(manifest.hdmvEntryCount) && (manifest.hdmvEntryCount as number) >= 0 ? manifest.hdmvEntryCount as number : undefined;
   const coverage = summarizeDeliveryCoverage({
@@ -482,23 +550,30 @@ async function validate(): Promise<void> {
   const releaseSummaryInput = {
     audit,
     mode,
-    dependencyAudit,
+    modeSource,
+    dependencyAudit: createDependencyAuditReport(audit),
     coverage,
     browserEvidence: [],
     referenceEvidence: [],
     decisionFacts: {
       limitations,
+      diagnostics: manifestDiagnostics,
       ...(declaredEntryCount === undefined ? {} : { declaredEntryCount }),
       ...(hdmvEntryCount === undefined ? {} : { hdmvEntryCount }),
       hasMissingRequiredAsset: audit.checks.some((check) => check.checkId === "PACKAGE_MISSING_ASSET" || check.checkId === "PACKAGE_REQUIRED_ASSET_MISSING"),
       ...(typeof manifest.hasUnresolvedReachability === "boolean" ? { hasUnresolvedReachability: manifest.hasUnresolvedReachability } : {}),
       ...(typeof manifest.hasUnsupportedReachableCapability === "boolean" ? { hasUnsupportedReachableCapability: manifest.hasUnsupportedReachableCapability } : {}),
     },
-    ...(typeof manifest.status === "string" ? { reportedStatus: manifest.status } : {}),
-    strict: argv.includes("--strict"),
+    strict,
   } as const;
   let releaseSummary = createReleaseSummary(releaseSummaryInput);
-  dependencyAudit = releaseSummary.dependencyAudit;
+  // `validate` never rewrites manifest.status: a disagreement is reported as
+  // unverified evidence, not repaired behind the caller's back (D-2R).
+  const manifestStatus = typeof manifest.status === "string" ? manifest.status : undefined;
+  if (manifestStatus !== undefined && manifestStatus !== releaseSummary.release.status) {
+    audit.checks.push({ checkId: "MANIFEST_STATUS_UNVERIFIED", result: "not-verified", message: `manifest.json records status '${manifestStatus}' but the current evidence decides '${releaseSummary.release.status}'; the manifest is not rewritten.`, path: "manifest.json" });
+    releaseSummary = createReleaseSummary(releaseSummaryInput);
+  }
   const priorNotVerified = Array.isArray(previousCompatibility.notVerified) ? previousCompatibility.notVerified.filter((item): item is string => typeof item === "string") : [];
   const currentGaps = releaseSummary.release.gaps.map((gap) => gap.checkId);
   releaseSummary = {
@@ -511,8 +586,13 @@ async function validate(): Promise<void> {
       notVerified: [...new Set([...priorNotVerified, ...currentGaps])],
     },
   };
-  if (!audit.checks.some((check) => check.checkId === "PACKAGE_ROOT_MISSING" || check.checkId === "PACKAGE_ROOT_INVALID")) {
+  let dependencyAudit = releaseSummary.dependencyAudit;
+  if (writable) {
     try {
+      // Every on-disk report must come from the same summary, so the dependency
+      // audit is written after the summary exists instead of from a pre-summary
+      // intermediate value (D-12).
+      await writeGeneratedReport(audit.packageRoot, "dependency-audit.json", `${JSON.stringify(releaseSummary.dependencyAudit, null, 2)}\n`);
       await writeGeneratedReport(audit.packageRoot, "compatibility.json", `${JSON.stringify(releaseSummary.compatibility, null, 2)}\n`);
       await writeGeneratedReport(audit.packageRoot, "reports/release-summary.json", `${JSON.stringify(releaseSummary, null, 2)}\n`);
     } catch (error) {
@@ -521,20 +601,32 @@ async function validate(): Promise<void> {
       dependencyAudit = releaseSummary.dependencyAudit;
     }
   }
-  const format = optionValue("--format");
   const decision = releaseSummary.release;
-  if (format === "json") process.stdout.write(`${JSON.stringify({ ...audit, dependencyAudit, decision, releaseSummary })}\n`);
+  if (format === "json") process.stdout.write(`${JSON.stringify({ ...audit, dependencyAudit, ...(manifestStatus === undefined ? {} : { manifestStatus }), decision, releaseSummary })}\n`);
   else {
     const failed = audit.checks.filter((check) => check.result === "fail");
     const unverified = audit.checks.filter((check) => check.result === "not-verified");
     process.stdout.write(`Offline package audit: ${failed.length ? "failed" : unverified.length ? "not verified" : "passed"}\n`);
     process.stdout.write(`Dependency audit: ${dependencyAudit.status}\n`);
     process.stdout.write(`Delivery decision: ${decision.status}${decision.strict ? " (strict)" : ""}\n`);
+    if (manifestStatus !== undefined && manifestStatus !== decision.status) process.stdout.write(`Manifest status: ${manifestStatus} (not rewritten)\n`);
     for (const check of audit.checks) if (check.result !== "pass") process.stdout.write(`${check.result.toUpperCase()} ${check.checkId}${check.path ? ` ${check.path}` : ""}: ${check.message}\n`);
     for (const gap of releaseSummary.release.gaps) process.stdout.write(`GAP ${gap.result} ${gap.checkId}${gap.path ? ` ${gap.path}` : ""}: ${gap.message} Next: ${gap.action}\n`);
     for (const reason of decision.reasons) process.stdout.write(`DECISION ${reason}\n`);
   }
   process.exitCode = decision.exitCode;
+}
+
+/** Read a JSON object, treating anything else as absent. */
+async function readJsonObject(path: string): Promise<Record<string, unknown>> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch { return {}; }
+}
+
+function packageMode(value: unknown): "menu-only" | "standalone-full" | undefined {
+  return value === "menu-only" || value === "standalone-full" ? value : undefined;
 }
 
 async function writeGeneratedReport(root: string, relativePath: string, content: string): Promise<void> {
@@ -559,6 +651,7 @@ async function writeGeneratedReport(root: string, relativePath: string, content:
 
 async function main(): Promise<void> {
   if (!command || !supported.has(command)) fail("CLI_USAGE", "Usage: bdmv-web <inspect|extract|convert|validate|compare> [INPUT] [options]");
+  validateCommandLine();
   if (command === "inspect") return inspect();
   if (command === "extract") return extract();
   if (command === "convert") return convert();

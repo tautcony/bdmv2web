@@ -23,6 +23,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isPlayerProfile(value: unknown): value is Record<string, unknown> {
+  return isRecord(value)
+    && ["menuLanguage", "audioLanguage", "subtitleLanguage"].every((key) => typeof value[key] === "string" && /^[A-Za-z]{3}$/.test(value[key] as string))
+    && typeof value.country === "string" && /^[A-Za-z]{2}$/.test(value.country)
+    && ["A", "B", "C"].includes(String(value.region))
+    && value.outputProfile === "portable"
+    && Array.isArray(value.videoProfiles) && value.videoProfiles.every((item) => typeof item === "string")
+    && Array.isArray(value.audioProfiles) && value.audioProfiles.every((item) => typeof item === "string");
+}
+
+function samePlayerProfile(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const keys = ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "region", "outputProfile", "videoProfiles", "audioProfiles"];
+  return keys.every((key) => JSON.stringify(left[key]) === JSON.stringify(right[key]));
+}
+
 function parseManifest(value: unknown, checks: AuditCheck[]): DeliveryManifest | null {
   if (!isRecord(value)) { add(checks, "MANIFEST_SCHEMA", "fail", "manifest.json must contain a JSON object", "manifest.json"); return null; }
   if (value.schemaVersion !== "1.0") { add(checks, "MANIFEST_SCHEMA", "fail", "Unsupported or missing package schemaVersion", "manifest.json", { schemaVersion: value.schemaVersion ?? null }); return null; }
@@ -300,6 +315,35 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   catch (error) { add(checks, "MANIFEST_INVALID_JSON", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files }; }
   const manifest = parseManifest(parsed, checks);
   if (!manifest) return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, payloadFingerprint: null, discoveredPayloadFiles: files };
+
+  // Older packages may not record a player profile. When the manifest does,
+  // require it to match the exact profile embedded for the runtime VM.
+  if (isRecord(parsed) && Object.hasOwn(parsed, "profile")) {
+    const manifestProfile = parsed.profile;
+    if (!isPlayerProfile(manifestProfile)) {
+      add(checks, "PLAYER_PROFILE_INVALID", "fail", "manifest.json profile does not match the PlayerProfile contract", "manifest.json/profile");
+    } else {
+      try {
+        const compatibility: unknown = JSON.parse(await readFile(resolve(root, "compatibility.json"), "utf8"));
+        if (!isRecord(compatibility) || compatibility.profile !== manifestProfile.outputProfile) {
+          add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "compatibility.json profile label does not match manifest.json outputProfile", "compatibility.json/profile");
+        }
+      } catch {
+        add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "Could not read compatibility.json profile label", "compatibility.json/profile");
+      }
+      try {
+        const runtimeScript = await readFile(resolve(root, "runtime/disc-data.js"), "utf8");
+        const assignment = /^globalThis\.__BDMV_MENU_DATA__=(.*);\s*$/s.exec(runtimeScript);
+        const runtimeData: unknown = assignment ? JSON.parse(assignment[1]!) : null;
+        const runtimeProfile = isRecord(runtimeData) ? runtimeData.profile : undefined;
+        if (!isPlayerProfile(runtimeProfile) || !samePlayerProfile(manifestProfile, runtimeProfile)) {
+          add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "manifest.json profile does not match runtime/disc-data.js profile", "runtime/disc-data.js/profile");
+        } else add(checks, "PLAYER_PROFILE_SYNC", "pass", "Manifest and runtime player profiles match", "manifest.json/profile");
+      } catch {
+        add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "Could not read the runtime player profile recorded by manifest.json", "runtime/disc-data.js/profile");
+      }
+    }
+  }
 
   const seen = new Set<string>();
   for (const [index, entry] of manifest.files.entries()) {

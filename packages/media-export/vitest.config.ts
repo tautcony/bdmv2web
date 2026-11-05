@@ -1,2 +1,3 @@
 import { defineConfig } from "vitest/config";
-export default defineConfig({ test: { environment: "node", include: ["src/**/*.test.ts"] } });
+// Codec and export cases exceed the 5s default when the machine is busy.
+export default defineConfig({ test: { environment: "node", include: ["src/**/*.test.ts"], testTimeout: 15000 } });

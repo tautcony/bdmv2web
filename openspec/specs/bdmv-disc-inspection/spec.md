@@ -72,6 +72,25 @@
 - **WHEN** 命令数声明超过剩余字节
 - **THEN** 有界失败并定位记录，不以补零指令凑数
 
+### Requirement: 可选元数据不得决定可读性
+
+系统 SHALL 只把主 index section（入口表）视为 critical；AppInfo 与 UHD 扩展等可选元数据解析失败时降级为 warning 诊断并继续解析导航，不得把整张盘判为不可解析。
+
+#### Scenario: UHD 元数据损坏
+
+- **WHEN** INDX 扩展区长度、entry 上界或 3.1 payload 损坏
+- **THEN** `entries` 仍完整保留，`discInfo.uhd` 为 null，产生 `warning` 级诊断，`inspect` / `extract` / `convert` 不因此退出 1
+
+#### Scenario: 声明长度不自洽
+
+- **WHEN** 扩展区或 CLPI 的长度字段少报/越界，但记录仍落在文件内
+- **THEN** 记 `BDMV_DECLARED_LENGTH_MISMATCH`（`warning`）并按文件边界继续解析，不丢弃整个 section 或 CLPI
+
+#### Scenario: 真的读越文件
+
+- **WHEN** 记录的计数或偏移确实超出文件边界
+- **THEN** 仍以 `BDMV_INVALID_COUNT` / `BDMV_INVALID_SECTION` 有界失败，不把相邻 section 当作本 section 的数据
+
 ### Requirement: 轨道与可选资源
 
 系统 SHALL 保留 STN/CLPI 轨道、角度/SubPath 标记和 sound 原始采样范围；冲突或未支持能力显式可见。

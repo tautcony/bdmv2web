@@ -9,6 +9,7 @@ export type SourceRef = DiscIR["entries"][number]["source"];
 export type NavigationDescriptor = DiscIR["entries"][number]["navigation"];
 export type AssetReference = DiscIR["mediaAssets"][number];
 export type Diagnostic = DiscIR["diagnostics"][number];
+export { DEFAULT_PLAYER_PROFILE } from "./defaults.js";
 
 export interface ActionEnvelope<T> {
   sessionId: string;
@@ -47,12 +48,6 @@ export interface Limits {
   maxExplorationStates: number;
   maxOutputBytes: number | null;
 }
-
-export const DEFAULT_PLAYER_PROFILE: Readonly<PlayerProfile> = Object.freeze({
-  menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng",
-  country: "US", region: "A", outputProfile: "portable",
-  videoProfiles: [], audioProfiles: [],
-});
 
 export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({
   maxReadWindowBytes: 8 * 1024 * 1024,
