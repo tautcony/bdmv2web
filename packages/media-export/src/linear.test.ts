@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { SourceLocation } from "@bdmv2web/bdmv-parser";
 import type { MediaPlan, MediaPlanRequirement } from "./media-plan.js";
 import { exportLinearMedia, type LinearProcessRunner } from "./linear.js";
 

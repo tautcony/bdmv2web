@@ -1,6 +1,7 @@
 {
-  "name": "@bdmv-web/test-runner",
+  "name": "@bdmv2web/test-runner",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "files": ["dist"],
   "private": true,
   "type": "module",

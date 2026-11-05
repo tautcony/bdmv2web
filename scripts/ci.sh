@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Platform-agnostic build gate for the bdmv-web workspace.
+# Platform-agnostic build gate for the bdmv2web workspace.
 #
 # This script is the hand-off point for a future CI pipeline (decision D1=A: the
 # pipeline itself - triggers, caches, credentials - is a separate change). It is

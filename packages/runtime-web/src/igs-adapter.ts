@@ -1,4 +1,4 @@
-import type { IgsAsset, IgsScene, IgsSource } from "@bdmv-web/igs";
+import type { IgsAsset, IgsScene, IgsSource } from "@bdmv2web/igs";
 
 export interface SerializedMenuState {
   bounds: { x: number; y: number; width: number; height: number };

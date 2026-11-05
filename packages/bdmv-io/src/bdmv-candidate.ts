@@ -1,4 +1,4 @@
-import { ContractError } from "@bdmv-web/core";
+import { ContractError } from "@bdmv2web/core";
 
 export interface BdmvChildEntry {
   name: string;

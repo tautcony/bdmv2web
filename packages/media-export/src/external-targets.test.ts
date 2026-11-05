@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ParsedDisc, PlayItem, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { ParsedDisc, PlayItem, SourceLocation } from "@bdmv2web/bdmv-parser";
 import type { MediaClosure } from "./closure.js";
 import { createExternalMediaTargets, resolveExternalPlayTarget } from "./external-targets.js";
 

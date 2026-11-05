@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import type { Limits } from "@bdmv-web/core";
-import { ContractError, DEFAULT_LIMITS } from "@bdmv-web/core";
+import type { Limits } from "@bdmv2web/core";
+import { ContractError, DEFAULT_LIMITS } from "@bdmv2web/core";
 import { selectBdmvChild } from "./bdmv-candidate.js";
 
 function within(root: string, target: string): boolean {

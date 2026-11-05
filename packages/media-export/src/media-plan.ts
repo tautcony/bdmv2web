@@ -1,4 +1,4 @@
-import type { ParsedDisc, PlayItem, SourceLocation, StreamDeclaration, SubPlayItem } from "@bdmv-web/bdmv-parser";
+import type { ParsedDisc, PlayItem, SourceLocation, StreamDeclaration, SubPlayItem } from "@bdmv2web/bdmv-parser";
 import type { MediaClosure } from "./closure.js";
 
 export interface MediaPlanOptions {

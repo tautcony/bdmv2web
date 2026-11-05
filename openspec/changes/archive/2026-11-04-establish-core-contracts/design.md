@@ -14,7 +14,7 @@
 
 ### 1. 工作区与依赖方向
 
-采用 pnpm workspace，包名 @bdmv-web/*。先建 core/bdmv-io/test-fixtures 和 apps/cli，下游随 change 增加。根脚本统一 build/typecheck/test；固定 Node/pnpm/TS/Vitest/bundle 工具版本与 lockfile。core 只用平台无关 TS/Uint8Array，不导入 Buffer、node:fs、DOM；Node I/O 在 bdmv-io，浏览器不得反向依赖转换器。选择单一 schema 来源生成/校验 TS 类型，避免两套结构漂移。
+采用 pnpm workspace，包名 @bdmv2web/*。先建 core/bdmv-io/test-fixtures 和 apps/cli，下游随 change 增加。根脚本统一 build/typecheck/test；固定 Node/pnpm/TS/Vitest/bundle 工具版本与 lockfile。core 只用平台无关 TS/Uint8Array，不导入 Buffer、node:fs、DOM；Node I/O 在 bdmv-io，浏览器不得反向依赖转换器。选择单一 schema 来源生成/校验 TS 类型，避免两套结构漂移。
 
 ### 2. 契约及阶段校验
 

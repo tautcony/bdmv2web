@@ -1,11 +1,12 @@
 {
-  "name": "@bdmv-web/media-export",
+  "name": "@bdmv2web/media-export",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": "./dist/index.js", "./external-targets": "./dist/external-targets.js" },
   "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv-web/bdmv-parser": "workspace:*", "@bdmv-web/hdmv": "workspace:*" },
+  "dependencies": { "@bdmv2web/bdmv-parser": "workspace:*", "@bdmv2web/hdmv": "workspace:*" },
   "devDependencies": { "@types/node": "24.10.0" }
 }

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 import { link, lstat, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
-import { assertDisjointRoots, beginOutputTransaction, hashFile, resolveInputFile } from "@bdmv-web/bdmv-io";
-import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv-web/core";
-import { parseBdmv, type ParsedDisc } from "@bdmv-web/bdmv-parser";
-import { extractIgsScenes } from "@bdmv-web/igs";
-import { buildNavigationGraph, HdmvVm, profileWord } from "@bdmv-web/hdmv";
-import { computeMediaClosure, createExternalMediaTargets } from "@bdmv-web/media-export";
-import { buildMenuPackage } from "@bdmv-web/package-builder";
-import { adaptIgsScene } from "@bdmv-web/runtime-web";
-import { auditOutputPackage, classifyDiagnostics, createDependencyAuditReport, createReleaseSummary, decideDelivery, decideStageOutcome, summarizeDeliveryCoverage, type DeliveryDiagnostic } from "@bdmv-web/test-runner";
+import { assertDisjointRoots, beginOutputTransaction, hashFile, resolveInputFile } from "@bdmv2web/bdmv-io";
+import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
+import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
+import { extractIgsScenes } from "@bdmv2web/igs";
+import { buildNavigationGraph, HdmvVm, profileWord } from "@bdmv2web/hdmv";
+import { computeMediaClosure, createExternalMediaTargets } from "@bdmv2web/media-export";
+import { buildMenuPackage } from "@bdmv2web/package-builder";
+import { adaptIgsScene } from "@bdmv2web/runtime-web";
+import { auditOutputPackage, classifyDiagnostics, createDependencyAuditReport, createReleaseSummary, decideDelivery, decideStageOutcome, summarizeDeliveryCoverage, type DeliveryDiagnostic } from "@bdmv2web/test-runner";
 
 const argv = process.argv.slice(2);
 const command = argv[0];
@@ -650,7 +650,7 @@ async function writeGeneratedReport(root: string, relativePath: string, content:
 }
 
 async function main(): Promise<void> {
-  if (!command || !supported.has(command)) fail("CLI_USAGE", "Usage: bdmv-web <inspect|extract|convert|validate|compare> [INPUT] [options]");
+  if (!command || !supported.has(command)) fail("CLI_USAGE", "Usage: bdmv2web <inspect|extract|convert|validate|compare> [INPUT] [options]");
   validateCommandLine();
   if (command === "inspect") return inspect();
   if (command === "extract") return extract();

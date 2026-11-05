@@ -1,10 +1,11 @@
 {
-  "name": "@bdmv-web/cli",
+  "name": "@bdmv2web/cli",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "files": ["dist"],
   "type": "module",
   "bin": {
-    "bdmv-web": "./dist/index.js"
+    "bdmv2web": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -12,18 +13,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bdmv-web/bdmv-io": "workspace:*",
-    "@bdmv-web/bdmv-parser": "workspace:*",
-    "@bdmv-web/core": "workspace:*",
-    "@bdmv-web/hdmv": "workspace:*",
-    "@bdmv-web/igs": "workspace:*",
-    "@bdmv-web/media-export": "workspace:*",
-    "@bdmv-web/package-builder": "workspace:*",
-    "@bdmv-web/runtime-web": "workspace:*",
-    "@bdmv-web/test-runner": "workspace:*"
+    "@bdmv2web/bdmv-io": "workspace:*",
+    "@bdmv2web/bdmv-parser": "workspace:*",
+    "@bdmv2web/core": "workspace:*",
+    "@bdmv2web/hdmv": "workspace:*",
+    "@bdmv2web/igs": "workspace:*",
+    "@bdmv2web/media-export": "workspace:*",
+    "@bdmv2web/package-builder": "workspace:*",
+    "@bdmv2web/runtime-web": "workspace:*",
+    "@bdmv2web/test-runner": "workspace:*"
   },
   "devDependencies": {
-    "@bdmv-web/test-fixtures": "workspace:*",
+    "@bdmv2web/test-fixtures": "workspace:*",
     "@types/node": "24.10.0"
   }
 }

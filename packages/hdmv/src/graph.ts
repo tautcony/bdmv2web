@@ -1,4 +1,4 @@
-import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
 import { decodeInstruction, type RawCommand } from "./decode.js";
 import type { VmProgram } from "./vm.js";
 

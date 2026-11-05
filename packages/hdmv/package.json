@@ -1,10 +1,11 @@
 {
-  "name": "@bdmv-web/hdmv",
+  "name": "@bdmv2web/hdmv",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv-web/bdmv-parser": "workspace:*", "@bdmv-web/core": "workspace:*" },
+  "dependencies": { "@bdmv2web/bdmv-parser": "workspace:*", "@bdmv2web/core": "workspace:*" },
   "devDependencies": { "@types/node": "24.10.0" }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BinaryCursor, parseDiscIR, type ActionEnvelope } from "@bdmv-web/core";
+import { BinaryCursor, parseDiscIR, type ActionEnvelope } from "@bdmv2web/core";
 import { buildCursorSample, damagedDanglingReference, damagedUnknownVersion, loadGolden, menuInteractionFixture, minimalHdmvGolden, mixedBdjGolden, simulatedBridge } from "./index.js";
 
 describe("shared contract fixtures", () => {

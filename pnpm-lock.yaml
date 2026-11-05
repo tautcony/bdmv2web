@@ -26,35 +26,35 @@ importers:
 
   apps/cli:
     dependencies:
-      '@bdmv-web/bdmv-io':
+      '@bdmv2web/bdmv-io':
         specifier: workspace:*
         version: link:../../packages/bdmv-io
-      '@bdmv-web/bdmv-parser':
+      '@bdmv2web/bdmv-parser':
         specifier: workspace:*
         version: link:../../packages/bdmv-parser
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@bdmv-web/hdmv':
+      '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../../packages/hdmv
-      '@bdmv-web/igs':
+      '@bdmv2web/igs':
         specifier: workspace:*
         version: link:../../packages/igs
-      '@bdmv-web/media-export':
+      '@bdmv2web/media-export':
         specifier: workspace:*
         version: link:../../packages/media-export
-      '@bdmv-web/package-builder':
+      '@bdmv2web/package-builder':
         specifier: workspace:*
         version: link:../../packages/package-builder
-      '@bdmv-web/runtime-web':
+      '@bdmv2web/runtime-web':
         specifier: workspace:*
         version: link:../../packages/runtime-web
-      '@bdmv-web/test-runner':
+      '@bdmv2web/test-runner':
         specifier: workspace:*
         version: link:../../packages/test-runner
     devDependencies:
-      '@bdmv-web/test-fixtures':
+      '@bdmv2web/test-fixtures':
         specifier: workspace:*
         version: link:../../packages/test-fixtures
       '@types/node':
@@ -63,7 +63,7 @@ importers:
 
   packages/bdmv-io:
     dependencies:
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -73,14 +73,14 @@ importers:
 
   packages/bdmv-parser:
     dependencies:
-      '@bdmv-web/bdmv-io':
+      '@bdmv2web/bdmv-io':
         specifier: workspace:*
         version: link:../bdmv-io
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@bdmv-web/test-fixtures':
+      '@bdmv2web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
       '@types/node':
@@ -99,10 +99,10 @@ importers:
 
   packages/hdmv:
     dependencies:
-      '@bdmv-web/bdmv-parser':
+      '@bdmv2web/bdmv-parser':
         specifier: workspace:*
         version: link:../bdmv-parser
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -112,20 +112,20 @@ importers:
 
   packages/igs:
     dependencies:
-      '@bdmv-web/bdmv-io':
+      '@bdmv2web/bdmv-io':
         specifier: workspace:*
         version: link:../bdmv-io
-      '@bdmv-web/bdmv-parser':
+      '@bdmv2web/bdmv-parser':
         specifier: workspace:*
         version: link:../bdmv-parser
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
-      '@bdmv-web/hdmv':
+      '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
-      '@bdmv-web/test-fixtures':
+      '@bdmv2web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
       '@types/node':
@@ -134,10 +134,10 @@ importers:
 
   packages/media-export:
     dependencies:
-      '@bdmv-web/bdmv-parser':
+      '@bdmv2web/bdmv-parser':
         specifier: workspace:*
         version: link:../bdmv-parser
-      '@bdmv-web/hdmv':
+      '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
     devDependencies:
@@ -147,13 +147,13 @@ importers:
 
   packages/package-builder:
     dependencies:
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../core
-      '@bdmv-web/hdmv':
+      '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
-      '@bdmv-web/media-export':
+      '@bdmv2web/media-export':
         specifier: workspace:*
         version: link:../media-export
       esbuild:
@@ -166,20 +166,20 @@ importers:
 
   packages/runtime-web:
     dependencies:
-      '@bdmv-web/bdmv-parser':
+      '@bdmv2web/bdmv-parser':
         specifier: workspace:*
         version: link:../bdmv-parser
-      '@bdmv-web/hdmv':
+      '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
-      '@bdmv-web/igs':
+      '@bdmv2web/igs':
         specifier: workspace:*
         version: link:../igs
-      '@bdmv-web/media-export':
+      '@bdmv2web/media-export':
         specifier: workspace:*
         version: link:../media-export
     devDependencies:
-      '@bdmv-web/test-fixtures':
+      '@bdmv2web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
       '@types/node':
@@ -188,7 +188,7 @@ importers:
 
   packages/test-fixtures:
     dependencies:
-      '@bdmv-web/core':
+      '@bdmv2web/core':
         specifier: workspace:*
         version: link:../core
 

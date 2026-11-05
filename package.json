@@ -1,7 +1,7 @@
 {
-  "name": "bdmv-web",
+  "name": "bdmv2web",
   "private": true,
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "packageManager": "pnpm@11.25.0",
   "engines": { "node": ">=24.18.0 <25", "pnpm": "11.25.0" },
   "scripts": {
@@ -9,7 +9,7 @@
     "typecheck": "corepack pnpm build && corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test",
     "test:all": "corepack pnpm -r --no-bail test",
-    "generate:contracts": "corepack pnpm --filter @bdmv-web/core generate"
+    "generate:contracts": "corepack pnpm --filter @bdmv2web/core generate"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bdmv-web.invalid/schema/disc-ir-1.0.json",
+  "$id": "https://bdmv2web.invalid/schema/disc-ir-1.0.json",
   "title": "DiscIR",
   "type": "object",
   "additionalProperties": false,

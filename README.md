@@ -1,4 +1,4 @@
-# bdmv-web
+# bdmv2web
 
 解析 Blu-ray 光盘目录，生成可在浏览器中交互的菜单，并通过本地播放器打开原始视频流。
 
@@ -29,7 +29,7 @@ corepack pnpm build
 
 包内脚本统一写 `corepack pnpm`：根脚本里的嵌套调用（如 `build` = `generate:contracts` + `-r build`）因此不依赖全局 `pnpm`，版本也由 `packageManager` 锁定。若已全局安装 pnpm，`pnpm install` 之类的等价写法仍可用。
 
-命令行入口为 `apps/cli/dist/index.js`，包内 bin 名为 `bdmv-web`。
+命令行入口为 `apps/cli/dist/index.js`，包内 bin 名为 `bdmv2web`。
 
 ## 使用
 
@@ -165,7 +165,7 @@ bash scripts/ci.sh          # 安装、生成契约、构建、类型检查和�
 运行单个包的测试：
 
 ```sh
-corepack pnpm --filter @bdmv-web/igs test
+corepack pnpm --filter @bdmv2web/igs test
 ```
 
 拉取本地参考源码缓存（需要网络和 Python 3）：
@@ -206,4 +206,4 @@ python3 scripts/fetch-reference-cache.py
 
 ## 许可
 
-[MIT](LICENSE)。
+[GNU GPL v3](LICENSE)。

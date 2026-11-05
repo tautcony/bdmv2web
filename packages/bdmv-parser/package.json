@@ -1,6 +1,7 @@
 {
-  "name": "@bdmv-web/bdmv-parser",
+  "name": "@bdmv2web/bdmv-parser",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,11 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bdmv-web/bdmv-io": "workspace:*",
-    "@bdmv-web/core": "workspace:*"
+    "@bdmv2web/bdmv-io": "workspace:*",
+    "@bdmv2web/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "@bdmv-web/test-fixtures": "workspace:*"
+    "@bdmv2web/test-fixtures": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
 import { access, mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
-import type { SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { SourceLocation } from "@bdmv2web/bdmv-parser";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetRates } from "./budget.js";
 import type { MediaPlan as SourceMediaPlan, MediaPlanRequirement, PlannedTrack } from "./media-plan.js";
 

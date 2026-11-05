@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseBdmv } from "@bdmv-web/bdmv-parser";
-import { extractIgsFromChunks } from "@bdmv-web/igs";
+import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { extractIgsFromChunks } from "@bdmv2web/igs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 

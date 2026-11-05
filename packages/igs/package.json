@@ -1,6 +1,7 @@
 {
-  "name": "@bdmv-web/igs",
+  "name": "@bdmv2web/igs",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,13 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bdmv-web/bdmv-io": "workspace:*",
-    "@bdmv-web/bdmv-parser": "workspace:*",
-    "@bdmv-web/core": "workspace:*"
+    "@bdmv2web/bdmv-io": "workspace:*",
+    "@bdmv2web/bdmv-parser": "workspace:*",
+    "@bdmv2web/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "@bdmv-web/hdmv": "workspace:*",
-    "@bdmv-web/test-fixtures": "workspace:*"
+    "@bdmv2web/hdmv": "workspace:*",
+    "@bdmv2web/test-fixtures": "workspace:*"
   }
 }

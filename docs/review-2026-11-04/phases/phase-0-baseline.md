@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 仓库 | `bdmv-web` monorepo（11 个 workspace 包） |
+| 仓库 | `bdmv2web` monorepo（11 个 workspace 包） |
 | 上一轮评审基线 | `614b4fe`，结论见 [`docs/code-review.md`](../../code-review.md)（D1–D13 决策表） |
 | 本轮 HEAD | `9b86daa` `docs: add README setup and usage guide` |
 | 代码层改动 | 48 文件，+1142 / -184（排除 docs、openspec、`.agents/skills`） |

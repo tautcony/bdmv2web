@@ -12,7 +12,7 @@
 | R2-2 | `CALL_TITLE` 走 `responseTo` 的 continuation，不改为运行时直接 `selectTitle` | C.3、C.4 | 中（改 VM 与两个桥的接口） | 待确认 |
 | R2-3 | `SourceRef.path` 统一为"相对 BDMV 根"，不带 `BDMV/` 前缀 | D.4、D.5 | 中（改 parser 输出 + 全链路断言 + golden） | 待确认 |
 | R2-4 | `loop=false` 结束时回 `MEDIA_ENDED`，不引入 `MEDIA_HELD` | E.2、E.5 | 中（新增等待语义与 UI 约定） | 待确认 |
-| R2-5 | `@bdmv-web/package-builder` 会随 CLI 发布，必须解耦源码路径 | F.1–F.4 | 中（若确定永不发布，可退化为 `files` 白名单 + 文档声明） | 待确认 |
+| R2-5 | `@bdmv2web/package-builder` 会随 CLI 发布，必须解耦源码路径 | F.1–F.4 | 中（若确定永不发布，可退化为 `files` 白名单 + 文档声明） | 待确认 |
 | R2-6 | `standalone-full` 长期做、近期不做 | 不在本 change 实现 | 低（若近期要做，需单独立项） | 待确认 |
 | R2-7 | `payloadFingerprint` 的导出函数一并删除（不仅是字段） | B.1 | 低（从 git 历史恢复该函数） | 待确认 |
 
@@ -68,7 +68,7 @@
 
 **假设**：会随 `apps/cli` 一起被安装/发布，因此必须解耦对 `runtime-web/src/browser.ts` 与 `hdmv/src/index.ts` 的源码路径依赖。
 
-**依据**：`apps/cli` 有 `bin: bdmv-web` 且依赖 `package-builder`；`package-builder` 自身既无 `private: true` 也无 `files` 白名单。CLI 一旦可安装，builder 必然被带上，`src/` 若不在发布清单内则构建期必然失败。
+**依据**：`apps/cli` 有 `bin: bdmv2web` 且依赖 `package-builder`；`package-builder` 自身既无 `private: true` 也无 `files` 白名单。CLI 一旦可安装，builder 必然被带上，`src/` 若不在发布清单内则构建期必然失败。
 
 **若判断相反**（确定永不对外安装，只在本仓库内跑）：F.1–F.3 可降级为"仅在 `README` 声明本包不独立发布 + 给 `files` 白名单"，省掉 `build:browser` 与 esbuild 依赖。但 `npm pack` / 未来的发布路径仍会踩坑。
 

@@ -1,4 +1,4 @@
-import { checkedObjectPixels, DEFAULT_LIMITS, type Limits } from "@bdmv-web/core";
+import { checkedObjectPixels, DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
 import type { IgsButton, IgsDiagnostic, IgsObject, IgsPage, IgsPalette, IgsScene, PtsValue } from "./types.js";
 import { source } from "./transport.js";
 

@@ -48,7 +48,7 @@
 - [x] 实施修复：AppInfo/UHD 解析包成 `optionalSection(...)`（内部 catch）→ 返回 null + `warning` 诊断；index 主 section 保持 critical
 - [x] 回归测试：把原"rejects an INDEX UHD extension…"改为 `keeps navigation entries when the optional INDEX UHD metadata is damaged`（断言 `entries.length === 2`、`uhd === null`、存在 warning），并补 payload 截断 / `address + entryLength` 越界 / 未知 entry type 三个分支
 - [x] 相邻路径验证：`discInfo: { appInfo: DiscAppInfo | null; uhd: UhdMetadata | null }`（`model.ts:57`）在类型上已允许 null，全仓无第二个 `discInfo` 消费者（`grep` 仅命中 `model.ts` 与 `parser.ts:522`），下游不会解引用
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/bdmv-parser test` → **69 passed**；`battle-royale-uhd` 语料仍解析出 24 个 entry
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/bdmv-parser test` → **69 passed**；`battle-royale-uhd` 语料仍解析出 24 个 entry
 - [x] 补充文档动作：`openspec/specs/bdmv-disc-inspection/spec.md` 新增 Requirement「可选元数据不得决定可读性」+ 3 场景
 - 落地证据: `parser.ts` 新增 `Warn` / `ignoreWarning` / `optionalSection`，`parseBdmv` 注入 `warn` 回调（`severity: "warning"`）
 - 最后更新: 2026-11-05
@@ -66,7 +66,7 @@
 - [x] 保留越界保护：读前仍校验 `address < 4 || address + entryLength > dataLength` → `throw new ContractError("BDMV_INVALID_SECTION")`
 - [x] 回归测试：新增 `bounds the INDEX extension by the file length, not the declared length`（`length: 8` 的少报样本仍解析出 entry，并带 warning）
 - [x] 相邻路径/兼容性验证：`battle-royale-uhd` 真实样本结果不变（`clips.length >= 13`、MPLS `00006` / CLPI `00011` 的 0x24 取值不变）
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/bdmv-parser test` → 69 passed
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/bdmv-parser test` → 69 passed
 - [x] 发布/监控/文档：`bdmv-disc-inspection` spec 新增场景「声明长度不自洽只降级为诊断」
 - 最后更新: 2026-11-05
 
@@ -83,7 +83,7 @@
 - [x] 保留越界保护：`atcCount` 超过文件长度仍然 `throw`（`still rejects a CLPI whose ATC count exceeds the file`）
 - [x] 回归测试：三条用例分别覆盖 TS type 长度越界、ATC 序列长度少报、ATC 计数超文件
 - [x] 相邻路径/兼容性验证：两张真实碟（baja / tamako）解析出的 clip 未减少，导航用例结果不变
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/bdmv-parser test` → 69 passed
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/bdmv-parser test` → 69 passed
 - [x] 发布/监控/文档：`bdmv-disc-inspection` spec 同步
 - 最后更新: 2026-11-05
 
@@ -98,7 +98,7 @@
 - [x] 实施修复：在任何写操作前解析 `--format`（只接受 `json`，否则 `CLI_INVALID_FORMAT`）；`--strict` 统一走 `strictDefault()`
 - [x] 回归测试：新增 `does not write any report when validate arguments are invalid`（断言三份报告与原字节一致）
 - [x] 相邻路径验证：正常 `validate` 与 `--strict` 输出不变（baja `complete` exit 0、tamako `partial` exit 2）
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test` → 33 passed
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
 - [x] 发布/监控/文档：README 的 validate 用法补 `--format` 取值说明
 - 最后更新: 2026-11-05
 
@@ -113,7 +113,7 @@
 - [x] 实施修复：命令级 `commandOptions` 白名单（flags + values）；未知 `--*` 报 `CLI_UNKNOWN_OPTION` 并 exit 1；位置参数 >1 报 `CLI_USAGE`；在命令分发前统一调用
 - [x] 回归测试：`rejects misspelled options and extra positionals instead of ignoring them`（`--stric` / `--ou` / 多余位置参数）+ `keeps every accepted option of each command working`（防误判）
 - [x] 相邻路径验证：`--allow-partial`、`--offline`、`--no-strict`、`--format json` 等既有旗标全部仍在白名单内
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test` → 33 passed（原 28）
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed（原 28）
 - [x] 发布/监控/文档：README 命令行说明列出支持选项与报错行为
 - 最后更新: 2026-11-05
 
@@ -160,7 +160,7 @@
 - [x] 实施修复：`registers.ts` 的 `profileWord` 改为 export，CLI 用 `profileWordField` 按 3/3/3/2 宽度与 ASCII 校验，并规范化大小写（不采用"捕获 VM 错误再转换"）
 - [x] 回归测试：四类非法值（`USA`、`jp`、`eng `、`日本語`）→ `CLI_INVALID_PROFILE`、无 `E_IO`、不创建目录；大小写规范化断言 `eng` / `US` 写入 manifest
 - [x] 相邻路径验证：合法 profile 仍写入 `manifest.profile` 与 `runtime/disc-data.js`
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test` → 33 passed
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
 - [x] 发布/监控/文档：`docs/development.md` 与 README 的 profile 字段规则改成 PSR 口径（3/3/3/2 ASCII + 大小写规范化）
 - 最后更新: 2026-11-05
 
@@ -175,7 +175,7 @@
 - [x] 实施修复：失败路径补 `reasons`、`notVerified`、`auditScope: "convert"`、带 `severity` 的 `diagnostics`、`blockingDiagnostics`
 - [x] 回归测试：测试文件新增 `expectFailureReportSchema()`，四条失败分支（无 scene / playlist 未解析 / scene 不匹配 / ambiguous ×2）统一断言 `status`/`code`/`mode`/`auditScope`/`reasons`/`blockingDiagnostics[0].severity`/诊断 severity 齐全
 - [x] 相邻路径验证：`failMenuConversion` 的 README 文案与 report 状态一致（`Status: **failed**.`）
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test` → 33 passed
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
 - [x] 发布/监控/文档：N/A（schema 收敛，不新增对外字段）
 - 最后更新: 2026-11-05
 
@@ -190,7 +190,7 @@
 - [x] 实施修复：先算 `releaseSummary`，再与 `compatibility.json`、`reports/release-summary.json` 一起写，只写 `releaseSummary.dependencyAudit`
 - [x] 回归测试：`writes the same dependency audit to disk as to stdout for a package without static payload`（断言磁盘 `checks` 与 stdout 相等，且 `modeSource === "report"`）
 - [x] 相邻路径验证：有 `index.html` 的包结果不变；三份产物与 stdout 同源
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test` → 33 passed；baja 真实包三份产物与 stdout 一致
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed；baja 真实包三份产物与 stdout 一致
 - [x] 发布/监控/文档：`cli-delivery-status/spec.md` 新增 Requirement「落盘报告与命令输出同源」
 - 最后更新: 2026-11-05
 
@@ -206,7 +206,7 @@
 - [x] 实施修复：读取 `report.json` 作为回退；summary 增加 `modeSource`（`manifest` / `report` / `assumed`），禁止静默默认
 - [x] 回归测试：失败包用例断言 `mode === "menu-only"` 且 `modeSource === "report"`；两者都缺时断言 `PACKAGE_MODE_ASSUMED`
 - [x] 相邻路径验证：成功包 `modeSource === "manifest"`（baja 实测）；`validate` 不因 report 的 `status: failed` 影响自己的 decision
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test` → 33 passed
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
 - [x] 发布/监控/文档：`cli-delivery-status/spec.md` 新增 Requirement「交付形态来源可追溯」
 - 最后更新: 2026-11-05
 
@@ -239,7 +239,7 @@
 - [ ] **触发条件**：新增 4:3 或非等比例菜单素材，或拿到"视频分辨率 ≠ scene 尺寸"的真实包
 - [ ] 触发后：由 JS 用同一份 letterbox rect 同时设置 video 与 canvas，而非各自交给 CSS `contain`
 - [ ] 触发后回归：加"scene 比例与视频比例不同仍对齐"的布局断言（可用 mock 尺寸）
-- [ ] 触发后验证：`corepack pnpm --filter @bdmv-web/package-builder test` + 指针命中（viewport 逆变换）
+- [ ] 触发后验证：`corepack pnpm --filter @bdmv2web/package-builder test` + 指针命中（viewport 逆变换）
 - 最后更新: 2026-11-05
 
 ## P4-P2-1 — [P2] 默认 5s 超时让重用例在负载下假失败
@@ -308,7 +308,7 @@
   - [ ] 实施修复：commit 前用三处诊断合并判定 `hasFatal`
   - [ ] 回归测试：注入一个 fatal 诊断，断言不 commit
   - [ ] 相邻路径/兼容性：`failMenuConversion` 行为不变
-  - [ ] 验证命令与证据：`corepack pnpm --filter @bdmv-web/cli test`
+  - [ ] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test`
   - [ ] 发布/监控/文档：N/A
   - 备注: 本轮不处理。`extract` 已改成"先判 fatal 再扫 IGS"（`P2-INFO-3`），`convert` 的打包前门禁待真有 fatal 生产者时再补
   - 最后更新: 2026-11-05

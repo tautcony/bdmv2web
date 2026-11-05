@@ -1,4 +1,4 @@
-import { DEFAULT_LIMITS, type Limits } from "@bdmv-web/core";
+import { DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
 import type { IgsDiagnostic, PtsValue, TsPacket } from "./types.js";
 
 const SYNC = 0x47;

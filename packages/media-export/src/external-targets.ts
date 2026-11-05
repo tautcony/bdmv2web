@@ -1,4 +1,4 @@
-import type { ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
 import type { MediaClosure } from "./closure.js";
 
 export interface ExternalPlayItem {

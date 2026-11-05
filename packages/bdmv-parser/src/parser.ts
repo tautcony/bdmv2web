@@ -1,5 +1,5 @@
-import { BinaryCursor, ContractError, DEFAULT_LIMITS, serializeOffset, type Limits } from "@bdmv-web/core";
-import { discoverBdmvInput, readRegisteredFile } from "@bdmv-web/bdmv-io";
+import { BinaryCursor, ContractError, DEFAULT_LIMITS, serializeOffset, type Limits } from "@bdmv2web/core";
+import { discoverBdmvInput, readRegisteredFile } from "@bdmv2web/bdmv-io";
 import type { AtcSequence, ClipHeader, ClipInfo, DiscAppInfo, EntryTarget, GraphEdge, GraphNode, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, Playlist, PlaylistAppInfo, PlayMark, SoundEntry, SourceLocation, StcSequence, StreamDeclaration, SubPath, UhdMetadata } from "./model.js";
 
 // 0240 is the 3D/MVC profile. libbluray does not restrict the version field and

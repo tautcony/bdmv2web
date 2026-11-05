@@ -19,11 +19,11 @@
 
 | 范围 | 命令 | 结果 | 代表性用例 |
 | --- | --- | --- | --- |
-| 输入路径与输出事务 | `pnpm --filter @bdmv-web/bdmv-io test` | 7/7 | Unicode/空格路径；`..` 与 symlink escape 拒绝；事务 abort 保留源、已存在目标不覆盖、成功时原子提交。 |
-| 结构解析 | `pnpm --filter @bdmv-web/bdmv-parser test` | 47/47 | 三字节截断 magic；12 字节命令截断不补零；图循环只遍历一次；节点预算返回未访问 frontier；原盘 symlink 拒绝。 |
-| IGS 传输与尺寸预算 | `pnpm --filter @bdmv-web/igs test` | 54/54 | 缺失首片/EOF、active ODS 聚合预算、有界 RLE 行溢出和像素预算。 |
-| HDMV 执行预算 | `pnpm --filter @bdmv-web/hdmv test` | 74/74 | 同步跳转/按钮循环以 `VM_EXECUTION_LIMIT` 终止；预算耗尽的图保留 unknown frontier。 |
-| 离线审计、对照、证据与发布摘要 | `pnpm --filter @bdmv-web/test-runner test` | 50/50 | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、浏览器绑定失效、发布缺口汇总。 |
+| 输入路径与输出事务 | `pnpm --filter @bdmv2web/bdmv-io test` | 7/7 | Unicode/空格路径；`..` 与 symlink escape 拒绝；事务 abort 保留源、已存在目标不覆盖、成功时原子提交。 |
+| 结构解析 | `pnpm --filter @bdmv2web/bdmv-parser test` | 47/47 | 三字节截断 magic；12 字节命令截断不补零；图循环只遍历一次；节点预算返回未访问 frontier；原盘 symlink 拒绝。 |
+| IGS 传输与尺寸预算 | `pnpm --filter @bdmv2web/igs test` | 54/54 | 缺失首片/EOF、active ODS 聚合预算、有界 RLE 行溢出和像素预算。 |
+| HDMV 执行预算 | `pnpm --filter @bdmv2web/hdmv test` | 74/74 | 同步跳转/按钮循环以 `VM_EXECUTION_LIMIT` 终止；预算耗尽的图保留 unknown frontier。 |
+| 离线审计、对照、证据与发布摘要 | `pnpm --filter @bdmv2web/test-runner test` | 50/50 | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、浏览器绑定失效、发布缺口汇总。 |
 
 计数于 2026-11-04 用 `corepack pnpm test:all` 逐包重测（Node `24.18.0` / pnpm `11.25.0`）；逐包明细见 [`docs/development.md` 的测试基线表](../../development.md#test-baseline)。旧计数（42/40/56/51）是 `dist/**/*.test.js` 与 `src` 被重复收集时的结果，不再使用。
 
@@ -43,13 +43,13 @@ M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IM
 | 网络 | Chrome DevTools 网络条件为 Offline；页面正常加载，`performance` 资源列表没有非 `file:`/`data:` URL。 |
 | 页面/图像 | `file://` 页面显示 `Menu preview ready`；本地 IGS 图像解码并渲染，菜单页面导航与返回操作正常。 |
 | 视频/音频 | 背景 MP4 与菜单 M4A 均从包内 `assets/media/` 加载；`readyState=4`、`paused=false`、媒体错误为空。 |
-| Console | 未发现 error 或 warn；VM 以 `[bdmv-web:vm]` 输出结构化 trace，本次菜单启动记录在 Console 合并为 158 条。 |
+| Console | 未发现 error 或 warn；VM 以 `[bdmv2web:vm]` 输出结构化 trace，本次菜单启动记录在 Console 合并为 158 条。 |
 
 这项验收只记录默认菜单音轨可从本地包播放，不覆盖语言切换行为。验收未为原盘文件或派生媒体生成哈希，因此本节的证据未绑定制品指纹。
 
 ### `CALL_TITLE` 后菜单返回复验
 
-在同一 Chrome DevTools Offline 会话中，使用 `/tmp/tamako-vm-return-smoke.7NYj3t/index.html` 临时合成包，在 Special Features 页首个按钮的命令前插入 `CALL_TITLE`。键盘进入该页并确认后，状态栏显示 `CALL_TITLE resume context is not implemented without independent semantic evidence`；按左键触发该页 Back 按钮的自动动作后，截图确认画面返回首页，状态栏仍保留诊断。Console 显示 `[bdmv-web:vm]` trace（合并计数 171），无 error/warn；本地背景视频仍为 `readyState=4`、`paused=false`。此复验只改临时合成包，没有改原盘或 `test-data/**`。
+在同一 Chrome DevTools Offline 会话中，使用 `/tmp/tamako-vm-return-smoke.7NYj3t/index.html` 临时合成包，在 Special Features 页首个按钮的命令前插入 `CALL_TITLE`。键盘进入该页并确认后，状态栏显示 `CALL_TITLE resume context is not implemented without independent semantic evidence`；按左键触发该页 Back 按钮的自动动作后，截图确认画面返回首页，状态栏仍保留诊断。Console 显示 `[bdmv2web:vm]` trace（合并计数 171），无 error/warn；本地背景视频仍为 `readyState=4`、`paused=false`。此复验只改临时合成包，没有改原盘或 `test-data/**`。
 
 ## 外部 M2TS 替身接入检查 — 2026-11-03
 

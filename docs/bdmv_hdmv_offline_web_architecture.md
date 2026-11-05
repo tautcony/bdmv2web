@@ -4,7 +4,7 @@
 
 > 文档版本：v1.0（2026-11-02）  
 > 技术路线：**TypeScript 全栈实现；首期仅执行 HDMV；保留 BD-J 扩展接口；导出物为完全自包含的离线 Web 目录**。  
-> 项目暂定名：`bdmv-web`  
+> 项目暂定名：`bdmv2web`
 > 文档性质：可供技术选型、研发拆分、实现与验收使用的设计基线。本文中的 TypeScript 接口、目录与命令均为**拟议设计**，不表示已经完成实现。
 
 ---
@@ -145,7 +145,7 @@ flowchart LR
 > **历史设计（非当前实现）**：下面这棵目录树是 2026-11 初版的设想名，实际仓库没有 `apps/studio`，且 `m2ts-demux`、`igs-decoder`、`navigation-hdmv`、`ir-builder` 四个包没有独立存在。对照关系见本节末尾的映射表。读当前布局请直接看仓库根目录或 `docs/development.md`。
 
 ```text
-bdmv-web/
+bdmv2web/
 ├── apps/
 │   ├── cli/                     # CLI: inspect/extract/convert/validate
 │   └── studio/                  # 可选 Tauri/Electron/Web GUI（非导出物）
@@ -681,28 +681,28 @@ export type NavigationDescriptor =
 
 ```bash
 # 总览、全部入口、媒体类型、IGS、BD-J 检测、覆盖度预测
-bdmv-web inspect /path/to/BDMV --format json --out disc-inspection.json
+bdmv2web inspect /path/to/BDMV --format json --out disc-inspection.json
 
 # 仅提取并保留可追踪原始信息
-bdmv-web extract /path/to/BDMV --out ./extracted
+bdmv2web extract /path/to/BDMV --out ./extracted
 
 # 默认：转换可达播放链路，严格检查，产生独立离线包
-bdmv-web convert /path/to/BDMV \
+bdmv2web convert /path/to/BDMV \
   --mode standalone-full \
   --offline-profile portable \
   --strict \
   --out ./my-disc-web
 
 # 调试用途：仅菜单图形/结构，非完整播放功能
-bdmv-web convert /path/to/BDMV \
+bdmv2web convert /path/to/BDMV \
   --mode menu-only \
   --out ./menu-preview
 
 # 验证输出资源、引用、安全和指令覆盖
-bdmv-web validate ./my-disc-web --offline --strict
+bdmv2web validate ./my-disc-web --offline --strict
 
 # 开发阶段可以执行参考对照，不属于用户输出物
-bdmv-web compare /path/to/BDMV ./my-disc-web --trace ./test-inputs.json
+bdmv2web compare /path/to/BDMV ./my-disc-web --trace ./test-inputs.json
 ```
 
 ### 12.2 管线阶段

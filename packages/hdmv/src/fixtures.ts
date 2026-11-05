@@ -1,4 +1,4 @@
-import type { SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { SourceLocation } from "@bdmv2web/bdmv-parser";
 import type { RawCommand } from "./decode.js";
 
 const source: SourceLocation = { path: "M3-test/MovieObject.bdmv", origin: "primary", offset: "128" };

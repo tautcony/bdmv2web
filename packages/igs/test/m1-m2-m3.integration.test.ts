@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv-web/test-fixtures";
-import { parseBdmv } from "@bdmv-web/bdmv-parser";
-import { buildNavigationGraph, decodeInstruction, HdmvVm, m3Fixtures } from "@bdmv-web/hdmv";
+import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
+import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { buildNavigationGraph, decodeInstruction, HdmvVm, m3Fixtures } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "../src/extract.js";
 import { syntheticClip, syntheticMenuSegments } from "./fixtures.js";
 

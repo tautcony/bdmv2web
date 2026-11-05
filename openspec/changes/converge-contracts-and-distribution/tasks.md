@@ -6,8 +6,8 @@
 
 ## A. 契约常量收敛（D3）
 
-- [ ] A.1 `packages/hdmv/src/vm.ts:30` 的 `DEFAULTS` 改为从 `@bdmv-web/core` 的 `DEFAULT_LIMITS` 派生（三个字段逐项引用，不写字面量）。验收：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -n "DEFAULT_LIMITS" packages/hdmv/src/vm.ts` 有命中。
-- [ ] A.2 删除 `packages/hdmv/src/vm.ts:31-35` 的 `DEFAULT_PLAYER_PROFILE` 复制品，改为引用 `@bdmv-web/core` 的同名导出。验收：`grep -rn "menuLanguage: \"eng\"" packages` 仅在 `core/src/index.ts` 命中一次。
+- [ ] A.1 `packages/hdmv/src/vm.ts:30` 的 `DEFAULTS` 改为从 `@bdmv2web/core` 的 `DEFAULT_LIMITS` 派生（三个字段逐项引用，不写字面量）。验收：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -n "DEFAULT_LIMITS" packages/hdmv/src/vm.ts` 有命中。
+- [ ] A.2 删除 `packages/hdmv/src/vm.ts:31-35` 的 `DEFAULT_PLAYER_PROFILE` 复制品，改为引用 `@bdmv2web/core` 的同名导出。验收：`grep -rn "menuLanguage: \"eng\"" packages` 仅在 `core/src/index.ts` 命中一次。
 - [ ] A.3 `VmOptions` 增加 `limits?: Limits`；内部 `this.limits = validateLimits(options.limits ?? DEFAULT_LIMITS)`；散字段与 `limits` 同时出现时以 `limits` 为准并记一条 `VM_LIMITS_OVERRIDDEN` 诊断。验收：单测覆盖"仅散字段""仅 limits""两者并存"三种构造，第三种产出该诊断且取 limits 值。
 - [ ] A.4 补漂移锁：单测断言 `new HdmvVm([])` 的 `maxCallDepth` / `maxQueueDepth` / `maxInstructionsPerTurn` 等于 `DEFAULT_LIMITS` 对应字段。验收：故意把 `DEFAULTS` 改成字面量 64，该测试失败（验证后还原）。
 - [ ] A.5 `maxCallDepth` 语义如实标注：在 `IMPLEMENTATION_BASELINE.md` §5 与 `docs/hdmv-support.md` 写明"当前为 CALL 开关（0 禁用），非深度上限；真正的多帧栈限制列为后续 change"，并补单测锁定 `maxCallDepth: 0` → `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`。验收：两处文档有该表述；测试存在且通过。
@@ -55,7 +55,7 @@
 - [ ] C.3 `CALL_TITLE` 建立 continuation：`vm.ts:437-458` 记录 `{ actionId, generation, waitFor: "started" }` 到等待表，`selectTitle` 的 `started` 与 `unavailable` 都按 `responseTo` 恢复；移除"无 continuation 即 suspended"的路径。验收：单测构造 `CALL_TITLE` → 桥回 `MEDIA_UNAVAILABLE` → VM 恢复且状态为预期的 unavailable；trace 中不再出现 `HDMV_IGNORED_EVENT`。
 - [ ] C.4 桥端只对 `waitFor` 匹配的动作回复：`runtime-web` 的 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 增加"是否有匹配等待"的检查，不再把任意事件交给 `handleEvent` 试。验收：无等待时收到事件不产生副作用（trace 记录 discarded 原因）。
 - [ ] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 MovieObject 上下文放入 `PLAY_PL` 指令，trace 出现该诊断且 VM 继续执行；`docs/hdmv-support.md` 补充该码说明。
-- [ ] C.6 回归：现有 74 个 hdmv 用例全部通过；新增用例不少于 6 条（C.1 两组上下文、C.2 可达性、C.3 两条、C.5）。验收：`corepack pnpm --filter @bdmv-web/hdmv test` 计数 ≥ 80 且无跳过。
+- [ ] C.6 回归：现有 74 个 hdmv 用例全部通过；新增用例不少于 6 条（C.1 两组上下文、C.2 可达性、C.3 两条、C.5）。验收：`corepack pnpm --filter @bdmv2web/hdmv test` 计数 ≥ 80 且无跳过。
 
 ## D. 源位置保真（D12）
 
@@ -72,14 +72,14 @@
 - [ ] E.3 音轨选择写回 PSR1：选轨成功后经系统事件入口 `systemWrite(1, psrStreamNumber)`，不通过程序写入路径。验收：选轨后 `snapshot().registers.psr` 的 PSR1 等于所选流号；单测断言按钮程序读到该值（当前读到 `0xff`）。
 - [ ] E.4 命中几何统一：`MenuController.hit()` 按可用性决定命中集（可用即 `selected ?? normal` 的 bounds）。验收：只有 `normal` 视觉的启用按钮可被点击命中；单测覆盖"仅 normal""selected 与 normal 不同几何"两种情况。
 - [ ] E.5 `docs/browser-matrix.md` 记录 `loop=false` 结束语义为"回 `MEDIA_ENDED`，画面停留末帧由渲染决定"，并注明如需 `MEDIA_HELD` 属后续能力。验收：文档含该条，且未声称支持 `HELD`。
-- [ ] E.6 回归：`corepack pnpm --filter @bdmv-web/runtime-web test` 现有 91 用例通过；`tamako-headless-navigation.test.ts` 仍通过（该用例 50s，若因此变慢需在本 change 记录耗时）。
+- [ ] E.6 回归：`corepack pnpm --filter @bdmv2web/runtime-web test` 现有 91 用例通过；`tamako-headless-navigation.test.ts` 仍通过（该用例 50s，若因此变慢需在本 change 记录耗时）。
 
 ## F. 发布布局可构建（D7）
 
-- [ ] F.1 `packages/runtime-web` 增加 `build:browser`：esbuild 打包 `src/browser.ts` → `dist/browser-entry.js`（IIFE / ES2020），`build` 顺序为 `tsc → build:browser`；`exports` 增加 `"./browser-entry"`。验收：`corepack pnpm --filter @bdmv-web/runtime-web build` 后该文件存在，且产物内不含 `require(` 之外的 Node 内建引用。
-- [ ] F.2 `packages/package-builder/src/index.ts:127-128` 改为解析 `@bdmv-web/runtime-web/browser-entry`，删除 `runtime-web/src/browser.ts` 与 `hdmv/src/index.ts` 两处相对路径与 alias。验收：`grep -rn "runtime-web/src\|hdmv/src" packages/package-builder/src` 无命中；`corepack pnpm --filter @bdmv-web/package-builder build` 成功。
+- [ ] F.1 `packages/runtime-web` 增加 `build:browser`：esbuild 打包 `src/browser.ts` → `dist/browser-entry.js`（IIFE / ES2020），`build` 顺序为 `tsc → build:browser`；`exports` 增加 `"./browser-entry"`。验收：`corepack pnpm --filter @bdmv2web/runtime-web build` 后该文件存在，且产物内不含 `require(` 之外的 Node 内建引用。
+- [ ] F.2 `packages/package-builder/src/index.ts:127-128` 改为解析 `@bdmv2web/runtime-web/browser-entry`，删除 `runtime-web/src/browser.ts` 与 `hdmv/src/index.ts` 两处相对路径与 alias。验收：`grep -rn "runtime-web/src\|hdmv/src" packages/package-builder/src` 无命中；`corepack pnpm --filter @bdmv2web/package-builder build` 成功。
 - [ ] F.3 防回归单测：拦截 `node:fs` 读取 `**/src/*.ts`（用 `vi.mock` 或 `module.register`），断言 `buildMenuPackage` 执行期间不发生此类读取。验收：测试通过；把实现改回相对路径时测试失败（验证后还原）。
-- [ ] F.4 `@bdmv-web/runtime-web` 与 `@bdmv-web/package-builder` 增加 `files: ["dist"]`。验收：两包 `npm pack --dry-run` 清单不含 `src/`、不含 `*.test.*`；生成的包仍能被 `apps/cli` 构建使用（`corepack pnpm -r build` 全通过）。
+- [ ] F.4 `@bdmv2web/runtime-web` 与 `@bdmv2web/package-builder` 增加 `files: ["dist"]`。验收：两包 `npm pack --dry-run` 清单不含 `src/`、不含 `*.test.*`；生成的包仍能被 `apps/cli` 构建使用（`corepack pnpm -r build` 全通过）。
 - [ ] F.5 端到端：`convert` 一个现有样本，产物结构与此前一致。验收：`find <out> -type f | sort` 与改动前快照一致（除时间戳/版本字段）；`validate --offline` 结果不变。
 
 ## G. 性能基准与修复（D5=B）

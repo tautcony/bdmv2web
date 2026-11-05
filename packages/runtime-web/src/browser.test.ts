@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { m3Fixtures } from "@bdmv-web/hdmv";
+import { m3Fixtures } from "@bdmv2web/hdmv";
 
 const validIr = {
   schemaVersion: "1.0", entries: [], programs: [], menus: [], playlists: [], mediaAssets: [], diagnostics: [],

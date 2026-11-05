@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
-import { m3Fixtures } from "@bdmv-web/hdmv";
+import { m3Fixtures } from "@bdmv2web/hdmv";
 
 const ir = {
   schemaVersion: "1.0" as const,
@@ -177,7 +177,7 @@ describe("menu package primitives", () => {
       expect(data).toContain('"vmEntries":[{"id":"title:0"');
       const report = JSON.parse(await readFile(resolve(outputDirectory, "compatibility.json"), "utf8"));
       expect(report.status).toBe("partial"); expect(report.coverage.igs).toBe("unverified");
-      expect(await readFile(resolve(outputDirectory, "README.md"), "utf8")).toContain("bdmv-web validate <package-directory> --offline");
+      expect(await readFile(resolve(outputDirectory, "README.md"), "utf8")).toContain("bdmv2web validate <package-directory> --offline");
       const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string; byteLength: string; sha256: string }>; payloadFingerprint: string };
       expect(manifest.files.map((file) => file.path)).toEqual(["index.html", "README.md", "runtime/app.bundle.js", "runtime/assets-data-000.js", "runtime/disc-data.js", "runtime/style.css"]);
       const rows: Array<{ path: string; sha256: string }> = [];

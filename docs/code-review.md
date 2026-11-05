@@ -5,7 +5,7 @@
 
 | 项 | 值 |
 | --- | --- |
-| 评审对象 | `bdmv-web` monorepo（10 个包 / 约 9k 行非测试 TS） |
+| 评审对象 | `bdmv2web` monorepo（10 个包 / 约 9k 行非测试 TS） |
 | 基线提交 | `614b4fe` (master) `feat(igs): complete field and color validation` |
 | 评审时间 | 2026-11-04（第一轮模块/性能；同日第二轮补验收链、失败状态与文档事实，已合并进本文件） |
 | 评审方式 | 通读源码 + 实际执行 `build` / `typecheck` / `test` / CLI 端到端校验；第二轮另做空 BDMV、Tamako `source-map`、`JUMP_TITLE` 图与参考实现对照 |
@@ -52,7 +52,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 
 ## 二、分模块评审
 
-### `@bdmv-web/core` — 契约层
+### `@bdmv2web/core` — 契约层
 
 - ✅ Ajv 严格模式之外还叠加了 `DUPLICATE_ID` / `DANGLING_REFERENCE` 手工二次校验，错误统一带 `code` + `path`。
 - ⚠️ `validateStage()`（`src/index.ts:154-162`）是空操作：`if` 分支内只有注释。API 上看起来做了分级校验，实际 `parsed` / `normalized` 直接返回入参。建议删除或真正实现。
@@ -60,14 +60,14 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ⚠️ `validateLimits()`（`src/index.ts:121-129`）只校验已知键的类型，未知键会被原样合并；拼错 `maxCallDepht` 之类不会报错，`--limits` 的无效键会静默失效。
 - ⚠️ `DEFAULT_PLAYER_PROFILE` 在此定义后，又在 `packages/hdmv/src/vm.ts:31-35` 原样复制；`Limits` 的 `maxCallDepth=128` / `maxQueueDepth=1024` 在 `vm.ts:30` 变成 `64` / `256`。**同名常量两套数值**，详见横切问题 1。
 
-### `@bdmv-web/bdmv-io` — 文件系统与安全边界
+### `@bdmv2web/bdmv-io` — 文件系统与安全边界
 
 - ✅ 全仓安全设计最完整的一块：symlink 全树拒绝、`realpath` 后再做 `within()` 判定、`assertDisjointRoots` 防输入输出重叠、`beginOutputTransaction` 走 staging + rename、`payloadFingerprint` 排序稳定。
 - ⚠️ **性能**：`buildInputFileTable`（`src/index.ts:88-99`）对每个文件调 `resolveInputFile`，后者每次都 `canonicalDirectory(root)`（`realpath` + `stat`）。千文件级碟会做千次重复 root 解析，root 应只解析一次后透传。
 - ⚠️ `beginOutputTransaction` 的 `lstat` 存在检查与 `rename` 之间有 TOCTOU 窗口（`src/index.ts:162-173`）；`rename` 落到已存在的空目录上仍会成功，注释里 `TARGET_EXISTS` 的保证不严格。
 - `readRegisteredFile` 先以 `MAX_SAFE_INTEGER` 求 size 再自判 `maxBytes`，逻辑无误但可读性差。
 
-### `@bdmv-web/bdmv-parser` — BDMV 结构解析
+### `@bdmv2web/bdmv-parser` — BDMV 结构解析
 
 - ✅ 位级 `Bits` 封装、每个 section 都校验 `end` / `length` 越界、错误码语义化（`BDMV_INVALID_SECTION` 等），是相当克制的二进制解析实现。
 - ⚠️ **`choose()` 用十六进制字符串比较主/备份**（`src/parser.ts:257`）：`hex(primary.raw) !== hex(backup.raw)` 会把最大 8MB 的 buffer 变成两份 16M 字符字符串。应改逐字节比较。
@@ -79,7 +79,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ⚠️ **结构图有不存在的 `command:*` 端点**：`buildGraph` 为每条指令加 `edges.push({ to: "command:<object>:<index>" })`（`src/parser.ts:286`），但从未 `add` 对应节点。`findStaticNavigationLoops` 会跳过这些边，其他消费者如果假设"边两端都在 nodes 中"就会拿到悬空引用。要么补节点，要么删除这些边。
 - 可维护性：`parseMpls` / `parseClpi` 是 60+ 行、分号密集的大函数，边界校验高度重复，建议抽 `readBoundedSection()` 之类的助手。
 
-### `@bdmv-web/hdmv` — 虚拟机
+### `@bdmv2web/hdmv` — 虚拟机
 
 - ✅ 罕见的高质量仿真层：`continuation` + `generation` + `consumedResponses` 三重去重防"迟到事件重入"；`beginMenuAction` / `recoverMenuAction` 检查点回滚；`callStack` 单帧行为与 libbluray 对齐并留注释；`HDMV_UNVERIFIED_OPCODE` 降级为 idle 而非 fault。测试 74 个且含源码派生 golden。
 - ⚠️ 常量重复（见横切问题 1），本模块应最先解决。
@@ -90,7 +90,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ⚠️ `emit()` 的 `generation` 每次自增，与 `snapshot().generation` 共用同一计数，语义上"会话代次"与"动作代次"混在一起。
 - 清理项：`runTurn` 的 `if (this.programId !== from.programId || this.pc !== from.pc + 1) { /* comment */ }`（`src/vm.ts:258`）是空分支；`transfer()` 的 `target` 变量和 `execute()` 的 `program` 参数未使用（`noUnusedLocals` 可复现）。
 
-### `@bdmv-web/igs` — TS / PES / IGS
+### `@bdmv2web/igs` — TS / PES / IGS
 
 - ✅ 192 字节 M2TS 同步搜索、连续性计数器含重复包判定、PTS 回绕（`MAX_PTS/2`）与"无回绕倒退则开新时域"、PSI CRC 全量计算——协议细节扎实，异常全部落成诊断。
 - ⚠️ **`PesAssembler.append()` 是 O(n²)**（`src/transport.ts:262,349`）：每收一个 184 字节 TS 包就整段复制已有 PES 缓冲，1MB PES 产生约 5.7GB 复制量。应改为"TS 包切片数组 + 结束时拼接"。
@@ -100,14 +100,14 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - 次要死代码：`parseSegments` 的 `length > 0xffff`（`src/igs.ts:25`）对 16 位长度永远为 false；`parseIcs` 的 `pageCount > 255`（`src/igs.ts:222`）对 `u8` 永远为 false。
 - 测试目录在 `packages/igs/test/`，其它包在 `src/`（vitest `include` 因此不同），建议统一。
 
-### `@bdmv-web/media-export` — FFmpeg 导出
+### `@bdmv2web/media-export` — FFmpeg 导出
 
 - ✅ 字节预算是亮点：编码前估算 + 编码中轮询 + 完成后复核，三层 `assertActualWithinLimit`；`spawn` 带超时 / SIGKILL 升级 / 4MiB 输出上限 / abort 传播；`-n` 防覆盖；编码后 ffprobe 校验 codec、偶数尺寸、宽高比、时长误差 0.25s。
 - ⚠️ **轮询开销**：`runWithBudget` 每 10ms 调一次 `directoryBytesExcluding()`（`src/index.ts:420,452`），每次 `readdir` + `stat` 整棵输出树。20 分钟编码 × 100 次/秒 ≈ 12 万次全树遍历，并与 ffmpeg 抢 IO。建议降到 250–500ms，或只 stat 当前写入文件。
 - ⚠️ `probeEncodedOutput` 走 `invoke` 而非 `runWithBudget`，probe 阶段不受字节预算监控，语义不一致。
 - ⚠️ `durationSeconds()` 与 `inTime45k` 的 45kHz 单位耦合，函数名不体现单位（VM 侧用的是 90k），跨模块易误用。
 
-### `@bdmv-web/package-builder` — 打包
+### `@bdmv2web/package-builder` — 打包
 
 - ✅ `serializeSafeScriptData` 转义 `<` `>` `&` U+2028 防 `</script>` 截断；`makePngBatches` 有单资源/单批/总量三级上限；`convertSounds` 对 BCLK PCM 的属性与范围校验很细。
 - ⚠️ **构建期耦合源码路径**：`resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` + `alias` 指向 `../../hdmv/src/index.ts`（`src/index.ts:127-128`）。在 monorepo 内可跑，一旦按 `dist/` 发布（`src/` 不在包内）或目录调整即失败。建议 runtime-web 预构建 `browser-entry.js`，builder 依赖产物而非 `.ts`。
@@ -115,7 +115,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ⚠️ `hashGeneratedPayload` 用 `kind` 白名单 + 路径前缀双重过滤（第 188-191 行），而 `test-runner/package-audit.ts` 另有一份判断。两处规则易分叉，建议把 payload 分类定义收敛到 `core`。
 - ⚠️ **`compatibility.json` schema 不一致**：`createCompatibility()`（`src/index.ts:54-63`）缺少 `IMPLEMENTATION_BASELINE §4` 要求的 `toolVersion`；`test-runner` 的 `createCompatibilityReport()` 又缺 `runtimeVersion` / `diagnostics`，且 `validate` 会覆盖构建产物。详见横切问题 7。
 
-### `@bdmv-web/runtime-web` — 浏览器运行时
+### `@bdmv2web/runtime-web` — 浏览器运行时
 
 - ✅ `MenuController` 对 UO mask 位序（`63 - fieldIndex`）、BOG 变体选择、`autoAction` 递归深度上限、指针与键盘路径分离（hover 不触发 autoAction）都处理得比一般实现细；`MenuSoundPlayer` / `MenuLoopPlaybackBridge` 对 `NotAllowedError` 的"可关联重试"很实用。
 - ⚠️ **审计盲区（安全相关）**：`src/browser.ts:130` 用 `image.src = \`http://127.0.0.1:${port}/open?token=...\`` 以 `<img>` 发 GET 触发本地桥——GET-with-side-effect 且 token 落在 URL 里。更关键的是 `package-audit.ts:214` 的 URL 正则只匹配 `= "字面量"`，**模板字面量完全不被采集**，离线审计无法把这条 loopback 调用归因，只能靠 `BUNDLE_DYNAMIC_ACCESS` 笼统标 `not-verified`。实测 `validate test-data/output/baja-studio-menu --offline` 输出中没有任何一条指向 `127.0.0.1` 的检查项。
@@ -128,7 +128,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 - ⚠️ `MenuController.hit()` 只用 `states.selected` 的 bounds（`src/index.ts:292`），而 `igs-adapter` 允许只有 `normal` 的按钮被启用（`igs-adapter.ts:109-118`）；这种按钮会"可聚焦但不可点"。需要统一"可命中几何"的定义。
 - 测试：`tamako-headless-navigation.test.ts` 单用例 50s，`runtime-web` 整体 56s，是全部包最慢的，建议拆分或用采样数据集。
 
-### `@bdmv-web/test-runner` — 审计与决策
+### `@bdmv2web/test-runner` — 审计与决策
 
 - ✅ 静态审计覆盖度好：HTML 属性 / `srcset` / inline handler / `<base>` / meta refresh / CSS `url()` / `@import` / data URL 签名（PNG magic、RIFF/WAVE）/ base64 规范性 / 路径多层 decode 防穿越 / `setAttribute` 动态 sink。`not-verified` 降级策略比"假绿"健康得多。
 - ⚠️ `codeOnly` 用正则剥注释与字符串（`src/package-audit.ts:194`），对正则字面量、`${}` 嵌套、`a / b` 除法可能误判。目前靠 `not-verified` 兜底可接受，建议注释写明这是启发式而非解析器。
@@ -140,7 +140,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 ### `apps/cli`
 
 - ✅ 事务式输出（staging + commit/abort）、`failMenuConversion` 写出带诊断的失败包而非静默退出、`safeDiagnosticMessage` 把源码根路径替换为 `<source>` 防信息泄漏、`--format json` 有结构化错误。
-- ⚠️ **`convert` 的模式契约不自洽**：仅实现 `menu-only`，但默认 `--mode` 是 `standalone-full`（`src/index.ts:257`），且 `strictDefault()`（第 26 行）在非 `menu-only` 时返回 true，导致不带参数执行 `bdmv-web convert X` **恒定 `exitCode = 2`**，而产物其实是 menu-only。
+- ⚠️ **`convert` 的模式契约不自洽**：仅实现 `menu-only`，但默认 `--mode` 是 `standalone-full`（`src/index.ts:257`），且 `strictDefault()`（第 26 行）在非 `menu-only` 时返回 true，导致不带参数执行 `bdmv2web convert X` **恒定 `exitCode = 2`**，而产物其实是 menu-only。
 - ⚠️ `--limits`、`--player-profile` 只出现在 `inputPath()` 的 `takesValue` 列表（第 29 行），**解析后从未使用**；`--title` 生效，`--format` 只影响 `validate`。属"看起来支持、实际不生效"的旗标。
 - ⚠️ **`extract` / `inspect` 不把 fatal 诊断变成失败**：`parseBdmv` 在缺少 `index.bdmv` 时写入 `fatal BDMV_REQUIRED_FILE_MISSING`，但 `extract()` 仍提交 staging 并 `exit 0`。实测空 BDMV：
 
@@ -354,7 +354,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 
 > 决策：【预填】A —— runtime-web 增加 `build:browser` 预构建产物，builder 依赖产物而非 `.ts` 源码。
 >
-> `@bdmv-web/package-builder` 是否对外发布：**实质上必然发布**。依据：`apps/cli` 声明了 `bin: bdmv-web` 且依赖 `@bdmv-web/package-builder`，CLI 若可安装，builder 就会被一并装上；builder 自身无 `private: true`、`main` 指向 `./dist/index.js`，也没有 `files` 白名单（等于会带上全部文件）。所以 B 不成立，C 是把已知故障留给安装用户。⚠需确认：CLI 是否有"对外安装"的实际计划（还是只在本仓库 devDependencies 里跑）？若确定永不对外安装，B 反而最省事。______
+> `@bdmv2web/package-builder` 是否对外发布：**实质上必然发布**。依据：`apps/cli` 声明了 `bin: bdmv2web` 且依赖 `@bdmv2web/package-builder`，CLI 若可安装，builder 就会被一并装上；builder 自身无 `private: true`、`main` 指向 `./dist/index.js`，也没有 `files` 白名单（等于会带上全部文件）。所以 B 不成立，C 是把已知故障留给安装用户。⚠需确认：CLI 是否有"对外安装"的实际计划（还是只在本仓库 devDependencies 里跑）？若确定永不对外安装，B 反而最省事。______
 >
 > 若发布，目标使用场景：预填假设为"CLI 内部依赖，不承诺第三方直接调用 builder API"——因此 D7 只要求 `buildMenuPackage` 在 `dist/` 布局下能跑，不需要稳定的公开 API。若要做第三方集成，需要额外定 API 兼容策略。______
 
@@ -525,12 +525,12 @@ corepack pnpm -r --no-bail typecheck
 corepack pnpm -r --no-bail test
 
 # 单包测试（聚合跑会漏用例，需单独确认）
-corepack pnpm --filter @bdmv-web/core test            # 14 用例
-corepack pnpm --filter @bdmv-web/bdmv-parser test     # 47 用例
-corepack pnpm --filter @bdmv-web/hdmv test            # 74 用例（vitest run src）
-corepack pnpm --filter @bdmv-web/media-export test    # 51 用例 + 1 skipped
-corepack pnpm --filter @bdmv-web/igs test             # 54 用例
-corepack pnpm --filter @bdmv-web/runtime-web test     # 91 用例
+corepack pnpm --filter @bdmv2web/core test            # 14 用例
+corepack pnpm --filter @bdmv2web/bdmv-parser test     # 47 用例
+corepack pnpm --filter @bdmv2web/hdmv test            # 74 用例（vitest run src）
+corepack pnpm --filter @bdmv2web/media-export test    # 51 用例 + 1 skipped
+corepack pnpm --filter @bdmv2web/igs test             # 54 用例
+corepack pnpm --filter @bdmv2web/runtime-web test     # 91 用例
 
 # 端到端：离线校验示例包
 node apps/cli/dist/index.js validate test-data/output/baja-studio-menu --offline

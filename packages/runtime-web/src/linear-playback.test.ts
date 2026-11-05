@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HdmvVm } from "@bdmv-web/hdmv";
+import { HdmvVm } from "@bdmv2web/hdmv";
 import { LinearPlaybackBridge, type LinearPlaybackAsset, type LinearPlaybackMedia, type LinearTimelineMapPort } from "./index.js";
 
 class FakeMedia implements LinearPlaybackMedia {

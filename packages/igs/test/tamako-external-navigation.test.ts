@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseBdmv } from "@bdmv-web/bdmv-parser";
-import { HdmvVm } from "@bdmv-web/hdmv";
+import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { HdmvVm } from "@bdmv2web/hdmv";
 import { extractIgsFromChunks } from "../src/extract.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");

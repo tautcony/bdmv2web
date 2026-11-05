@@ -12,16 +12,16 @@
 
 | 包 | 位置 | 错误码 |
 | --- | --- | --- |
-| `@bdmv-web/test-runner` | `src/index.test.ts(165,1)`、`(165,2)` | `TS1128: Declaration or statement expected.` |
-| `@bdmv-web/runtime-web` | `src/igs-adapter.test.ts(14,17)` | `TS2741: Property 'numericSelectValue' is missing ... but required in type 'IgsButton'.` |
+| `@bdmv2web/test-runner` | `src/index.test.ts(165,1)`、`(165,2)` | `TS1128: Declaration or statement expected.` |
+| `@bdmv2web/runtime-web` | `src/igs-adapter.test.ts(14,17)` | `TS2741: Property 'numericSelectValue' is missing ... but required in type 'IgsButton'.` |
 
 （`pnpm -r build` 不带 `--no-bail` 时会在 test-runner 处停止，只能看到 1 个失败包；用 `--no-bail` 才能看全。）
 
 ### 2) `corepack pnpm -r --no-bail typecheck` → exit 1
 
-首个失败包为 `@bdmv-web/test-runner`（同上 `TS1128`），第二个为 `@bdmv-web/runtime-web`（同上 `TS2741`）。
+首个失败包为 `@bdmv2web/test-runner`（同上 `TS1128`），第二个为 `@bdmv2web/runtime-web`（同上 `TS2741`）。
 
-### 3) `corepack pnpm --filter @bdmv-web/test-runner test` → exit 1
+### 3) `corepack pnpm --filter @bdmv2web/test-runner test` → exit 1
 
 ```
 FAIL  src/index.test.ts [ src/index.test.ts ]
@@ -41,10 +41,10 @@ packages/test-runner/src/index.test.ts:109:20: ERROR: "await" can only be used i
 删除第 109–118 行的重复块后：
 
 ```
-$ corepack pnpm --filter @bdmv-web/test-runner typecheck
+$ corepack pnpm --filter @bdmv2web/test-runner typecheck
 （无输出，退出 0）
 
-$ corepack pnpm --filter @bdmv-web/test-runner test
+$ corepack pnpm --filter @bdmv2web/test-runner test
  Test Files  5 passed (5)
       Tests  41 passed (41)
 ```
@@ -62,10 +62,10 @@ src/igs-adapter.test.ts(8,9): error TS2741: Property 'frameRateCode' is missing 
 这是同一类「夹具未跟随 `IgsScene` 契约」的问题（TS 在嵌套字面量报错时会抑制外层缺失属性诊断，所以修复前只看到 `numericSelectValue` 一条）。按同样口径补齐：`frameRateCode: 1`，取值依据 `packages/igs/src/igs.ts:212`（ICS 视频描述符高 4 位）与 `packages/igs/test/real-igs.test.ts:22` 对 1920×1080 的断言。**没有**放宽 `IgsScene` 类型。
 
 ```
-$ corepack pnpm --filter @bdmv-web/runtime-web typecheck
+$ corepack pnpm --filter @bdmv2web/runtime-web typecheck
 （无输出，退出 0）
 
-$ corepack pnpm --filter @bdmv-web/runtime-web test
+$ corepack pnpm --filter @bdmv2web/runtime-web test
  Test Files  9 passed (9)
       Tests  91 passed (91)
 ```
@@ -97,10 +97,10 @@ index.js
 在 `packages/runtime-web/src/igs-adapter.test.ts` 末尾临时加入 `const __typecheck_probe: number = "";`：
 
 ```
-$ corepack pnpm --filter @bdmv-web/runtime-web typecheck
+$ corepack pnpm --filter @bdmv2web/runtime-web typecheck
 src/igs-adapter.test.ts(121,7): error TS2322: Type 'string' is not assignable to type 'number'.
 Exit status 2
-$ corepack pnpm --filter @bdmv-web/runtime-web build
+$ corepack pnpm --filter @bdmv2web/runtime-web build
 $ tsc -p tsconfig.build.json     # 退出 0
 ```
 
@@ -108,11 +108,11 @@ $ tsc -p tsconfig.build.json     # 退出 0
 
 ### 2.4 `runtime-web/src` 的保留
 
-`grep -rn "runtime-web/src/browser.ts" packages/package-builder/src/index.ts` 命中第 129 行；已在同一处留注释说明该源码路径耦合将在第 2 批 D7 移除。`corepack pnpm --filter @bdmv-web/package-builder build` 通过。
+`grep -rn "runtime-web/src/browser.ts" packages/package-builder/src/index.ts` 命中第 129 行；已在同一处留注释说明该源码路径耦合将在第 2 批 D7 移除。`corepack pnpm --filter @bdmv2web/package-builder build` 通过。
 
 ### 2.5 发布内容
 
-`npm pack --dry-run` 中匹配 `src/|*.test.*` 的行数：`core` = 0、`test-runner` = 0、`apps/cli` = 0。为此给 `@bdmv-web/test-runner` 与 `@bdmv-web/cli` 补了 `"files": ["dist"]`（此前会把 `src/` 与 `*.test.ts` 一起发布）。
+`npm pack --dry-run` 中匹配 `src/|*.test.*` 的行数：`core` = 0、`test-runner` = 0、`apps/cli` = 0。为此给 `@bdmv2web/test-runner` 与 `@bdmv2web/cli` 补了 `"files": ["dist"]`（此前会把 `src/` 与 `*.test.ts` 一起发布）。
 
 ### 3.1 / 3.2 测试入口
 

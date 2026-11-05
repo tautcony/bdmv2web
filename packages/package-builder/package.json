@@ -1,10 +1,11 @@
 {
-  "name": "@bdmv-web/package-builder",
+  "name": "@bdmv2web/package-builder",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv-web/core": "workspace:*", "@bdmv-web/hdmv": "workspace:*", "@bdmv-web/media-export": "workspace:*", "esbuild": "0.25.12" },
+  "dependencies": { "@bdmv2web/core": "workspace:*", "@bdmv2web/hdmv": "workspace:*", "@bdmv2web/media-export": "workspace:*", "esbuild": "0.25.12" },
   "devDependencies": { "@types/node": "24.10.0" }
 }

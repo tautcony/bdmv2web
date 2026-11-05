@@ -1,5 +1,5 @@
-import type { ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
-import type { NavigationGraph, NavigationGraphEdge, NavigationGraphNode } from "@bdmv-web/hdmv";
+import type { ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
+import type { NavigationGraph, NavigationGraphEdge, NavigationGraphNode } from "@bdmv2web/hdmv";
 
 export interface MediaClosureOptions { maxStates?: number; }
 export interface MediaClosureUnknown { code: string; message: string; source: SourceLocation | null; }

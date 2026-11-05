@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { IgsAsset, IgsScene, IgsSource } from "@bdmv-web/igs";
+import type { IgsAsset, IgsScene, IgsSource } from "@bdmv2web/igs";
 import { adaptIgsScene } from "./index.js";
 
 const source: IgsSource = { clipId: "00001", pid: 0x18, packetOffset: "192", pesOffset: "208", segmentOffset: "4", segmentFileOffset: "400", pts90k: "9000", timeDomain: 0 };

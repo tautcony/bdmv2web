@@ -22,11 +22,11 @@
   验收（两条都要，顺序不能反）：
   
   1. `rm -f packages/test-runner/dist/*.test.js packages/test-runner/dist/*.test.d.ts`
-  2. `corepack pnpm --filter @bdmv-web/test-runner typecheck` → 通过
-  3. `corepack pnpm --filter @bdmv-web/test-runner test` → `Test Files 5 passed (5)` / `Tests 41 passed (41)`，日志中无 `"await" can only be used inside an "async" function`
+  2. `corepack pnpm --filter @bdmv2web/test-runner typecheck` → 通过
+  3. `corepack pnpm --filter @bdmv2web/test-runner test` → `Test Files 5 passed (5)` / `Tests 41 passed (41)`，日志中无 `"await" can only be used inside an "async" function`
   
   说明：不清理 `dist` 时会看到 `Test Files 10` / `Tests 42`，因为 `src` 与 `dist` 各跑一遍——这不是修复失败，是产物污染（由 1.3 与 2.1 根治）。评审阶段的 `42 passed` 即由此产生，不可作为完成依据。
-- [x] 1.2 补 `packages/runtime-web/src/igs-adapter.test.ts:14` 夹具的 `numericSelectValue`。取值按协议语义显式填写（该按钮 `id: 11`，故 `numericSelectValue: 11`），**不**把 `IgsButton.numericSelectValue` 改成可选、也不给类型默认值——它是 IG 流中的实际字段（`packages/igs/src/igs.ts:240`），可选化会掩盖解析缺失。验收：`corepack pnpm --filter @bdmv-web/runtime-web typecheck` 通过；`igs-adapter` 相关用例仍断言按钮 id/坐标/三态，未被削弱。
+- [x] 1.2 补 `packages/runtime-web/src/igs-adapter.test.ts:14` 夹具的 `numericSelectValue`。取值按协议语义显式填写（该按钮 `id: 11`，故 `numericSelectValue: 11`），**不**把 `IgsButton.numericSelectValue` 改成可选、也不给类型默认值——它是 IG 流中的实际字段（`packages/igs/src/igs.ts:240`），可选化会掩盖解析缺失。验收：`corepack pnpm --filter @bdmv2web/runtime-web typecheck` 通过；`igs-adapter` 相关用例仍断言按钮 id/坐标/三态，未被削弱。
 - [x] 1.3 清理并重建产物，确认无残留测试编译物。验收：`rm -rf packages/*/dist apps/*/dist && corepack pnpm build` 后 `find packages apps -path "*/dist/*" -name "*.test.*" | wc -l` 输出 `0`（清理前在当前 HEAD 上实测为 70；若数字不同，在验证记录里写明实际值，不要照抄 70）。
   
   注意：`tsc` 默认在报错时仍 emit，所以"build 失败但产物仍生成"是当前现象之一——这也是测试产物能进 `dist` 的机制。先删再建，不要只建不删。
@@ -40,7 +40,7 @@
 - [x] 2.1 为 `packages/*` 与 `apps/cli` 逐个新增 `tsconfig.build.json`：`{ "extends": "./tsconfig.json", "exclude": ["**/*.test.ts", "**/*.test-d.ts"] }`。验收：11 个包均存在该文件，`node -e` 读取 `exclude` 逐包断言。
 - [x] 2.2 各包 `build` 脚本改为 `tsc -p tsconfig.build.json`；`packages/core` 的第二段 `node ../../scripts/build-core-browser.mjs` 保留。验收：`corepack pnpm -r build` 全通过；`packages/core/dist/` 同时存在 `index.js` 与 `browser.js`。
 - [x] 2.3 `typecheck` 保持 `tsc -p tsconfig.json --noEmit`（覆盖测试）。验收：在任一 `.test.ts` 中临时制造类型错误（如 `const x: number = ""`），`typecheck` 必须失败而 `build` 必须成功；验证后还原并确认两者恢复通过。该正反例需写入验证记录。
-- [x] 2.4 保留 `packages/runtime-web/src/`（`package-builder` 仍直接引用 `runtime-web/src/browser.ts`，解耦属第 2 批 D7）。验收：`grep -rn "runtime-web/src/browser.ts" packages/package-builder/src/index.ts` 有命中，且 `corepack pnpm --filter @bdmv-web/package-builder build` 成功；在 change 内留一行注释说明该依赖将在 D7 移除。
+- [x] 2.4 保留 `packages/runtime-web/src/`（`package-builder` 仍直接引用 `runtime-web/src/browser.ts`，解耦属第 2 批 D7）。验收：`grep -rn "runtime-web/src/browser.ts" packages/package-builder/src/index.ts` 有命中，且 `corepack pnpm --filter @bdmv2web/package-builder build` 成功；在 change 内留一行注释说明该依赖将在 D7 移除。
 - [x] 2.5 确认发布内容只含产物。验收：`cd packages/core && npm pack --dry-run` 的文件清单不含 `src/`、不含任何 `*.test.*`；对 `packages/test-runner`、`apps/cli` 执行同检查。
 
 ## 3. 测试入口统一（D8 · test 脚本）
@@ -75,7 +75,7 @@
 - [x] 6.2 统一"V1 Chrome `file://`"的表述为"已完成 macOS Chrome 实测，证据未绑定制品指纹"，并在 `docs/browser-matrix.md`、`docs/references/stages/M6-release-verification.md`、`docs/development.md` 三处引用同一证据位置。**不修改**任何 tasks 勾选状态（属 D9）。验收：三处措辞一致且互相引用；`grep -rn "not-verified" docs/browser-matrix.md` 与阶段文档不再矛盾。
 - [x] 6.3 `docs/igs-support.md:22` 的 Tamako 结论改为：包为 partial 的原因是 Clip 00043 缺失；0xfffe 语义已建立（activated 哨兵，见 `packages/igs/test/tamako-real-smoke.test.ts`）。验收：文档结论与测试断言（`complete: true`）不再互相否定。
 - [x] 6.4 用 0.1 的基线表替换 `docs/references/stages/M6-release-verification.md:22-26` 的旧计数（42/40/56/51）。验收：文档计数与 `pnpm test:all` 实测一致，并注明测量日期与命令。
-- [x] 6.5 `bdmv_hdmv_offline_web_architecture.md` 的旧包布局（`:145-168`）与旧 `DiscIR` 形状（`:530-538`）加"历史设计"标注，并补"设计名 → 实际包/字段"映射表（`m2ts-demux` → `@bdmv-web/igs`、`navigation-hdmv` → `@bdmv-web/hdmv`、`ir-builder` → CLI/parser 侧、`apps/studio` → 未实施）。验收：文档中任一旧名称都能在同一页找到对应实际位置或"未实施"标注。
+- [x] 6.5 `bdmv_hdmv_offline_web_architecture.md` 的旧包布局（`:145-168`）与旧 `DiscIR` 形状（`:530-538`）加"历史设计"标注，并补"设计名 → 实际包/字段"映射表（`m2ts-demux` → `@bdmv2web/igs`、`navigation-hdmv` → `@bdmv2web/hdmv`、`ir-builder` → CLI/parser 侧、`apps/studio` → 未实施）。验收：文档中任一旧名称都能在同一页找到对应实际位置或"未实施"标注。
 - [x] 6.6 `.gitignore` 增加 `.DS_Store` 与 `**/.DS_Store`。验收：`touch packages/core/.DS_Store && git status --short` 无输出；删除临时文件。
 - [x] 6.7 大二进制保持现状，但写入策略：新增 >1 MiB 的 fixture 必须由脚本按 manifest 生成，不入库。验收：`docs/development.md` 有该约定，并列出两个既存大文件路径与体积（11 MB / 8.7 MB）作为历史遗留。
 

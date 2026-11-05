@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { HdmvVm, m3Fixtures } from "@bdmv-web/hdmv";
-import { menuInteractionFixture } from "@bdmv-web/test-fixtures";
+import { HdmvVm, m3Fixtures } from "@bdmv2web/hdmv";
+import { menuInteractionFixture } from "@bdmv2web/test-fixtures";
 import { CanvasViewport, drawMenu, EventScheduler, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuScheduler, type MenuScene, type PlaybackAction, type PlaybackBridge } from "./index.js";
 
 const bounds = (x: number) => ({ x, y: 10, width: 20, height: 20 });

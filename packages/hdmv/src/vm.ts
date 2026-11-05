@@ -1,6 +1,6 @@
-import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
-import { DEFAULT_PLAYER_PROFILE } from "@bdmv-web/core/defaults";
-import type { PlayerProfile as CorePlayerProfile } from "@bdmv-web/core";
+import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
+import { DEFAULT_PLAYER_PROFILE } from "@bdmv2web/core/defaults";
+import type { PlayerProfile as CorePlayerProfile } from "@bdmv2web/core";
 import { decodeInstruction, type DecodedInstruction, type Operand, type RawCommand } from "./decode.js";
 import { RegisterFile, RegisterFault, type PlayerProfile, type RegisterRef } from "./registers.js";
 

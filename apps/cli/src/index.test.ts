@@ -5,8 +5,8 @@ import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } fr
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv-web/test-fixtures";
-import { encodeTimestampForFixture } from "@bdmv-web/igs";
+import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
+import { encodeTimestampForFixture } from "@bdmv2web/igs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 

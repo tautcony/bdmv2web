@@ -2,10 +2,10 @@ import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { build } from "esbuild";
-import { parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv-web/core";
-import type { VmOptions, VmProgram } from "@bdmv-web/hdmv";
+import { parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
+import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
 import { LOCAL_PLAYER_BRIDGE, localPlayerLauncher } from "./local-player-bridge.js";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput } from "@bdmv-web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput } from "@bdmv2web/media-export";
 
 export interface PngPayload { id: string; bytes: Uint8Array }
 export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
@@ -139,7 +139,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   if (input.externalTargets) await chmod(resolve(output, "start-menu.sh"), 0o755);
   // Bundling reads runtime-web's TypeScript entry directly; the source-path coupling is scheduled for removal in D7 (batch 2), so `packages/runtime-web/src/` stays in the build scope for now.
   const entry = resolve(import.meta.dirname, "../../runtime-web/src/browser.ts");
-  await build({ entryPoints: [entry], outfile: resolve(runtimeDirectory, "app.bundle.js"), bundle: true, platform: "browser", format: "iife", target: "es2020", legalComments: "none", alias: { "@bdmv-web/hdmv": resolve(import.meta.dirname, "../../hdmv/src/index.ts"), "@bdmv-web/media-export/external-targets": resolve(import.meta.dirname, "../../media-export/src/external-targets.ts") } });
+  await build({ entryPoints: [entry], outfile: resolve(runtimeDirectory, "app.bundle.js"), bundle: true, platform: "browser", format: "iife", target: "es2020", legalComments: "none", alias: { "@bdmv2web/hdmv": resolve(import.meta.dirname, "../../hdmv/src/index.ts"), "@bdmv2web/media-export/external-targets": resolve(import.meta.dirname, "../../media-export/src/external-targets.ts") } });
   const payloadFingerprint = await hashGeneratedPayload(output, files);
   await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility({ ...metadata, payloadFingerprint }, !!input.externalTargets), null, 2)}\n`);
   // M6 reserves compatibility.json and asset-manifest.json as report metadata and rejects them in manifest.files.
@@ -235,7 +235,7 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
   return [
     `# ${title.replace(/[\r\n]/g, " ")}`,
     `This is a menu-only preview. Its delivery status is **${status}**. \`complete\` means no known failure was found, not that every scenario has been verified. ${playbackNote} Browser/file:// verification is not included in this package.`,
-    "Run `bdmv-web validate <package-directory> --offline` to generate `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json` from current package evidence. Missing browser or reference evidence remains unverified.",
+    "Run `bdmv2web validate <package-directory> --offline` to generate `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json` from current package evidence. Missing browser or reference evidence remains unverified.",
     externalPlayback ? "Run start-menu.sh to open the menu and enable external playback. You can edit bdmv-config.json and restart the launcher to change the BDMV path." : "Open index.html in Chrome while offline.",
   ].join("\n\n") + "\n";
 }

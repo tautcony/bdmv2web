@@ -1,4 +1,4 @@
-import type { MovieInstruction, SourceLocation } from "@bdmv-web/bdmv-parser";
+import type { MovieInstruction, SourceLocation } from "@bdmv2web/bdmv-parser";
 
 export type Operand = { kind: "immediate" | "gpr" | "psr" | "encoded"; value: number; raw: number; invalid?: true };
 export type OpcodeName = "NOP" | "GOTO" | "BREAK" | "JUMP_OBJECT" | "JUMP_TITLE" | "CALL_OBJECT" | "CALL_TITLE" | "RESUME" | "PLAY_PL" | "PLAY_PL_PI" | "PLAY_PL_PM" | "TERMINATE_PL" | "LINK_PI" | "LINK_MK" | "BC" | "EQ" | "NE" | "GE" | "GT" | "LE" | "LT" | "MOVE" | "SWAP" | "ADD" | "SUB" | "MUL" | "DIV" | "MOD" | "RND" | "AND" | "OR" | "XOR" | "BITSET" | "BITCLR" | "SHL" | "SHR" | "SET_STREAM" | "SET_NV_TIMER" | "SET_BUTTON_PAGE" | "ENABLE_BUTTON" | "DISABLE_BUTTON" | "SET_SEC_STREAM" | "POPUP_OFF" | "STILL_ON" | "STILL_OFF" | "SET_OUTPUT_MODE" | "SET_STREAM_SS" | "SETSYSTEM_0x10";

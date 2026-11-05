@@ -1,5 +1,5 @@
-import type { ActionEnvelope, DiscIR, EventEnvelope } from "@bdmv-web/core";
-import { parseDiscIR } from "@bdmv-web/core";
+import type { ActionEnvelope, DiscIR, EventEnvelope } from "@bdmv2web/core";
+import { parseDiscIR } from "@bdmv2web/core";
 
 const source = { path: "BDMV/index.bdmv", origin: "primary", byteOffset: "0" } as const;
 const base = {

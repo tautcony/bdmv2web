@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LIMITS } from "@bdmv-web/core";
+import { DEFAULT_LIMITS } from "@bdmv2web/core";
 import { decodeRle } from "../src/igs.js";
 import { M2tsPacketReader, PesAssembler, PsiAssembler, decodeTimestamp, encodeTimestampForFixture } from "../src/transport.js";
 import { IG_PID, m2tsPacket, patPacket, pesPacket, syntheticClip } from "./fixtures.js";

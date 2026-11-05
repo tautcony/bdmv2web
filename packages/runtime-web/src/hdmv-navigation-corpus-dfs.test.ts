@@ -1,8 +1,8 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { parseBdmv, type ParsedDisc } from "@bdmv-web/bdmv-parser";
-import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, HdmvVm, type NavigationAction, type StaticNavigationLoop, type TraceEntry } from "@bdmv-web/hdmv";
+import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
+import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, HdmvVm, type NavigationAction, type StaticNavigationLoop, type TraceEntry } from "@bdmv2web/hdmv";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const corpus = ["tamako", "baja", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;

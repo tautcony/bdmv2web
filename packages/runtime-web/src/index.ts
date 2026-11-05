@@ -1,5 +1,5 @@
-import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult, type HdmvVm, type NavigationAction, type RawCommand, type VmEvent, type VmSnapshot } from "@bdmv-web/hdmv";
-import type { SourceLocation } from "@bdmv-web/bdmv-parser";
+import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult, type HdmvVm, type NavigationAction, type RawCommand, type VmEvent, type VmSnapshot } from "@bdmv2web/hdmv";
+import type { SourceLocation } from "@bdmv2web/bdmv-parser";
 export { adaptIgsScene } from "./igs-adapter.js";
 export type { IgsAdapterDiagnostic, IgsSceneAdapterResult, SerializedMenuButton, SerializedMenuPage, SerializedMenuState, SerializedScene } from "./igs-adapter.js";
 export { LinearPlaybackBridge } from "./linear-playback.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HdmvVm } from "@bdmv-web/hdmv";
+import { HdmvVm } from "@bdmv2web/hdmv";
 import { MenuController, type MenuButton, type MenuScene } from "./index.js";
 
 function rawCommand(word0: number, word1 = 0, word2 = 0): string {

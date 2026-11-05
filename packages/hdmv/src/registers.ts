@@ -1,4 +1,4 @@
-import type { PlayerProfile as CorePlayerProfile } from "@bdmv-web/core";
+import type { PlayerProfile as CorePlayerProfile } from "@bdmv2web/core";
 
 export const GPR_COUNT = 4096;
 export const PSR_COUNT = 128;

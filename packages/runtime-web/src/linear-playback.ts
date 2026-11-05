@@ -1,4 +1,4 @@
-import type { VmEvent } from "@bdmv-web/hdmv";
+import type { VmEvent } from "@bdmv2web/hdmv";
 import type { PlaybackAction, PlaybackBridge } from "./index.js";
 
 export interface LinearTimelinePosition {

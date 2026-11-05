@@ -102,7 +102,7 @@ const DEFAULTS = {
 
 ### 6. builder 依赖产物，不依赖源码树（D7）
 
-`packages/package-builder/src/index.ts:127-128` 用 `resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` 取入口，并把 `@bdmv-web/hdmv` alias 到 `../../hdmv/src/index.ts`。在 monorepo 内成立，在 `dist` 发布布局下必然断（`src/` 不在包内）。
+`packages/package-builder/src/index.ts:127-128` 用 `resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` 取入口，并把 `@bdmv2web/hdmv` alias 到 `../../hdmv/src/index.ts`。在 monorepo 内成立，在 `dist` 发布布局下必然断（`src/` 不在包内）。
 
 改动：`runtime-web` 新增 `build:browser`（esbuild 打包 `src/browser.ts` → `dist/browser-entry.js`，IIFE、ES2020），`package.json` 的 `exports` 增加 `"./browser-entry"`；builder 改为解析该子路径，删除两处相对路径 alias。补 `files: ["dist"]` 白名单，避免发布带上 `src` 与测试。
 

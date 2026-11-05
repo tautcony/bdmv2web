@@ -1,10 +1,11 @@
 {
-  "name": "@bdmv-web/bdmv-io",
+  "name": "@bdmv2web/bdmv-io",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv-web/core": "workspace:*" },
+  "dependencies": { "@bdmv2web/core": "workspace:*" },
   "devDependencies": { "@types/node": "24.10.0" }
 }

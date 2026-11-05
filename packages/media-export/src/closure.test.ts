@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ParsedDisc, SourceLocation } from "@bdmv-web/bdmv-parser";
-import { buildNavigationGraph, m3Fixtures, type NavigationGraph } from "@bdmv-web/hdmv";
+import type { ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
+import { buildNavigationGraph, m3Fixtures, type NavigationGraph } from "@bdmv2web/hdmv";
 import { computeMediaClosure, createMediaPlan } from "./index.js";
 
 const source: SourceLocation = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };

@@ -1,4 +1,4 @@
-import type { Limits } from "@bdmv-web/core";
+import type { Limits } from "@bdmv2web/core";
 
 export interface IgsSource {
   clipId: string;
