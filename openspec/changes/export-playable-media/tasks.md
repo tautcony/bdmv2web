@@ -81,3 +81,12 @@
 
 - [x] 9.1 增加右下角静音切换，控制菜单背景视频、音轨和按钮音效；外部影片请求发起前自动静音。验证：`npm run build` 通过。
 - [ ] 9.2 在 Chrome `file://` 菜单中验证按钮状态、各音源静音和外部播放器请求时自动静音。
+
+## 10. 菜单/内容 IGS 角色与菜单媒体范围
+
+- [x] 10.1 按 `uiModel` 区分常驻菜单（0）与内容弹出菜单（1）；`menuPlaylistIds`/`menuScenes` 只包含常驻菜单，内容弹出场景保留在 `popupScenes`。
+- [x] 10.2 对可达的常驻菜单 Playlist 运行单 Clip 时间线分析；Top Menu 之外的菜单媒体写入独立 `assets/media/playlist-<id>/` 目录和 `media-plans/playlist-<id>.json`。
+- [x] 10.3 运行时按 `PLAY_PLAYLIST` 切换菜单媒体视频/音频和循环设置；无本地菜单媒体的菜单 Playlist 保留当前菜单背景。
+- [x] 10.4 带 `uiModel=1` 弹出 IGS 的标题 Playlist 使用外部播放映射；`runtime-web` 测试确认 `PLAY_PLAYLIST 18` 生成 IINA 协议 URL 且不打开弹出场景，报告 `M5_POPUP_CONTENT_MEDIA_EXTERNAL`。
+- [x] 10.5 验证：`media-export`、`package-builder`、`runtime-web`、`cli` 测试通过；对用户提供的 BDMV 执行 `convert --overwrite`，`menuMedia` 只包含菜单 Playlist `00003`，`00014`–`00018` 保留在 `external-targets.json`，`validate --offline` 通过。
+- [x] 10.6 浏览器实测：点击预告/画册等标题 Playlist 后由系统播放器打开对应 M2TS，Top Menu 不被替换；记录 Chrome 版本、播放器与观察结果。

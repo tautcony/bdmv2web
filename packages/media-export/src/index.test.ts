@@ -90,6 +90,14 @@ describe("menu-loop media export", () => {
       expect(calls.find((call) => call.args.at(-1)?.endsWith("audio-1100-eng.m4a"))?.args).toContain("0:i:0x1100");
       expect(calls.filter((call) => call.executable === "ffmpeg" && call.args.includes("-map")).every((call) => call.args.includes("-ss") && call.args.includes("0"))).toBe(true);
       expect(JSON.parse(await readFile(join(root, "media-plan.json"), "utf8"))).toMatchObject({ repeatCount: 999, sourceFile: "BDMV/STREAM/00004.m2ts" });
+      const scopedRoot = await mkdtemp(join(tmpdir(), "bdmv-media-scoped-"));
+      try {
+        const scoped = await exportMenuLoopMedia(input, { outputDirectory: scopedRoot, runProcess: run, assetDirectory: "assets/media/playlist-00018", planPath: "media-plans/playlist-00018.json" });
+        expect(scoped.files.map((file) => file.path)).toEqual([
+          "assets/media/playlist-00018/background.mp4", "assets/media/playlist-00018/audio-1100-eng.m4a", "assets/media/playlist-00018/audio-1101-jpn.m4a",
+        ]);
+        expect(JSON.parse(await readFile(join(scopedRoot, "media-plans/playlist-00018.json"), "utf8"))).toMatchObject({ playlistId: "00003", clipId: "00004" });
+      } finally { await rm(scopedRoot, { recursive: true, force: true }); }
       const markedRoot = await mkdtemp(join(tmpdir(), "bdmv-media-loop-mark-"));
       try {
         encodedDuration = 1;

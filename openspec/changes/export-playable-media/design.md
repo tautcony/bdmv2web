@@ -26,6 +26,12 @@
 
 菜单 Playlist 由 `index.bdmv` 的 Top Menu 入口及 HDMV MovieObject 执行结果确定。转换时运行 First Play MovieObject 读取初始化状态，再通过 `selectTitle(0)` 进入 Top Menu；Top Menu MovieObject 发出的 `PLAY_PL` 指定菜单 Playlist。背景媒体按 Playlist 的 PlayItem 和 mark 生成：单片、同源 Clip 的连续区间作为完整时间线；重复尾段或有效 loop mark 设置循环。跨 Clip、时间间隙、流声明变化和多角度序列记录为媒体不可用。无循环背景播放完后保留末帧，并把 `MEDIA_ENDED` 交给 VM。AVC/H.264 与 HEVC 视频统一转成包内 H.264。
 
+### 菜单场景与影片角色
+
+IGS `uiModel` 决定场景角色。`uiModel=0` 的场景是常驻菜单画面，进入 `menuScenes` 和 `menuPlaylistIds`。`uiModel=1` 的场景是标题播放期间的弹出菜单，只进入 `popupScenes`，不替换 Top Menu 画面。带弹出 IGS 的 Playlist 是影片播放，交给外部播放器，不进入包内媒体；该类 Playlist 不因带有 IGS 子路径而成为菜单 Playlist。
+
+转换阶段对每个可达的菜单 Playlist 检查单 Clip 连续时间线。Top Menu 使用 `assets/media/`；其他可本地表示的菜单 Playlist 使用 `assets/media/playlist-<id>/` 和独立 `media-plans/playlist-<id>.json`。运行时按 `PLAY_PLAYLIST` 选择菜单媒体并切换视频、音频和循环设置；无法本地表示的菜单 Playlist 保留当前菜单背景并记录诊断。
+
 ### 系统交接与能力边界
 
 用户触发影片动作后，前端按映射将 M2TS 转成 `file://` URL 并调用操作系统 URL Protocol。运行时按当前实现选择 IINA 或 PotPlayer 协议。播放动作只报告协议请求，不伪造开始/结束状态；VM 对应等待可恢复，菜单继续可操作。真实播放器打开和目标路径行为仍需环境验证。

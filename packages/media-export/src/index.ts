@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { access, copyFile, mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { M2tsPacketReader, PesAssembler } from "@bdmv2web/igs";
 import { parsePgsSup } from "./pgs.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates, MediaBudgetError } from "./budget.js";
@@ -128,6 +128,10 @@ export interface MenuLoopMediaOptions {
   outputDirectory: string;
   /** Reuse encoded assets only when the previous package media plan matches this input. */
   reuseFromDirectory?: string;
+  /** Package-relative directory for this playlist's encoded video and audio. */
+  assetDirectory?: string;
+  /** Package-relative path for this playlist's media plan. */
+  planPath?: string;
   ffmpegPath?: string;
   ffprobePath?: string;
   timeoutMs?: number;
@@ -230,11 +234,14 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     }
   };
   const output = resolve(options.outputDirectory);
-  const mediaDirectory = resolve(output, "assets/media");
-  const planAbsolute = resolve(output, "media-plan.json");
+  const assetDirectory = normalizePackageDirectory(options.assetDirectory ?? "assets/media");
+  const planPath = normalizePackagePath(options.planPath ?? "media-plan.json");
+  const mediaDirectory = resolve(output, assetDirectory);
+  const planAbsolute = resolve(output, planPath);
   await ensureAbsent(planAbsolute);
+  await mkdir(dirname(planAbsolute), { recursive: true });
   if (options.reuseFromDirectory) {
-    const reused = await reuseMenuLoopMedia(input, options, resolve(options.reuseFromDirectory), output, mediaDirectory, planAbsolute, crf, preset);
+    const reused = await reuseMenuLoopMedia(input, options, resolve(options.reuseFromDirectory), output, mediaDirectory, planPath, crf, preset);
     if (reused) return reused;
   }
 
@@ -247,8 +254,8 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   };
   validateBudgetRates(rates);
   const estimate = estimateMenuLoopBudget(input.outTime45k - (input.loopStart45k ?? input.inTime45k), input.audioTracks.length, rates);
-  const backgroundPath = "assets/media/background.mp4";
-  const audioPaths = input.audioTracks.map((track) => `assets/media/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`);
+  const backgroundPath = `${assetDirectory}/background.mp4`;
+  const audioPaths = input.audioTracks.map((track) => `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`);
   for (const [path, bytes] of [[backgroundPath, estimate.videoBytes] as const, ...audioPaths.map((path, index) => [path, estimate.audioBytes[index]!] as const)]) {
     assertEstimateWithinLimit({ scope: "asset", estimateBytes: BigInt(bytes), limitBytes: options.maxAssetBytes, message: `Estimated media asset '${path}' exceeds maxAssetBytes before encoding.` });
     await ensureAbsent(resolve(output, path));
@@ -319,7 +326,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     const files = [{ path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size }];
     for (const { track, stream } of audioStreams) {
       const stem = `audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}`;
-      const relativePath = `assets/media/${stem}.m4a`;
+      const relativePath = `${assetDirectory}/${stem}.m4a`;
       const absolutePath = resolve(output, relativePath);
       created.push(absolutePath);
       await runWithBudget(ffmpeg, [
@@ -362,23 +369,27 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
 }
 
 async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions, sourceDirectory: string, output: string, mediaDirectory: string, planPath: string, crf: number, preset: string): Promise<MenuLoopMediaResult | null> {
+  const assetDirectory = normalizePackageDirectory(options.assetDirectory ?? "assets/media");
   let priorPlan: MediaPlan;
   let priorManifest: Record<string, unknown>;
   try {
-    priorPlan = JSON.parse(await readFile(resolve(sourceDirectory, "media-plan.json"), "utf8")) as MediaPlan;
+    priorPlan = JSON.parse(await readFile(resolve(sourceDirectory, planPath), "utf8")) as MediaPlan;
     priorManifest = JSON.parse(await readFile(resolve(sourceDirectory, "asset-manifest.json"), "utf8")) as Record<string, unknown>;
   } catch { return null; }
   if (!matchesReusablePlan(priorPlan, input, preset, crf)) return null;
-  const media = priorManifest.media as { background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> } | undefined;
+  type PriorPackagedMedia = { plan?: { playlistId?: string }; background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> };
+  const priorMenuMedia = Array.isArray(priorManifest.menuMedia) ? priorManifest.menuMedia as PriorPackagedMedia[] : [];
+  const media = [priorManifest.media as PriorPackagedMedia | undefined, ...priorMenuMedia]
+    .find((candidate) => candidate?.plan?.playlistId === input.playlistId);
   const priorBackground = media?.background;
   const priorAudioTracks = media?.audioTracks;
-  const backgroundPath = "assets/media/background.mp4";
+  const backgroundPath = `${assetDirectory}/background.mp4`;
   if (!priorBackground || priorBackground.path !== backgroundPath || priorBackground.codec !== "h264" || priorBackground.pid !== input.videoPid
     || !positive(priorBackground.width) || !positive(priorBackground.height)
     || typeof priorBackground.durationSeconds !== "number" || !Number.isFinite(priorBackground.durationSeconds)
     || priorBackground.loop !== loopBackground(input) || !Array.isArray(priorAudioTracks) || priorAudioTracks.length !== input.audioTracks.length) return null;
   const audioRecords = input.audioTracks.map((track) => {
-    const path = `assets/media/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
+    const path = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
     const previous = priorAudioTracks.find((candidate) => candidate.pid === track.pid && candidate.streamNumber === track.streamNumber && candidate.language === track.language && candidate.path === path && candidate.codec === "aac");
     if (!previous || typeof previous.durationSeconds !== "number" || !Number.isFinite(previous.durationSeconds)) return null;
     return { track, path, previous };
@@ -430,8 +441,9 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
       const file = files[index + 1]!;
       return { ...file, codec: "aac" as const, pid: record!.track.pid, streamNumber: record!.track.streamNumber, language: record!.track.language, durationSeconds: record!.previous.durationSeconds as number };
     });
-    await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
-    copied.push(planPath);
+    const planAbsolute = resolve(output, planPath);
+    await writeFile(planAbsolute, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
+    copied.push(planAbsolute);
     assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Reused media package exceeds maxOutputBytes." });
     return {
       plan, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
@@ -462,6 +474,7 @@ function loopBackground(input: Pick<MenuLoopMediaInput, "stillMode" | "repeatCou
   return input.loopBackground ?? (input.stillMode !== 2 && input.repeatCount > 1);
 }
 export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "outTime45k" | "loopStart45k">): number { return (input.outTime45k - (input.loopStart45k ?? input.inTime45k)) / 45_000; }
+
 export function resolveMenuLoopStart45k(playItemIndex: number, inTime45k: number, outTime45k: number, marks: readonly { type: number; playItemRef: number; time45k: number }[]): number | undefined {
   return marks.filter((mark) => mark.type === 1 && mark.playItemRef === playItemIndex && mark.time45k > inTime45k && mark.time45k < outTime45k).at(-1)?.time45k;
 }
@@ -599,6 +612,18 @@ async function runProcess(executable: string, args: string[], timeoutMs: number,
 
 export const runMediaProcess: MediaProcessRunner = runProcess;
 
+function normalizePackageDirectory(value: string): string {
+  const normalized = value.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "");
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").some((part) => part === "" || part === "." || part === "..")) throw new RangeError(`assetDirectory must be a package-relative directory, received '${value}'.`);
+  return normalized;
+}
+
+function normalizePackagePath(value: string): string {
+  const normalized = value.replace(/\\/g, "/").replace(/^\.\/+/, "");
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").some((part) => part === "" || part === "." || part === "..")) throw new RangeError(`planPath must be a package-relative file path, received '${value}'.`);
+  return normalized;
+}
+
 function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, plannedPackageBytes: bigint, maxAssetBytes: number | null, maxOutputBytes: number | null, crf: number, preset: string, reused = false): MediaPlan {
   return {
     status: "partial", playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId,
@@ -613,7 +638,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
       container: { video: "mp4", audio: "m4a", faststart: true },
     },
     budget: { ...estimate, existingOutputBytes: existingOutputBytes.toString(), plannedPackageBytes: plannedPackageBytes.toString(), maxAssetBytes, maxOutputBytes },
-    limitations: [input.stillMode === 2 ? "This output covers the single infinite-still menu PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : loopBackground(input) ? "This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : "This output covers one non-repeating Top Menu PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline.", "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.", reused ? "H.264/AAC assets were reused from a prior package because its media plan matched; source content changes at the same path are not fingerprinted." : "On overwrite, prior media assets are reused only when playlist, clip, time bounds, stream declarations, and encoding settings match; source content changes at the same path are not fingerprinted."],
+    limitations: [input.stillMode === 2 ? "This output covers the single infinite-still PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : loopBackground(input) ? "This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : "This output covers one non-repeating PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline.", "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.", reused ? "H.264/AAC assets were reused from a prior package because its media plan matched; source content changes at the same path are not fingerprinted." : "On overwrite, prior media assets are reused only when playlist, clip, time bounds, stream declarations, and encoding settings match; source content changes at the same path are not fingerprinted."],
   };
 }
 

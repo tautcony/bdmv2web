@@ -258,25 +258,25 @@ describe("offline browser boot", () => {
     expect(host.elements.get("runtime-status")?.textContent).not.toContain("external player");
   });
 
-  it("opens and closes an IGS popup reached through a menu playlist", async () => {
+  it("hands a popup-only content playlist to the external player instead of replacing the menu", async () => {
+    const location = { hash: "", href: "file:///menu/index.html" };
+    vi.stubGlobal("location", location);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
+    vi.stubGlobal("__BDMV_BDMV_PATH__", "/fake/BDMV");
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
     const baseScene = packageData().scene as Record<string, unknown>;
     const page = (baseScene.pages as Array<Record<string, unknown>>)[0]!;
-    const albumScene = { ...baseScene, clipId: "album", pid: 0x1400, width: 80, pages: [{ ...page, buttons: [{
-      id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
-      states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 } }, selected: { bounds: { x: 10, y: 10, width: 20, height: 20 } } },
-      commands: [{ bytes: "110000070000000000000000" }],
-    }] }] };
+    const popupScene = { ...baseScene, clipId: "00017", pid: 0x1400, uiModel: 1, width: 80, pages: [{ ...page, id: 2 }] };
     const data = packageData({
       vmPrograms: [{ id: 7, instructions: ["228000000000001200000000"] }],
-      menuPlaylistIds: [18], menuScenes: [{ playlistId: 18, scene: albumScene }], popupScenes: [albumScene],
+      popupScenes: [popupScene],
       media: { playlist: 4, background: { path: "assets/media/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [{ streamNumber: 0, psrStreamNumber: 1, path: "assets/media/audio.m4a", durationSeconds: 10 }] },
+      externalTargets: { playlists: [{ id: "00018", items: [{ index: 0, stcId: 0, clipId: "00032", streamPath: "STREAM/00032.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
     });
     const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
     await host.elements.get("start-menu")!.fire("click");
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(host.elements.get("popup-canvas")?.hidden).toBe(false);
-    expect(host.elements.get("menu-canvas")).toMatchObject({ width: 100, height: 60 });
-    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00032.m2ts&mpv_start=0");
     expect(host.elements.get("popup-canvas")?.hidden).toBe(true);
   });
 

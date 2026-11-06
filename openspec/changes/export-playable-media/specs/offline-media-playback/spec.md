@@ -87,6 +87,35 @@
 - **WHEN** 用户操作右下角静音按钮，或页面请求外部播放器打开影片
 - **THEN** 按钮切换菜单音频静音状态；外部播放请求自动静音菜单背景视频、菜单音轨和按钮音效
 
+### Requirement: 菜单场景与影片播放角色
+
+系统 SHALL 按 IGS 场景的 uiModel 区分常驻菜单与内容弹出菜单。`uiModel=0` 的 IGS 场景作为菜单画面；`uiModel=1` 的场景只作为标题播放期间的弹出菜单，不得替换 Top Menu 场景。带 `uiModel=1` 场景的 Playlist 是影片播放，交给外部播放器，不进入包内媒体。系统 SHALL 为可本地表示的菜单 Playlist 生成独立媒体计划；无法本地表示的菜单 Playlist 保留已有背景和诊断。
+
+#### Scenario: 弹出 IGS 不接管菜单
+
+- **WHEN** 菜单按钮进入的 Playlist 带有 `uiModel=1` 的 IGS 子路径
+- **THEN** 运行时不把该场景当作常驻菜单画面，保留外部影片映射并请求系统播放器打开对应 M2TS
+
+#### Scenario: 多菜单 Playlist 本地媒体
+
+- **WHEN** Top Menu 之外的菜单 Playlist 具有单 Clip、连续时间线和受支持的主视频/音频声明
+- **THEN** 转换阶段为其生成独立目录下的 H.264/AAC 资产和独立媒体计划，运行时在 `PLAY_PLAYLIST` 时切换视频、音频与循环设置
+
+#### Scenario: 返回 Top Menu
+
+- **WHEN** HDMV 从带本地媒体的菜单 Playlist 返回 Top Menu
+- **THEN** 运行时切回 Top Menu 的媒体和 IGS 场景，不保留原菜单 Playlist 的视频或音频
+
+#### Scenario: 菜单媒体不可本地表示
+
+- **WHEN** 可达菜单 Playlist 不能表示为包内单 Clip 时间线
+- **THEN** 保留 Top Menu 背景，记录诊断，不把该菜单 Playlist 的影片当作包内媒体
+
+#### Scenario: 影片播放期间的弹出控件
+
+- **WHEN** 外部播放器打开带弹出 IGS 的标题 Playlist
+- **THEN** 报告该弹出组合在外部播放器中不可用，不在网页中伪造其显示或返回状态
+
 ### Requirement: 受限本地引用
 
 系统 SHALL 仅允许经验证的 BDMV STREAM 内实际 M2TS 作为外部影片目标，安全处理本地路径并与包内运行资源审计分开。

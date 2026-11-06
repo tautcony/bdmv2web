@@ -3,7 +3,8 @@ import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInp
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 
-export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; inputConfig?: Partial<MenuInputConfig> }
+export type PackageMenuMedia = MenuLoopMediaPackage;
+export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; }
 
@@ -161,11 +162,13 @@ async function boot(): Promise<void> {
     }
     let retrySound: (() => void) | null = null;
     let retryMedia: (() => void) | null = null;
+    const menuMedia = (data.menuMedia ?? []).filter((item) => item.playlist !== data.media?.playlist);
+    const playlistMedia = (playlist: number): PackageMenuMedia | undefined => playlist === data.media?.playlist ? data.media : menuMedia.find((item) => item.playlist === playlist);
     const playbackBridge: PlaybackBridge = data.media && video && audio
       ? new MenuLoopPlaybackBridge(vm, video, audio, data.media, (message) => { showStatus(message); }, {
         offerRetry: (retry) => { retryMedia = retry; start.textContent = "Retry menu media"; start.hidden = false; start.disabled = false; },
         clearRetry: () => { retryMedia = null; if (!retrySound) start.hidden = true; },
-      })
+      }, menuMedia)
       : new PreviewPlaybackBridge(vm, (message) => { showStatus(message); });
     let controller: MenuController | null = null;
     let popupController: MenuController | null = null;
@@ -247,35 +250,20 @@ async function boot(): Promise<void> {
             if (vm.recoverMenuAction()) { controller.syncVmContext(); pendingActions.length = 0; continue; }
           }
           pendingActions.push(...vm.drainActions());
-        } else if (action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist) && (action.payload.playlist !== data.media?.playlist || data.menuScenes?.some((item) => item.playlistId === action.payload.playlist))) {
-          const target = data.menuScenes?.find((item) => item.playlistId === action.payload.playlist);
+        } else if (action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
+          const playlist = action.payload.playlist;
+          const localMedia = playlistMedia(playlist);
+          const target = data.menuScenes?.find((item) => item.playlistId === playlist);
           if (!target) {
-            showStatus(`Menu playlist ${action.payload.playlist} has no packaged IGS composition.`);
+            showStatus(`Menu playlist ${playlist} has no packaged IGS composition.`);
             vm.releaseExternalPlayback(action);
             continue;
           }
-          const targetIsPopup = (data.popupScenes ?? []).some((candidate) => candidate.clipId === target.scene.clipId && candidate.pid === target.scene.pid);
-          if (targetIsPopup && popupCanvas) {
-            closePopup();
-            const popupScene = normalizeScene(target.scene, assetMap);
-            popupViewport = new CanvasViewport(popupScene.width, popupScene.height);
-            popupCanvas.hidden = false;
-            const drawPopup = () => {
-              if (!popupController || !popupViewport || !popupCanvas) return;
-              const rect = popupCanvas.getBoundingClientRect(); const context = popupCanvas.getContext("2d");
-              if (context) drawMenu(context, popupScene, popupController, popupViewport, rect.width, rect.height, window.devicePixelRatio || 1);
-              ensureAnimationLoop();
-            };
-            popupController = new MenuController(popupScene, vm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate() }, data.inputConfig);
-            const rect = popupCanvas.getBoundingClientRect(); popupViewport.resize(popupCanvas, rect.width, rect.height, window.devicePixelRatio || 1);
-            removePopupPointer = installCanvasPointerInput(popupCanvas, popupViewport, popupController, () => { const size = popupCanvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
-            popupController.start();
-            if (inputStarted) queueMicrotask(() => { removeKeyboard?.(); if (popupController) removeKeyboard = installKeyboardInput(window, popupController); });
-            drawPopup();
-          } else {
-            const targetSceneKey = menuSceneKey(target.scene);
-            const sameScene = activeMenuSceneKey === targetSceneKey;
-            if (!sameScene) {
+          // Always-on menu compositions replace the menu scene. Menu backgrounds are
+          // switched through the playback bridge when that playlist has local media.
+          const targetSceneKey = menuSceneKey(target.scene);
+          const sameScene = activeMenuSceneKey === targetSceneKey;
+          if (!sameScene) {
             closePopup();
             removePointer?.();
             scene = normalizeScene(target.scene, assetMap);
@@ -289,15 +277,14 @@ async function boot(): Promise<void> {
               removeKeyboard = installKeyboardInput(window, controller);
             }
             redraw();
-            }
           }
-          if (action.payload.playlist === data.media?.playlist) mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
+          if (localMedia) mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
           else {
             vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id });
-            if (playbackBridge.startMenuBackground) mediaActions.push(playbackBridge.startMenuBackground().then(() => undefined));
+            mediaActions.push(Promise.resolve(playbackBridge.startMenuBackground?.() ?? false).then(() => undefined));
           }
           menuPlaylistRequested = true;
-        } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist && data.media)) {
+        } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistMedia(action.payload.playlist))) {
           closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
           if (result.status === "unavailable") { showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }

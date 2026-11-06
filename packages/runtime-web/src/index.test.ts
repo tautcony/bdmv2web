@@ -881,6 +881,22 @@ describe("offline menu primitives", () => {
     expect(audio.play).toHaveBeenCalledTimes(2);
     expect(video.paused).toBe(false);
   });
+  it("switches video and audio to the local media of another menu playlist", async () => {
+    const vm = new HdmvVm([{ id: 9, instructions: ["228000000000001200000000"] }]);
+    vm.reset(9); vm.runTurn(); const action = vm.drainActions()[0]!;
+    const video = { loop: false, src: "", currentTime: 0, paused: true, play: vi.fn(async function(this: { paused: boolean }) { this.paused = false; }), pause: vi.fn(function(this: { paused: boolean }) { this.paused = true; }) } as unknown as HTMLVideoElement;
+    const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement;
+    const main = { playlist: 3, background: { path: "menu-background.mp4", loop: true, durationSeconds: 60 }, audioTracks: [{ streamNumber: 0, path: "menu-audio.m4a", language: "eng", durationSeconds: 60 }] };
+    const gallery = { playlist: 18, background: { path: "assets/media/playlist-00018/background.mp4", loop: false, durationSeconds: 90 }, audioTracks: [{ streamNumber: 0, path: "assets/media/playlist-00018/audio-1100-jpn.m4a", language: "jpn", durationSeconds: 90 }] };
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, main, () => {}, {}, [gallery]);
+    expect(await bridge.startMenuBackground()).toBe(true);
+    await bridge.dispatch(action);
+    expect(video.src).toBe(gallery.background.path);
+    expect(audio.src).toBe(gallery.audioTracks[0]!.path);
+    expect(video.loop).toBe(false); expect(audio.loop).toBe(false);
+    expect(vm.snapshot()).toMatchObject({ status: "suspended", waiting: { id: action.id } });
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED" && record.event.responseTo === action.id)).toBe(true);
+  });
   it("restores PSR1 and the previously selected track when the new variant cannot play", async () => {
     const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
     vm.reset(9); vm.registers.systemWrite(1, 1); vm.runTurn(); const action = vm.drainActions()[0]!;

@@ -731,11 +731,34 @@ async function convert(): Promise<void> {
     const menuScene = menuSceneResult.scene;
     const adapted = adaptIgsScene(menuScene, extraction.assets);
     const scene = adapted.scene;
-    const menuPlaylistIds = disc.playlists.flatMap((playlist) => menuIgsSceneTargets(disc, playlist).length ? [Number(playlist.id)] : []);
-    const menuScenes = disc.playlists.flatMap((playlist) => {
+    const mediaClosure = buildMediaClosure(disc, extraction.scenes);
+    const externalTargets = createExternalMediaTargets(disc, mediaClosure);
+    const reachablePlaylistIds = new Set(mediaClosure.playlistIds.map((id) => Number(id.slice("playlist:".length))));
+    // An IGS composition identifies the playlist that owns it, not the role it
+    // plays. Always-on compositions (uiModel 0) are menu surfaces. Popup
+    // compositions (uiModel 1) belong to title playback and must not replace the
+    // Top Menu background with an overlay-only scene.
+    const playlistSceneResults = disc.playlists.flatMap((playlist) => {
       const result = findMenuScene(disc, playlist, extraction.scenes);
-      return result.status === "found" ? [{ playlistId: Number(playlist.id), scene: adaptIgsScene(result.scene, extraction.assets).scene }] : [];
+      return result.status === "found"
+        ? [{ playlistId: Number(playlist.id), scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
+        : [];
     });
+    const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0);
+    const menuPlaylistIds = menuSceneResults.map((item) => item.playlistId);
+    const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, scene: item.adapted.scene }));
+    const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
+    const popupContentPlaylists: number[] = [];
+    for (const item of playlistSceneResults) {
+      if (!reachablePlaylistIds.has(item.playlistId) || item.playlistId === Number(menuPlaylist.id)) continue;
+      if (item.scene.uiModel === 1) {
+        popupContentPlaylists.push(item.playlistId);
+        continue;
+      }
+      const playlist = disc.playlists.find((candidate) => Number(candidate.id) === item.playlistId);
+      const media = await menuLoopMediaInput(disc, playlist);
+      if (media) additionalMenuMedia.push(media);
+    }
     const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
     const popupScenes = popupAdaptations.map((result) => result.scene);
     const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
@@ -758,6 +781,8 @@ async function convert(): Promise<void> {
     ];
     if (popupScenes.length) diagnostics.push({ code: "M4_POPUP_RENDER_PARTIAL", message: "Popup IGS compositions are overlaid when POPUP_MENU has an unambiguous match for the active packaged menu clip/PID. Title playback delegated to the external player cannot be overlaid.", severity: "warning" });
     if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "The HDMV Top Menu command selected a playlist, but its background timeline could not be represented as one continuous source-clip span or a repeated tail with supported video and primary audio streams.", severity: "warning" });
+    for (const playlistId of popupContentPlaylists) diagnostics.push({ code: "M5_POPUP_CONTENT_MEDIA_EXTERNAL", message: `Playlist ${String(playlistId).padStart(5, "0")} is title playback with a popup IGS composition; its video is handed to the external player and the popup composition is not available there.`, severity: "warning" });
+    if (additionalMenuMedia.length) diagnostics.push({ code: "M5_PLAYLIST_MEDIA_EXPORTED", message: `Packaged local media for playlist${additionalMenuMedia.length === 1 ? "" : "s"} ${[...new Set(additionalMenuMedia.map((media) => media.playlistId))].join(", ")}.`, severity: "info" });
     if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands.", severity: "warning" });
     let soundBytes: Uint8Array | null = null;
     const soundPath = disc.sounds[0]?.source.path;
@@ -789,13 +814,14 @@ async function convert(): Promise<void> {
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
       scene, popupScenes, menuScenes, menuPlaylistIds, vmPrograms, vmEntries: disc.entries,
-      externalTargets: buildExternalTargets(disc, extraction.scenes),
+      externalTargets,
       bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
       ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }),
       graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, vmLimits: limits,
       ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
+      ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
       onMediaProgress: ({ assetPath, outTimeSeconds, durationSeconds, state }) => {
         const percent = state === "end" ? 100 : durationSeconds > 0 ? Math.min(99, Math.floor(outTimeSeconds / durationSeconds * 100)) : 0;
         if (assetPath !== progressAsset) {
