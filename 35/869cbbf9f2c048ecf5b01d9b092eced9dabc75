@@ -1,0 +1,91 @@
+packages/runtime-web/src/igs-adapter.ts
+  s_5ff6fb2c496ca0::t_ec4e193b74568a 197
+  s_5ff6fb2c496ca0::t_4c58f84d0e260b 29-31,160-166,187,198-209
+  s_5ff6fb2c496ca0::t_30b640307adaee 27-28,48
+  s_5ff6fb2c496ca0::t_0234c31eab51b1 210-211
+packages/igs/test/fixtures.ts
+  s_5ff6fb2c496ca0::t_6db5f720fc5bc0 82
+apps/cli/src/index.ts
+  s_5ff6fb2c496ca0::t_7c74ea2e93cc14 503
+docs/references/stages/M2-igs-scenes.md
+  s_5ff6fb2c496ca0::t_a7a688efb9eba9 45-48
+packages/runtime-web/src/browser.test.ts
+  s_5ff6fb2c496ca0::t_7c74ea2e93cc14 119
+packages/runtime-web/src/index.ts
+  s_5ff6fb2c496ca0::t_b2eb56f7f3f749 246
+  s_5ff6fb2c496ca0::t_3625b132ffc676 30,189-190,208-209,220-221,228-245,247-252,257-258,263-264,281,291,293-299,386
+  s_5ff6fb2c496ca0::t_34e8213ebc4ef3 9-11,25-26,121-122
+  s_5ff6fb2c496ca0::t_83cc9178c4e230 300-352,368,531,541-542,604-606,608,614,617,623-634
+  s_5ff6fb2c496ca0::t_13afeac758a8f7 253-256
+  s_5ff6fb2c496ca0::t_86e84a4864c405 635
+packages/igs/src/igs.ts
+  s_5ff6fb2c496ca0::t_b967a263bb334c 293-310
+  s_5ff6fb2c496ca0::t_7c74ea2e93cc14 255,292,311
+packages/runtime-web/src/tamako-headless-navigation.test.ts
+  s_5ff6fb2c496ca0::t_550ae1ec5882dc 39
+openspec/specs/offline-menu-runtime/spec.md
+  s_5ff6fb2c496ca0::t_fc12057a1a02af 1-106
+packages/runtime-web/src/index.test.ts
+  s_5ff6fb2c496ca0::t_91d59f37cdb82f 761
+  s_5ff6fb2c496ca0::t_ebf1d9f1fe32b4 766,768,772
+  s_5ff6fb2c496ca0::t_3525fd727ffdad 744-760,762,764-765,767,769-771,773
+  s_5ff6fb2c496ca0::t_cae8940248a04f 763
+packages/runtime-web/src/browser.ts
+  s_5ff6fb2c496ca0::t_b2eb56f7f3f749 2,175-188,233,298
+  s_5ff6fb2c496ca0::t_30b640307adaee 381-388,401-408
+  s_5ff6fb2c496ca0::t_13afeac758a8f7 373
+  s_5ff6fb2c496ca0::t_3e7d9646a51fc5 409-410
+openspec/changes/converge-contracts-and-distribution/specs/offline-menu-runtime/spec.md
+  s_5ff6fb2c496ca0::t_d0f884e6296cfb 23-27
+packages/runtime-web/src/igs-adapter.test.ts
+  s_5ff6fb2c496ca0::t_93185dedf58b70 25,51-52,88,92-93,95,100
+  s_5ff6fb2c496ca0::t_ebf1d9f1fe32b4 47
+  s_5ff6fb2c496ca0::t_ec4e193b74568a 98-99
+packages/igs/test/extraction.test.ts
+  s_5ff6fb2c496ca0::t_53091d7f053084 413
+  s_5ff6fb2c496ca0::t_93185dedf58b70 181
+  s_5ff6fb2c496ca0::t_13afeac758a8f7 186,191
+  s_5ff6fb2c496ca0::t_3525fd727ffdad 190
+  s_5ff6fb2c496ca0::t_a7a688efb9eba9 396
+AGENTS.md
+  s_5ff6fb2c496ca0::t_e3b0528b2af9ad 32
+packages/runtime-web/src/baja-studio-headless-navigation.test.ts
+  s_5ff6fb2c496ca0::t_550ae1ec5882dc 51
+docs/references/stages/M4-offline-menu.md
+  s_5ff6fb2c496ca0::t_ad08d489c767a1 14
+  s_5ff6fb2c496ca0::t_3fd6aa577ae2cf 15
+packages/igs/src/types.ts
+  s_5ff6fb2c496ca0::t_b967a263bb334c 76-96,108
+packages/igs/src/png.ts
+  s_5ff6fb2c496ca0::t_325339ad60d6a0 9-10,16,19-26,68-69,74,76-86
+  s_5ff6fb2c496ca0::t_45f08ff671df4d 13-15,71-73
+openspec/changes/archive/2026-11-06-build-offline-menu-runtime/design.md
+  s_5ff6fb2c496ca0::t_d9282346244ff8 27,35,37,39,43,47
+openspec/changes/archive/2026-11-06-build-offline-menu-runtime/proposal.md
+  s_5ff6fb2c496ca0::t_939ff1ca566be0 31,33
+openspec/changes/archive/2026-11-06-build-offline-menu-runtime/specs/offline-menu-runtime/spec.md
+  s_5ff6fb2c496ca0::t_3e52a4b8e1e5e1 35,54
+openspec/changes/archive/2026-11-06-build-offline-menu-runtime/tasks.md
+  s_5ff6fb2c496ca0::t_724bc0941d36e7 20,24-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "35869cbbf9f2c048ecf5b01d9b092eced9dabc75",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_5ff6fb2c496ca0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aea0-8f12-7b33-bbc9-c625f819c641",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
