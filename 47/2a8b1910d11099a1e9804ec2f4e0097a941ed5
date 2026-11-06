@@ -1,0 +1,79 @@
+openspec/changes/export-playable-media/design.md
+  s_5ff6fb2c496ca0::t_86988493f5b973 5,17,31,41,45
+  s_5ff6fb2c496ca0::t_82d173f28d4a20 11
+apps/cli/src/index.test.ts
+  s_5ff6fb2c496ca0::t_5a6b0c12beacbb 333
+  s_5ff6fb2c496ca0::t_1b0c90bc02d952 31-33,38,120,247,267,280,292,305,320,502,507,509,515,523,538
+openspec/changes/build-offline-menu-runtime/proposal.md
+  s_5ff6fb2c496ca0::t_e4bba113aa7392 12,23,31
+openspec/changes/verify-offline-release/tasks.md
+  s_5ff6fb2c496ca0::t_6ecc502ff2cc10 34
+  s_5ff6fb2c496ca0::t_e96be28a8ba400 3,9,11,19,33
+README.md
+  s_5ff6fb2c496ca0::t_5a6b0c12beacbb 45,49
+openspec/specs/cli-delivery-status/spec.md
+  s_5ff6fb2c496ca0::t_3b3505a9fa952f 58,62-63,65,67-68
+openspec/changes/verify-offline-release/proposal.md
+  s_5ff6fb2c496ca0::t_60ba0d0c8c5c6d 11-12
+openspec/changes/build-offline-menu-runtime/design.md
+  s_5ff6fb2c496ca0::t_e4bba113aa7392 5,33,37,43,55
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_5ff6fb2c496ca0::t_eb498092d919d9 7-10,35,51-52,85-87,89,91
+openspec/changes/export-playable-media/proposal.md
+  s_5ff6fb2c496ca0::t_86988493f5b973 9,12-13,27
+openspec/changes/verify-offline-release/design.md
+  s_5ff6fb2c496ca0::t_60ba0d0c8c5c6d 35,48-50
+  s_5ff6fb2c496ca0::t_493412361c4972 19
+  s_5ff6fb2c496ca0::t_6ecc502ff2cc10 41,56
+openspec/changes/converge-contracts-and-distribution/specs/hdmv-navigation/spec.md
+  s_5ff6fb2c496ca0::t_ea99d3c3f61491 30-31
+docs/development.md
+  s_5ff6fb2c496ca0::t_5a6b0c12beacbb 62
+docs/bdmv_hdmv_offline_web_architecture.md
+  s_5ff6fb2c496ca0::t_2be70d16690daf 686
+  s_5ff6fb2c496ca0::t_38ddc2a866f5f4 68,70,72
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  s_5ff6fb2c496ca0::t_9dc81e6576c4fd 55,57,59,61
+  s_5ff6fb2c496ca0::t_1ca2643fba2bc1 9,11
+  s_5ff6fb2c496ca0::t_1ed9bbe513a8f2 25
+apps/cli/src/index.ts
+  s_5ff6fb2c496ca0::t_1b0c90bc02d952 23,80
+openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md
+  s_5ff6fb2c496ca0::t_ea99d3c3f61491 90,92,95-98
+  s_5ff6fb2c496ca0::t_03f1df78a462d3 99
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_5ff6fb2c496ca0::t_1ed9bbe513a8f2 29,95,128,141
+  s_5ff6fb2c496ca0::t_18de78ef948081 19-24,75,96-98
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  s_5ff6fb2c496ca0::t_40d9a5b0e90c40 11-12,14,16-17,37,41,77,79,81,83,89,93
+openspec/changes/build-offline-menu-runtime/tasks.md
+  s_5ff6fb2c496ca0::t_e4bba113aa7392 3,20,26
+  s_5ff6fb2c496ca0::t_5a6b0c12beacbb 31
+openspec/changes/converge-contracts-and-distribution/specs/offline-delivery-assurance/spec.md
+  s_5ff6fb2c496ca0::t_ea99d3c3f61491 65
+  s_5ff6fb2c496ca0::t_1dd2e6ad8682f5 18,20-21,23,25-26
+openspec/changes/export-playable-media/tasks.md
+  s_5ff6fb2c496ca0::t_84eae84db363a2 3,5,19,26,30,39,50,71
+  s_5ff6fb2c496ca0::t_5a6b0c12beacbb 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "472a8b1910d11099a1e9804ec2f4e0097a941ed5",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_5ff6fb2c496ca0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aea0-8f12-7b33-bbc9-c625f819c641",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
