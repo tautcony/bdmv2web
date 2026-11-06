@@ -22,7 +22,7 @@ describe("Tamako menu-to-feature navigation", () => {
     const extraction = await extractIgsFromChunks("00005", chunks(), [{
       pid: 0x1400,
       source: { path: "BDMV/CLIPINF/00005.clpi", origin: "primary", offset: "0" },
-    }]);
+    }], { renderAssets: false });
     const scene = extraction.scenes.find((item) => item.clipId === "00005")!;
     const first = disc.entries.find((entry) => entry.kind === "firstPlay")!;
     const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries });

@@ -8,18 +8,18 @@ import { chunks } from "./fixtures.js";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 const fixtures = [
-  { caseId: "tamako", clipId: "00005", pages: 7, objects: 168, palettes: 7, assets: 168 },
-  { caseId: "tamako", clipId: "00043", pages: 7, objects: 168, palettes: 7, assets: 168 },
-  { caseId: "baja", clipId: "00005", pages: 4, objects: 41, palettes: 4, assets: 41 },
-  { caseId: "kyoani-ova", clipId: "00005", pages: 4, objects: 32, palettes: 4, assets: 32 },
-  { caseId: "battle-royale-uhd", clipId: "00002", pages: 21, objects: 215, palettes: 21, assets: 215 },
-  { caseId: "battle-royale-uhd", clipId: "00005", pages: 4, objects: 55, palettes: 4, assets: 68 },
-  { caseId: "bang-dream-mygo-vol1", clipId: "00010", pages: 7, objects: 182, palettes: 6, assets: 188 },
-  { caseId: "bang-dream-mygo-vol1", clipId: "00011", pages: 2, objects: 51, palettes: 1, assets: 51 },
+  { caseId: "tamako", clipId: "00005", pages: 7, objects: 168, palettes: 7, assets: 168, renderAssets: true },
+  { caseId: "tamako", clipId: "00043", pages: 7, objects: 168, palettes: 7, assets: 168, renderAssets: false },
+  { caseId: "baja", clipId: "00005", pages: 4, objects: 41, palettes: 4, assets: 41, renderAssets: false },
+  { caseId: "kyoani-ova", clipId: "00005", pages: 4, objects: 32, palettes: 4, assets: 32, renderAssets: false },
+  { caseId: "battle-royale-uhd", clipId: "00002", pages: 21, objects: 215, palettes: 21, assets: 215, renderAssets: false },
+  { caseId: "battle-royale-uhd", clipId: "00005", pages: 4, objects: 55, palettes: 4, assets: 68, renderAssets: true },
+  { caseId: "bang-dream-mygo-vol1", clipId: "00010", pages: 7, objects: 182, palettes: 6, assets: 188, renderAssets: false },
+  { caseId: "bang-dream-mygo-vol1", clipId: "00011", pages: 2, objects: 51, palettes: 1, assets: 51, renderAssets: false },
 ] as const;
 
 describe("real-disc IGS packet fixtures", () => {
-  it.each(fixtures)("extracts IGS scenes from $caseId clip $clipId packet data", async ({ caseId, clipId, pages, objects, palettes, assets }) => {
+  it.each(fixtures)("extracts IGS scenes from $caseId clip $clipId packet data", async ({ caseId, clipId, pages, objects, palettes, assets, renderAssets }) => {
     const streamRelative = `STREAM/${clipId}.m2ts_ig-packets.bin`;
     const streamPath = resolve(fixtureRoot, caseId, "BDMV", streamRelative);
     const [bytes, sidecarBytes] = await Promise.all([
@@ -48,7 +48,7 @@ describe("real-disc IGS packet fixtures", () => {
     const result = await extractIgsFromChunks(clipId, chunks(bytes, 4093), [{
       pid: 0x1400,
       source: { path: `BDMV/CLIPINF/${clipId}.clpi`, origin: "primary", offset: "0" },
-    }]);
+    }], { renderAssets });
     const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error").map((diagnostic) => diagnostic.code);
 
     expect(errors).not.toContain("IGS_PID_CONFLICT");
@@ -58,7 +58,8 @@ describe("real-disc IGS packet fixtures", () => {
     expect(result.scenes[0]?.pages).toHaveLength(pages);
     expect(result.scenes[0]?.objects).toHaveLength(objects);
     expect(result.scenes[0]?.palettes).toHaveLength(palettes);
-    expect(result.assets).toHaveLength(assets);
+    if (renderAssets) expect(result.assets).toHaveLength(assets);
+    else expect(result.assets).toEqual([]);
 
     if (caseId === "battle-royale-uhd" && clipId === "00005") {
       const scene = result.scenes[0]!;

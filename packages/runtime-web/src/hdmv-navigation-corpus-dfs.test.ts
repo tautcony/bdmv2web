@@ -59,6 +59,15 @@ type Report = {
 
 function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationGraph>): { report: Report } {
   const programById = new Map(disc.movieObjects.map((program) => [program.id, program]));
+  const decodedInstructions = new WeakMap<object, ReturnType<typeof decodeInstruction>>();
+  const decode = (instruction: Parameters<typeof decodeInstruction>[0]) => {
+    if (typeof instruction !== "object" || instruction === null) return decodeInstruction(instruction);
+    const cached = decodedInstructions.get(instruction);
+    if (cached) return cached;
+    const decoded = decodeInstruction(instruction);
+    decodedInstructions.set(instruction, decoded);
+    return decoded;
+  };
   const entries = disc.entries.map((entry) => {
     const target = entry.target.objectType === "BDJ" ? `BDJ:${String(entry.target.target)}` : `${entry.target.objectType}:${String(entry.target.target)}`;
     return { id: entry.id, kind: entry.kind, target, entry };
@@ -176,7 +185,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
       if (runStateCount >= MAX_STATES_PER_SCENARIO) { stateBudgetExhausted = true; vm.status = "idle"; return; }
       runStateKeys.set(state, { location, pathIndex: commandPath.length });
       runStateCount++; allStates.add(`${scenario.entryId}|${state}`); reachedObjects.add(vm.programId);
-      const decoded = decodeInstruction(instruction);
+      const decoded = decode(instruction);
       if (!["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(decoded.opcode ?? "")) return;
       const base = `${vm.programId}:${vm.pc}`;
       const branchKey = base;
@@ -202,7 +211,8 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
             observedObjectTransitions.add(`${lastInstruction.id}->object:${entry.programId}:${basis}`);
           }
         }
-        const decoded = decodeInstruction(entry.raw);
+        const sourceInstruction = programById.get(entry.programId)?.instructions[entry.pc];
+        const decoded = sourceInstruction ? decode(sourceInstruction) : decode(entry.raw);
         let targetObject: number | undefined;
         let targetPc: number | undefined;
         if (["JUMP_OBJECT", "CALL_OBJECT"].includes(decoded.opcode ?? "")) {
@@ -260,7 +270,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
         const sourceTrace = [...vm.trace].reverse().find((item) => item.action?.id === action.id || item.source?.path === action.source.path && item.source.offset === action.source.offset);
         const sourceId = sourceTrace ? `command:${sourceTrace.programId}:${sourceTrace.pc}` : `command:${vm.programId}:${vm.pc}`;
         const sourceInstruction = sourceTrace ? programById.get(sourceTrace.programId)?.instructions[sourceTrace.pc] : undefined;
-        const decodedSource = sourceInstruction ? decodeInstruction(sourceInstruction) : null;
+        const decodedSource = sourceInstruction ? decode(sourceInstruction) : null;
         if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type)) {
           const playlistNumber = Number(action.payload.playlist);
           const playlist = metadataPlaylists.get(playlistNumber);
@@ -305,7 +315,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
       const previous = traceInstructions[i - 1]!; const current = traceInstructions[i]!;
       const basis = previous.simulated || current.simulated ? "simulated" : "actual";
       observedTransitions.add(`${previous.id}->${current.id}:${basis}`);
-      const previousDecoded = decodeInstruction(programById.get(previous.programId)!.instructions[previous.pc]!);
+      const previousDecoded = decode(programById.get(previous.programId)!.instructions[previous.pc]!);
       if (["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(previousDecoded.opcode ?? "") && current.programId === previous.programId) {
         const outcomes = branchTargetsByLocation.get(`${previous.programId}:${previous.pc}`) ?? new Set<number>();
         outcomes.add(current.pc); branchTargetsByLocation.set(`${previous.programId}:${previous.pc}`, outcomes);
@@ -333,7 +343,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
   for (const commandId of reachedCommands) {
     const [, programText, pcText] = commandId.split(":");
     const instruction = programById.get(Number(programText))?.instructions[Number(pcText)];
-    if (instruction && ["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(decodeInstruction(instruction).opcode ?? "")) conditionalCommandIds.add(commandId);
+    if (instruction && ["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(decode(instruction).opcode ?? "")) conditionalCommandIds.add(commandId);
   }
   let conditionalShadowEdges = 0;
   for (const edge of graph.edges) {
@@ -384,7 +394,9 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
     if (edge.kind !== "jump" || !edge.from.startsWith("command:") || !reachedCommands.has(edge.from)) return false;
     const [, objectText, pcText] = edge.from.split(":");
     const instruction = programById.get(Number(objectText))?.instructions[Number(pcText)];
-    return instruction !== undefined && decodeInstruction(instruction).opcode === "JUMP_OBJECT" && decodeInstruction(instruction).operands[0]?.kind === "immediate";
+    if (!instruction) return false;
+    const decoded = decode(instruction);
+    return decoded.opcode === "JUMP_OBJECT" && decoded.operands[0]?.kind === "immediate";
   }).filter((edge) => {
     const id = `${edge.from}->${edge.to ?? "?"}:${edge.kind}`;
     return !edgeRows.some((row) => row.id === id && (row.status === "covered" || row.status === "simulated"));
