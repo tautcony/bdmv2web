@@ -1,0 +1,140 @@
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/assumptions.md
+  s_bd630b16c420f0::t_f487bc8b873db5 9
+packages/package-builder/src/index.ts
+  s_bd630b16c420f0::t_389262c1a21d72 6,96,148
+docs/support/hdmv-support.md
+  s_bd630b16c420f0::t_de9b1516920863 1-117,119-122
+  s_bd630b16c420f0::t_5d376428189bff 118
+packages/core/src/contracts.test.ts
+  s_bd630b16c420f0::t_2a82fdc6b5971e 48
+  s_bd630b16c420f0::t_e68b19cfbaad92 47
+openspec/changes/archive/2026-11-04-parse-bdmv-structure/design.md
+  s_bd630b16c420f0::t_f487bc8b873db5 41
+docs/references/stages/M2-igs-scenes.md
+  s_bd630b16c420f0::t_cdb5fbc17271c4 3
+docs/architecture/bdmv_hdmv_offline_web_architecture.md
+  s_bd630b16c420f0::t_6e873c4f3f4019 1
+  s_bd630b16c420f0::t_f487bc8b873db5 2-884
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/verification.md
+  s_bd630b16c420f0::t_f487bc8b873db5 3,144,146,219,221-222,226-227,260
+openspec/changes/archive/2026-11-04-execute-hdmv-navigation/tasks.md
+  s_bd630b16c420f0::t_f487bc8b873db5 9
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_bd630b16c420f0::t_8e3d5e4dcaab69 23
+  s_bd630b16c420f0::t_f487bc8b873db5 51
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  s_bd630b16c420f0::t_c825c11d1f41fe 81
+  s_bd630b16c420f0::t_8e3d5e4dcaab69 57
+  s_bd630b16c420f0::t_f487bc8b873db5 43,77
+openspec/changes/archive/2026-11-04-execute-hdmv-navigation/design.md
+  s_bd630b16c420f0::t_f487bc8b873db5 19
+packages/hdmv/src/index.test.ts
+  s_bd630b16c420f0::t_e68b19cfbaad92 2,10-33
+packages/package-builder/src/index.test.ts
+  s_bd630b16c420f0::t_8aafb2235ddbac 173-183
+docs/review-2026-11-04/phases/phase-2-cli-status.md
+  s_bd630b16c420f0::t_f487bc8b873db5 64
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_bd630b16c420f0::t_c825c11d1f41fe 14
+  s_bd630b16c420f0::t_898ec96b64a977 9,13,15-18
+  s_bd630b16c420f0::t_f487bc8b873db5 5,37,46,54
+docs/review-2026-11-04/phases/phase-0-baseline.md
+  s_bd630b16c420f0::t_6febd484858fd9 12
+README.md
+  s_bd630b16c420f0::t_10a1c92025f195 139-142
+  s_bd630b16c420f0::t_5d376428189bff 45,49-50,52-59
+  s_bd630b16c420f0::t_b5cd2d9788246d 134-135,138,143-145
+  s_bd630b16c420f0::t_6e873c4f3f4019 10
+  s_bd630b16c420f0::t_ce3782811a5756 51
+packages/core/src/index.ts
+  s_bd630b16c420f0::t_7ef1c9440b482d 4-5,15-17
+packages/core/src/limits.ts
+  s_bd630b16c420f0::t_7ef1c9440b482d 1-40
+docs/references/stages/M0-core-contracts.md
+  s_bd630b16c420f0::t_cdb5fbc17271c4 3
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  s_bd630b16c420f0::t_f487bc8b873db5 103
+  s_bd630b16c420f0::t_5d376428189bff 99
+docs/references/stages/M6-release-verification.md
+  s_bd630b16c420f0::t_6febd484858fd9 28,37
+docs/references/stages/M1-bdmv-structure.md
+  s_bd630b16c420f0::t_cdb5fbc17271c4 3
+docs/review-2026-11-04/fixes-plan.md
+  s_bd630b16c420f0::t_f487bc8b873db5 12,66
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/proposal.md
+  s_bd630b16c420f0::t_f487bc8b873db5 32,42
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  s_bd630b16c420f0::t_c825c11d1f41fe 11
+  s_bd630b16c420f0::t_f487bc8b873db5 31
+packages/runtime-web/src/browser.ts
+  s_bd630b16c420f0::t_389262c1a21d72 6,15
+apps/cli/src/index.test.ts
+  s_bd630b16c420f0::t_544f3006b453cf 6,163-176,515,525-527,529-530,551
+packages/core/package.json
+  s_bd630b16c420f0::t_7ef1c9440b482d 11
+docs/references/stages/M3-hdmv-navigation.md
+  s_bd630b16c420f0::t_cdb5fbc17271c4 3
+docs/review-2026-11-04/summary.md
+  s_bd630b16c420f0::t_10a1c92025f195 7
+openspec/changes/archive/2026-11-04-establish-core-contracts/tasks.md
+  s_bd630b16c420f0::t_f487bc8b873db5 26
+docs/archive/code-review.md
+  s_bd630b16c420f0::t_f487bc8b873db5 158,216,327,369,377
+  s_bd630b16c420f0::t_7f472827f9049d 473
+docs/review-2026-11-04/fix-checklist.md
+  s_bd630b16c420f0::t_f487bc8b873db5 164,238,259,393,416
+docs/README.md
+  s_bd630b16c420f0::t_b5cd2d9788246d 1-28
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/tasks.md
+  s_bd630b16c420f0::t_f487bc8b873db5 5,9,34,74-76,80
+openspec/changes/REVIEW_BACKLOG.md
+  s_bd630b16c420f0::t_f487bc8b873db5 3
+docs/guides/browser-matrix.md
+  s_bd630b16c420f0::t_6e873c4f3f4019 1,11,14-15,17
+  s_bd630b16c420f0::t_6febd484858fd9 2-10,12-13,16
+docs/guides/development.md
+  s_bd630b16c420f0::t_048aced32b4bdf 73,77,91,93,111
+  s_bd630b16c420f0::t_6febd484858fd9 1-39,42-72,74-76,78-90,92,94-110,112-148
+  s_bd630b16c420f0::t_de9b1516920863 41
+  s_bd630b16c420f0::t_ce3782811a5756 40
+packages/hdmv/src/vm.ts
+  s_bd630b16c420f0::t_a3dba60db92a30 729
+  s_bd630b16c420f0::t_79bf0d943a303e 16,29,43-47,56,72-88,730
+  s_bd630b16c420f0::t_d7a66189e2c303 3
+docs/support/igs-support.md
+  s_bd630b16c420f0::t_6febd484858fd9 1-40
+apps/cli/src/index.ts
+  s_bd630b16c420f0::t_d7a66189e2c303 6-7
+  s_bd630b16c420f0::t_c2b017748fdda8 152-163,601,605,679,694,789
+packages/runtime-web/src/browser.test.ts
+  s_bd630b16c420f0::t_2e0056fc1774bd 355-362
+docs/references/stages/M4-offline-menu.md
+  s_bd630b16c420f0::t_cdb5fbc17271c4 3
+packages/core/src/contract-error.ts
+  s_bd630b16c420f0::t_7ef1c9440b482d 1-6
+docs/review-2026-11-04/decisions.md
+  s_bd630b16c420f0::t_f487bc8b873db5 144,175,246-247
+openspec/changes/archive/2026-11-04-restore-build-gate-and-delivery-status/design.md
+  s_bd630b16c420f0::t_f487bc8b873db5 11,91,96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c25cf185c36f2b0cdcb0f5ef2ee3ee89c3119ccd",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_bd630b16c420f0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1af30-9c42-7740-a25b-7dc82d569f34",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
