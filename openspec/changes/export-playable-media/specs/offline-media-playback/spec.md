@@ -121,6 +121,26 @@
 - **WHEN** 可达菜单 Playlist 不能表示为包内单 Clip 时间线
 - **THEN** 保留 Top Menu 背景，记录诊断，不把该菜单 Playlist 的影片当作包内媒体
 
+#### Scenario: 分片 ICS 菜单
+
+- **WHEN** 菜单 IGS 的 ICS 由 start、continuation 和 end 段组成，单段声明的数据长度不等于该段长度
+- **THEN** 提取器按 PID、PTS 与 composition 拼接完整 ICS 后再解析，不因单段 sequence flags 不完整丢弃场景
+
+#### Scenario: 多段 Top Menu 入口
+
+- **WHEN** Top Menu 先播放片头或警告，经过媒体结束和 `TITLE_SEARCH` 后才到达 `PLAY_PLAYLIST_ITEM` 或 `PLAY_PLAYLIST_MARK` 菜单
+- **THEN** 解析跟随这些可达转换，选择第一个带 `uiModel=0` IGS 场景的 Playlist，不只取第一个 `PLAY_PLAYLIST`
+
+#### Scenario: 片头不触发外部播放
+
+- **WHEN** 运行时进入 Top Menu 并遇到转换阶段标记的片头 Playlist
+- **THEN** 运行时在 VM 中完成该片头而不请求外部播放器，继续 title/搜索转换直到菜单 Playlist
+
+#### Scenario: 多 PlayItem 菜单
+
+- **WHEN** 菜单 Playlist 包含多个 still PlayItem，各 PlayItem 带 IGS 场景，由 `PLAY_PLAYLIST_ITEM` 或 `PLAY_PLAYLIST_MARK` 选择
+- **THEN** 按选中 PlayItem 打包场景，运行时按 `playItem` 切换；still 菜单背景可以无音频并使用循环视频
+
 #### Scenario: 影片播放期间的弹出控件
 
 - **WHEN** 外部播放器打开带弹出 IGS 的标题 Playlist

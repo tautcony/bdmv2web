@@ -327,16 +327,15 @@ describe("M4 convert output", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("applies CLPI fallback per PlayItem when the same clip has another item without MPLS IG", async () => {
+  it("resolves the selected PlayItem scene when another item has no MPLS IG declaration", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert per-item clpi cue "));
-    const disc = await makeMenuDisc(parent, { explicitIgPriority: true, repeatedMenuPlayItemWithoutIg: true }); const output = join(parent, "failed output");
+    const disc = await makeMenuDisc(parent, { explicitIgPriority: true, repeatedMenuPlayItemWithoutIg: true }); const output = join(parent, "output");
     try {
       const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
-      expect(result.status).toBe(1);
-      expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
-      expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
-      expect(await readFile(join(output, "README.md"), "utf8")).toContain("maps to multiple extracted IGS scenes");
-      await expect(access(join(output, "index.html"))).rejects.toThrow();
+      expect(result.status).toBe(0);
+      const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
+      const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { scene: { pages: Array<{ objects: Array<{ assetId: string }> }> } };
+      expect(menuData.scene.pages[0]!.objects[0]!.assetId).toContain("igs-00002-");
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

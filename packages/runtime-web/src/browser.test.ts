@@ -230,6 +230,25 @@ describe("offline browser boot", () => {
     expect(host.elements.get("menu-background")?.muted).toBe(true);
   });
 
+  it("completes a packaged pre-menu intro without handing it to the external player", async () => {
+    const location = { hash: "", href: "file:///menu/index.html" };
+    vi.stubGlobal("location", location);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
+    vi.stubGlobal("__BDMV_BDMV_PATH__", "/fake/BDMV");
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: ["228000000000000d00000000"] }],
+      preMenuPlaylistIds: [13],
+      externalTargets: { playlists: [{ id: "00013", items: [{ index: 0, stcId: 0, clipId: "00004", streamPath: "STREAM/00004.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
+      media: { playlist: 4, background: { path: "assets/media/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [{ streamNumber: 0, psrStreamNumber: 1, path: "assets/media/audio.m4a", durationSeconds: 10 }] },
+    });
+    const host = await launch(data);
+    await host.elements.get("start-menu")!.fire("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(location.href).toBe("file:///menu/index.html");
+    expect(host.elements.get("runtime-status")?.textContent).not.toContain("external player");
+  });
+
   it("restores an automatic external mute on page input but keeps a manual mute", async () => {
     const location = { hash: "", href: "file:///menu/index.html" };
     vi.stubGlobal("location", location);
@@ -314,6 +333,23 @@ describe("offline browser boot", () => {
     await Promise.resolve();
     expect(location.href).toBe("file:///menu/index.html");
     expect(host.elements.get("runtime-status")?.textContent).not.toContain("external player");
+  });
+
+  it("routes PLAY_PLAYLIST_ITEM to its menu scene with video-only background media", async () => {
+    const baseScene = packageData().scene as Record<string, unknown>;
+    const page = (baseScene.pages as Array<Record<string, unknown>>)[0]!;
+    const targetScene = { ...baseScene, width: 80, height: 40, pages: [{ ...page, id: 2 }] };
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: ["428100000000004800000007"] }],
+      menuPlaylistIds: [72], menuScenes: [{ playlistId: 72, playItem: 0, scene: targetScene }],
+      media: { playlist: 72, background: { path: "assets/media/background.mp4", durationSeconds: 1, loop: true }, audioTracks: [] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("menu-background")?.src).toBe("assets/media/background.mp4");
+    expect(host.elements.get("menu-audio")?.src).toBe("");
+    expect(host.elements.get("runtime-status")?.textContent).not.toContain("no packaged IGS composition");
   });
 
   it("hands a popup-only content playlist to the external player instead of replacing the menu", async () => {

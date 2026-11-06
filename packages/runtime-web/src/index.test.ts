@@ -396,6 +396,23 @@ describe("offline menu primitives", () => {
     expect(menu.button?.id).toBe(2);
     expect(vm.snapshot().registers.gpr[0]).toBe(5);
   });
+  it("defers an autoAction selected during a page enter effect until the effect ends", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [] }]);
+    const testScene: MenuScene = { width: 100, height: 60, pages: [
+      { id: 0, defaultButtonId: 1, bogDefaults: [{ bog: 0, defaultButtonId: 1 }], buttons: [
+        { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: {}, commands: [] },
+      ] },
+      { id: 1, defaultButtonId: 0, bogDefaults: [{ bog: 0, defaultButtonId: 0 }], effects: { enter: [{ duration90k: 90_000, objects: [] }], exit: [] }, buttons: [
+        { id: 0, bog: 0, enabled: true, autoAction: true, neighbors: { up: 0, down: 0, left: 0, right: 0 }, states: {}, commands: [{ bytes: m3Fixtures.move5.bytes }] },
+      ] },
+    ] };
+    const menu = new MenuController(testScene, vm);
+    menu.start();
+    menu.applySetButtonPage(0xa0010000);
+    expect(vm.snapshot().registers.gpr[0]).toBe(0);
+    menu.advanceWhileRunning(1000);
+    expect(vm.snapshot().registers.gpr[0]).toBe(5);
+  });
   it("stops a cyclic SET_BUTTON_PAGE autoAction chain at the documented depth limit", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [] }]);
     const makePage = (id: number): MenuScene["pages"][number] => ({

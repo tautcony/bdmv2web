@@ -32,6 +32,26 @@ describe("synthetic IGS extraction", () => {
     expect(result.support.status).toBe("unverified");
   });
 
+  it("reassembles a fragmented ICS start/continuation pair before END", () => {
+    const full = syntheticMenuSegments();
+    const icsLength = ((full[1]! << 8) | full[2]!) >>> 0;
+    const ics = full.subarray(3, 3 + icsLength);
+    const rest = full.subarray(3 + icsLength);
+    const payload = ics.subarray(12);
+    const split = Math.floor(payload.length / 2);
+    const startHeader = ics.subarray(0, 9).slice(); startHeader[8] = 0x80;
+    const endHeader = ics.subarray(0, 9).slice(); endHeader[8] = 0x40;
+    const startData = concat(startHeader, Uint8Array.of(payload.length >>> 16, payload.length >>> 8, payload.length & 255), payload.subarray(0, split));
+    const endData = concat(endHeader, payload.subarray(split));
+    const stream = concat(segmentBytes(0x18, startData), segmentBytes(0x18, endData), rest);
+    const state = createIgsState();
+    for (const segment of parseSegments(stream).segments) consumeSegment(state, segment, "00001", IG_PID, null, 0n, 0n, 0n);
+    expect(state.scenes).toHaveLength(1);
+    expect(state.scenes[0]).toMatchObject({ clipId: "00001", complete: true, compositionNumber: 7 });
+    expect(state.scenes[0]?.pages[0]?.buttons).toHaveLength(1);
+    expect(state.diagnostics).toEqual([]);
+  });
+
   it("extracts navigation scenes independently from PNG asset rendering", async () => {
     const bytes = syntheticClip();
     const extracted = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }], { renderAssets: false });
@@ -451,3 +471,6 @@ function decodePngRgbaPixels(asset: { pngBytes: Uint8Array }): number[][] {
   for (let offset = 1; offset < scanline.length; offset += 4) pixels.push([...scanline.slice(offset, offset + 4)]);
   return pixels;
 }
+
+
+function segmentBytes(type: number, body: Uint8Array): Uint8Array { return concat(Uint8Array.of(type, body.length >> 8, body.length & 255), body); }

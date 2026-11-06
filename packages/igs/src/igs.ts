@@ -67,6 +67,24 @@ export function decodeRle(data: Uint8Array, width: number, height: number, limit
   return output;
 }
 
+function appendIcsFragment(previous: Uint8Array, fragment: Uint8Array): Uint8Array {
+  if (previous.length < 12 || fragment.length < 9) throw new IgsError("IGS_INVALID_SEGMENT", "ICS fragment is shorter than its header");
+  const payload = previous.subarray(12);
+  // Continuation ICS segments repeat the common fields and sequence flags but
+  // omit the 24-bit total data length present in the start segment.
+  const nextPayload = fragment.subarray(9);
+  const combined = new Uint8Array(12 + payload.length + nextPayload.length);
+  combined.set(previous.subarray(0, 9));
+  combined.set(payload, 12);
+  combined.set(nextPayload, 12 + payload.length);
+  return combined;
+}
+
+function u24Bytes(value: number): Uint8Array {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffff) throw new IgsError("IGS_INVALID_SEGMENT", "ICS data length exceeds its 24-bit field");
+  return Uint8Array.of(value >>> 16, value >>> 8, value & 0xff);
+}
+
 export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipId: string, pid: number, pts: PtsValue | null, packetOffset: bigint, pesOffset: bigint, segmentFileOffset: bigint, limits: Limits = DEFAULT_LIMITS): void {
   const src = source(clipId, pid, packetOffset, pesOffset, segment.offset, pts?.normalized.toString() ?? null, pts?.timeDomain ?? 0, segmentFileOffset);
   let current = state.current.get(pid);
@@ -83,18 +101,34 @@ export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipI
   }
   try {
     if (segment.type === 0x18) {
-      if (current) {
-        state.diagnostics.push(error("IGS_UNCOMPLETED_DISPLAY_SET", "New ICS arrived before prior Display Set reached END", current.source, [sceneId(current.source)]));
-        for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, current.timeDomain))) state.pendingObjects.delete(key);
+      const sequenceFlags = segment.data[8] ?? 0;
+      const startsComposition = (sequenceFlags & 0x80) !== 0;
+      const endsComposition = (sequenceFlags & 0x40) !== 0;
+      if (startsComposition) {
+        if (current) {
+          state.diagnostics.push(error("IGS_UNCOMPLETED_DISPLAY_SET", "New ICS arrived before prior Display Set reached END", current.source, [sceneId(current.source)]));
+          for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, current.timeDomain))) state.pendingObjects.delete(key);
+        }
+        const compositionState = (segment.data[7] ?? 0) >> 6;
+        if (compositionState === 2) {
+          for (const key of [...state.objects.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.objects.delete(key);
+          for (const key of [...state.palettes.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.palettes.delete(key);
+          for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.pendingObjects.delete(key);
+        }
+        current = { ics: segment.data.slice(), source: src, pts: pts?.normalized.toString() ?? null, timeDomain: pts?.timeDomain ?? 0, objects: [], palettes: [], invalid: false };
+        state.current.set(pid, current);
+        return;
       }
-      const parsed = parseIcs(segment.data, limits);
-      if (parsed.compositionState === 2) {
-        for (const key of [...state.objects.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.objects.delete(key);
-        for (const key of [...state.palettes.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.palettes.delete(key);
-        for (const key of [...state.pendingObjects.keys()]) if (key.startsWith(cachePrefix(pid, src.timeDomain))) state.pendingObjects.delete(key);
+      if (!current) {
+        state.diagnostics.push(error("IGS_INVALID_SEGMENT", "ICS continuation has no active composition", src));
+        return;
       }
-      current = { ics: segment.data.slice(), source: src, pts: pts?.normalized.toString() ?? null, timeDomain: pts?.timeDomain ?? 0, objects: [], palettes: [], invalid: false };
-      state.current.set(pid, current);
+      current.ics = appendIcsFragment(current.ics, segment.data);
+      if (endsComposition) {
+        // The combined composition is parsed at the following END segment.
+        current.ics[8] = 0xc0;
+        current.ics.set(u24Bytes(current.ics.length - 12), 9);
+      }
       return;
     }
     if (segment.type === 0x14) {

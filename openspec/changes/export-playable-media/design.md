@@ -30,7 +30,11 @@
 
 IGS `uiModel` 决定场景角色。`uiModel=0` 的场景是常驻菜单画面，进入 `menuScenes` 和 `menuPlaylistIds`。`uiModel=1` 的场景是标题播放期间的弹出菜单，只进入 `popupScenes`，不替换 Top Menu 画面。带弹出 IGS 的 Playlist 是影片播放，交给外部播放器，不进入包内媒体；该类 Playlist 不因带有 IGS 子路径而成为菜单 Playlist。
 
-转换阶段对每个可达的菜单 Playlist 检查单 Clip 连续时间线。Top Menu 使用 `assets/media/`；其他可本地表示的菜单 Playlist 使用 `assets/media/playlist-<id>/` 和独立 `media-plans/playlist-<id>.json`。运行时按 `PLAY_PLAYLIST` 选择菜单媒体并切换视频、音频和循环设置；无法本地表示的菜单 Playlist 保留当前菜单背景并记录诊断。
+转换阶段对每个可达的菜单 Playlist 检查单 Clip 连续时间线。Top Menu 使用 `assets/media/`；其他可本地表示的菜单 Playlist 使用 `assets/media/playlist-<id>/` 和独立 `media-plans/playlist-<id>.json`。Top Menu 解析按实际 VM 转换前进：片头或警告的 `PLAY_PLAYLIST` 通过 `MEDIA_ENDED` 继续，`TITLE_SEARCH` 继续跟随，直到第一个带 `uiModel=0` 场景的 `PLAY_PLAYLIST`、`PLAY_PLAYLIST_ITEM` 或 `PLAY_PLAYLIST_MARK`。转换阶段把经过的片头 Playlist 记录到 `preMenuPlaylistIds`；运行时在 VM 中完成这些 Playlist，不交给外部播放器。菜单场景按 Playlist 与选中 PlayItem 记录，运行时按 `playItem` 切换。
+
+IGS 提取支持分片 ICS：start 段带 12 字节头与总长度，continuation/end 段带 9 字节公共头；提取器拼接 payload 后重写 sequence flags 和总长度，再按 END 提交场景。still 菜单 PlayItem 可导出无音频的循环视频；运行时的菜单媒体桥允许空音轨。
+
+运行时按 `PLAY_PLAYLIST`、`PLAY_PLAYLIST_ITEM` 或 `PLAY_PLAYLIST_MARK` 选择菜单媒体并切换视频、音频和循环设置；无法本地表示的菜单 Playlist 保留当前菜单背景并记录诊断。
 
 ### 系统交接与能力边界
 

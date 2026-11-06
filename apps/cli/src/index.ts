@@ -514,7 +514,9 @@ function serializeIgsScene(scene: Awaited<ReturnType<typeof extractIgsScenes>>["
     userTimeoutDuration: scene.userTimeoutDuration, rawIcs: Array.from(scene.rawIcs), complete: scene.complete,
     source: mapIgsSource(scene.source),
     pages: scene.pages.map((page) => ({ ...page, uoMask: page.uoMask.toString(10), buttons: page.buttons.map((button) => ({ ...button, commands: button.commands.map((command) => ({ ...command, bytes: Array.from(command.bytes) })) })) })),
-    objects: scene.objects.map((object) => ({ ...object, indices: Array.from(object.indices), source: mapIgsSource(object.source) })),
+    // Pixel indices belong to the rendered asset stage; embedding them here makes
+    // large menus exceed the JSON string limit. Keep object metadata and length only.
+    objects: scene.objects.map(({ indices, ...object }) => ({ ...object, indicesLength: indices.length, source: mapIgsSource(object.source) })),
     palettes: scene.palettes.map((palette) => ({ id: palette.id, version: palette.version, entries: [...palette.entries].map(([id, entry]) => ({ id, ...entry })), source: mapIgsSource(palette.source) })),
   };
 }
@@ -537,9 +539,10 @@ function referencedAssetIds(value: unknown): Set<string> {
   return ids;
 }
 
-function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number]): Array<{ clipId: string; pid: number }> {
+function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], playItemIndex?: number): Array<{ clipId: string; pid: number }> {
   const targets: Array<{ clipId: string; pid: number }> = [];
   for (const item of playlist.playItems) {
+    if (playItemIndex !== undefined && item.index !== playItemIndex) continue;
     const hasExplicitPrimaryIg = item.streams.some((stream) => stream.codingType === 0x91 && stream.streamType === 1 && stream.pid !== null);
     for (const stream of item.streams) {
       if (stream.codingType !== 0x91 || stream.pid === null) continue;
@@ -563,8 +566,8 @@ function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"]
   return [...new Map(targets.map((target) => [`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`, target])).values()];
 }
 
-function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
-  const targets = menuIgsSceneTargets(disc, playlist);
+function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], playItemIndex?: number) {
+  const targets = menuIgsSceneTargets(disc, playlist, playItemIndex);
   const matches = scenes.filter((scene) => targets.some((target) => target.clipId.toLocaleLowerCase("en-US") === scene.clipId.toLocaleLowerCase("en-US") && target.pid === scene.pid));
   const unique = [...new Map(matches.map((scene) => [`${scene.clipId.toLocaleLowerCase("en-US")}\0${scene.pid}\0${scene.source.segmentFileOffset}`, scene])).values()];
   if (unique.length === 1) return { status: "found" as const, scene: unique[0]! };
@@ -598,34 +601,68 @@ function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; cl
   return parseDiscIR({ schemaVersion: "1.0", entries, programs, menus, playlists, mediaAssets: [], diagnostics });
 }
 
-function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, limits: Limits): ParsedDisc["playlists"][number] | undefined {
+interface MenuPlaylistTarget {
+  playlist: ParsedDisc["playlists"][number];
+  playItem: number;
+  playMark?: number;
+  /** Playlists the Top Menu chain completes before the menu surface. */
+  preMenuPlaylistIds?: number[];
+}
+
+function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, limits: Limits, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]): MenuPlaylistTarget | undefined {
   const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV");
   const topMenu = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV");
   if (typeof firstPlay?.target.target !== "number" || typeof topMenu?.target.target !== "number") return undefined;
+  const menuSceneKeys = new Set(scenes.filter((scene) => scene.uiModel === 0).map((scene) => `${scene.clipId.toLocaleLowerCase("en-US")}\0${scene.pid}`));
+  const menuTarget = (playlist: ParsedDisc["playlists"][number], playItem: number): MenuPlaylistTarget | undefined => {
+    const hasScene = menuIgsSceneTargets(disc, playlist, playItem).some((target) => menuSceneKeys.has(`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`));
+    return hasScene ? { playlist, playItem } : undefined;
+  };
   const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, profile, limits });
   // First Play may initialize PSRs/GPRs before it jumps to a feature title.
   // Run that initialization, then enter the explicit index.bdmv Top Menu entry
-  // via selectTitle(0). The playlist emitted there is the menu playlist; do not
-  // infer menu identity from playlist repetition, duration, or filename.
+  // via selectTitle(0). The menu playlist is the first reachable Playlist with a
+  // menu IGS scene, not necessarily the first PLAY_PLAYLIST (some discs play a
+  // logo or warning first). Media waits are completed to continue that chain.
   vm.reset(firstPlay.target.target);
   const startup = vm.runTurn();
   if (startup.waiting) vm.releaseExternalPlayback(startup.waiting);
   vm.drainActions();
   let navigation = vm.selectTitle(0);
-  for (let step = 0; step < 16; step += 1) {
-    if (navigation.waiting?.type === "PLAY_PLAYLIST") {
-      return disc.playlists.find((item) => Number(item.id) === navigation.waiting!.payload.playlist);
+  let fallbackTarget: MenuPlaylistTarget | undefined;
+  const preMenuPlaylistIds: number[] = [];
+  for (let step = 0; step < 64; step += 1) {
+    const waiting = navigation.waiting;
+    if (waiting && (waiting.type === "PLAY_PLAYLIST" || waiting.type === "PLAY_PLAYLIST_ITEM" || waiting.type === "PLAY_PLAYLIST_MARK")) {
+      const playlistNumber = waiting.payload.playlist;
+      const playlist = typeof playlistNumber === "number" ? disc.playlists.find((item) => Number(item.id) === playlistNumber) : undefined;
+      if (playlist) {
+        const playMark = waiting.type === "PLAY_PLAYLIST_MARK" && typeof waiting.payload.playMark === "number" ? waiting.payload.playMark : undefined;
+        const playItem = waiting.type === "PLAY_PLAYLIST_ITEM" && typeof waiting.payload.playItem === "number"
+          ? waiting.payload.playItem
+          : playMark !== undefined ? playlist.marks.find((mark) => mark.index === playMark)?.playItemRef ?? 0 : 0;
+        const target = menuTarget(playlist, playItem);
+        if (target) return { ...target, ...(playMark === undefined ? {} : { playMark }), preMenuPlaylistIds: [...preMenuPlaylistIds] };
+        fallbackTarget ??= { playlist, playItem, ...(playMark === undefined ? {} : { playMark }), preMenuPlaylistIds };
+        if (!preMenuPlaylistIds.includes(Number(playlist.id))) preMenuPlaylistIds.push(Number(playlist.id));
+        // A logo, warning, or feature played before the menu: complete it and follow
+        // the next title/search or playlist transition.
+        vm.handleEvent({ type: "MEDIA_ENDED", generation: waiting.generation, responseTo: waiting.id });
+        navigation = vm.runTurn();
+        continue;
+      }
     }
     const titleSearch = vm.drainActions().find((action) => action.type === "TITLE_SEARCH");
-    if (!titleSearch || typeof titleSearch.payload.title !== "number") return undefined;
+    if (!titleSearch || typeof titleSearch.payload.title !== "number") return fallbackTarget;
     navigation = vm.selectTitle(titleSearch.payload.title);
   }
-  return undefined;
+  return fallbackTarget;
 }
 
-async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
+async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined, options: { playItemIndex?: number } = {}): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
   if (!playlist || playlist.playItems.length === 0) return null;
-  const playItems = playlist.playItems;
+  const playItems = options.playItemIndex === undefined ? playlist.playItems : playlist.playItems.filter((item) => item.index === options.playItemIndex);
+  if (playItems.length === 0) return null;
   const first = playItems[0]!;
   const last = playItems.at(-1)!;
   if (playItems.some((item) => item.multiAngle)) return null;
@@ -661,12 +698,13 @@ async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playli
   const video = first.streams.find((stream) => stream.pid !== null && (stream.codingType === 0x1b || stream.codingType === 0x24) && stream.streamType === 1);
   const audioCodingTypes = new Set([0x03, 0x04, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0xa1, 0xa2]);
   const audioStreams = first.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType !== null && audioCodingTypes.has(stream.codingType) && stream.language !== null);
-  if (!video?.pid || audioStreams.length === 0 || audioStreams.some((stream) => !/^[A-Za-z]{3}$/.test(stream.language!))) return null;
+  const stillWithoutAudio = playItems.length === 1 && first.stillMode === 2 && audioStreams.length === 0;
+  if (!video?.pid || (!stillWithoutAudio && audioStreams.length === 0) || audioStreams.some((stream) => !/^[A-Za-z]{3}$/.test(stream.language!))) return null;
   const sourceFile = `BDMV/STREAM/${first.clipId}.m2ts`;
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
   return {
     sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: repeatedTail ? last.index : first.index, clipId: first.clipId,
-    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: Math.max(1, repeatCount), loopBackground: loopItem.stillMode !== 2 && (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
+    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: Math.max(1, repeatCount), loopBackground: loopItem.stillMode === 2 || (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
     audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
   };
 }
@@ -691,8 +729,9 @@ async function convert(): Promise<void> {
   const title = titleOption ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const extraction = await extractIgsScenes(disc);
-  const menuPlaylist = findTopMenuPlaylist(disc, profile, limits);
-  const menuMedia = await menuLoopMediaInput(disc, menuPlaylist);
+  const menuTarget = findTopMenuPlaylist(disc, profile, limits, extraction.scenes);
+  const menuPlaylist = menuTarget?.playlist;
+  const menuMedia = await menuLoopMediaInput(disc, menuPlaylist, { ...(menuTarget ? { playItemIndex: menuTarget.playItem } : {}) });
   const transaction = await beginOutputTransaction(roots.output, { overwrite });
   try {
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
@@ -718,7 +757,7 @@ async function convert(): Promise<void> {
       await failMenuConversion("MENU_PLAYLIST_NOT_RESOLVED", "The HDMV Top Menu playlist could not be resolved from the disc navigation entries; no IGS scene was selected.");
       return;
     }
-    const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes);
+    const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes, menuTarget?.playItem);
     if (menuSceneResult.status === "not-found") {
       await failMenuConversion("MENU_SCENE_NOT_FOUND", `No extracted IGS scene matches the stream and clip declarations in Top Menu playlist ${menuPlaylist.id}; no other scene was selected.`);
       return;
@@ -739,14 +778,15 @@ async function convert(): Promise<void> {
     // compositions (uiModel 1) belong to title playback and must not replace the
     // Top Menu background with an overlay-only scene.
     const playlistSceneResults = disc.playlists.flatMap((playlist) => {
-      const result = findMenuScene(disc, playlist, extraction.scenes);
+      const playItem = playlist.id === menuPlaylist.id ? menuTarget?.playItem : undefined;
+      const result = findMenuScene(disc, playlist, extraction.scenes, playItem);
       return result.status === "found"
-        ? [{ playlistId: Number(playlist.id), scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
+        ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
         : [];
     });
     const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0);
-    const menuPlaylistIds = menuSceneResults.map((item) => item.playlistId);
-    const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, scene: item.adapted.scene }));
+    const menuPlaylistIds = [...new Set(menuSceneResults.map((item) => item.playlistId))];
+    const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
     const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
     const popupContentPlaylists: number[] = [];
     for (const item of playlistSceneResults) {
@@ -756,7 +796,7 @@ async function convert(): Promise<void> {
         continue;
       }
       const playlist = disc.playlists.find((candidate) => Number(candidate.id) === item.playlistId);
-      const media = await menuLoopMediaInput(disc, playlist);
+      const media = await menuLoopMediaInput(disc, playlist, { playItemIndex: item.playItem });
       if (media) additionalMenuMedia.push(media);
     }
     const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
@@ -814,6 +854,7 @@ async function convert(): Promise<void> {
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
       scene, popupScenes, menuScenes, menuPlaylistIds, vmPrograms, vmEntries: disc.entries,
+      ...(menuTarget?.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: menuTarget.preMenuPlaylistIds } : {}),
       externalTargets,
       bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),

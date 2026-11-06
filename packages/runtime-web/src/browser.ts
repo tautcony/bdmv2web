@@ -4,7 +4,7 @@ import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlay
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
-export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
+export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; }
 
@@ -250,10 +250,12 @@ async function boot(): Promise<void> {
             if (vm.recoverMenuAction()) { controller.syncVmContext(); pendingActions.length = 0; continue; }
           }
           pendingActions.push(...vm.drainActions());
-        } else if (action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
+        } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
           const playlist = action.payload.playlist;
           const localMedia = playlistMedia(playlist);
-          const target = data.menuScenes?.find((item) => item.playlistId === playlist);
+          const requestedPlayItem = action.type === "PLAY_PLAYLIST_ITEM" && typeof action.payload.playItem === "number" ? action.payload.playItem : 0;
+          const menuScenesForPlaylist = data.menuScenes?.filter((item) => item.playlistId === playlist) ?? [];
+          const target = menuScenesForPlaylist.find((item) => (item.playItem ?? 0) === requestedPlayItem) ?? menuScenesForPlaylist[0];
           if (!target) {
             showStatus(`Menu playlist ${playlist} has no packaged IGS composition.`);
             vm.releaseExternalPlayback(action);
@@ -284,6 +286,13 @@ async function boot(): Promise<void> {
             mediaActions.push(Promise.resolve(playbackBridge.startMenuBackground?.() ?? false).then(() => undefined));
           }
           menuPlaylistRequested = true;
+        } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.preMenuPlaylistIds?.includes(action.payload.playlist)) {
+          // Top Menu can start with a logo or warning playlist. Complete that intro
+          // in the VM without handing it to the external player, then follow the
+          // title/search actions that lead to the actual menu playlist.
+          vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
+          pendingActions.push(...vm.drainActions());
+          continue;
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistMedia(action.payload.playlist))) {
           closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
