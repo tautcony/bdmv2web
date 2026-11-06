@@ -140,6 +140,9 @@ importers:
       '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
+      '@bdmv2web/igs':
+        specifier: workspace:*
+        version: link:../igs
     devDependencies:
       '@types/node':
         specifier: 24.10.0

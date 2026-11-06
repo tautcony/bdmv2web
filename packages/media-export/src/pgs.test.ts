@@ -3,7 +3,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { parsePgsSup, PgsSubtitleTimeline } from "./pgs.js";
 import { extractPgsTrack } from "./index.js";
@@ -21,13 +20,16 @@ describe("PGS SUP parsing", () => {
     expect(timeline.at(49_500)).toBeNull();
   });
 
-  it.skipIf(!ffmpegAvailable())("extracts the reachable title PGS PID from the generated M2TS", async () => {
+  it("extracts the reachable title PGS PID from the generated M2TS without an external demuxer", async () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated");
     const output = await mkdtemp(resolve(tmpdir(), "bdmvkit-pgs-"));
     try {
-      const track = await extractPgsTrack(resolve(root, "BDMV/STREAM/00001.m2ts"), 0x1200, resolve(output, "english.sup"));
+      const track = await extractPgsTrack(resolve(root, "BDMV/STREAM/00001.m2ts"), 0x1200, resolve(output, "english.sup"), { timestampOffset90k: 252_480n });
+      const expected = await readFile(resolve(root, "pgs/english.sup"));
+      const expectedDisplaySets = parsePgsSup(new Uint8Array(expected));
       expect(track).toMatchObject({ pid: 0x1200, byteLength: expect.any(Number) });
       expect(track.displaySets.length).toBeGreaterThanOrEqual(3);
+      expect(track.displaySets.map((set) => set.pts90k)).toEqual(expectedDisplaySets.map((set) => set.pts90k));
       expect(track.displaySets.some((set) => set.placements.length > 0 && [...set.bitmaps.values()][0]?.pixels.some((value) => value > 0))).toBe(true);
     } finally { await rm(output, { recursive: true, force: true }); }
   });
@@ -112,8 +114,6 @@ describe("PGS SUP parsing", () => {
     expect(() => parsePgsSup(join(extraData, composition, segment(2, 0x80, [])))).toThrow(/trailing RLE data/);
   });
 });
-
-function ffmpegAvailable(): boolean { try { execFileSync("ffmpeg", ["-version"], { stdio: "ignore" }); return true; } catch { return false; } }
 
 function segment(pts: number, type: number, payload: number[]): Uint8Array {
   const data = new Uint8Array(13 + payload.length);

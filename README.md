@@ -15,9 +15,10 @@
 
 | 依赖 | 版本或要求 | 用途 |
 | --- | --- | --- |
-| Node.js | `>=24.18.0 <25` | 构建和运行命令 |
+| Node.js | `>=24.18.0` | 构建和运行命令 |
 | pnpm | `>=11.25.0` | 安装依赖和运行脚本 |
-| ffmpeg / ffprobe |  | 导出菜单媒体 |
+| ffmpeg | 可从 `PATH` 调用 | 编码菜单背景视频与音轨 |
+| ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
 
 ## 安装
 
@@ -33,72 +34,19 @@ corepack pnpm build
 
 ## 使用
 
-输入为 BDMV 目录，或包含一个 `BDMV/` 子目录的父目录。目录需包含 `index.bdmv`、`MovieObject.bdmv`、`PLAYLIST/` 和 `CLIPINF/`；提取菜单场景还需要 `STREAM/*.m2ts`。输入内容需已解除 AACS/BD+，输入树不能包含符号链接。
+输入为 BDMV 目录或包含 `BDMV/` 的父目录。
 
-### 解析结构
-
-```sh
-node apps/cli/dist/index.js inspect "/path/to/Disc/BDMV"
-```
-
-使用 `--out` 将结果写入尚不存在的文件：
-
-```sh
-node apps/cli/dist/index.js inspect "/path/to/Disc/BDMV" --out /tmp/disc.json
-```
-
-### 提取结构与菜单图形
-
-```sh
-node apps/cli/dist/index.js extract "/path/to/Disc/BDMV" --out "/path/to/extracted"
-```
-
-输出包括结构数据、场景、原始指令、来源映射、IGS 诊断、外部媒体目标和 PNG 图形。
-
-### 生成菜单包
-
-```sh
-node apps/cli/dist/index.js convert "/path/to/Disc/BDMV" \
-  --title "My Disc" \
-  --out "/path/to/output/my-disc-menu"
-```
-
-省略 `--out` 时，输出到 `<BDMV 父目录>/BDMV-menu`。`--title` 默认为 BDMV 父目录名。
-
-输出目录已存在时，添加 `--overwrite` 替换现有菜单包。若旧包中的 `media-plan.json` 与本次 Playlist、Clip、时间范围、流声明和编码设置一致，会复制并复用 H.264/AAC 媒体，跳过转码；不匹配或媒体文件缺失时会重新生成媒体。媒体复用依据媒体计划元数据，不检测源文件内容是否在相同路径下被替换。
-
-### 打开菜单包
-
-在 Chrome 中打开生成的 `index.html`，即可使用菜单、背景视频和音效。
-
-右下角的静音按钮控制菜单背景视频、音轨和按钮音效。请求外部播放器打开影片时，菜单音频自动静音。
-
-菜单影片动作通过 URL Protocol 打开源 M2TS：macOS 使用 IINA 1.4.4 或更新版本，并通过 `mpv_start` 跳转到所选章节；Windows 使用 PotPlayer 打开对应 M2TS。
-
-菜单包不包含影片 PGS 字幕。需要单独导出时，使用 `export-assets --type pgs`。
-
-移动菜单包后，可修改 `runtime/bdmv-config.js` 中的 `__BDMV_BDMV_PATH__`，设置原始 BDMV 的绝对路径或相对菜单包的路径，然后重新加载菜单。
-
-### 校验菜单包
-
-```sh
-node apps/cli/dist/index.js validate "/path/to/output/my-disc-menu" --offline
-```
-
-校验结果写入 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`。使用 `--format json` 输出机器可读结果（该选项当前只接受 `json`）。校验不会改写 `manifest.json` 中的状态；两者不一致时会以 `MANIFEST_STATUS_UNVERIFIED` 记录差异。
-
-## 命令行
-
-| 命令 | 用途 | 常用选项 |
+| 命令 | 主要选项 | 产物 |
 | --- | --- | --- |
-| `inspect` | 解析并输出光盘结构和诊断 | `--out FILE`、`--allow-partial`、`--strict` |
-| `extract` | 导出结构数据和菜单图形 | `--out DIR`（必填）、`--strict` |
-| `list-assets` | 列举可达标题的 IGS 图片与 PGS SUP 字幕声明 | `--type all\|igs\|pgs` |
-| `export-assets` | 导出 IGS PNG 图片和解析验证后的 SUP 字幕，并写入资源类型、导出路径和大小清单 | `--out DIR`（必填）、`--type all\|igs\|pgs` |
-| `convert` | 生成或覆盖菜单包 | `--out DIR`、`--title`、`--overwrite`、`--mode menu-only`、`--player-profile FILE`、`--strict` |
-| `validate` | 校验菜单包 | `--offline`（必填）、`--format json`、`--strict` |
+| `inspect <BDMV>` | `--out FILE`、`--allow-partial`、`--strict` | 光盘结构 JSON（stdout 或文件） |
+| `extract <BDMV> --out DIR` | `--strict` | `parsed-disc.json`、`raw-commands.json`、`scenes.json`、`source-map.json`、`igs-diagnostics.json`、`external-media-targets.json`、`manifest.json`、`assets/graphics/*.png` |
+| `list-assets <BDMV>` | `--type all\|igs\|pgs` | 可达 IGS/PGS 资源列表（JSON stdout） |
+| `export-assets <BDMV> --out DIR` | `--type all\|igs\|pgs` | 按类型输出 `assets/graphics/*.png` 和/或 `assets/subtitles/*.sup`，附 `assets-manifest.json`；PGS 从 M2TS 直接抽取并由内置解析器验证，不需要 `ffmpeg` |
+| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--mode menu-only`、`--player-profile FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
+| `validate <菜单包目录> --offline` | `--format json`、`--strict` | 更新 `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
+| `compare <输入>` | `--mode`、`--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
-`inspect` 和 `extract` 使用 `stageStatus` 表示解析状态，`convert` 和 `validate` 使用 `status` 表示交付状态。状态为 `partial` 时默认退出码为 0，使用 `--strict` 时退出码为 2；失败时退出码为 1。`inspect --allow-partial` 在解析失败时也返回 0，报告仍保留 `failed` 状态。
+`partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 仅支持 `menu-only`，`--limits` 尚未实现。输出目录已存在时，`convert` 需加 `--overwrite`。
 
 ## 播放器档案
 
@@ -128,24 +76,7 @@ node apps/cli/dist/index.js validate "/path/to/output/my-disc-menu" --offline
 | `videoProfiles` | 否 | 字符串数组 | `[]` |
 | `audioProfiles` | 否 | 字符串数组 | `[]` |
 
-省略档案时使用默认值。语言码统一转小写、国家码统一转大写；长度不符或含非 ASCII 字符会以 `CLI_INVALID_PROFILE` 退出 1。档案会写入菜单包的 `manifest.json` 与 `runtime/disc-data.js`。
-
-## 输出包结构
-
-```text
-my-disc-menu/
-├── index.html                 # 菜单入口
-├── runtime/                   # 浏览器运行时、光盘数据和菜单图形
-├── assets/media/              # 菜单背景视频和音轨
-├── assets/audio/              # 支持的按钮音效
-├── runtime/bdmv-config.js    # 可编辑的原始 BDMV 路径
-├── external-targets.json      # 可外部播放的 playlist/clip
-├── manifest.json              # 文件清单与交付状态
-├── asset-manifest.json        # 音频和媒体资产元数据
-├── media-plan.json            # 媒体导出计划
-├── compatibility.json         # 兼容性声明
-└── report.json                # 交付结论和诊断
-```
+省略档案时使用默认值。长度不符或含非 ASCII 字符会以 `CLI_INVALID_PROFILE` 退出 1。相关信息记录于 `manifest.json` 与 `runtime/disc-data.js`。
 
 ## 开发
 

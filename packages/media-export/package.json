@@ -7,6 +7,6 @@
   "types": "./dist/index.d.ts",
   "exports": { ".": "./dist/index.js", "./external-targets": "./dist/external-targets.js" },
   "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv2web/bdmv-parser": "workspace:*", "@bdmv2web/hdmv": "workspace:*" },
+  "dependencies": { "@bdmv2web/bdmv-parser": "workspace:*", "@bdmv2web/hdmv": "workspace:*", "@bdmv2web/igs": "workspace:*" },
   "devDependencies": { "@types/node": "24.10.0" }
 }

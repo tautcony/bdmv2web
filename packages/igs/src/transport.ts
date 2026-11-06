@@ -280,11 +280,19 @@ export class PesAssembler {
     return out;
   }
 
-  end(): void {
+  end(): PesPacket[] {
+    const completed: PesPacket[] = [];
     for (const [pid, current] of this.pending) {
-      this.diagnostics.push({ severity: "warning", code: "PES_TRUNCATED_EOF", message: `PID ${pid} has ${current.bytes.length} pending PES bytes at EOF`, source: source(this.clipId, pid, current.start), affectedSceneIds: [] });
+      const declared = current.bytes.length >= 6 ? (current.bytes[4]! << 8) | current.bytes[5]! : 0;
+      if (declared === 0) {
+        const packet = this.finish(pid, current);
+        if (packet) completed.push(packet);
+      } else if (current.bytes.length < declared + 6) {
+        this.diagnostics.push({ severity: "warning", code: "PES_TRUNCATED_EOF", message: `PID ${pid} has ${current.bytes.length} pending PES bytes at EOF`, source: source(this.clipId, pid, current.start), affectedSceneIds: [] });
+      }
     }
     this.pending.clear(); this.activeBytes = 0;
+    return completed;
   }
 
   private finish(pid: number, current: { bytes: Uint8Array; start: bigint; pesOffset: bigint; corrupt: boolean }, declaredTotal?: number): PesPacket | null {

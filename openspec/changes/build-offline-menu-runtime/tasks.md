@@ -7,7 +7,7 @@
 ## 1. Portable打包与启动
 
 - [x] 1.1 实现classic IIFE ES2020 bundle及data→graphics→runtime加载顺序；验收：产物无module/import/fetch/XHR/eval/外部依赖。
-- [x] 1.2 实现安全IR数据脚本/标题文本及分批PNG data资源；验收：</script>/HTML注入负例不执行，批次预算有界。
+- [x] 1.2 实现安全IR数据脚本/标题文本及分批PNG Base64资源；验收：</script>/HTML注入负例不执行，图形批次仅接收PNG签名字节且预算有界。
 - [x] 1.3 接入M1 sound到本地WAV及资产manifest；验收：对应索引声音可播放，缺失/未知编码报告受影响按钮。
 - [x] 1.4 实现Bootloader版本/引用/图形预解码、开始手势及稳定入口；验收：坏schema/加载失败可见错误，刷新不依赖localStorage。
 

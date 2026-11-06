@@ -56,13 +56,14 @@ describe("menu package primitives", () => {
         pgsTracks,
       });
       await expect(buildMenuPackage({ outputDirectory: resolve(parent, "bounded"), title: "PGS package", ir, scene, graphics: [], pgsTracks, pgsLimits: { maxRuntimeBytes: 32 } })).rejects.toThrow(/maxPgsRuntimeBytes/);
-      const embedded: { __BDMV_MENU_DATA__?: { pgsTracks?: Array<{ pid: number; streamNumber: number; displaySets: Array<{ palette: unknown[]; bitmaps: Array<{ pixels: string }> }> }> } } = {};
+      const embedded: { __BDMV_MENU_DATA__?: { pgsTracks?: Array<{ pid: number; streamNumber: number; displaySets: Array<{ palette: unknown[]; bitmaps: Array<{ objectId: number; width: number; height: number }>; imageBase64: string }> }> } } = {};
       runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
       const track = embedded.__BDMV_MENU_DATA__!.pgsTracks![0]!;
       expect(track.pid).toBe(0x1200); expect(track.streamNumber).toBe(1); expect(Array.isArray(track.displaySets)).toBe(true);
       const shown = track.displaySets.find((set) => set.bitmaps.length)!;
       expect(shown.palette.length).toBeGreaterThan(0);
-      expect(typeof shown.bitmaps[0]!.pixels).toBe("string");
+      expect(shown.bitmaps[0]).toMatchObject({ objectId: expect.any(Number), width: expect.any(Number), height: expect.any(Number) });
+      expect(Buffer.from(shown.imageBase64, "base64").subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
       const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; byteLength: string }>; assets: { pgsTracks: Array<{ pid: number; displaySetCount: number }> } };
       expect(manifest.files.find((file) => file.path === "assets/subtitles/00001-1200.sup")?.byteLength).toBe(String((await stat(resolve(outputDirectory, "assets/subtitles/00001-1200.sup"))).size));
       expect(manifest.assets.pgsTracks[0]).toMatchObject({ pid: 0x1200, displaySetCount: displaySets.length });
@@ -83,14 +84,16 @@ describe("menu package primitives", () => {
     expect(html).not.toContain("<script>globalThis.pwned");
   });
   it("keeps PNG data batches within per-asset, per-batch and total byte limits", () => {
-    const batches = makePngBatches([{ id: "a", bytes: new Uint8Array(4) }, { id: "b", bytes: new Uint8Array(4) }, { id: "c", bytes: new Uint8Array(1) }], { maxAssetBytes: 4, maxBatchBytes: 5, maxTotalBytes: 9 });
-    expect(batches.map((batch) => batch.assets.map((asset) => asset.id))).toEqual([["a"], ["b", "c"]]);
-    expect(batches.every((batch) => batch.assets.reduce((sum, asset) => sum + asset.byteLength, 0) <= 5)).toBe(true);
-    expect(batches.flatMap((batch) => batch.assets).reduce((sum, asset) => sum + asset.byteLength, 0)).toBe(9);
+    const size = png1x1.byteLength;
+    const batches = makePngBatches([{ id: "a", bytes: png1x1 }, { id: "b", bytes: png1x1 }, { id: "c", bytes: png1x1 }], { maxAssetBytes: size, maxBatchBytes: size * 2 - 1, maxTotalBytes: size * 3 });
+    expect(batches.map((batch) => batch.assets.map((asset) => asset.id))).toEqual([["a"], ["b"], ["c"]]);
+    expect(batches.every((batch) => batch.assets.reduce((sum, asset) => sum + asset.byteLength, 0) <= size * 2 - 1)).toBe(true);
+    expect(batches.flatMap((batch) => batch.assets).reduce((sum, asset) => sum + asset.byteLength, 0)).toBe(size * 3);
     expect(createAssetBatchScript(batches[0]!)).toContain("data:image/png;base64,");
-    expect(() => makePngBatches([{ id: "too-big", bytes: new Uint8Array(5) }], { maxAssetBytes: 4 })).toThrow(/maxAssetBytes/);
-    expect(() => makePngBatches([{ id: "batch-too-big", bytes: new Uint8Array(5) }], { maxAssetBytes: 8, maxBatchBytes: 4 })).toThrow(/maxBatchBytes/);
-    expect(() => makePngBatches([{ id: "a", bytes: new Uint8Array(4) }, { id: "b", bytes: new Uint8Array(4) }], { maxTotalBytes: 7 })).toThrow(/maxTotalBytes/);
+    expect(() => makePngBatches([{ id: "too-big", bytes: png1x1 }], { maxAssetBytes: size - 1 })).toThrow(/maxAssetBytes/);
+    expect(() => makePngBatches([{ id: "batch-too-big", bytes: png1x1 }], { maxAssetBytes: size, maxBatchBytes: size - 1 })).toThrow(/maxBatchBytes/);
+    expect(() => makePngBatches([{ id: "a", bytes: png1x1 }, { id: "b", bytes: png1x1 }], { maxTotalBytes: size * 2 - 1 })).toThrow(/maxTotalBytes/);
+    expect(() => makePngBatches([{ id: "raw-rgba", bytes: new Uint8Array(4) }])).toThrow(/encoded as PNG/);
     expect(() => makePngBatches([], { maxBatchBytes: 0 })).toThrow(/maxBatchBytes/);
   });
   it("marks every generated preview partial with no browser evidence", () => {

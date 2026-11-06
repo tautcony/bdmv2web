@@ -22,22 +22,37 @@
 
 ### Requirement: PGS 显示集解析与有界序列化
 
-系统 SHALL 验证 SUP 片段边界、PCS、PDS 调色板、ODS 分片、RLE 对象和裁切区域，并将显示集与 RGBA 像素以有界 JSON-safe 形式写入包。
+系统 SHALL 验证 SUP 片段边界、PCS、PDS 调色板、ODS 分片、RLE 对象和裁切区域，并将显示集图像编码为 PNG 后以 Base64 写入有界 JSON-safe runtime 数据。显示时间、画面尺寸、调色板、对象标识/尺寸、位置、裁切区域和来源映射 SHALL 保留；展开后的 RGBA 字节 SHALL NOT 写入 runtime JSON。
 
 #### Scenario: 解析生成盘字幕
 
 - **WHEN** 解析 bdmvkit 生成的 PGS 流
-- **THEN** 保留 show/clear 显示集、调色板、对象像素、坐标、裁切区域和 90 kHz PTS
+- **THEN** 保留 show/clear 显示集、PNG 视觉内容、调色板、对象标识/尺寸、坐标、裁切区域和 90 kHz PTS
 
 #### Scenario: PTS 跨越 32-bit 回绕
 
 - **WHEN** 同一 SUP 流的 PTS 从 32-bit 最大值回绕到低值
 - **THEN** 解析结果将后续显示集映射到延续的 90 kHz 时间，而不把它排序到流起点
 
+#### Scenario: SUP 时间戳保持参考导出结果
+
+- **WHEN** 从 M2TS PES 组装 SUP 并保留播放区间时间基准
+- **THEN** 每个 PGS 段的 PTS/DTS 与同源参考 SUP 一致，显示集时间不因重新组装而偏移
+
 #### Scenario: 像素或包数据超过界限
 
 - **WHEN** 解码对象或序列化后的 PGS 数据超过配置界限
 - **THEN** 转换拒绝该输出，不生成越界分配或不完整字幕包
+
+#### Scenario: 序列化 PGS 显示集图像
+
+- **WHEN** 成功序列化已验证的 PGS 显示集
+- **THEN** runtime 数据以 PNG Base64 保存完整合成画面及既有显示集元数据，并在运行时数据预算内拒绝超限包
+
+#### Scenario: 从 Blu-ray M2TS 抽取 PGS
+
+- **WHEN** 用户运行 PGS `export-assets`
+- **THEN** 系统使用内置 M2TS/PES 读取和 SUP 组装，不调用 FFmpeg
 
 #### Scenario: 包资源完整性
 

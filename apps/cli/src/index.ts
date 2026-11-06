@@ -205,7 +205,7 @@ async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<Retur
     if (!track) {
       const sourcePath = await resolveInputFile(disc.root, `STREAM/${reference.clipId}.m2ts`);
       const relativePath = pathForReference?.(reference, index) ?? `assets/subtitles/${reference.clipId}-${reference.pid.toString(16)}.sup`;
-      track = { ...await extractPgsTrack(sourcePath, reference.pid, resolve(outputDirectory, relativePath)), packagePath: relativePath };
+      track = { ...await extractPgsTrack(sourcePath, reference.pid, resolve(outputDirectory, relativePath), { timestampOffset90k: BigInt(reference.sourceIn90k) }), packagePath: relativePath };
       extracted.set(key, track);
     }
     result.push({ ...reference, path: track.packagePath, displaySets: track.displaySets });

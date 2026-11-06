@@ -1,11 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { deflateSync } from "node:zlib";
 import { build } from "esbuild";
 import { parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
 import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput, type PgsDisplaySet } from "@bdmv2web/media-export";
 
+/** A rendered PNG image asset ready for offline embedding. */
 export interface PngPayload { id: string; bytes: Uint8Array }
 export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
 export interface SoundMetadata { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number }
@@ -29,6 +31,7 @@ export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: 
   const batches: PngBatch[] = []; let current: PngBatch = { index: 0, assets: [] }; let batchBytes = 0; let totalBytes = 0;
   for (const asset of assets) {
     const length = asset.bytes.byteLength;
+    if (!isPng(asset.bytes)) throw new TypeError(`Image asset '${asset.id}' must be encoded as PNG before packaging.`);
     if (length > maxAssetBytes) throw new RangeError(`PNG asset '${asset.id}' exceeds maxAssetBytes`);
     if (length > maxBatchBytes) throw new RangeError(`PNG asset '${asset.id}' exceeds maxBatchBytes`);
     totalBytes += length; if (totalBytes > maxTotalBytes) throw new RangeError("PNG assets exceed maxTotalBytes");
@@ -37,6 +40,10 @@ export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: 
   }
   if (current.assets.length) batches.push(current);
   return batches;
+}
+
+function isPng(bytes: Uint8Array): boolean {
+  return bytes.length >= 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 && bytes[4] === 13 && bytes[5] === 10 && bytes[6] === 26 && bytes[7] === 10;
 }
 
 /** The stage fills the viewport and letterboxes the scene inside itself: the
@@ -263,10 +270,58 @@ function serializePgsTrack(track: PgsTrackPackageInput) {
       pts90k: set.pts90k, width: set.width, height: set.height, compositionNumber: set.compositionNumber,
       compositionState: set.compositionState, paletteId: set.paletteId,
       palette: [...set.palette].map(([index, rgba]) => [index, [...rgba]]),
-      bitmaps: [...set.bitmaps.values()].map((bitmap) => ({ objectId: bitmap.objectId, width: bitmap.width, height: bitmap.height, pixels: bitmap.pixels })),
+      bitmaps: [...set.bitmaps.values()].map((bitmap) => ({ objectId: bitmap.objectId, width: bitmap.width, height: bitmap.height })),
+      imageBase64: encodePgsDisplayPng(set),
       placements: set.placements,
     })),
   };
+}
+
+function encodePgsDisplayPng(set: PgsDisplaySet): string {
+  const rgba = new Uint8Array(set.width * set.height * 4);
+  for (const placement of set.placements) {
+    const bitmap = set.bitmaps.get(placement.objectId);
+    if (!bitmap) continue;
+    const crop = placement.crop ?? { x: 0, y: 0, width: bitmap.width, height: bitmap.height };
+    for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) {
+      const sourceX = crop.x + x, sourceY = crop.y + y;
+      const targetX = placement.x + x, targetY = placement.y + y;
+      if (sourceX >= bitmap.width || sourceY >= bitmap.height || targetX < 0 || targetY < 0 || targetX >= set.width || targetY >= set.height) continue;
+      const sourceOffset = (sourceY * bitmap.width + sourceX) * 4;
+      const targetOffset = (targetY * set.width + targetX) * 4;
+      const sourceAlpha = bitmap.pixels[sourceOffset + 3]! / 255;
+      if (sourceAlpha === 0) continue;
+      const targetAlpha = rgba[targetOffset + 3]! / 255;
+      const outputAlpha = sourceAlpha + targetAlpha * (1 - sourceAlpha);
+      for (let channel = 0; channel < 3; channel++) {
+        rgba[targetOffset + channel] = Math.round((bitmap.pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
+      }
+      rgba[targetOffset + 3] = Math.round(outputAlpha * 255);
+    }
+  }
+  const scanlines = Buffer.alloc(set.height * (set.width * 4 + 1));
+  for (let y = 0; y < set.height; y++) scanlines.set(rgba.subarray(y * set.width * 4, (y + 1) * set.width * 4), y * (set.width * 4 + 1) + 1);
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(set.width, 0); header.writeUInt32BE(set.height, 4); header[8] = 8; header[9] = 6;
+  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", header), pngChunk("IDAT", deflateSync(scanlines, { level: 9 })), pngChunk("IEND", Buffer.alloc(0))]);
+  return png.toString("base64");
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typeBytes = Buffer.from(type, "ascii");
+  const contents = Buffer.concat([typeBytes, data]);
+  const chunk = Buffer.alloc(data.length + 12);
+  chunk.writeUInt32BE(data.length, 0); contents.copy(chunk, 4); chunk.writeUInt32BE(pngCrc32(contents), data.length + 8);
+  return chunk;
+}
+
+function pngCrc32(data: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Record<string, unknown> {
