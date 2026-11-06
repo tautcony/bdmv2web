@@ -317,7 +317,10 @@ async function boot(): Promise<void> {
       isCurrent: (_soundId, buttonId) => !!controller && controller.button?.id === buttonId && controller.activatedButtonId === buttonId,
     });
     let menuMuted = false;
-    const setMenuMuted = (muted: boolean) => {
+    let manualMuted = false;
+    let removeAutoMuteRestore: (() => void) | null = null;
+    let armAutoMuteTimer: ReturnType<typeof setTimeout> | undefined;
+    const applyMenuMuted = (muted: boolean) => {
       menuMuted = muted;
       if (video) video.muted = muted;
       if (audio) audio.muted = muted;
@@ -326,7 +329,52 @@ async function boot(): Promise<void> {
       muteToggle.setAttribute("aria-label", muted ? "Unmute menu audio" : "Mute menu audio");
       muteToggle.title = muted ? "Unmute menu audio" : "Mute menu audio";
     };
-    muteToggle.addEventListener("click", () => setMenuMuted(!menuMuted));
+    const disarmAutoMuteRestore = () => {
+      if (armAutoMuteTimer !== undefined) clearTimeout(armAutoMuteTimer);
+      armAutoMuteTimer = undefined;
+      removeAutoMuteRestore?.();
+      removeAutoMuteRestore = null;
+    };
+    // An external handoff mutes the page without expressing user intent. Restore
+    // that automatic mute on the next input; keep an explicit mute in place.
+    const isMuteControl = (event: Event): boolean => {
+      const target = event.target as (Element & { closest?: (selector: string) => Element | null }) | null;
+      if (target === muteToggle) return true;
+      return !!target && typeof target.closest === "function" && target.closest("#audio-mute-toggle") !== null;
+    };
+    const restoreAutoMutedMenu = (event: Event) => {
+      if (manualMuted || !menuMuted || isMuteControl(event)) return;
+      applyMenuMuted(false);
+      disarmAutoMuteRestore();
+    };
+    const armAutoMuteRestore = () => {
+      if (removeAutoMuteRestore) return;
+      window.addEventListener("keydown", restoreAutoMutedMenu, true);
+      window.addEventListener("pointerdown", restoreAutoMutedMenu, true);
+      window.addEventListener("click", restoreAutoMutedMenu, true);
+      removeAutoMuteRestore = () => {
+        window.removeEventListener("keydown", restoreAutoMutedMenu, true);
+        window.removeEventListener("pointerdown", restoreAutoMutedMenu, true);
+        window.removeEventListener("click", restoreAutoMutedMenu, true);
+      };
+    };
+    const setMenuMuted = (muted: boolean, manual = false) => {
+      if (manual) {
+        manualMuted = muted;
+        disarmAutoMuteRestore();
+      }
+      applyMenuMuted(muted);
+      if (muted && !manual && !manualMuted) {
+        // The handoff runs inside the key/click handler that caused it. Arm the
+        // restore listener after that event finishes so it does not undo the mute.
+        if (armAutoMuteTimer !== undefined) clearTimeout(armAutoMuteTimer);
+        armAutoMuteTimer = setTimeout(() => {
+          armAutoMuteTimer = undefined;
+          if (menuMuted && !manualMuted) armAutoMuteRestore();
+        }, 0);
+      } else if (!muted) disarmAutoMuteRestore();
+    };
+    muteToggle.addEventListener("click", () => setMenuMuted(!menuMuted, true));
     const redraw = () => {
       if (!controller) return;
       const rect = canvas.getBoundingClientRect(); const context = canvas.getContext("2d");
@@ -372,7 +420,10 @@ async function boot(): Promise<void> {
       removePointer = installCanvasPointerInput(canvas, viewport, controller!, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
       redraw();
     });
-    window.addEventListener("pagehide", () => { removeKeyboard?.(); removePointer?.(); }, { once: true });
+    window.addEventListener("pagehide", () => {
+      removeKeyboard?.(); removePointer?.();
+      disarmAutoMuteRestore();
+    }, { once: true });
   } catch (error) { visibleError(error); }
 }
 

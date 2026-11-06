@@ -278,7 +278,7 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
     `# ${title.replace(/[\r\n]/g, " ")}`,
     `Menu preview. Delivery status: **${status}**. ${playbackNote}`,
     "Run `bdmv2web validate <package-directory> --offline` to refresh `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json`.",
-    externalPlayback ? "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio; external playback requests mute menu audio automatically. Edit runtime/bdmv-config.js and reload to change the BDMV path. External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows." : "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio.",
+    externalPlayback ? "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio; external playback requests mute menu audio automatically, and the next key or click restores that automatic mute. A manual mute stays until the mute button is used again. Edit runtime/bdmv-config.js and reload to change the BDMV path. External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows." : "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio.",
   ].join("\n\n") + "\n";
 }
 

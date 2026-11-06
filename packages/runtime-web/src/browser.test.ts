@@ -224,9 +224,67 @@ describe("offline browser boot", () => {
     const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
     await host.elements.get("start-menu")!.fire("click");
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00006.m2ts&mpv_start=0");
     expect(host.elements.get("runtime-status")?.textContent).toContain("Requested STREAM/00006.m2ts in the external player.");
+    expect(host.elements.get("menu-background")?.muted).toBe(true);
+  });
+
+  it("restores an automatic external mute on page input but keeps a manual mute", async () => {
+    const location = { hash: "", href: "file:///menu/index.html" };
+    vi.stubGlobal("location", location);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
+    vi.stubGlobal("__BDMV_BDMV_PATH__", "/fake/BDMV");
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: [] }, { id: 8, instructions: ["228000000000002a00000000"] }],
+      vmEntries: [{ id: "title:0", kind: "title", target: { objectType: "HDMV", playbackType: 0, target: 8, source }, source }],
+      externalTargets: { playlists: [{ id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00006.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
+      scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        commands: [{ bytes: "218100000000000100000000" }],
+      }] }] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("menu-background")?.muted).toBe(true);
+
+    await host.fakeWindow.fire("keydown", { code: "ArrowRight", preventDefault() {} });
+    expect(host.elements.get("menu-background")?.muted).toBe(false);
+
+    await host.elements.get("audio-mute-toggle")!.fire("click");
+    expect(host.elements.get("menu-background")?.muted).toBe(true);
+    await host.fakeWindow.fire("keydown", { code: "ArrowLeft", preventDefault() {} });
+    await host.fakeWindow.fire("pointerdown", { target: null });
+    expect(host.elements.get("menu-background")?.muted).toBe(true);
+  });
+
+  it("keeps a manual mute across an external handoff and later page input", async () => {
+    const location = { hash: "", href: "file:///menu/index.html" };
+    vi.stubGlobal("location", location);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
+    vi.stubGlobal("__BDMV_BDMV_PATH__", "/fake/BDMV");
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: [] }, { id: 8, instructions: ["228000000000002a00000000"] }],
+      vmEntries: [{ id: "title:0", kind: "title", target: { objectType: "HDMV", playbackType: 0, target: 8, source }, source }],
+      externalTargets: { playlists: [{ id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00006.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
+      scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        commands: [{ bytes: "218100000000000100000000" }],
+      }] }] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.elements.get("audio-mute-toggle")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("menu-background")?.muted).toBe(true);
+    await host.fakeWindow.fire("keydown", { code: "ArrowRight", preventDefault() {} });
     expect(host.elements.get("menu-background")?.muted).toBe(true);
   });
 
