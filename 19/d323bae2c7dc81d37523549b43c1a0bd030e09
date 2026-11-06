@@ -1,0 +1,38 @@
+packages/runtime-web/src/index.test.ts
+  h_3705811fa4502c 399-415
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 89,92,176
+openspec/changes/export-playable-media/design.md
+  h_3705811fa4502c 33-37
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 330,332,335-338
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  h_3705811fa4502c 124-133,139-143
+  h_3705811fa4502c 134-138
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 338-354
+  h_3705811fa4502c 233-251
+apps/cli/src/index.ts
+  h_3705811fa4502c 517-519,542,545,569-570,604-612,616-620,624-626,632-653,656,659,662,664-665,701-702,707,732-734,760,781-782,784,788-789,799,857
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 7,253,256-258,289-295
+packages/runtime-web/src/index.ts
+  h_3705811fa4502c 579,745,758,778,797-798,800,812-813,815-819,912-915
+packages/igs/src/igs.ts
+  h_3705811fa4502c 70-87,104-124,126-130
+packages/igs/test/extraction.test.ts
+  h_3705811fa4502c 35-54,474-476
+openspec/changes/export-playable-media/tasks.md
+  h_3705811fa4502c 88-89,91-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "19d323bae2c7dc81d37523549b43c1a0bd030e09",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
