@@ -26,7 +26,6 @@ export interface ManifestFile {
 
 export interface DeliveryManifest {
   schemaVersion: "1.0";
-  mode: "menu-only" | "standalone-full";
   files: ManifestFile[];
   diagnostics?: Array<{ severity: string; code?: string; acknowledged?: boolean; blocksComplete?: boolean }>;
   limitations?: string[];

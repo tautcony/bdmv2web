@@ -6,13 +6,10 @@ import type { AuditCheck, DeliveryStatus, OfflinePackageAudit } from "./types.js
 
 const REQUIRED_COVERAGE = ["entries", "instructions", "media", "tests"] as const;
 
-export type ReleaseDecisionFacts = Omit<DeliveryDecisionInput, "mode" | "checks" | "requiredEvidenceComplete" | "coverageComplete">;
+export type ReleaseDecisionFacts = Omit<DeliveryDecisionInput, "checks" | "requiredEvidenceComplete" | "coverageComplete">;
 
 export interface ReleaseSummaryInput {
   audit: OfflinePackageAudit;
-  mode: "menu-only" | "standalone-full";
-  /** Where `mode` came from; `assumed` means neither manifest nor report declared it (D-13). */
-  modeSource?: "manifest" | "report" | "assumed";
   dependencyAudit: DependencyAuditReport;
   coverage: CoverageReport | null;
   browserEvidence: readonly AuditCheck[];
@@ -34,8 +31,6 @@ export interface ReleaseSummary {
   schemaVersion: "1.0";
   release: {
     status: DeliveryStatus;
-    mode: "menu-only" | "standalone-full";
-    modeSource?: "manifest" | "report" | "assumed";
     strict: boolean;
     exitCode: 0 | 1 | 2;
     reasons: string[];
@@ -85,20 +80,19 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   const referenceEvidenceComplete = referenceChecks.length > 0 && referenceChecks.every((check) => check.result === "pass");
   const coverageComplete = coverageChecks.every((check) => check.result === "pass");
   const decisionInput: DeliveryDecisionInput = {
-    mode: input.mode,
     checks,
     ...input.decisionFacts,
     requiredEvidenceComplete: browserEvidenceComplete && referenceEvidenceComplete,
     coverageComplete,
   };
   const decision: DeliveryDecision = decideDelivery(decisionInput, input.strict ?? false);
-  const compatibility = createCompatibilityReport(input.audit, decision, input.mode, coverage);
+  const compatibility = createCompatibilityReport(input.audit, decision, coverage);
   compatibility.checks = checks;
   compatibility.validationEvidence = checks.map(({ checkId, result, path, evidence }) => ({ checkId, result, ...(path === undefined ? {} : { path }), ...(evidence === undefined ? {} : { evidence }) }));
   const gaps = checks.filter((check): check is AuditCheck & { result: "fail" | "not-verified" } => check.result !== "pass").map(toGap);
   return {
     schemaVersion: "1.0",
-    release: { status: decision.status, mode: input.mode, ...(input.modeSource === undefined ? {} : { modeSource: input.modeSource }), strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
+    release: { status: decision.status, strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
     compatibility,
     dependencyAudit,
     coverage,

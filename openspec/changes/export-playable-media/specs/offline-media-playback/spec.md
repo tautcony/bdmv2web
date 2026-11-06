@@ -70,7 +70,7 @@
 
 ### Requirement: 单一离线菜单产物
 
-系统 SHALL 提供统一的 convert 产物，不将 menu-only 与 standalone-full 作为不同交付模式；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。影片 PGS 字幕由外部播放器处理，不嵌入菜单运行时。
+系统 SHALL 提供统一的 convert 产物，不使用产物模式字段；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。影片 PGS 字幕由外部播放器处理，不嵌入菜单运行时。
 
 #### Scenario: 移动菜单包
 

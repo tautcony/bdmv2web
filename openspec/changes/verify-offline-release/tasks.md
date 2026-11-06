@@ -14,9 +14,8 @@
 
 ## 2. 完整度与覆盖
 
-- [x] 2.1 以共享决策表实现failed/partial/complete和strict退出码；验收：menu-only、混合/纯BD-J、unknown opcode、缺媒体、缺证据逐行测试。
-  - 历史完成记录：对应旧的模式与状态规则；新产品边界须按下项重新验收。
-- [ ] 2.1a 按当前一种 convert 菜单产物（CLI/manifest/report 模式字段为 `menu-only`）更新共享决策表和 strict 退出码；覆盖外部系统交接不可用/未验证、混合/纯 BD-J、unknown opcode、缺源 M2TS 和缺证据。
+- [x] 2.1 以共享决策表实现failed/partial/complete和strict退出码；验收：convert、混合/纯BD-J、unknown opcode、缺媒体、缺证据逐行测试。
+- [ ] 2.1a 按当前 convert 产物更新共享决策表和 strict 退出码；覆盖外部系统交接不可用/未验证、混合/纯 BD-J、unknown opcode、缺源 M2TS 和缺证据。
 - [x] 2.2 实现acknowledged错误和降级记录；验收：不删除原严重性/影响，strict策略变化不提升能力状态。
 - [x] 2.3 实现入口/指令/媒体/测试的分母和未知计数；验收：零分母N/A、探索超限unknown，不能报虚假100%。
 

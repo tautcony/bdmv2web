@@ -4,7 +4,6 @@ import { decideDelivery } from "./decisions.js";
 import type { BrowserEvidenceContext } from "./browser-evidence.js";
 
 const context: BrowserEvidenceContext = {
-  mode: "standalone-full",
   profile: { audioLanguage: "eng", outputProfile: "portable", region: "A" },
   generatedFiles: [
     { path: "media/background.mp4", kind: "media", byteLength: "120" },
@@ -25,23 +24,22 @@ function record(overrides: Partial<BrowserEvidenceContext> = {}) {
 }
 
 describe("browser evidence binding", () => {
-  it("binds profile, mode, matrix and browser environment", () => {
+  it("binds profile, matrix and browser environment", () => {
     const evidence = record();
     expect(evaluateBrowserEvidence(evidence, context)).toMatchObject({ checkId: "BROWSER_EVIDENCE_BINDING", result: "pass" });
-    expect(evidence.binding).toMatchObject({ profile: context.profile, mode: "standalone-full", matrix: context.matrix, environment: context.environment, generatedMedia: [context.generatedFiles[1], context.generatedFiles[0]] });
+    expect(evidence.binding).toMatchObject({ profile: context.profile, matrix: context.matrix, environment: context.environment, generatedMedia: [context.generatedFiles[1], context.generatedFiles[0]] });
     expect(evidence.artifacts[0]).toMatchObject({ path: "reports/evidence/J-file-chrome/screenshot.png", kind: "screenshot", byteLength: "3" });
   });
 
   it.each([
     ["profile", { profile: { audioLanguage: "jpn", outputProfile: "portable", region: "A" } }],
-    ["mode", { mode: "menu-only" as const }],
     ["matrix", { matrix: [{ caseId: "J-file-chrome", expected: { launch: true, offline: false } }] }],
     ["browser version", { environment: { ...context.environment, browserVersion: "157.0.0.0" } }],
   ])("marks old evidence stale after a %s change and records it as not verified", (_label, changed) => {
     const stale = evaluateBrowserEvidence(record(), { ...context, ...changed });
     expect(stale).toMatchObject({ checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", evidence: { stale: true } });
     const decision = decideDelivery({
-      mode: "standalone-full", checks: [stale], declaredEntryCount: 1, hdmvEntryCount: 1,
+      checks: [stale], declaredEntryCount: 1, hdmvEntryCount: 1,
       hasMissingRequiredAsset: false, hasUnresolvedReachability: false, hasUnsupportedReachableCapability: false,
       requiredEvidenceComplete: true, coverageComplete: true,
     }, true);

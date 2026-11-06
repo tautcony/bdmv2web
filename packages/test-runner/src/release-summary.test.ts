@@ -32,7 +32,7 @@ const completeDecisionFacts = {
 describe("release summary aggregation", () => {
   it("keeps status complete while listing missing browser, reference, dependency, and coverage evidence as gaps", () => {
     const summary = createReleaseSummary({
-      audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([], "pass"), coverage: null,
+      audit: audit(), dependencyAudit: dependencyAudit([], "pass"), coverage: null,
       browserEvidence: [], referenceEvidence: [], decisionFacts: completeDecisionFacts,
     });
 
@@ -47,9 +47,9 @@ describe("release summary aggregation", () => {
     expect(summary.compatibility.status).toBe("complete");
   });
 
-  it("keeps the recorded menu-only mode separate from delivery status", () => {
+  it("uses current evidence to determine delivery status", () => {
     const summary = createReleaseSummary({
-      audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
+      audit: audit(), dependencyAudit: dependencyAudit(), coverage: completeCoverage,
       browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: completeDecisionFacts,
     });
@@ -57,7 +57,7 @@ describe("release summary aggregation", () => {
     expect(summary.release.status).toBe("complete");
 
     const gapped = createReleaseSummary({
-      audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
+      audit: audit(), dependencyAudit: dependencyAudit(), coverage: completeCoverage,
       browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: { ...completeDecisionFacts, hasUnresolvedReachability: true },
     });
@@ -66,7 +66,7 @@ describe("release summary aggregation", () => {
 
   it("allows complete only from current passing tool facts and ignores persisted component statuses", () => {
     const summary = createReleaseSummary({
-      audit: audit(), mode: "standalone-full", dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
+      audit: audit(), dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
       coverage: completeCoverage, browserEvidence: [pass("BROWSER_EVIDENCE")],
       referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
     });

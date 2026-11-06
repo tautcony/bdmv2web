@@ -16,7 +16,7 @@ export interface PgsTrackPackageInput { playlistId: string; playlistNumber: numb
 /** Delivery status as decided by the caller; the package must not invent one. */
 export type MenuPackageStatus = "failed" | "partial" | "complete";
 export interface MenuPackageDiagnostic { code: string; message: string; severity?: string }
-export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; mode: "menu-only"; status: MenuPackageStatus; diagnostics: MenuPackageDiagnostic[] }
+export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; status: MenuPackageStatus; diagnostics: MenuPackageDiagnostic[] }
 
 /** Serialize data for a classic script. Escaping '<' also prevents HTML script termination. */
 export function serializeSafeScriptData(value: unknown): string {
@@ -111,7 +111,7 @@ export interface MenuPackageInput {
   pngLimits?: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number };
 }
 
-/** Write a self-contained menu-only folder and bundle its browser entry as a classic IIFE. */
+/** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
 export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const ir = parseDiscIR(input.ir);
   const sceneSize = getSceneSize(input.scene);
@@ -127,7 +127,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
   const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, preset: "veryfast", ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}) }) : undefined;
-  const metadata: MenuPackageMetadata = { schemaVersion: "1.0", runtimeVersion: input.runtimeVersion ?? "0.1.0", title: input.title, mode: "menu-only", status: input.status ?? "partial", diagnostics };
+  const metadata: MenuPackageMetadata = { schemaVersion: "1.0", runtimeVersion: input.runtimeVersion ?? "0.1.0", title: input.title, status: input.status ?? "partial", diagnostics };
   const files: Array<{ path: string; kind: string; required?: boolean }> = [
     { path: "index.html", kind: "html", required: true },
     { path: "runtime/disc-data.js", kind: "runtime", required: true },
@@ -163,9 +163,9 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     return { ...file, byteLength: String(fileInfo.size) };
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  const menuMediaLimitation = input.externalTargets ? "External playback uses IINA on macOS and PotPlayer on Windows; IINA chapter positions use `mpv_start`; PotPlayer opens the selected M2TS." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu-only preview; media playback unavailable";
+  const menuMediaLimitation = input.externalTargets ? "External playback uses IINA on macOS and PotPlayer on Windows; IINA chapter positions use `mpv_start`; PotPlayer opens the selected M2TS." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
-  const manifest = { schemaVersion: "1.0", mode: "menu-only", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
+  const manifest = { schemaVersion: "1.0", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS animation and visual effects are not fully verified", "Direct file:// browser acceptance remains unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
@@ -248,7 +248,7 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
       : "No menu background media was exported.";
   return [
     `# ${title.replace(/[\r\n]/g, " ")}`,
-    `Menu-only preview. Delivery status: **${status}**. ${playbackNote}`,
+    `Menu preview. Delivery status: **${status}**. ${playbackNote}`,
     "Run `bdmv2web validate <package-directory> --offline` to refresh `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json`.",
     externalPlayback ? "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio; external playback requests mute menu audio automatically. Edit runtime/bdmv-config.js and reload to change the BDMV path. External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows." : "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio.",
   ].join("\n\n") + "\n";

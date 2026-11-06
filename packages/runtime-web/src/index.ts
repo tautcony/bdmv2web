@@ -44,7 +44,7 @@ export const DEFAULT_MENU_INPUT_CONFIG: Readonly<MenuInputConfig> = Object.freez
 
 export type PlaybackAction = Pick<NavigationAction, "id" | "generation" | "type" | "payload"> & Partial<Pick<NavigationAction, "source" | "waitFor">>;
 
-/** Shared seam for the menu-only preview and a future timeline-backed player. */
+/** Shared seam for menu playback and a future timeline-backed player. */
 export interface PlaybackBridge {
   dispatch(action: PlaybackAction): void | Promise<void>;
   isCurrent(generation: number): boolean;
@@ -647,14 +647,14 @@ function menuPageLayer(output: HTMLCanvasElement, width: number, height: number)
 
 function contains(b: Bounds | undefined, x: number, y: number): boolean { return !!b && x >= b.x && y >= b.y && x < b.x + b.width && y < b.y + b.height; }
 
-/** Menu-only action bridge: correlated failures unblock the VM without a fake ended event. */
+/** Menu action bridge: correlated failures unblock the VM without a fake ended event. */
 export class PreviewPlaybackBridge implements PlaybackBridge {
   private currentGeneration = 0;
   constructor(private readonly vm: HdmvVm, private readonly report: (message: string) => void) {}
   dispatch(action: PlaybackAction): void {
     this.currentGeneration = Math.max(this.currentGeneration, action.generation);
     if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "LINK_PLAY_ITEM", "LINK_PLAY_MARK", "TITLE_SEARCH"].includes(action.type)) {
-      this.report(`Playback unavailable in menu-only preview (${action.type}).`);
+      this.report(`Playback unavailable in menu preview (${action.type}).`);
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
     } else if (action.type === "MENU_CALL") {
       this.report("Popup composition is unavailable because this package does not have an in-browser title overlay context.");
@@ -719,7 +719,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     }
     if (action.type !== "PLAY_PLAYLIST") return;
     if (action.payload?.playlist !== this.media.playlist) {
-      this.report(`Playback unavailable in menu-only preview (PLAY_PLAYLIST ${String(action.payload?.playlist)}).`);
+      this.report(`Playback unavailable in menu preview (PLAY_PLAYLIST ${String(action.payload?.playlist)}).`);
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
       return;
     }

@@ -799,7 +799,7 @@ describe("offline menu primitives", () => {
 
     controller.handle("activate");
 
-    expect(messages).toEqual(["Playback unavailable in menu-only preview (LINK_PLAY_ITEM)."]);
+    expect(messages).toEqual(["Playback unavailable in menu preview (LINK_PLAY_ITEM)."]);
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(false);
   });
   it("runs the shared M4/M5 menu interaction fixture through either playback bridge", () => {

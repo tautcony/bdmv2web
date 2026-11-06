@@ -26,7 +26,7 @@
 
 **Goals:** 每个事实只有一个来源；已声明的契约要么成立、要么显式标记未验证；性能优先级由数据决定。
 
-**Non-Goals:** 实现字节级完整性校验；实现浏览器内 `standalone-full` 正片播放；引入 CI；BD-J 执行；把 `maxCallDepth` 做成真正的多帧栈（结构改动，单列后续 change）；新增本地 HTTP bridge。
+**Non-Goals:** 实现字节级完整性校验；实现浏览器内正片播放；引入 CI；BD-J 执行；把 `maxCallDepth` 做成真正的多帧栈（结构改动，单列后续 change）；新增本地 HTTP bridge。
 
 ## Decisions
 

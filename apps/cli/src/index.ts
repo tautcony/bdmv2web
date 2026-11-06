@@ -22,7 +22,7 @@ const commandOptions: Record<string, { flags: ReadonlySet<string>; values: Reado
   extract: { flags: new Set(["--strict", "--no-strict", "--all"]), values: new Set(["--out", "--format", "--type"]) },
   convert: { flags: new Set(["--strict", "--no-strict", "--overwrite"]), values: new Set(["--out", "--player-profile", "--limits", "--title", "--format"]) },
   validate: { flags: new Set(["--strict", "--no-strict", "--offline"]), values: new Set(["--format"]) },
-  compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--mode", "--format"]) },
+  compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--format"]) },
   "list-assets": { flags: new Set([]), values: new Set(["--type", "--format", "--out", "--m2ts", "--pid", "--decode"]) },
   "export-assets": { flags: new Set([]), values: new Set(["--type", "--out", "--format", "--m2ts", "--pid", "--decode"]) },
 };
@@ -572,7 +572,7 @@ function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; cl
     else if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") entries.push({ id: entry.id, navigation: { type: "BDJ", bdjoId: entry.target.target, status: "unsupported" }, source });
     else diagnostics.push({ severity: "warning", code: "M4_ENTRY_NOT_PROJECTED", message: `Entry ${entry.id} has no supported navigation target and was omitted.`, sourcePath: null, offset: null, entityId: null, action: null, recoverable: true, stage: "structural", affectedEntryIds: [] });
   }
-  if (!exportsMenuMedia) diagnostics.push({ severity: "warning", code: "M4_MEDIA_METADATA_NOT_PROJECTED", message: "Source video stream and playback metadata are not exported in the menu-only preview.", sourcePath: null, offset: null, entityId: null, action: null, recoverable: true, stage: "structural", affectedEntryIds: [] });
+  if (!exportsMenuMedia) diagnostics.push({ severity: "warning", code: "M4_MEDIA_METADATA_NOT_PROJECTED", message: "Source video stream and playback metadata are not included in the menu package.", sourcePath: null, offset: null, entityId: null, action: null, recoverable: true, stage: "structural", affectedEntryIds: [] });
   const programs = disc.playlists.map((playlist, index) => ({ id: `program-${index}`, title: `Playlist ${playlist.id}` }));
   const menus = sceneRecords.map((_, index) => ({ id: `menu-${index}` }));
   const playlists: DiscIR["playlists"] = disc.playlists.map((playlist, index) => {
@@ -686,7 +686,7 @@ async function convert(): Promise<void> {
   const transaction = await beginOutputTransaction(roots.output, { overwrite });
   try {
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
-      await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu-only preview\n\n${message}\n\nStatus: **failed**.\n`);
+      await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu package\n\n${message}\n\nStatus: **failed**.\n`);
       // The failure report keeps the same shape as the success report so a consumer
       // can read one schema regardless of how the conversion ended (P2-P2-5).
       const diagnostics = deliveryDiagnostics([
@@ -694,7 +694,7 @@ async function convert(): Promise<void> {
         ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
         ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
       ]);
-      const report = { schemaVersion: "1.0", status: "failed", code, mode: "menu-only", auditScope: "convert", reasons: [message], notVerified: [], diagnostics, blockingDiagnostics: classifyDiagnostics(diagnostics).blocking };
+      const report = { schemaVersion: "1.0", status: "failed", code, auditScope: "convert", reasons: [message], notVerified: [], diagnostics, blockingDiagnostics: classifyDiagnostics(diagnostics).blocking };
       await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
       await transaction.commit();
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
@@ -759,7 +759,6 @@ async function convert(): Promise<void> {
     // the package can record the same conclusion instead of inventing its own (D-2R).
     const decisionFacts = deliveryDiagnostics(diagnostics);
     const decision = decideDelivery({
-      mode: "menu-only",
       checks: [],
       diagnostics: decisionFacts,
       declaredEntryCount: disc.entries.length,
@@ -782,10 +781,10 @@ async function convert(): Promise<void> {
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
-    const report = { schemaVersion: "1.0", status: decision.status, mode: "menu-only", auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
+    const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
     await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
-    process.stdout.write(`${JSON.stringify({ status: decision.status, mode: "menu-only", output: roots.output })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output })}\n`);
     if (decision.exitCode !== 0) process.exitCode = decision.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }
@@ -801,15 +800,6 @@ async function validate(): Promise<void> {
   const writable = !audit.checks.some((check) => check.checkId === "PACKAGE_ROOT_MISSING" || check.checkId === "PACKAGE_ROOT_INVALID");
   const manifest = await readJsonObject(resolve(audit.packageRoot, audit.manifestPath));
   const previousCompatibility = await readJsonObject(resolve(audit.packageRoot, "compatibility.json"));
-  const reportedReport = await readJsonObject(resolve(audit.packageRoot, "report.json"));
-  // A failed conversion only writes README.md and report.json. That report still
-  // declares the intended shape, so it is the fallback source for `mode`; its
-  // `status` is never trusted (D-13).
-  const manifestMode = packageMode(manifest.mode);
-  const reportMode = packageMode(reportedReport.mode);
-  const modeSource = manifestMode !== undefined ? "manifest" as const : reportMode !== undefined ? "report" as const : "assumed" as const;
-  const mode = manifestMode ?? reportMode ?? "standalone-full";
-  if (modeSource === "assumed") audit.checks.push({ checkId: "PACKAGE_MODE_ASSUMED", result: "not-verified", message: "Neither manifest.json nor report.json declares a supported mode; 'standalone-full' was assumed.", path: "manifest.json" });
   const limitations = Array.isArray(manifest.limitations) ? manifest.limitations.filter((item): item is string => typeof item === "string") : [];
   // A package records the diagnostics that decided its own conversion. Re-reading
   // them keeps convert and validate on the same evidence instead of two verdicts.
@@ -830,8 +820,6 @@ async function validate(): Promise<void> {
   });
   const releaseSummaryInput = {
     audit,
-    mode,
-    modeSource,
     dependencyAudit: createDependencyAuditReport(audit),
     coverage,
     browserEvidence: [],
@@ -906,10 +894,6 @@ async function readJsonObject(path: string): Promise<Record<string, unknown>> {
   } catch { return {}; }
 }
 
-function packageMode(value: unknown): "menu-only" | "standalone-full" | undefined {
-  return value === "menu-only" || value === "standalone-full" ? value : undefined;
-}
-
 async function writeGeneratedReport(root: string, relativePath: string, content: string): Promise<void> {
   const reportPath = resolve(root, relativePath);
   const parentPath = dirname(reportPath);
@@ -939,8 +923,8 @@ async function main(): Promise<void> {
   if (command === "validate") return validate();
   if (command === "list-assets") return listAssets();
   if (command === "export-assets") return exportAssets();
-  const mode = optionValue("--mode") ?? "standalone-full"; const strict = strictDefault(); const format = optionValue("--format");
-  const detail = { code: "E_NOT_IMPLEMENTED", command, mode, strict, message: `The '${command}' command is not implemented yet.` };
+  const strict = strictDefault(); const format = optionValue("--format");
+  const detail = { code: "E_NOT_IMPLEMENTED", command, strict, message: `The '${command}' command is not implemented yet.` };
   process.stderr.write(format === "json" ? `${JSON.stringify(detail)}\n` : `${detail.code}: ${detail.message}\n`);
   process.exitCode = 1;
 }

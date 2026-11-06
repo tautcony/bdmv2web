@@ -6,7 +6,6 @@ import { compareVmTraces, validateCompareInput, type CompareInputSequence, type 
 export interface CompatibilityReport {
   schemaVersion: "1.0";
   status: DeliveryStatus;
-  mode: "menu-only" | "standalone-full";
   profile?: string;
   checks: AuditCheck[];
   coverage: CoverageReport;
@@ -24,11 +23,10 @@ export interface DependencyAuditReport {
   checks: AuditCheck[];
 }
 
-export function createCompatibilityReport(audit: OfflinePackageAudit, decision: DeliveryDecision, mode: "menu-only" | "standalone-full", coverage: CoverageReport): CompatibilityReport {
+export function createCompatibilityReport(audit: OfflinePackageAudit, decision: DeliveryDecision, coverage: CoverageReport): CompatibilityReport {
   return {
     schemaVersion: "1.0",
     status: decision.status,
-    mode,
     checks: audit.checks,
     coverage,
     reasons: decision.reasons,

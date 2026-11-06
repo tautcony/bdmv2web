@@ -12,8 +12,6 @@ export interface DeliveryDiagnostic {
 }
 
 export interface DeliveryDecisionInput {
-  /** Recorded for the caller and the report; `decideDelivery` never branches on it. */
-  mode: "menu-only" | "standalone-full";
   checks: readonly AuditCheck[];
   diagnostics?: readonly DeliveryDiagnostic[];
   limitations?: readonly string[];

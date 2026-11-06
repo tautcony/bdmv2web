@@ -55,7 +55,7 @@
 
 ### Requirement: 单一产物形态
 
-系统 SHALL 通过 `convert` 产出唯一的离线菜单包，且不提供模式参数；manifest/report 中的 `menu-only` 是现有状态字段，不作为用户可选的产物模式。产物形态不得作为"交付不完整"的判定依据。
+系统 SHALL 通过 `convert` 产出唯一的离线菜单包，且不提供模式参数；stdout、manifest、report、兼容性报告和发布汇总不记录产物模式。产物形态不得作为"交付不完整"的判定依据。
 
 #### Scenario: 裸跑转换
 
@@ -153,17 +153,3 @@
 
 - **WHEN** 包内没有静态载荷，依赖审计检查集为空
 - **THEN** 磁盘 `dependency-audit.json` 与 stdout 的 `dependencyAudit.checks` 完全相等（都含 `DEPENDENCY_AUDIT_REQUIRED`）
-
-### Requirement: 交付形态来源可追溯
-
-系统 SHALL 从 `manifest.mode` 读取交付形态，缺失时回退到 `report.json.mode`，两者都缺失时报 `PACKAGE_MODE_ASSUMED`，不得静默按 `standalone-full` 处理。
-
-#### Scenario: 失败包只有 report.json
-
-- **WHEN** 转换失败只留下 `README.md` 与 `report.json`（`mode: "menu-only"`）
-- **THEN** decision、`compatibility.json`、`release-summary.json` 与 stdout 的 `mode` 均为 `menu-only`，并记录 `modeSource: "report"`
-
-#### Scenario: 两处都没有形态
-
-- **WHEN** `manifest.json` 与 `report.json` 都不声明受支持的 `mode`
-- **THEN** 输出 `PACKAGE_MODE_ASSUMED`（`not-verified`），并记录 `modeSource: "assumed"`

@@ -202,7 +202,7 @@ describe("offline browser boot", () => {
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
 
     expect(host.audioUrls).toEqual(["assets/audio/sound-4.wav"]);
-    expect(host.elements.get("runtime-status")?.textContent).toBe("Playback unavailable in menu-only preview (LINK_PLAY_ITEM).");
+    expect(host.elements.get("runtime-status")?.textContent).toBe("Playback unavailable in menu preview (LINK_PLAY_ITEM).");
   });
 
   it("routes a dynamic title to an external playlist and releases the VM wait", async () => {

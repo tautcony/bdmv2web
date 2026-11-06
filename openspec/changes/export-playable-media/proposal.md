@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- `convert INPUT --out DIR` 当前生成一种离线菜单产物；manifest/report 保留现有 `menu-only` 模式值。该值描述浏览器内资源范围，不意味着另有 standalone-full 路径。
+- `convert INPUT --out DIR` 当前生成一种离线菜单产物；manifest、report 和 stdout 不记录产物模式。
 - 根据结构和导航信息确定影片动作对应的源 M2TS，保留 Playlist、PlayItem、来源、时间范围及无法确定的映射。
 - 通过操作系统 URL Protocol 将实际 M2TS 交给 macOS 上的 IINA 或 Windows 上的 PotPlayer。
 - 菜单背景与音效在网页中播放；影片由系统 URL Protocol 交给外部播放器。网页不承诺正片播放控制、章节/字幕渲染、影片时钟或外部播放状态回传。

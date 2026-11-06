@@ -11,7 +11,6 @@ export interface BrowserEnvironment {
 }
 
 export interface BrowserEvidenceContext {
-  mode: "menu-only" | "standalone-full";
   profile: unknown;
   /** Rows from this tool's output manifest only; never pass source-disc files. */
   generatedFiles: readonly (ManifestFile & { byteLength: string })[];
@@ -35,7 +34,6 @@ export interface BrowserEvidence {
   environment: BrowserEnvironment;
   binding: {
     profile: unknown;
-    mode: "menu-only" | "standalone-full";
     generatedMedia: Array<{ path: string; kind: string; byteLength: string }>;
     matrix: BrowserMatrixCase[];
     environment: BrowserEnvironment;
@@ -57,7 +55,6 @@ const EVIDENCE_PATH = /^reports\/evidence\/(?:[A-Za-z0-9._ -]|%[0-9A-Fa-f]{2}|[^
 
 /** Capture the current browser-test inputs directly so stale evidence can be compared. */
 export function createBrowserEvidenceBinding(context: BrowserEvidenceContext): BrowserEvidence["binding"] {
-  if (context.mode !== "menu-only" && context.mode !== "standalone-full") throw new TypeError("A supported package mode is required to bind browser evidence");
   const matrix = normalizedMatrix(context.matrix);
   const environment = normalizedEnvironment(context.environment);
   const mediaRows = context.generatedFiles
@@ -69,7 +66,6 @@ export function createBrowserEvidenceBinding(context: BrowserEvidenceContext): B
   }
   return {
     profile: context.profile,
-    mode: context.mode,
     generatedMedia: mediaRows,
     matrix,
     environment,
@@ -116,7 +112,7 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
     expectedMismatch = canonicalJson(evidence.expected) !== canonicalJson(matrixCase.expected);
     environmentMismatch = canonicalJson(normalizedEnvironment(evidence.environment)) !== canonicalJson(current.environment);
   } catch { expectedMismatch = true; environmentMismatch = true; }
-  const mismatches: string[] = (["profile", "mode", "generatedMedia", "matrix", "environment"] as const).filter((key) => canonicalJson(evidence.binding?.[key]) !== canonicalJson(current[key]));
+  const mismatches: string[] = (["profile", "generatedMedia", "matrix", "environment"] as const).filter((key) => canonicalJson(evidence.binding?.[key]) !== canonicalJson(current[key]));
   if (expectedMismatch) mismatches.push("matrixCase.expected");
   if (environmentMismatch) mismatches.push("recordedEnvironment");
   if (mismatches.length) {
@@ -128,7 +124,7 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
   if (!artifactsValid) return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser evidence for case ${id} has no valid generated artifact record.`, entityId: id };
   if (evidence.result === "fail") return { checkId: "BROWSER_EVIDENCE_BINDING", result: "fail", message: `Browser case ${id} failed.`, entityId: id };
   if (evidence.result !== "pass") return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Browser case ${id} has not been verified.`, entityId: id };
-  return { checkId: "BROWSER_EVIDENCE_BINDING", result: "pass", message: `Browser evidence for case ${id} matches the current profile, mode, generated media, matrix, and environment.`, entityId: id, evidence: { profile: current.profile, mode: current.mode, generatedMedia: current.generatedMedia, matrix: current.matrix, environment: current.environment, artifacts: evidence.artifacts.map(({ path, kind, byteLength }) => ({ path, kind, byteLength })) } };
+  return { checkId: "BROWSER_EVIDENCE_BINDING", result: "pass", message: `Browser evidence for case ${id} matches the current profile, generated media, matrix, and environment.`, entityId: id, evidence: { profile: current.profile, generatedMedia: current.generatedMedia, matrix: current.matrix, environment: current.environment, artifacts: evidence.artifacts.map(({ path, kind, byteLength }) => ({ path, kind, byteLength })) } };
 }
 
 /** Produce one gate check per matrix row so omitted cases cannot disappear from the denominator. */

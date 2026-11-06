@@ -41,7 +41,6 @@ function samePlayerProfile(left: Record<string, unknown>, right: Record<string, 
 function parseManifest(value: unknown, checks: AuditCheck[]): DeliveryManifest | null {
   if (!isRecord(value)) { add(checks, "MANIFEST_SCHEMA", "fail", "manifest.json must contain a JSON object", "manifest.json"); return null; }
   if (value.schemaVersion !== "1.0") { add(checks, "MANIFEST_SCHEMA", "fail", "Unsupported or missing package schemaVersion", "manifest.json", { schemaVersion: value.schemaVersion ?? null }); return null; }
-  if (value.mode !== "menu-only" && value.mode !== "standalone-full") add(checks, "MANIFEST_SCHEMA", "fail", "mode must be menu-only or standalone-full", "manifest.json/mode");
   if (!Array.isArray(value.files)) { add(checks, "MANIFEST_SCHEMA", "fail", "files must be an array", "manifest.json/files"); return null; }
   const files: ManifestFile[] = [];
   value.files.forEach((item, index) => {
@@ -54,7 +53,6 @@ function parseManifest(value: unknown, checks: AuditCheck[]): DeliveryManifest |
   add(checks, "MANIFEST_SCHEMA", checks.some((x) => x.checkId === "MANIFEST_SCHEMA" && x.result === "fail") ? "fail" : "pass", "Validated package manifest shape", "manifest.json");
   return {
     schemaVersion: "1.0",
-    mode: value.mode === "menu-only" ? "menu-only" : "standalone-full",
     files,
     ...(Array.isArray(value.diagnostics) ? { diagnostics: value.diagnostics.filter(isRecord).map((d) => ({ severity: String(d.severity ?? "unknown"), ...(typeof d.code === "string" ? { code: d.code } : {}), ...(typeof d.acknowledged === "boolean" ? { acknowledged: d.acknowledged } : {}), ...(typeof d.blocksComplete === "boolean" ? { blocksComplete: d.blocksComplete } : {}) })) } : {}),
     ...(Array.isArray(value.limitations) ? { limitations: value.limitations.filter((v): v is string => typeof v === "string") } : {}),

@@ -36,7 +36,7 @@
 ## Remaining work
 
 - 2.3 remains open. Persistent media-asset caching stays disabled by user decision; no cache-key implementation is included.
-- Browser full-feature playback tasks 3.1–3.3, PGS rendering task 3.5 and standalone-full tasks 4.1–4.2 were removed from this change's delivery scope. Existing library primitives remain code, not a browser playback product promise.
+- Browser full-feature playback tasks 3.1–3.3, PGS rendering task 3.5 and tasks 4.1–4.2 were removed from this change's delivery scope. Existing library primitives remain code, not a browser playback product promise.
 
 
 ## 当前范围：默认关联播放器接入
@@ -45,7 +45,7 @@
 
 ## 5. 单一产物与目标映射
 
-- [ ] 5.1 对齐统一菜单产物的 CLI/文档契约：convert 直接生成唯一菜单产物，不提供模式参数；manifest/report 保留当前 `menu-only` 状态字段。CLI、README 和开发文档已更新，测试已改为不传模式参数并检查旧参数被拒绝；待运行相关测试确认。
+- [ ] 5.1 对齐统一菜单产物的 CLI/文档契约：convert 直接生成唯一菜单产物，不提供模式参数；manifest、report 与 stdout 不包含产物模式字段。CLI、README 和开发文档已更新，测试覆盖产物模式字段已移除以及旧参数被拒绝；待运行相关测试确认。
 - [x] 5.4 默认在发现的 BDMV 同级生成 HTML 目录，`--out` 可指定不重叠的其他目标；为 BDMV 自身与父目录输入、路径冲突及既有目录添加验证。
 - [ ] 5.5 验收现有可编辑 BDMV 路径配置：CLI 已写入相对/绝对路径，浏览器读取 `runtime/bdmv-config.js`；验证共同移动、单独移动、编辑配置和 reload 后的 M2TS 目标。
 - [ ] 5.2 复用结构和导航信息映射可达影片动作至实际 M2TS；保留 Playlist/PlayItem/Clip、IN/OUT、来源和分支，未知目标不猜测。

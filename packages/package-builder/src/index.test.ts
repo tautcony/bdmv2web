@@ -97,7 +97,7 @@ describe("menu package primitives", () => {
     expect(() => makePngBatches([], { maxBatchBytes: 0 })).toThrow(/maxBatchBytes/);
   });
   it("marks every generated preview partial with no browser evidence", () => {
-    const report = createCompatibility({ schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Preview", mode: "menu-only", status: "partial", diagnostics: [] });
+    const report = createCompatibility({ schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Preview", status: "partial", diagnostics: [] });
     expect(report.status).toBe("partial"); expect(report.browserEvidence).toEqual([]); expect(report.coverage).toMatchObject({ browser: "Chrome only; direct file:// evidence not collected", igs: "unverified" });
     expect(report.notVerified).toEqual(expect.arrayContaining(["direct file:// launch", "offline directory relocation", "browser support matrix", "media timeline and seek accuracy"]));
   });

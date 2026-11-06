@@ -16,7 +16,7 @@ M1 graph paths use virtual `BDMV/...` names, while a validated bdmv-io table can
 
 The synthetic fixture IDs are the Vitest cases in `packages/igs/test/transport.test.ts` and `packages/igs/test/extraction.test.ts`; all expected bytes are authored in `packages/igs/test/fixtures.ts`. They test parser mechanics only.
 
-The bdmvkit-generated fixture at `test-data/fixtures/bdmvkit-generated/` adds an authoring-side interoperability case. Its title Clip `00001` contains popup IGS (`uiModel=1`) and its motion menu uses Clip `00004`. Parser, adapter and package serialization tests assert the popup flag and clip/PID provenance. A browser boot test opens and closes a matching overlay while retaining the same video element. Popup rendering over title video remains unavailable in the current external-player package mode.
+The bdmvkit-generated fixture at `test-data/fixtures/bdmvkit-generated/` adds an authoring-side interoperability case. Its title Clip `00001` contains popup IGS (`uiModel=1`) and its motion menu uses Clip `00004`. Parser, adapter and package serialization tests assert the popup flag and clip/PID provenance. A browser boot test opens and closes a matching overlay while retaining the same video element. Popup rendering over title video is unavailable in the current menu package; title video plays in the external player.
 
 The repository also includes one externally sourced 6,129-byte ICS body in `test-data/fixtures/igs-parser/ics-menu-disc14.bin`, with its source and MIT notice alongside it. Its test wraps the body in a minimal segment and END marker, then parses a 1920×1080 composition with four pages and raw button commands. This is a real IGS-structure positive case, not an end-to-end disc or rendering validation.
 

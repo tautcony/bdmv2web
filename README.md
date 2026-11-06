@@ -44,7 +44,7 @@ corepack pnpm build
 | `export-assets <BDMV> --out DIR` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` | 导出所选 PID 的 igstools 兼容 `.mnu` 和/或已验证的 `.sup`；指定 `--decode png` 时另外输出图像 PNG；附 `assets-manifest.json` |
 | `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
 | `validate <菜单包目录> --offline` | `--format json`、`--strict` | 更新 `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
-| `compare <输入>` | `--mode`、`--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
+| `compare <输入>` | `--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
 `partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 生成统一离线菜单包；输出目录已存在时需加 `--overwrite`。`--limits` 尚未实现。
 

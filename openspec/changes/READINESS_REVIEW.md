@@ -23,7 +23,7 @@
 | 时间有统一单位但缺精确映射和边界 | M0/M5 design：字符串/bigint、45k、epoch、半开区间、跨项章节具体数值和一帧 seek 上限 |
 | 异步 Action/Event 缺关联和恢复规则 | 共享基线 §2、M3/M5：actionId/responseTo/单一 generation 分配、等待条件、旧/重复/错误/unavailable |
 | BACKUP/损坏数据只写“明确规则” | M1 design 主备决策表；M2 分层失效/恢复、RLE/尺寸/分片负例 |
-| menu-only 和 strict 成功含义含糊 | 共享基线 §3–4、M4/M6：模式默认、退出0/1/2、partial/failed/complete、确认错误不能升级能力 |
+| convert 与 strict 成功含义含糊 | 共享基线 §3–4、M4/M6：退出0/1/2、partial/failed/complete、确认错误不能升级能力 |
 | file:// 只给成功路径 | M4/M6：安全数据脚本、图集、启动失败、自动播放恢复、特殊路径/URL、断网矩阵 |
 | 质量验证晚于业务，缺独立分母与证据绑定 | M6：A–J所有者、覆盖统计、独立golden、版本矩阵和失效规则 |
 | “按规范实现”没有落地任务 | M1/M2协议表与 M3逐编码表：固定参考revision/字段位置/fixture/支持状态，未验证不计supported |

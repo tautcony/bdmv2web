@@ -38,7 +38,7 @@ async function packageRoot(payload: Record<string, string | Uint8Array>, extra: 
     await writeFile(target, bytes);
     files.push({ path, kind: path.endsWith(".html") ? "html" : path.endsWith(".js") ? "runtime" : path.endsWith(".png") ? "graphics" : "asset", byteLength: String(bytes.byteLength) });
   }
-  await writeFile(join(root, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", mode: "standalone-full", files, ...extra }));
+  await writeFile(join(root, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", files, ...extra }));
   return root;
 }
 
@@ -144,7 +144,6 @@ describe("offline package audit", () => {
 describe("delivery status and coverage", () => {
   const passing = { checkId: "PACKAGE", result: "pass" as const, message: "ok" };
   const base = {
-    mode: "standalone-full" as const,
     checks: [passing],
     declaredEntryCount: 1,
     hdmvEntryCount: 1,
@@ -156,10 +155,10 @@ describe("delivery status and coverage", () => {
   };
 
   it("keeps strict policy separate from status and never upgrades acknowledged errors", () => {
-    expect(decideDelivery({ ...base, mode: "menu-only" }, false)).toMatchObject({ status: "complete", exitCode: 0 });
-    expect(decideDelivery({ ...base, mode: "menu-only" }, true)).toMatchObject({ status: "complete", exitCode: 0 });
-    expect(decideDelivery({ ...base, mode: "menu-only", hasUnresolvedReachability: true }, false)).toMatchObject({ status: "partial", exitCode: 0 });
-    expect(decideDelivery({ ...base, mode: "menu-only", hasUnresolvedReachability: true }, true)).toMatchObject({ status: "partial", exitCode: 2 });
+    expect(decideDelivery({ ...base }, false)).toMatchObject({ status: "complete", exitCode: 0 });
+    expect(decideDelivery({ ...base }, true)).toMatchObject({ status: "complete", exitCode: 0 });
+    expect(decideDelivery({ ...base, hasUnresolvedReachability: true }, false)).toMatchObject({ status: "partial", exitCode: 0 });
+    expect(decideDelivery({ ...base, hasUnresolvedReachability: true }, true)).toMatchObject({ status: "partial", exitCode: 2 });
     const acknowledged = acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED", blocksComplete: true }, "reviewer", "accepted for preview");
     expect(acknowledged).toMatchObject({ severity: "error", blocksComplete: true, acknowledged: true });
     expect(decideDelivery({ ...base, diagnostics: [acknowledged] }, true)).toMatchObject({ status: "partial", exitCode: 2 });
@@ -168,8 +167,8 @@ describe("delivery status and coverage", () => {
   });
 
   it.each([
-    ["menu-only without gaps", { ...base, mode: "menu-only" as const }, false, "complete", 0],
-    ["strict menu-only without gaps", { ...base, mode: "menu-only" as const }, true, "complete", 0],
+    ["without gaps", { ...base }, false, "complete", 0],
+    ["strict without gaps", { ...base }, true, "complete", 0],
     ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, true, "partial", 2],
     ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, true, "failed", 1],
     ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, true, "partial", 2],
@@ -179,14 +178,13 @@ describe("delivery status and coverage", () => {
     expect(decideDelivery(input, strict)).toMatchObject({ status, strict, exitCode });
   });
 
-  it("uses delivery facts to determine status while recording the output mode", () => {
-    const menuOnly = decideDelivery({ ...base, mode: "menu-only" }, false);
-    expect(menuOnly.status).toBe("complete");
+  it("uses delivery facts to determine status", () => {
+    const decision = decideDelivery({ ...base }, false);
+    expect(decision.status).toBe("complete");
   });
 
   it("allows complete delivery with unverified checks and records those evidence gaps", () => {
     const decision = decideDelivery({
-      mode: "menu-only",
       checks: [passing, { checkId: "BROWSER_EVIDENCE", result: "not-verified", message: "not supplied" }],
       diagnostics: [],
       declaredEntryCount: 1,
@@ -231,7 +229,7 @@ describe("delivery status and coverage", () => {
     const outcome = decideStageOutcome({ stage: "inspect", diagnostics: [], strict: false });
     expect(outcome).toMatchObject({ status: "complete", exitCode: 0, blockingDiagnostics: [] });
     // No checks were supplied: that is missing evidence, not a failure (D-2R).
-    const delivery = decideDelivery({ mode: "menu-only", checks: [], diagnostics: [] }, false);
+    const delivery = decideDelivery({ checks: [], diagnostics: [] }, false);
     expect(delivery.status).toBe("complete");
     expect(delivery.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS", "REQUIRED_EVIDENCE_INCOMPLETE"]));
 
