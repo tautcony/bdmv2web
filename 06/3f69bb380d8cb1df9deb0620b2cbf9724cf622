@@ -1,0 +1,99 @@
+packages/runtime-web/src/baja-studio-headless-navigation.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 70
+packages/runtime-web/src/index.ts
+  s_9c0e0b530e2424::t_edbe914540ad93 755-764
+  s_9c0e0b530e2424::t_d45f572753b2e9 428,439
+  s_9c0e0b530e2424::t_0513292773e88c 720-723,802-805
+  s_9c0e0b530e2424::t_d72ceeab142e41 806-807
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_9c0e0b530e2424::t_d45f572753b2e9 33,39
+packages/runtime-web/src/tamako-headless-navigation.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 74
+packages/hdmv/src/control-flow.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 104
+packages/hdmv/src/index.test.ts
+  s_9c0e0b530e2424::t_6f11982424efa5 321,328
+  s_9c0e0b530e2424::t_54b8299514a2a6 322
+  s_9c0e0b530e2424::t_ac91e1696523fb 739-740
+  s_9c0e0b530e2424::t_61d331ac9f4d34 554
+  s_9c0e0b530e2424::t_f01e2572e5b085 727-729,731-734,736-738,741-742
+  s_9c0e0b530e2424::t_6e5a37a6f06290 730
+  s_9c0e0b530e2424::t_546af3e43019b8 325
+  s_9c0e0b530e2424::t_156456ed3a2224 305-306,310-311
+  s_9c0e0b530e2424::t_d45f572753b2e9 109,195,211,218,236,250,280,283,296,354,366,562,622,639,735,780,787,802,896
+  s_9c0e0b530e2424::t_aaae0bade7059f 324,327,329-330
+  s_9c0e0b530e2424::t_8ddc8eabee989c 304,307-309,312-320,323,326
+packages/test-runner/src/compare.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 12
+docs/support/hdmv-support.md
+  s_9c0e0b530e2424::t_a7d53af7a26ec9 41,75,83-84
+  s_9c0e0b530e2424::t_c1a5583870bac6 85
+packages/igs/test/m1-m2-m3.integration.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 64
+packages/hdmv/src/vm.ts
+  s_9c0e0b530e2424::t_5864cc94d33f05 189,229,674
+  s_9c0e0b530e2424::t_e926c8aee90d73 602
+  s_9c0e0b530e2424::t_29744bbd21b9a0 684
+  s_9c0e0b530e2424::t_d45f572753b2e9 32,188,237,239,454,483,527,538-542,544,608-612,648
+  s_9c0e0b530e2424::t_c58fd721c7dfb7 599-601,603-606,613-620,623
+  s_9c0e0b530e2424::t_78cdaa676981e0 66,219,227-228,266,290-291,324,332
+  s_9c0e0b530e2424::t_f0605c8a8e604e 482,484,679-683,685-686
+  s_9c0e0b530e2424::t_2b7a3b1254bd2a 624,703
+  s_9c0e0b530e2424::t_f26b05c670d174 702
+  s_9c0e0b530e2424::t_66f8c636078a5f 665-666
+  s_9c0e0b530e2424::t_fce9d59c150149 621-622,701,704
+  s_9c0e0b530e2424::t_ec7081ef2a2018 667-668
+  s_9c0e0b530e2424::t_7db8fae4ff29d7 687
+  s_9c0e0b530e2424::t_cda7ec02123bbb 705
+packages/igs/test/tamako-external-navigation.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 36
+packages/runtime-web/src/index.test.ts
+  s_9c0e0b530e2424::t_d45f572753b2e9 689
+  s_9c0e0b530e2424::t_94a0c7d0669a35 866-881
+packages/package-builder/src/index.ts
+  s_9c0e0b530e2424::t_1cd787d32a39bc 88-91,153
+apps/cli/src/index.ts
+  s_9c0e0b530e2424::t_1bf1d17d7ec36a 734-738,751,791
+packages/runtime-web/src/browser.ts
+  s_9c0e0b530e2424::t_1ef7f5f9f36f20 259-260,262-281,294
+  s_9c0e0b530e2424::t_7c02ab1c265bd5 252,261,282-283,285-293,296-300
+  s_9c0e0b530e2424::t_0a5f09fbb88169 148,284,452
+  s_9c0e0b530e2424::t_be781d6cae4ecf 6,147,156,253-258,295,301
+  s_9c0e0b530e2424::t_fd8f37a9b1dd55 453
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_9c0e0b530e2424::t_d45f572753b2e9 73
+openspec/changes/converge-contracts-and-distribution/specs/hdmv-navigation/spec.md
+  s_9c0e0b530e2424::t_4de1d5ca6921a5 66-70
+packages/runtime-web/src/browser.test.ts
+  s_9c0e0b530e2424::t_64be862b734b21 310
+  s_9c0e0b530e2424::t_7c66e39d948a3d 299
+  s_9c0e0b530e2424::t_020a6cd7787b2a 233-242,244-260
+  s_9c0e0b530e2424::t_d87b24ba7add86 243
+  s_9c0e0b530e2424::t_0fc8ded7ff1921 267
+  s_9c0e0b530e2424::t_e3b2199731aa7a 283,285-287,293-298,301-307,309,311-312
+  s_9c0e0b530e2424::t_36430c45744caa 262,269,272-273,275,279,281-282
+  s_9c0e0b530e2424::t_4adf0ee70cb503 261,263-266,268,270-271,276-278,280
+  s_9c0e0b530e2424::t_19985ba59c9dc4 274
+  s_9c0e0b530e2424::t_92367d235c42b6 284,288-292,300,308
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "063f69bb380d8cb1df9deb0620b2cbf9724cf622",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_9c0e0b530e2424": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1b0e7-72b8-7311-bc22-8ecb196085ab",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
