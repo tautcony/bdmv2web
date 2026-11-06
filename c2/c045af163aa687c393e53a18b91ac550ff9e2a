@@ -1,0 +1,44 @@
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 157-159,297-298
+docs/README.md
+  h_3705811fa4502c 28
+docs/review-2026-11-06-hdmv-vm-conformance/index.md
+  h_3705811fa4502c 1-710
+docs/support/hdmv-support.md
+  h_3705811fa4502c 5-6,19,21,23,41-42,44-47,61,86,88,92,94,98,100,120,122
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  h_3705811fa4502c 33,35,37-38
+packages/hdmv/src/control-flow.test.ts
+  h_3705811fa4502c 19,22,27-28,30,41,48,55-56,63-64,68-72,74,77,80,85-86,88,100,107-128
+packages/hdmv/src/decode.ts
+  h_3705811fa4502c 59-62,80-84
+packages/hdmv/src/fixtures/libbluray-1.5.0-source-derived-reference-golden.json
+  h_3705811fa4502c 59,62,70,73,89,93,110
+packages/hdmv/src/index.test.ts
+  h_3705811fa4502c 46,66,78,106,316,322,426,441,456,458-459,463-465,468-470,487,491-493,498,505-508,511-514,517,537,543-545,548-550,554,559-568,588-590,593-595,597-598,600,618-621,627,674-675,679-722,728-729,731,733,742,747-749,781-782,785,789-790,792-795,798,826-830,836-838,846-857,886,984,988
+packages/hdmv/src/reference-golden.test.ts
+  h_3705811fa4502c 81
+packages/hdmv/src/vm.ts
+  h_3705811fa4502c 6,22,40-41,49-51,66,105,115,133,165,167,181-182,190,192,199,222-229,231-238,250,256,263-267,293-296,332-334,381,389-396,424-432,434-444,449,453-459,476-493,495-496,501,505-517,519,521,537-541,564-569,571,575-584,589-591,593-594,597-599,605-610,612,614-615,619-622,625-633,724,731-735,768-776,778-811,828,830,833-884,927-933,945,955-961
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 242
+packages/runtime-web/src/index.test.ts
+  h_3705811fa4502c 159,170,178,180-181,793,850-851,872
+packages/runtime-web/src/index.ts
+  h_3705811fa4502c 661-662,693,711-718,734-737
+packages/runtime-web/src/linear-playback.test.ts
+  h_3705811fa4502c 126
+packages/runtime-web/src/linear-playback.ts
+  h_3705811fa4502c 176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2c045af163aa687c393e53a18b91ac550ff9e2a",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
