@@ -1,0 +1,77 @@
+packages/igs/src/extract.ts
+  s_73be6d6c0c1a12::t_5f83a660e5b997 82,90-91,93-95,169
+  s_73be6d6c0c1a12::t_5391a7f7cd5bb9 6,165
+  s_73be6d6c0c1a12::t_fdfd94083329a2 15,61,67,81,170-177
+  s_73be6d6c0c1a12::t_aa7e4f029088a6 84-89,92
+apps/cli/src/index.ts
+  s_73be6d6c0c1a12::t_a40a87338f5dae 332
+  s_73be6d6c0c1a12::t_e88e95d3050cca 426-427
+  s_73be6d6c0c1a12::t_d91110743c7f77 2,4
+  s_73be6d6c0c1a12::t_fd4fdc8ca8135f 327,337
+  s_73be6d6c0c1a12::t_c60ea33cae8f8f 8
+  s_73be6d6c0c1a12::t_417eae7115e593 226-227,295,301,351
+  s_73be6d6c0c1a12::t_d7e7626952f440 308
+  s_73be6d6c0c1a12::t_e275c906e0fbc8 313,335-336,338,340
+  s_73be6d6c0c1a12::t_8a92fa4415c933 254,257,285-286,305,309-310,314-315
+  s_73be6d6c0c1a12::t_cee4dc139cbd70 261-280
+  s_73be6d6c0c1a12::t_66750ceb0fb79f 290,378-406
+  s_73be6d6c0c1a12::t_5792aa0c7ada06 424-425,443-448
+  s_73be6d6c0c1a12::t_795445ebaf446b 473
+  s_73be6d6c0c1a12::t_5a92c86077e9b0 26-27,80
+  s_73be6d6c0c1a12::t_344d6351d0e8d6 10,284,291,293-294,296-300,302-304,306-307,311-312,322,333,341-342,346,349-350,356-362
+  s_73be6d6c0c1a12::t_d2efe7c1bbb2a5 292,334,339,377
+  s_73be6d6c0c1a12::t_9978c915cd4ad5 22,92-113,191,201-209
+  s_73be6d6c0c1a12::t_89b485a3256ad1 411-417,434-436,439,441-442,449-451,462-472,474-476,478
+  s_73be6d6c0c1a12::t_182485f0123b5f 354-355
+apps/cli/src/index.test.ts
+  s_73be6d6c0c1a12::t_546cb3039b1c02 49-50,53-58,61-62,64,70,74,77-80,86-87
+  s_73be6d6c0c1a12::t_51128a08a471d8 476,492,496
+  s_73be6d6c0c1a12::t_2d1a596e1e1807 381,415,421,423,425-426,428,430,434,437,448,450,453-454
+packages/igs/src/png.ts
+  s_73be6d6c0c1a12::t_5391a7f7cd5bb9 63-91
+openspec/changes/bdmvkit-interoperability/design.md
+  s_73be6d6c0c1a12::t_f02bcd3249a7ee 15
+docs/development.md
+  s_73be6d6c0c1a12::t_f02bcd3249a7ee 61
+  s_73be6d6c0c1a12::t_247498b3bcb8e9 60
+  s_73be6d6c0c1a12::t_60d2a82e490016 57,59
+README.md
+  s_73be6d6c0c1a12::t_84dab726a8648e 43
+  s_73be6d6c0c1a12::t_aa16d7a39481ed 41
+  s_73be6d6c0c1a12::t_f02bcd3249a7ee 44,51
+  s_73be6d6c0c1a12::t_525414b6e45383 52
+  s_73be6d6c0c1a12::t_8af89d26a56f94 42
+packages/igs/src/types.ts
+  s_73be6d6c0c1a12::t_aa7e4f029088a6 117
+  s_73be6d6c0c1a12::t_5f83a660e5b997 118,145
+  s_73be6d6c0c1a12::t_247498b3bcb8e9 144
+AGENTS.md
+  s_73be6d6c0c1a12::t_ae9f153c971a99 32
+openspec/changes/bdmvkit-interoperability/specs/asset-cli/spec.md
+  s_73be6d6c0c1a12::t_247498b3bcb8e9 17,39
+  s_73be6d6c0c1a12::t_c49a93f498bc72 24,32
+  s_73be6d6c0c1a12::t_a5ebae112755da 5-6,8-10,12-14,16,18-20,22-23,25-31,33-34,36-37,41-43
+  s_73be6d6c0c1a12::t_84dab726a8648e 21
+  s_73be6d6c0c1a12::t_f02bcd3249a7ee 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "517c26f52cfd035cde9151deb3f8b2c113b81ea6",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_73be6d6c0c1a12": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1ae65-6088-73d3-8341-b9425bcdf9e2",
+        "model": "gpt-6-luna"
+      },
+      "human_author": null
+    }
+  }
+}
