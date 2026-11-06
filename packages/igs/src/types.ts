@@ -114,6 +114,8 @@ export interface IgsScene {
 export interface IgsExtraction {
   scenes: IgsScene[];
   assets: IgsAsset[];
+  /** igstools-compatible MNU bytes recovered from each declared IG PID. */
+  streams: Array<{ clipId: string; pid: number; byteLength: number; bytes?: Uint8Array }>;
   diagnostics: IgsDiagnostic[];
   status: "complete" | "partial" | "failed";
   support: { format: "Blu-ray IGS"; status: "unverified" };
@@ -139,4 +141,6 @@ export interface IgsOptions {
   chunkSize?: number;
   /** Skip PNG asset generation so callers can parse/navigation-process scenes separately. Defaults to true. */
   renderAssets?: boolean;
+  /** Retain igstools-compatible MNU bytes for explicit asset export. Defaults to false. */
+  captureStreams?: boolean;
 }

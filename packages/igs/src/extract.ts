@@ -3,7 +3,7 @@ import { discoverBdmvInput, readFileChunks, resolveFileReference, type InputFile
 import type { ClipInfo, ParsedDisc, SourceLocation, StreamDeclaration } from "@bdmv2web/bdmv-parser";
 import type { IgsDiagnostic, IgsExtraction, IgsOptions, IgsScene, PtsValue, TsPacket } from "./types.js";
 import { consumeSegment, createIgsState, parseSegments } from "./igs.js";
-import { renderIgsAssets } from "./png.js";
+import { renderIgsAssets, validateIgsSceneAssets } from "./png.js";
 import { M2tsPacketReader, PesAssembler, PsiAssembler, source, type PesPacket } from "./transport.js";
 
 export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & { table?: InputFileTable } = {}): Promise<IgsExtraction> {
@@ -12,6 +12,7 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
   const diagnostics: IgsDiagnostic[] = [];
   const scenes: IgsScene[] = [];
   const assets: IgsExtraction["assets"] = [];
+  const streams: IgsExtraction["streams"] = [];
   const seen = new Set<string>();
   for (const playlist of disc.playlists) {
     for (const item of playlist.playItems) {
@@ -57,12 +58,13 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
         diagnostics.push(...result.diagnostics);
         scenes.push(...result.scenes);
         assets.push(...result.assets);
+        streams.push(...result.streams);
       }
     }
   }
   const hasErrors = diagnostics.some((d) => d.severity === "error");
   const hasWarnings = diagnostics.some((d) => d.severity === "warning");
-  return { scenes, assets, diagnostics, status: hasErrors ? (scenes.length ? "partial" : "failed") : (hasWarnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
+  return { scenes, assets, streams, diagnostics, status: hasErrors ? (scenes.length ? "partial" : "failed") : (hasWarnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
 }
 
 export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable<Uint8Array>, expectedPidCues: Array<{ pid: number; source: SourceLocation }> = [], options: IgsOptions = {}): Promise<IgsExtraction> {
@@ -76,7 +78,21 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const streamBytes = new Map<number, bigint>();
   const residuals = new Map<number, Uint8Array<ArrayBufferLike>>();
   const spans = new Map<number, Array<{ start: bigint; end: bigint; packetOffset: bigint; pesOffset: bigint; payloadOffset: bigint; pts: PtsValue | null }>>();
+  const streamChunks = new Map<number, Uint8Array[]>();
+  const streamByteLengths = new Map<number, number>();
   const processPes = (unit: PesPacket): void => {
+    const mnuHeader = new Uint8Array(10);
+    mnuHeader.set([0x49, 0x47]);
+    const mnuHeaderView = new DataView(mnuHeader.buffer);
+    mnuHeaderView.setUint32(2, Number((unit.pts?.raw ?? 0n) & 0xffff_ffffn), false);
+    mnuHeaderView.setUint32(6, Number((unit.dtsRaw ?? 0n) & 0xffff_ffffn), false);
+    streamByteLengths.set(unit.pid, (streamByteLengths.get(unit.pid) ?? 0) + mnuHeader.byteLength + unit.payload.byteLength);
+    if (options.captureStreams) {
+      const chunksForPid = streamChunks.get(unit.pid) ?? [];
+      chunksForPid.push(mnuHeader);
+      chunksForPid.push(unit.payload.slice());
+      streamChunks.set(unit.pid, chunksForPid);
+    }
     const previousTotal = streamBytes.get(unit.pid) ?? 0n;
     const previousResidualLength = BigInt(residuals.get(unit.pid)?.length ?? 0);
     const segmentStart = previousTotal - previousResidualLength;
@@ -146,11 +162,19 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     const rendered = renderIgsAssets(scenes);
     assets.push(...rendered.assets);
     diagnostics.push(...rendered.diagnostics);
-  }
+  } else diagnostics.push(...validateIgsSceneAssets(scenes));
   const errors = diagnostics.some((d) => d.severity === "error");
   const warnings = diagnostics.some((d) => d.severity === "warning");
   if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [] });
-  return { scenes, assets, diagnostics, status: errors ? (scenes.length ? "partial" : "failed") : (warnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
+  const streams = [...streamByteLengths].map(([pid, byteLength]) => ({ clipId, pid, byteLength, ...(options.captureStreams ? { bytes: concatChunks(streamChunks.get(pid) ?? []) } : {}) }));
+  return { scenes, assets, streams, diagnostics, status: errors ? (scenes.length ? "partial" : "failed") : (warnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
+}
+
+function concatChunks(chunks: readonly Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((length, chunk) => length + chunk.byteLength, 0);
+  const result = new Uint8Array(total); let offset = 0;
+  for (const chunk of chunks) { result.set(chunk, offset); offset += chunk.byteLength; }
+  return result;
 }
 
 async function extractClip(clipId: string, path: string, expected: Array<StreamDeclaration | { pid: number; source: SourceLocation }>, options: IgsOptions): Promise<IgsExtraction> {

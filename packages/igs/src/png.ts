@@ -60,6 +60,35 @@ export function renderIgsAssets(scenes: readonly IgsScene[]): { assets: IgsAsset
   return { assets, diagnostics };
 }
 
+/** Validate rendered-element references without allocating or encoding PNG images. */
+export function validateIgsSceneAssets(scenes: readonly IgsScene[]): IgsDiagnostic[] {
+  const diagnostics: IgsDiagnostic[] = [];
+  for (const scene of scenes) {
+    for (const page of scene.pages) {
+      if (page.rawEffects.enterEffectCount || page.rawEffects.exitEffectCount) {
+        scene.complete = false;
+        diagnostics.push({ severity: "warning", code: "IGS_UNSUPPORTED_EFFECT", message: `Page ${page.id} declares ${page.rawEffects.enterEffectCount} enter and ${page.rawEffects.exitEffectCount} exit effect(s); raw bytes are retained, visual timing is not interpreted`, source: scene.source, affectedSceneIds: [scene.id], details: { pageId: page.id, enterCount: page.rawEffects.enterEffectCount, exitCount: page.rawEffects.exitEffectCount } });
+      }
+      const palette = [...scene.palettes].reverse().find((item) => item.id === page.paletteId);
+      if (!palette) {
+        scene.complete = false;
+        diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${page.paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
+        continue;
+      }
+      const objectIds = new Set<number>();
+      for (const button of page.buttons) for (const state of [button.visuals.normal, button.visuals.selected, button.visuals.activated]) {
+        if (state.startObjectId !== 0xffff) objectIds.add(state.startObjectId);
+        if (state.endObjectId !== 0xffff) objectIds.add(state.endObjectId);
+      }
+      for (const objectId of objectIds) if (![...scene.objects].reverse().some((object) => object.id === objectId)) {
+        scene.complete = false;
+        diagnostics.push({ severity: "error", code: "UNRESOLVED_OBJECT", message: `Page ${page.id} references object ${objectId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
+      }
+    }
+  }
+  return diagnostics;
+}
+
 export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): Uint8Array {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new RangeError("RGBA dimensions do not match pixel data");
   const scanlines = new Uint8Array((width * 4 + 1) * height);

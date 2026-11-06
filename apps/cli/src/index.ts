@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-import { link, lstat, mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { assertDisjointRoots, beginOutputTransaction, resolveInputFile } from "@bdmv2web/bdmv-io";
 import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
 import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
-import { extractIgsScenes } from "@bdmv2web/igs";
+import { encodeRgbaPng, extractIgsScenes } from "@bdmv2web/igs";
 import { buildNavigationGraph, HdmvVm, profileWord } from "@bdmv2web/hdmv";
-import { computeMediaClosure, createExternalMediaTargets, extractPgsTrack, resolveMenuLoopStart45k } from "@bdmv2web/media-export";
+import { computeMediaClosure, createExternalMediaTargets, extractPgsTrack, resolveMenuLoopStart45k, type PgsDisplaySet } from "@bdmv2web/media-export";
 import { buildMenuPackage } from "@bdmv2web/package-builder";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 import { auditOutputPackage, classifyDiagnostics, createDependencyAuditReport, createReleaseSummary, decideDelivery, decideStageOutcome, summarizeDeliveryCoverage, type DeliveryDiagnostic } from "@bdmv2web/test-runner";
@@ -18,12 +19,12 @@ const supported = new Set(["inspect", "extract", "convert", "validate", "compare
 /** Per-command option contract. Anything else is a typo, not a silent no-op. */
 const commandOptions: Record<string, { flags: ReadonlySet<string>; values: ReadonlySet<string> }> = {
   inspect: { flags: new Set(["--strict", "--no-strict", "--allow-partial"]), values: new Set(["--out", "--format"]) },
-  extract: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--out", "--format"]) },
+  extract: { flags: new Set(["--strict", "--no-strict", "--all"]), values: new Set(["--out", "--format", "--type"]) },
   convert: { flags: new Set(["--strict", "--no-strict", "--overwrite"]), values: new Set(["--out", "--mode", "--player-profile", "--limits", "--title", "--format"]) },
   validate: { flags: new Set(["--strict", "--no-strict", "--offline"]), values: new Set(["--format"]) },
   compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--mode", "--format"]) },
-  "list-assets": { flags: new Set([]), values: new Set(["--type", "--format"]) },
-  "export-assets": { flags: new Set([]), values: new Set(["--type", "--out", "--format"]) },
+  "list-assets": { flags: new Set([]), values: new Set(["--type", "--format", "--out", "--m2ts", "--pid", "--decode"]) },
+  "export-assets": { flags: new Set([]), values: new Set(["--type", "--out", "--format", "--m2ts", "--pid", "--decode"]) },
 };
 
 /**
@@ -76,7 +77,7 @@ function strictDefault(): boolean {
   return false;
 }
 function inputPath(): string | undefined {
-  const takesValue = new Set(["--format", "--out", "--mode", "--player-profile", "--limits", "--title", "--type"]);
+  const takesValue = new Set(["--format", "--out", "--mode", "--player-profile", "--limits", "--title", "--type", "--m2ts", "--pid", "--decode"]);
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg.startsWith("--")) { if (!arg.includes("=") && takesValue.has(arg)) i++; continue; }
@@ -86,6 +87,28 @@ function inputPath(): string | undefined {
 }
 function fail(code: string, message: string, path?: string): never {
   throw new ContractError(code, path ?? "/", message);
+}
+
+function outputFormat(commandName: string, defaultFormat: "table" | "json" = "table"): "table" | "json" {
+  const value = optionValue("--format") ?? defaultFormat;
+  if (value !== "table" && value !== "json") fail("CLI_INVALID_FORMAT", `${commandName} supports 'table' or 'json' for --format, got '${value}'`);
+  return value;
+}
+
+function printTable(title: string, columns: string[], rows: Array<Array<string | number | null | undefined>>): void {
+  const values = rows.map((row) => row.map((value) => value === null || value === undefined ? "-" : String(value)));
+  const widths = columns.map((column, i) => Math.max(column.length, ...values.map((row) => row[i]?.length ?? 0)));
+  process.stdout.write(`${title}\n`);
+  process.stdout.write(`${columns.map((column, i) => column.padEnd(widths[i]!)).join("  ")}\n`);
+  process.stdout.write(`${widths.map((width) => "-".repeat(width)).join("  ")}\n`);
+  for (const row of values) process.stdout.write(`${row.map((value, i) => value.padEnd(widths[i]!)).join("  ")}\n`);
+}
+
+async function writeJsonFile(targetPath: string, json: string): Promise<void> {
+  const target = resolve(targetPath);
+  const temp = resolve(dirname(target), `.${basename(target)}.tmp-${process.pid}`);
+  try { await writeFile(temp, json, { flag: "wx" }); await link(temp, target); await unlink(temp); }
+  catch (error) { await rm(temp, { force: true }); throw error; }
 }
 
 /** Read and validate a `PlayerProfile` JSON file; a profile is either fully declared or absent. */
@@ -165,6 +188,7 @@ async function inspect(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "inspect requires an input path");
   // Argument contract first: a missing flag value must not be masked by stage output.
   const out = optionValue("--out");
+  const format = outputFormat("inspect");
   const strict = strictDefault();
   const allowPartial = argv.includes("--allow-partial");
   const disc = await parseBdmv(input);
@@ -174,11 +198,15 @@ async function inspect(): Promise<void> {
     return;
   }
   const json = `${JSON.stringify({ ...disc, stageStatus: outcome.status }, null, 2)}\n`;
-  if (!out) { process.stdout.write(json); process.exitCode = allowPartial ? 0 : outcome.exitCode; return; }
-  const target = resolve(out); await assertDisjointRoots(disc.root, target);
-  const temp = resolve(dirname(target), `.${basename(target)}.tmp-${process.pid}`);
-  try { await writeFile(temp, json, { flag: "wx" }); await link(temp, target); await unlink(temp); }
-  catch (error) { await rm(temp, { force: true }); throw error; }
+  if (out) { const target = resolve(out); await assertDisjointRoots(disc.root, target); await writeJsonFile(target, json); }
+  if (format === "json") process.stdout.write(json);
+  else printTable("BDMV inspection", ["Section", "Count / Status"], [
+    ["Analysis", disc.analysisStage], ["Delivery", outcome.status], ["Entries", disc.declarations.entries],
+    ["MovieObjects", disc.declarations.movieObjects], ["Playlists", disc.declarations.playlists],
+    ["PlayItems", disc.declarations.playItems], ["Clips", disc.declarations.clips],
+    ["Streams", disc.declarations.streams], ["Sounds", disc.declarations.sounds],
+    ["Diagnostics", disc.diagnostics.length], ["Support prediction", disc.supportPrediction.status],
+  ]);
   process.exitCode = allowPartial ? 0 : outcome.exitCode;
 }
 
@@ -195,8 +223,8 @@ function buildExternalTargets(disc: ParsedDisc, scenes: Awaited<ReturnType<typeo
   return createExternalMediaTargets(disc, buildMediaClosure(disc, scenes));
 }
 
-async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], outputDirectory: string, pathForReference?: (reference: ReturnType<typeof reachablePgsReferences>[number], index: number) => string) {
-  const references = reachablePgsReferences(disc, scenes);
+async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], outputDirectory: string, pathForReference?: (reference: ReturnType<typeof reachablePgsReferences>[number], index: number) => string, selectedReferences?: ReturnType<typeof reachablePgsReferences>) {
+  const references = selectedReferences ?? reachablePgsReferences(disc, scenes);
   const extracted = new Map<string, Awaited<ReturnType<typeof extractPgsTrack>> & { packagePath: string }>();
   const result = [];
   for (const [index, reference] of references.entries()) {
@@ -223,55 +251,115 @@ function reachablePgsReferences(disc: ParsedDisc, scenes: Awaited<ReturnType<typ
   });
 }
 
-type AssetType = "all" | "igs" | "pgs";
+type AssetType = "all" | "igs" | "sup";
 function assetTypeOption(): AssetType {
   const value = optionValue("--type") ?? "all";
-  if (value !== "all" && value !== "igs" && value !== "pgs") fail("CLI_INVALID_ASSET_TYPE", "--type must be one of all, igs, or pgs");
+  if (value !== "all" && value !== "igs" && value !== "sup") fail("CLI_INVALID_ASSET_TYPE", "--type must be one of all, igs, or sup");
   return value;
 }
+
+function assetSelection(): { clipId?: string; pid?: number; decodePng: boolean } {
+  const rawClip = optionValue("--m2ts");
+  const clipValue = rawClip?.replace(/\.m2ts$/i, "");
+  if (clipValue !== undefined && !/^\d{1,5}$/.test(clipValue)) fail("CLI_INVALID_M2TS", "--m2ts must be a clip ID such as 00001");
+  const clipId = clipValue?.padStart(5, "0");
+  const rawPid = optionValue("--pid");
+  let pid: number | undefined;
+  if (rawPid !== undefined) {
+    if (!/^(?:0x[\da-f]{1,4}|\d{1,4})$/i.test(rawPid)) fail("CLI_INVALID_PID", "--pid must be a decimal PID or hexadecimal value such as 0x0120");
+    pid = Number(rawPid.toLowerCase().startsWith("0x") ? rawPid : Number(rawPid));
+    if (!Number.isInteger(pid) || pid < 0x20 || pid > 0x1ffe) fail("CLI_INVALID_PID", "--pid must be between 0x0020 and 0x1ffe");
+  }
+  const decode = optionValue("--decode");
+  if (decode !== undefined && decode !== "png") fail("CLI_INVALID_DECODE", "--decode supports only 'png'");
+  return { ...(clipId ? { clipId } : {}), ...(pid === undefined ? {} : { pid }), decodePng: decode === "png" };
+}
+
+function selectedClip(clipId: string, selection: { clipId?: string }): boolean { return selection.clipId === undefined || selection.clipId.toLocaleLowerCase("en-US") === clipId.toLocaleLowerCase("en-US"); }
+function selectedPid(pid: number, selection: { pid?: number }): boolean { return selection.pid === undefined || selection.pid === pid; }
 
 async function listAssets(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "list-assets requires a BDMV input path");
   const type = assetTypeOption();
+  const selection = assetSelection();
+  const format = outputFormat("list-assets");
+  const out = optionValue("--out");
   const disc = await parseBdmv(input);
   const fatal = classifyDiagnostics(disc.diagnostics);
   if (fatal.hasFatal) { stageFailure(firstBlockingCode(fatal.blocking), fatal.blocking); return; }
-  const extraction = type === "pgs" ? { assets: [], scenes: [], diagnostics: [] } : await extractIgsScenes(disc);
-  const images = extraction.assets.map((asset, index) => ({ type: "igs", path: `assets/graphics/image-${String(index + 1).padStart(5, "0")}.png`, byteLength: asset.pngBytes.byteLength }));
-  const references = type === "igs" ? [] : uniquePgsReferences(reachablePgsReferences(disc, extraction.scenes));
-  const subtitles = references.map((item, index) => ({ type: "pgs", path: `assets/subtitles/subtitle-${String(index + 1).padStart(5, "0")}-${safeAssetLanguage(item.language)}.sup`, language: item.language, streamNumber: item.streamNumber }));
-  process.stdout.write(`${JSON.stringify({ schemaVersion: "1.0", assets: [...images, ...subtitles] }, null, 2)}\n`);
+  const extraction = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup" });
+  const scenes = extraction.scenes.filter((scene) => selectedClip(scene.clipId, selection) && selectedPid(scene.pid, selection));
+  const igsStreams = type === "sup" ? [] : extraction.streams.filter((stream) => selectedClip(stream.clipId, selection) && selectedPid(stream.pid, selection)).map((stream) => ({ type: "igs", format: "mnu", path: igsMnuPath(stream.clipId, stream.pid), clipId: stream.clipId, pid: stream.pid, byteLength: stream.byteLength }));
+  const igsElements = type === "sup" ? [] : scenes.flatMap((scene) => scene.objects.map((object) => ({ type: "igs-image-element", clipId: scene.clipId, pid: scene.pid, sceneId: scene.id, compositionNumber: scene.compositionNumber, objectId: object.id, objectVersion: object.version, width: object.width, height: object.height })));
+  const igsPngs = type === "sup" || !selection.decodePng ? [] : extraction.assets.filter((asset) => selectedClip(asset.source.clipId, selection) && selectedPid(asset.source.pid, selection)).map((asset) => ({ type: "igs-png", path: asset.relativePath, clipId: asset.source.clipId, pid: asset.source.pid, objectId: asset.objectId, objectVersion: asset.objectVersion, paletteId: asset.paletteId, paletteVersion: asset.paletteVersion, width: asset.width, height: asset.height, byteLength: asset.pngBytes.byteLength }));
+  const references = type === "igs" ? [] : uniquePgsReferences(reachablePgsReferences(disc, extraction.scenes)).filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection));
+  const subtitles = references.map((item, index) => ({ type: "sup", path: supTrackPath(item.clipId, item.pid, index), clipId: item.clipId, pid: item.pid, language: item.language, streamNumber: item.streamNumber, playlistId: item.playlistId, playItemIndex: item.playItemIndex }));
+  const supPngs: Array<{ type: string; path: string; clipId: string; pid: number; displaySet: number }> = [];
+  if (selection.decodePng && type !== "igs" && references.length) {
+    const temp = await mkdtemp(resolve(tmpdir(), "bdmv-list-assets-"));
+    try {
+      const tracks = await extractReachablePgsTracks(disc, extraction.scenes, temp, (_reference, index) => `tracks/${index}.sup`, references);
+      for (const track of [...new Map(tracks.map((entry) => [entry.path, entry])).values()]) track.displaySets.forEach((_, index) => supPngs.push({ type: "sup-png", path: supDisplaySetPath(track.clipId, track.pid, track.language, index), clipId: track.clipId, pid: track.pid, displaySet: index + 1 }));
+    } finally { await rm(temp, { recursive: true, force: true }); }
+  }
+  const perM2ts = [...new Set(subtitles.map((asset) => asset.clipId))].map((clipId) => ({ clipId, subtitleTrackCount: subtitles.filter((asset) => asset.clipId === clipId).length }));
+  const assets = [...igsStreams, ...igsPngs, ...subtitles, ...supPngs];
+  const report = { schemaVersion: "1.0", decode: selection.decodePng ? "png" : "none", summary: { igsScenes: type === "sup" ? 0 : scenes.length, igsStreams: igsStreams.length, igsImageElements: igsElements.length, supTracks: subtitles.length, supDisplaySetPngs: supPngs.length, m2tsWithSup: perM2ts.length, perM2ts }, assets, igsImageElements: igsElements };
+  if (out) { await assertDisjointRoots(disc.root, resolve(out)); await writeJsonFile(out, `${JSON.stringify(report, null, 2)}\n`); }
+  if (format === "json") process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  else {
+    printTable("Asset summary", ["Type", "Count"], [["IGS streams", report.summary.igsStreams], ["IGS scenes", report.summary.igsScenes], ["IGS image elements", report.summary.igsImageElements], ["SUP tracks", report.summary.supTracks], ["SUP display set PNGs", report.summary.supDisplaySetPngs], ["M2TS with SUP", report.summary.m2tsWithSup]]);
+    printTable("Assets", ["Type", "Clip", "PID", "Language", "Bytes", "Path"], assets.map((asset) => [asset.type, "clipId" in asset ? asset.clipId : "-", "pid" in asset ? `0x${asset.pid.toString(16)}` : "-", "language" in asset ? asset.language : "-", "byteLength" in asset ? asset.byteLength : "-", "path" in asset ? asset.path : "-"]));
+    printTable("IGS image elements", ["Clip", "PID", "Scene", "Composition", "Object", "Version", "Dimensions"], igsElements.map((item) => [item.clipId, `0x${item.pid.toString(16)}`, item.sceneId, item.compositionNumber, item.objectId, item.objectVersion, `${item.width}x${item.height}`]));
+    printTable("SUP tracks by M2TS", ["Clip", "SUP tracks"], perM2ts.map((item) => [item.clipId, item.subtitleTrackCount]));
+  }
 }
 
 async function exportAssets(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "export-assets requires a BDMV input path");
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "export-assets requires --out DIR");
   const type = assetTypeOption();
+  const selection = assetSelection();
   const disc = await parseBdmv(input);
   const facts = classifyDiagnostics(disc.diagnostics);
   if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
   const roots = await assertDisjointRoots(disc.root, resolve(out));
-  const igs = type === "pgs" ? { assets: [], scenes: [], diagnostics: [] } : await extractIgsScenes(disc);
+  const igs = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", captureStreams: type !== "sup" });
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
   if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
   const transaction = await beginOutputTransaction(roots.output);
   try {
-    const files: Array<{ type: string; path: string; byteLength: number; language?: string; streamNumber?: number; displaySetCount?: number }> = [];
-    for (const [index, asset] of igs.assets.entries()) {
-      const path = `assets/graphics/image-${String(index + 1).padStart(5, "0")}.png`;
+    const files: Array<{ type: string; format?: string; path: string; byteLength: number; language?: string; streamNumber?: number; displaySetCount?: number }> = [];
+    if (type !== "sup") for (const stream of igs.streams.filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection))) {
+      const path = igsMnuPath(stream.clipId, stream.pid);
+      const target = resolve(transaction.stagingPath, path);
+      await mkdir(dirname(target), { recursive: true });
+      if (!stream.bytes) throw new Error(`Raw IGS bytes were not retained for ${stream.clipId} PID ${stream.pid}`);
+      await writeFile(target, stream.bytes, { flag: "wx" });
+      files.push({ type: "igs", format: "mnu", path, byteLength: stream.byteLength });
+    }
+    for (const asset of igs.assets.filter((item) => selectedClip(item.source.clipId, selection) && selectedPid(item.source.pid, selection))) {
+      const path = asset.relativePath;
       const target = resolve(transaction.stagingPath, path);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, asset.pngBytes, { flag: "wx" });
-      files.push({ type: "igs", path, byteLength: asset.pngBytes.byteLength });
+      files.push({ type: "igs-png", path, byteLength: asset.pngBytes.byteLength });
     }
     if (type !== "igs") {
-      const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes));
-      const exportPaths = new Map(references.map((reference, index) => [`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`, `assets/subtitles/subtitle-${String(index + 1).padStart(5, "0")}-${safeAssetLanguage(reference.language)}.sup`]));
-      const tracks = await extractReachablePgsTracks(disc, igs.scenes, transaction.stagingPath, (reference) => exportPaths.get(`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`)!);
+      const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes)).filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection));
+      const exportPaths = new Map(references.map((reference, index) => [`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`, supTrackPath(reference.clipId, reference.pid, index)]));
+      const tracks = await extractReachablePgsTracks(disc, igs.scenes, transaction.stagingPath, (reference) => exportPaths.get(`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`)!, references);
       const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
       for (const track of uniqueTracks) {
-        const stat = await lstat(resolve(transaction.stagingPath, track.path));
-        files.push({ type: "pgs", path: track.path, byteLength: stat.size, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length });
+        const trackStat = await lstat(resolve(transaction.stagingPath, track.path));
+        files.push({ type: "sup", path: track.path, byteLength: trackStat.size, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length });
+        if (selection.decodePng) for (const [index, displaySet] of track.displaySets.entries()) {
+          const path = supDisplaySetPath(track.clipId, track.pid, track.language, index);
+          const target = resolve(transaction.stagingPath, path);
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, renderPgsDisplaySet(displaySet), { flag: "wx" });
+          files.push({ type: "sup-png", path, byteLength: (await stat(target)).size, language: track.language, streamNumber: track.streamNumber });
+        }
       }
     }
     await writeFile(resolve(transaction.stagingPath, "assets-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", assets: files }, null, 2)}\n`, { flag: "wx" });
@@ -286,34 +374,81 @@ function uniquePgsReferences(references: ReturnType<typeof reachablePgsReference
 }
 
 function safeAssetLanguage(language: string): string { return /^[a-z]{3}$/i.test(language) ? language.toLowerCase() : "und"; }
+function igsMnuPath(clipId: string, pid: number): string { return `assets/igs/${clipId}-pid-${pid.toString(16).padStart(4, "0")}.mnu`; }
+function supTrackPath(clipId: string, pid: number, _index: number): string { return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}.sup`; }
+function supDisplaySetPath(clipId: string, pid: number, language: string, index: number): string {
+  return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}-${safeAssetLanguage(language)}-display-${String(index + 1).padStart(5, "0")}.png`;
+}
+
+function renderPgsDisplaySet(display: PgsDisplaySet): Uint8Array {
+  const rgba = new Uint8Array(display.width * display.height * 4);
+  for (const placement of display.placements) {
+    const bitmap = display.bitmaps.get(placement.objectId);
+    if (!bitmap) continue;
+    const crop = placement.crop ?? { x: 0, y: 0, width: bitmap.width, height: bitmap.height };
+    for (let sy = 0; sy < crop.height; sy++) for (let sx = 0; sx < crop.width; sx++) {
+      const dx = placement.x + sx; const dy = placement.y + sy;
+      const sourceX = crop.x + sx; const sourceY = crop.y + sy;
+      if (dx < 0 || dy < 0 || dx >= display.width || dy >= display.height || sourceX >= bitmap.width || sourceY >= bitmap.height) continue;
+      const sourceOffset = (sourceY * bitmap.width + sourceX) * 4;
+      const targetOffset = (dy * display.width + dx) * 4;
+      const sourceAlpha = bitmap.pixels[sourceOffset + 3]! / 255;
+      if (sourceAlpha === 0) continue;
+      const targetAlpha = rgba[targetOffset + 3]! / 255;
+      const outputAlpha = sourceAlpha + targetAlpha * (1 - sourceAlpha);
+      for (let channel = 0; channel < 3; channel++) {
+        rgba[targetOffset + channel] = Math.round((bitmap.pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
+      }
+      rgba[targetOffset + 3] = Math.round(outputAlpha * 255);
+    }
+  }
+  return encodeRgbaPng(display.width, display.height, rgba);
+}
 
 async function extract(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "extract requires an input path");
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "extract requires --out DIR");
+  const selectedType = optionValue("--type");
+  const all = argv.includes("--all");
+  if (all === (selectedType !== undefined)) fail("CLI_EXTRACT_SELECTION", "extract requires exactly one of --type hdmv|igs|sup or --all");
+  if (selectedType !== undefined && !["hdmv", "igs", "sup"].includes(selectedType)) fail("CLI_INVALID_EXTRACT_TYPE", "--type must be one of hdmv, igs, or sup");
+  const includeHdmv = all || selectedType === "hdmv";
+  const includeIgs = all || selectedType === "igs";
+  const includeSup = all || selectedType === "sup";
   const strict = strictDefault();
   const disc = await parseBdmv(input);
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   // Fail on fatal parse diagnostics before scanning STREAM data (P2-INFO-3).
   const parseFacts = classifyDiagnostics(disc.diagnostics);
   if (parseFacts.hasFatal) { stageFailure(firstBlockingCode(parseFacts.blocking), parseFacts.blocking); return; }
-  const igs = await extractIgsScenes(disc);
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict });
+  const needsIgs = includeIgs || includeSup;
+  const igs = needsIgs ? await extractIgsScenes(disc, { renderAssets: false }) : { scenes: [], assets: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
+  const stageDiagnostics = [...disc.diagnostics, ...(includeIgs || includeSup ? igs.diagnostics : [])];
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: stageDiagnostics, strict });
   if (outcome.status === "failed") {
     stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics);
     return;
   }
   const transaction = await beginOutputTransaction(roots.output);
   try {
-    const externalTargets = buildExternalTargets(disc, igs.scenes);
-    await writeFile(resolve(transaction.stagingPath, "external-media-targets.json"), `${JSON.stringify(externalTargets, null, 2)}\n`, { flag: "wx" });
+    const generatedFiles: Array<{ path: string; kind: string; byteLength: string }> = [];
+    if (includeHdmv) {
+    const hdmvRoot = resolve(transaction.stagingPath, "hdmv"); await mkdir(hdmvRoot, { recursive: true });
     const commandTable = disc.movieObjects.flatMap((object) => object.instructions.map((instruction, instructionIndex) => ({ movieObjectId: object.id, instructionIndex, words: instruction.words, bytes: instruction.bytes, source: instruction.source })));
     const raw = `${JSON.stringify(commandTable, null, 2)}\n`;
-    const rawPath = resolve(transaction.stagingPath, "raw-commands.json");
+    const rawPath = resolve(transaction.stagingPath, "hdmv/commands.json");
     await writeFile(rawPath, raw, { flag: "wx" });
-    const sceneRecords = igs.scenes.map((scene) => {
-      const adapted = adaptIgsScene(scene, igs.assets.filter((asset) => asset.id.startsWith(`igs-${scene.clipId}-${scene.pid}-${scene.compositionNumber}-`)));
-      return { id: scene.id, status: adapted.status, scene: adapted.scene, raw: serializeIgsScene(scene), diagnostics: adapted.diagnostics };
-    });
+    const parsedPath = "hdmv/parsed-disc.json";
+    await writeFile(resolve(transaction.stagingPath, parsedPath), `${JSON.stringify(disc, null, 2)}\n`, { flag: "wx" });
+    generatedFiles.push(await generatedFileRecord(transaction.stagingPath, parsedPath, "parsed-disc"), await generatedFileRecord(transaction.stagingPath, "hdmv/commands.json", "hdmv-command-table"));
+    if (all) {
+      const externalPath = "hdmv/external-media-targets.json";
+      await writeFile(resolve(transaction.stagingPath, externalPath), `${JSON.stringify(buildExternalTargets(disc, igs.scenes), null, 2)}\n`, { flag: "wx" });
+      generatedFiles.push(await generatedFileRecord(transaction.stagingPath, externalPath, "external-media-targets"));
+    }
+    }
+    if (includeIgs) {
+    const sceneRecords = igs.scenes.map((scene) => ({ id: scene.id, raw: serializeIgsScene(scene) }));
     const sceneJson = `${JSON.stringify({ schemaVersion: "1.0", status: igs.status, support: igs.support, scenes: sceneRecords }, null, 2)}\n`;
     const diagnosticRecords = igs.diagnostics.map((item) => ({ ...item, message: safeDiagnosticMessage(item.message, roots.input) }));
     const diagnosticsJson = `${JSON.stringify({ schemaVersion: "1.0", status: igs.status, diagnostics: diagnosticRecords }, null, 2)}\n`;
@@ -324,27 +459,23 @@ async function extract(): Promise<void> {
       diagnostics: igs.diagnostics.map((diagnostic, index) => ({ index, source: diagnostic.source ? mapIgsSource(diagnostic.source) : null, affectedSceneIds: diagnostic.affectedSceneIds })),
     };
     const sourceMapJson = `${JSON.stringify(sourceMap, null, 2)}\n`;
-    await writeFile(resolve(transaction.stagingPath, "parsed-disc.json"), `${JSON.stringify(disc, null, 2)}\n`, { flag: "wx" });
-    await writeFile(resolve(transaction.stagingPath, "scenes.json"), sceneJson, { flag: "wx" });
-    await writeFile(resolve(transaction.stagingPath, "igs-diagnostics.json"), diagnosticsJson, { flag: "wx" });
-    await writeFile(resolve(transaction.stagingPath, "source-map.json"), sourceMapJson, { flag: "wx" });
-    const generatedFiles = [
-      await generatedFileRecord(transaction.stagingPath, "parsed-disc.json", "parsed-disc"),
-      await generatedFileRecord(transaction.stagingPath, "external-media-targets.json", "external-media-targets"),
-      await generatedFileRecord(transaction.stagingPath, "raw-commands.json", "raw-command-table"),
-      await generatedFileRecord(transaction.stagingPath, "scenes.json", "igs-scenes"),
-      await generatedFileRecord(transaction.stagingPath, "igs-diagnostics.json", "igs-diagnostics"),
-      await generatedFileRecord(transaction.stagingPath, "source-map.json", "source-map"),
-    ];
-    for (const asset of igs.assets) {
-      const relativePath = asset.relativePath.replaceAll("\\", "/");
-      if (!relativePath.startsWith("assets/graphics/") || relativePath.split("/").includes("..")) throw new Error(`Invalid generated IGS asset path: ${asset.relativePath}`);
-      const assetPath = resolve(transaction.stagingPath, relativePath);
-      await mkdir(dirname(assetPath), { recursive: true });
-      await writeFile(assetPath, asset.pngBytes, { flag: "wx" });
-      generatedFiles.push(await generatedFileRecord(transaction.stagingPath, relativePath, "image"));
+    await mkdir(resolve(transaction.stagingPath, "igs"), { recursive: true });
+    await writeFile(resolve(transaction.stagingPath, "igs/scenes.json"), sceneJson, { flag: "wx" });
+    await writeFile(resolve(transaction.stagingPath, "igs/diagnostics.json"), diagnosticsJson, { flag: "wx" });
+    await writeFile(resolve(transaction.stagingPath, "igs/source-map.json"), sourceMapJson, { flag: "wx" });
+    generatedFiles.push(await generatedFileRecord(transaction.stagingPath, "igs/scenes.json", "igs-scenes"), await generatedFileRecord(transaction.stagingPath, "igs/diagnostics.json", "igs-diagnostics"), await generatedFileRecord(transaction.stagingPath, "igs/source-map.json", "source-map"));
     }
-    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS animation and visual effects are not fully verified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
+    if (includeSup) {
+      const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes));
+      const tracks = await extractReachablePgsTracks(disc, igs.scenes, transaction.stagingPath, (reference, index) => `sup/${reference.clipId}-pid-${reference.pid.toString(16).padStart(4, "0")}-${safeAssetLanguage(reference.language)}-${String(index + 1).padStart(3, "0")}.sup`);
+      const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
+      const trackRecords = [];
+      for (const track of uniqueTracks) { const info = await lstat(resolve(transaction.stagingPath, track.path)); trackRecords.push({ clipId: track.clipId, pid: track.pid, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length, byteLength: info.size }); await unlink(resolve(transaction.stagingPath, track.path)); }
+      await mkdir(resolve(transaction.stagingPath, "sup"), { recursive: true });
+      await writeFile(resolve(transaction.stagingPath, "sup/tracks.json"), `${JSON.stringify({ schemaVersion: "1.0", tracks: trackRecords }, null, 2)}\n`, { flag: "wx" });
+      generatedFiles.push(await generatedFileRecord(transaction.stagingPath, "sup/tracks.json", "sup-track-index"));
+    }
+    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", selectedTypes: [includeHdmv ? "hdmv" : null, includeIgs ? "igs" : null, includeSup ? "sup" : null].filter(Boolean), igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS animation and visual effects are not fully verified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
     await writeFile(resolve(transaction.stagingPath, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
     process.stdout.write(`${JSON.stringify({ stageStatus: outcome.status, output: roots.output })}\n`);
