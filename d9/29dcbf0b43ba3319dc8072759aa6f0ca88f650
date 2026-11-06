@@ -1,0 +1,29 @@
+packages/test-runner/src/release-summary.test.ts
+  s_5ff6fb2c496ca0::t_e7ae1dd8c55ece 50
+packages/test-runner/src/index.test.ts
+  s_5ff6fb2c496ca0::t_e7ae1dd8c55ece 182,187
+apps/cli/src/index.test.ts
+  s_5ff6fb2c496ca0::t_e7ae1dd8c55ece 134-135
+  s_5ff6fb2c496ca0::t_f049e5cf7ebdaa 188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d929dcbf0b43ba3319dc8072759aa6f0ca88f650",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_5ff6fb2c496ca0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aea0-8f12-7b33-bbc9-c625f819c641",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
