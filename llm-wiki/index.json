@@ -1,0 +1,202 @@
+{
+  "schemaVersion": "1.0",
+  "project": "bdmv2web",
+  "description": "面向 LLM/agent 的工程知识索引：功能、代码位置、诊断与排查路径。",
+  "baseline": {
+    "commit": "19d323b",
+    "date": "2026-11-06",
+    "authoritativeSources": [
+      "openspec/specs/",
+      "openspec/changes/",
+      "packages/",
+      "apps/cli/src/index.ts"
+    ]
+  },
+  "entry": "README.md",
+  "documents": [
+    {
+      "path": "README.md",
+      "kind": "index",
+      "summary": "工程定位、五分钟心智模型、任务路由表、目录与维护约定。",
+      "covers": ["overview", "navigation", "task routing", "maintenance"],
+      "keywords": ["bdmv2web", "索引", "任务路由", "维护"],
+      "keyFiles": ["README.md", "package.json", "docs/guides/development.md"]
+    },
+    {
+      "path": "architecture.md",
+      "kind": "overview",
+      "summary": "转换/交付/校验三段边界、包依赖、数据形态、一次 convert 的完整时序、状态归属。",
+      "covers": ["pipeline", "package graph", "data flow", "artifacts", "ownership"],
+      "keywords": ["架构", "流水线", "依赖", "convert 时序", "产物"],
+      "keyFiles": ["apps/cli/src/index.ts", "packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts"]
+    },
+    {
+      "path": "contracts.md",
+      "kind": "reference",
+      "summary": "DiscIR、SourceRef、Time90k、PlayerProfile、Limits、诊断对象、事件信封与改契约流程。",
+      "covers": ["DiscIR", "time90k", "player profile", "limits", "diagnostics", "events", "schema changes"],
+      "keywords": ["契约", "schema", "PSR", "限流", "generation"],
+      "keyFiles": ["packages/core/schema/disc-ir.schema.json", "packages/core/src/index.ts", "packages/core/src/limits.ts", "packages/core/src/defaults.ts"]
+    },
+    {
+      "path": "packages/foundation.md",
+      "kind": "package",
+      "summary": "core 与 bdmv-io：契约校验、时间、限流、目录发现、文件表、输出事务。",
+      "covers": ["core", "bdmv-io", "binary cursor", "input discovery", "output transaction"],
+      "keywords": ["core", "bdmv-io", "BinaryCursor", "transaction", "disjoint roots", "symlink"],
+      "keyFiles": ["packages/core/src/index.ts", "packages/core/src/binary-cursor.ts", "packages/bdmv-io/src/index.ts", "packages/bdmv-io/src/bdmv-candidate.ts"]
+    },
+    {
+      "path": "packages/bdmv-parser.md",
+      "kind": "package",
+      "summary": "BDMV 元数据解析、主备回退、版本门、容错规则、引用图与 ParsedDisc。",
+      "covers": ["index.bdmv", "MovieObject", "MPLS", "CLPI", "sound.bdmv", "backup fallback", "reference graph"],
+      "keywords": ["bdmv-parser", "INDX", "MOBJ", "MPLS", "CLPI", "ParsedDisc", "traverseGraph"],
+      "keyFiles": ["packages/bdmv-parser/src/parser.ts", "packages/bdmv-parser/src/model.ts", "packages/bdmv-parser/src/graph.ts"]
+    },
+    {
+      "path": "packages/hdmv.md",
+      "kind": "package",
+      "summary": "指令解码、寄存器、VM 状态机、等待与代次、导航图、静态循环。",
+      "covers": ["opcode decoding", "registers", "VM", "navigation graph", "static loops", "trace"],
+      "keywords": ["hdmv", "VM", "PSR", "GPR", "trace", "checkpoint", "JUMP_TITLE", "UO"],
+      "keyFiles": ["packages/hdmv/src/decode.ts", "packages/hdmv/src/registers.ts", "packages/hdmv/src/vm.ts", "packages/hdmv/src/graph.ts", "packages/hdmv/src/loops.ts"]
+    },
+    {
+      "path": "packages/igs.md",
+      "kind": "package",
+      "summary": "M2TS/TS/PES 重组、IGS 段与场景、RLE、PNG、提取入口与边界。",
+      "covers": ["transport stream", "PSI", "PES", "IGS segments", "scenes", "PNG"],
+      "keywords": ["igs", "M2TS", "ICS", "PDS", "ODS", "RLE", "Display Set", "PNG"],
+      "keyFiles": ["packages/igs/src/transport.ts", "packages/igs/src/igs.ts", "packages/igs/src/png.ts", "packages/igs/src/extract.ts", "packages/igs/src/types.ts"]
+    },
+    {
+      "path": "packages/media-export.md",
+      "kind": "package",
+      "summary": "媒体闭包、媒体计划、循环导出、线性变体、PGS、时间线、外部目标、预算。",
+      "covers": ["media closure", "media plan", "ffmpeg export", "linear export", "PGS", "timeline", "external targets"],
+      "keywords": ["media-export", "ffmpeg", "ffprobe", "closure", "PGS", "SUP", "external playback"],
+      "keyFiles": ["packages/media-export/src/closure.ts", "packages/media-export/src/index.ts", "packages/media-export/src/media-plan.ts", "packages/media-export/src/linear.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
+    },
+    {
+      "path": "packages/runtime-web.md",
+      "kind": "package",
+      "summary": "MenuController、播放桥、媒体时钟、场景序列化、浏览器启动与输入绑定。",
+      "covers": ["menu controller", "input", "rendering", "playback bridge", "media clock", "boot"],
+      "keywords": ["runtime-web", "MenuController", "CanvasViewport", "popup", "boot", "autoplay"],
+      "keyFiles": ["packages/runtime-web/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/igs-adapter.ts", "packages/runtime-web/src/media-clock.ts", "packages/runtime-web/src/linear-playback.ts"]
+    },
+    {
+      "path": "packages/package-builder.md",
+      "kind": "package",
+      "summary": "菜单包文件布局、脚本嵌入与转义、PNG 批次、音效转换、媒体与 esbuild 打包。",
+      "covers": ["package layout", "script embedding", "PNG batching", "sound conversion", "manifest", "esbuild"],
+      "keywords": ["package-builder", "index.html", "disc-data.js", "manifest", "WAV", "assets-data"],
+      "keyFiles": ["packages/package-builder/src/index.ts"]
+    },
+    {
+      "path": "packages/test-runner.md",
+      "kind": "package",
+      "summary": "包审计检查项、交付/阶段判定、覆盖率、浏览器证据、发布汇总与对照。",
+      "covers": ["package audit", "delivery decision", "stage outcome", "coverage", "browser evidence", "release summary"],
+      "keywords": ["test-runner", "audit", "status", "notVerified", "gaps", "OFFLINE_URL"],
+      "keyFiles": ["packages/test-runner/src/package-audit.ts", "packages/test-runner/src/decisions.ts", "packages/test-runner/src/release-summary.ts", "packages/test-runner/src/coverage.ts", "packages/test-runner/src/browser-evidence.ts"]
+    },
+    {
+      "path": "packages/test-fixtures.md",
+      "kind": "package",
+      "summary": "手写字节构造器、DiscIR golden、共享菜单交互向量。",
+      "covers": ["fixtures", "byte builders", "goldens", "menu interaction vector"],
+      "keywords": ["fixtures", "buildM1Index", "golden", "synthetic"],
+      "keyFiles": ["packages/test-fixtures/src/index.ts", "packages/test-fixtures/src/bdmv.ts", "packages/test-fixtures/src/menu-runtime.ts"]
+    },
+    {
+      "path": "packages/cli.md",
+      "kind": "package",
+      "summary": "参数契约、六个命令实现要点、错误出口、退出码与扩展位置。",
+      "covers": ["argument contract", "commands", "exit codes", "error handling"],
+      "keywords": ["cli", "commandOptions", "exit code", "CLI_INVALID_PROFILE", "convert", "validate"],
+      "keyFiles": ["apps/cli/src/index.ts"]
+    },
+    {
+      "path": "features/cli-commands.md",
+      "kind": "feature",
+      "summary": "七个命令的输入、选项、产物、失败码与退出码；含常用命令小抄。",
+      "covers": ["inspect", "extract", "list-assets", "export-assets", "convert", "validate", "compare"],
+      "keywords": ["命令", "产物", "退出码", "CLI"],
+      "keyFiles": ["apps/cli/src/index.ts", "README.md"]
+    },
+    {
+      "path": "features/navigation.md",
+      "kind": "feature",
+      "summary": "解码→执行→导航图→媒体闭包四环；事件/代次、上下文、UO、转换期找菜单。",
+      "covers": ["VM execution", "event protocol", "UO mask", "navigation graph", "top menu resolution"],
+      "keywords": ["导航", "VM", "Top Menu", "媒体闭包", "UO"],
+      "keyFiles": ["packages/hdmv/src/vm.ts", "packages/hdmv/src/graph.ts", "packages/media-export/src/closure.ts", "apps/cli/src/index.ts"]
+    },
+    {
+      "path": "features/igs-extraction.md",
+      "kind": "feature",
+      "summary": "从 STREAM 找到 IGS 载体，经传输层到场景与 PNG；场景完整性与验证方式。",
+      "covers": ["IGS carrier detection", "transport", "segments", "scene completeness", "PNG", "verification"],
+      "keywords": ["IGS 提取", "PID", "场景", "complete", "BT.709"],
+      "keyFiles": ["packages/igs/src/extract.ts", "packages/igs/src/igs.ts", "packages/igs/src/png.ts"]
+    },
+    {
+      "path": "features/offline-menu.md",
+      "kind": "feature",
+      "summary": "菜单包结构、场景选择、disc-data 字段、浏览器启动、交互与媒体边界。",
+      "covers": ["package layout", "scene selection", "boot", "interaction", "media", "sound", "boundaries"],
+      "keywords": ["离线菜单", "file://", "popup", "convert", "输入映射"],
+      "keyFiles": ["packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts"]
+    },
+    {
+      "path": "features/media.md",
+      "kind": "feature",
+      "summary": "媒体闭包→计划→循环导出→线性变体→PGS→外部交接；能力边界与排查顺序。",
+      "covers": ["closure", "media plan", "loop export", "linear variants", "PGS", "external handoff", "capabilities"],
+      "keywords": ["媒体", "ffmpeg", "循环", "PGS", "外部播放器"],
+      "keyFiles": ["packages/media-export/src/index.ts", "packages/media-export/src/closure.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
+    },
+    {
+      "path": "features/verification.md",
+      "kind": "feature",
+      "summary": "阶段/交付两类判定、严格模式、convert 与 validate 的关系、报告字段与证据类型。",
+      "covers": ["delivery decision", "stage outcome", "strict", "reports", "evidence", "notVerified"],
+      "keywords": ["交付判定", "validate", "manifest", "auditScope", "gaps"],
+      "keyFiles": ["packages/test-runner/src/decisions.ts", "packages/test-runner/src/package-audit.ts", "packages/test-runner/src/release-summary.ts", "apps/cli/src/index.ts"]
+    },
+    {
+      "path": "diagnostics.md",
+      "kind": "reference",
+      "summary": "按前缀分组的诊断码：含义、典型严重性、产生位置、首查方向。",
+      "covers": ["contract errors", "CLI", "BDMV", "TS/PES/IGS", "HDMV/VM", "MEDIA/EXTERNAL", "SOUND", "audit checks"],
+      "keywords": ["诊断码", "错误", "severity", "检查项"],
+      "keyFiles": ["packages/bdmv-parser/src/parser.ts", "packages/igs/src/transport.ts", "packages/hdmv/src/vm.ts", "packages/test-runner/src/package-audit.ts"]
+    },
+    {
+      "path": "troubleshooting.md",
+      "kind": "guide",
+      "summary": "症状驱动排查：构建、inspect/extract、convert、浏览器、交互、音频、弹窗、外部播放、validate、VM。",
+      "covers": ["build failures", "convert failures", "browser boot", "interaction", "audio", "popup", "external playback", "validate", "VM"],
+      "keywords": ["排查", "故障", "黑屏", "点击偏移", "无声音"],
+      "keyFiles": ["packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts", "apps/cli/src/index.ts"]
+    },
+    {
+      "path": "testing.md",
+      "kind": "guide",
+      "summary": "测试命令、逐包基线、测试分层、夹具来源、新增测试与环境要求。",
+      "covers": ["test commands", "baseline counts", "test layout", "fixtures", "adding tests"],
+      "keywords": ["测试", "vitest", "基线", "夹具", "ci.sh"],
+      "keyFiles": ["package.json", "scripts/ci.sh", "docs/guides/development.md", "packages/test-fixtures/src/bdmv.ts"]
+    },
+    {
+      "path": "glossary.md",
+      "kind": "reference",
+      "summary": "BDMV/IGS/HDMV/产物与判定的术语对照。",
+      "covers": ["disc structure", "interactive graphics", "navigation", "artifacts", "abbreviations"],
+      "keywords": ["术语", "BDMV", "MPLS", "IGS", "PSR", "UO"],
+      "keyFiles": ["packages/bdmv-parser/src/model.ts", "packages/igs/src/types.ts", "packages/hdmv/src/registers.ts"]
+    }
+  ]
+}

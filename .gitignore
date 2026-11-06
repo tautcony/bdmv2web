@@ -1,5 +1,7 @@
 # Local, non-vendored reference extracts. Re-fetch from the pinned source manifest.
 .reference-cache/
+# Local code intelligence index (codegraph).
+.codegraph/
 node_modules/
 **/dist/
 *.m2ts

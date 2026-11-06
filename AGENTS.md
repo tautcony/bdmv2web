@@ -33,3 +33,14 @@ This file records cross-cutting requirements repeated in Codex conversations for
 - State current behavior directly in documentation, code, tests, comments, status messages, and prompts. Name supported capabilities, inputs, outputs, and requirements affirmatively. Remove stale behavior descriptions and contrastive explanations that describe current behavior by negating an obsolete or unrequested alternative. When behavior changes, replace old descriptions and assertions with the current contract instead of appending the change reason or a disclaimer about previous behavior. Tests should assert supported output and state directly; retain negative checks when rejection, security, or error handling is itself the contract, and assert its specific observable outcome.
 - Keep shared code and build configuration consistent across packages. Follow existing workspace conventions and avoid platform-specific assumptions or unnecessary dependencies.
 - When reporting progress, keep checklists current and separate completed implementation, verified results, pending work, and blocked work. Do not mark work complete based only on code being present.
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->
