@@ -666,9 +666,9 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
 
 export interface MenuLoopMediaPackage {
   playlist: number;
-  background: { path: string; loop: boolean };
+  background: { path: string; durationSeconds?: number; loop: boolean };
   /** Each entry is one source audio lane. Same-language lanes remain distinct. */
-  audioTracks: Array<{ streamNumber: number; psrStreamNumber?: number; path: string; language: string; pid?: number; variantId?: string }>;
+  audioTracks: Array<{ streamNumber: number; psrStreamNumber?: number; path: string; language: string; durationSeconds?: number; pid?: number; variantId?: string }>;
 }
 
 export interface MenuLoopPlaybackHooks {
@@ -841,13 +841,16 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
 
   private async applyAudioTrack(track: MenuLoopMediaPackage["audioTracks"][number], logicalTime: number, shouldPlay: boolean, generation: number, sequence: number): Promise<void> {
     this.audio.pause();
+    // Wait for metadata from the newly selected resource. readyState can still
+    // describe the previous source until load() resets the media element.
     this.audio.src = track.path;
-    const metadataWait = this.audio.readyState < 1 ? waitAudioEvent(this.audio, "loadedmetadata", this.hooks.trackSwitchTimeoutMs ?? 15_000) : null;
+    const expectedSrc = this.audio.src;
+    const metadataWait = waitAudioMetadata(this.audio, this.hooks.trackSwitchTimeoutMs ?? 15_000, expectedSrc);
     this.audio.load();
-    if (metadataWait) await metadataWait;
+    await metadataWait;
     this.assertCurrentTrackSwitch(generation, sequence);
-    const duration = this.audio.duration;
-    if (!Number.isFinite(duration) || duration <= 0) throw new Error("Audio variant reported an invalid duration.");
+    const duration = track.durationSeconds ?? this.media.background.durationSeconds;
+    if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) throw new Error("Menu package is missing a valid generated audio duration.");
     const targetTime = logicalTime % duration;
     if (!Number.isFinite(targetTime) || targetTime < 0) throw new Error("Video logical time cannot be mapped to the audio variant.");
     if (Math.abs(this.audio.currentTime - targetTime) > 0.000001) {
@@ -877,7 +880,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
 
 interface AudioWait { promise: Promise<void>; cancel(): void; }
 
-function waitAudioEvent(audio: HTMLAudioElement, eventName: "loadedmetadata" | "seeked", timeoutMs: number): AudioWait {
+function waitAudioEvent(audio: HTMLAudioElement, eventName: "seeked", timeoutMs: number): AudioWait {
   let cancel = () => {};
   const promise = new Promise<void>((resolvePromise, rejectPromise) => {
     let settled = false;
@@ -893,7 +896,7 @@ function waitAudioEvent(audio: HTMLAudioElement, eventName: "loadedmetadata" | "
       if (error) rejectPromise(error); else resolvePromise();
     };
     const onReady = () => finish();
-    const onFailure = () => finish(new Error(`Audio ${eventName} failed (${eventName === "loadedmetadata" ? "load" : "seek"}).`));
+    const onFailure = () => finish(new Error("Audio seek failed."));
     const timer = setTimeout(() => finish(new Error(`Timed out waiting for audio ${eventName}.`)), timeoutMs);
     cancel = () => finish(new Error(`Audio ${eventName} was superseded.`));
     audio.addEventListener(eventName, onReady, { once: true });
@@ -901,6 +904,32 @@ function waitAudioEvent(audio: HTMLAudioElement, eventName: "loadedmetadata" | "
     audio.addEventListener("abort", onFailure, { once: true });
   });
   return { promise, cancel: () => cancel() };
+}
+
+function waitAudioMetadata(audio: HTMLAudioElement, timeoutMs: number, expectedSrc: string): Promise<void> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      audio.removeEventListener("loadedmetadata", onMetadata);
+      audio.removeEventListener("error", onFailure);
+      audio.removeEventListener("abort", onFailure);
+    };
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) rejectPromise(error); else resolvePromise();
+    };
+    const onMetadata = () => {
+      if (audio.currentSrc === expectedSrc && audio.readyState >= 1) finish();
+    };
+    const onFailure = () => finish(new Error(`Audio metadata failed (media error ${audio.error?.code ?? "unknown"}).`));
+    const timer = setTimeout(() => finish(new Error("Timed out waiting for target audio metadata.")), timeoutMs);
+    audio.addEventListener("loadedmetadata", onMetadata);
+    audio.addEventListener("error", onFailure, { once: true });
+    audio.addEventListener("abort", onFailure, { once: true });
+  });
 }
 
 function waitAudioReady(audio: HTMLAudioElement, timeoutMs: number): Promise<void> {

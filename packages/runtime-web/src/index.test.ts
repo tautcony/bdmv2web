@@ -31,6 +31,7 @@ function keyEvent(code: string): KeyboardEvent {
 
 class FakeAudioElement {
   src = "";
+  get currentSrc(): string { return this.src; }
   duration = 109.234;
   readyState = 1;
   paused = true;
@@ -46,7 +47,7 @@ class FakeAudioElement {
   readonly load = vi.fn(() => {
     this.loadReadyStates.push(this.readyState);
     if (this.failLoadForPath && this.src.includes(this.failLoadForPath)) this.emit("error");
-    else if (this.readyState < 1 && this.autoMetadata) { this.readyState = 1; this.emit("loadedmetadata"); }
+    else if (this.autoMetadata) { this.readyState = Math.max(this.readyState, 1); this.emit("loadedmetadata"); }
   });
 
   constructor() {
@@ -838,7 +839,7 @@ describe("offline menu primitives", () => {
     const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement;
     const reports: string[] = [];
     const changed: string[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 1, pid: 0x1101, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
       { streamNumber: 0, pid: 0x1100, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
     ] }, (message) => reports.push(message), { audioTrackChanged: (track) => changed.push(track.path) });
@@ -868,7 +869,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", currentTime: 0, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement;
     const reports: string[] = []; const changed: number[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, pid: 0x1100, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
       { streamNumber: 1, pid: 0x1101, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
     ] }, (message) => reports.push(message), { audioTrackChanged: (track) => changed.push(track.streamNumber) });
@@ -888,7 +889,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", currentTime: 31.5, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement;
     const changed: string[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, pid: 0x1100, path: "audio-eng.m4a", language: "eng" },
       { streamNumber: 1, pid: 0x1101, path: "audio-jpn.m4a", language: "jpn" },
     ] }, () => {}, { audioTrackChanged: (track) => changed.push(track.path) });
@@ -911,7 +912,7 @@ describe("offline menu primitives", () => {
     vm.reset(9); vm.registers.systemWrite(1, 1); vm.runTurn(); const action = vm.drainActions()[0]!;
     const video = { loop: false, src: "", currentTime: 0, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement; const reports: string[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, pid: 0x1100, path: "audio-1100-eng.m4a", language: "eng" },
     ] }, (message) => reports.push(message));
     await bridge.dispatch(action); vm.registers.systemWrite(1, 2);
@@ -925,7 +926,7 @@ describe("offline menu primitives", () => {
     vm.reset(9); vm.registers.systemWrite(1, 1);
     const video = { loop: false, src: "", currentTime: 8, paused: true, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audioFake = new FakeAudioElement(); const audio = audioFake as unknown as HTMLAudioElement;
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, pid: 0x1100, path: "audio-eng-main.m4a", language: "eng" },
       { streamNumber: 1, pid: 0x1102, path: "audio-eng-commentary.m4a", language: "eng" },
     ] }, () => {});
@@ -940,7 +941,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", currentTime: 11, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audioFake = new FakeAudioElement(); audioFake.autoSeeked = false; const audio = audioFake as unknown as HTMLAudioElement;
     const changed: string[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, pid: 0x1100, path: "audio-eng.m4a", language: "eng" },
       { streamNumber: 1, pid: 0x1101, path: "audio-jpn.m4a", language: "jpn" },
       { streamNumber: 2, pid: 0x1102, path: "audio-kor.m4a", language: "kor" },
@@ -975,7 +976,7 @@ describe("offline menu primitives", () => {
         { streamNumber: 1, pid: 0x1101, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
         { streamNumber: 0, pid: 0x1100, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
       ];
-      const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: tracks }, () => {});
+      const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: tracks }, () => {});
       await bridge.startMenuBackground();
       const menuScene = scene(); menuScene.pages[0]!.id = 3; menuScene.pages[1]!.id = 2; menuScene.pages[0]!.buttons[0]!.commands = rawButtonCommands.map((bytes) => ({ bytes }));
       const dispatches: Promise<void>[] = []; const reached: PlaybackAction[] = [];
@@ -1020,7 +1021,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", currentTime: 42.5, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audio = new FakeAudioElement() as unknown as HTMLAudioElement;
     const bridge = new MenuLoopPlaybackBridge(vm, video, audio, {
-      playlist: 3, background: { path: "assets/media/background.mp4", loop: true },
+      playlist: 3, background: { path: "assets/media/background.mp4", loop: true, durationSeconds: 109.234 },
       audioTracks: [
         { streamNumber: 0, pid: 0x1100, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
         { streamNumber: 1, pid: 0x1101, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
@@ -1058,7 +1059,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", currentTime: 0, paused: true, play: vi.fn().mockRejectedValueOnce(Object.assign(new Error("gesture required"), { name: "NotAllowedError" })).mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audio = { loop: false, src: "", currentTime: 0, duration: 100, readyState: 1, paused: true, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), load: vi.fn() } as unknown as HTMLAudioElement;
     const reports: string[] = []; let retry: (() => void) | undefined;
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
     ] }, (message) => reports.push(message), { offerRetry: (callback) => { retry = callback; } });
 
@@ -1082,14 +1083,14 @@ describe("offline menu primitives", () => {
     const staleVideo = { loop: false, src: "", play: vi.fn().mockRejectedValueOnce(Object.assign(new Error("gesture required"), { name: "NotAllowedError" })) } as unknown as HTMLVideoElement;
     const staleAudio = { loop: false, src: "", play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLAudioElement;
     let staleRetry: (() => void) | undefined;
-    const staleBridge = new MenuLoopPlaybackBridge(stale.vm, staleVideo, staleAudio, { playlist: 3, background: { path: "background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "audio.wav", language: "eng" }] }, () => {}, { offerRetry: (callback) => { staleRetry = callback; } });
+    const staleBridge = new MenuLoopPlaybackBridge(stale.vm, staleVideo, staleAudio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [{ streamNumber: 0, path: "audio.wav", language: "eng" }] }, () => {}, { offerRetry: (callback) => { staleRetry = callback; } });
     await staleBridge.dispatch(stale.action); stale.vm.reset(9); staleRetry!(); await new Promise((resolve) => setTimeout(resolve, 0));
     expect(staleVideo.play).toHaveBeenCalledOnce();
 
     const unsupported = makeVmAction(); const reports: string[] = []; const retry = vi.fn();
     const unsupportedVideo = { loop: false, src: "", play: vi.fn().mockRejectedValueOnce(Object.assign(new Error("unsupported codec"), { name: "NotSupportedError" })) } as unknown as HTMLVideoElement;
     const unsupportedAudio = { loop: false, src: "", play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLAudioElement;
-    const unsupportedBridge = new MenuLoopPlaybackBridge(unsupported.vm, unsupportedVideo, unsupportedAudio, { playlist: 3, background: { path: "background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "audio.wav", language: "eng" }] }, (message) => reports.push(message), { offerRetry: retry });
+    const unsupportedBridge = new MenuLoopPlaybackBridge(unsupported.vm, unsupportedVideo, unsupportedAudio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [{ streamNumber: 0, path: "audio.wav", language: "eng" }] }, (message) => reports.push(message), { offerRetry: retry });
     await unsupportedBridge.dispatch(unsupported.action);
     expect(reports[0]).toMatch(/format is not supported/i); expect(retry).not.toHaveBeenCalled();
     expect(unsupported.vm.snapshot()).toMatchObject({ status: "stopped", waiting: null, diagnostic: { code: "HDMV_MEDIA_ERROR" } });
@@ -1101,7 +1102,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", play: vi.fn() } as unknown as HTMLVideoElement;
     const audio = { loop: false, src: "", play: vi.fn() } as unknown as HTMLAudioElement;
     const reports: string[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "", loop: true }, audioTracks: [] }, (message) => reports.push(message));
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "", loop: true, durationSeconds: 109.234 }, audioTracks: [] }, (message) => reports.push(message));
     await bridge.dispatch(action);
     expect(vm.snapshot().playback.status).toBe("unavailable"); expect(vm.snapshot().status).toBe("stopped");
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(true);
@@ -1112,7 +1113,7 @@ describe("offline menu primitives", () => {
     vm.reset(9); expect(vm.runTurn().status).toBe("idle"); expect(vm.drainActions()).toEqual([]);
     const video = { loop: false, src: "", currentTime: 0, paused: false, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
     const audio = { loop: false, src: "", currentTime: 0, duration: 109.234, readyState: 1, paused: false, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), load: vi.fn() } as unknown as HTMLAudioElement;
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
       { streamNumber: 1, path: "assets/media/audio-1101-jpn.m4a", language: "jpn" },
     ] }, () => {});
@@ -1127,7 +1128,7 @@ describe("offline menu primitives", () => {
     const video = { loop: false, src: "", play: vi.fn() } as unknown as HTMLVideoElement;
     const audio = { loop: false, src: "", play: vi.fn() } as unknown as HTMLAudioElement;
     const reports: string[] = [];
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: true, durationSeconds: 109.234 }, audioTracks: [
       { streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
     ] }, (message) => reports.push(message));
     await bridge.dispatch(action);

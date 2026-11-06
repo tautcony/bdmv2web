@@ -778,6 +778,8 @@ async function convert(): Promise<void> {
       limitations: menuMedia ? [] : ["Menu loop media is unavailable; the menu background holds its final frame."],
     }, strictDefault());
     const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
+    let progressAsset = "";
+    let lastProgressPercent = -5;
     await buildMenuPackage({
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
@@ -789,6 +791,19 @@ async function convert(): Promise<void> {
       graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, vmLimits: limits,
       ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
+      onMediaProgress: ({ assetPath, outTimeSeconds, durationSeconds, state }) => {
+        const percent = state === "end" ? 100 : durationSeconds > 0 ? Math.min(99, Math.floor(outTimeSeconds / durationSeconds * 100)) : 0;
+        if (assetPath !== progressAsset) {
+          progressAsset = assetPath;
+          lastProgressPercent = -5;
+        }
+        if (percent - lastProgressPercent < 5 && state !== "end") return;
+        lastProgressPercent = percent;
+        const line = `[ffmpeg] ${assetPath} ${percent}% (${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)} s)`;
+        if (process.stderr.isTTY) process.stderr.write(`\r${line}`);
+        else process.stderr.write(`${line}\n`);
+        if (state === "end" && process.stderr.isTTY) process.stderr.write("\n");
+      },
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
     const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };

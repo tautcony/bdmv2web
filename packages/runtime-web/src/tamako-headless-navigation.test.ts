@@ -63,7 +63,7 @@ describe("Tamako current-source headless navigation", () => {
     };
     const launch = (route: RouteStep[], checkpoint?: BranchCheckpoint) => {
       const vm = new HdmvVm(vmPrograms, { entries: disc.entries });
-      const events: EventRecord[] = checkpoint ? structuredClone(checkpoint.events) : [];
+      const events: EventRecord[] = checkpoint ? [...checkpoint.events] : [];
       const activations: Array<{ page: number; button: number }> = checkpoint ? [...checkpoint.activations] : [];
       const diagnostics: string[] = checkpoint ? [...checkpoint.diagnostics] : [];
       let menu!: MenuController;
@@ -104,7 +104,7 @@ describe("Tamako current-source headless navigation", () => {
         menu.restoreCheckpoint(checkpoint.menu);
         selectedTopMenu = checkpoint.selectedTopMenu;
         initialMenuPage = checkpoint.initialMenuPage;
-        startActions = structuredClone(checkpoint.startActions);
+        startActions = [...checkpoint.startActions];
         startFinalPage = checkpoint.startFinalPage;
       } else {
         vm.reset(firstPlay!.target.target as number);
@@ -156,9 +156,9 @@ describe("Tamako current-source headless navigation", () => {
       const state = JSON.stringify({ page: menu.page.id, visible: visible.map((button) => button.id), bogs: visible.map((button) => [button.bog, button.id]), psr: [registers.psr[1], registers.psr[2], registers.psr[11]], nonzeroGpr });
       const saveCheckpoint = (): BranchCheckpoint => {
         return {
-          vm: vm.saveCheckpoint(), menu: menu.saveCheckpoint(), events: structuredClone(events),
-          activations: [...activations], diagnostics: [...diagnostics], selectedTopMenu: structuredClone(selectedTopMenu),
-          initialMenuPage, startActions: structuredClone(startActions), startFinalPage,
+          vm: vm.saveCheckpoint(), menu: menu.saveCheckpoint(), events: [...events],
+          activations: [...activations], diagnostics: [...diagnostics], selectedTopMenu,
+          initialMenuPage, startActions: [...startActions], startFinalPage,
         };
       };
       return { vm, menu, events, activations, diagnostics, routeErrors, selectedTopMenu, initialMenuPage, startActions, startFinalPage, visible, state, saveCheckpoint };

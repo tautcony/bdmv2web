@@ -108,7 +108,8 @@ export interface MenuLoopMediaInput {
   audioTracks: MediaAudioTrackInput[];
 }
 export interface MediaProcessResult { stdout: string; stderr: string; }
-export type MediaProcessRunner = (executable: string, args: string[], timeoutMs: number, signal?: AbortSignal) => Promise<MediaProcessResult>;
+export interface MediaProcessProgress { outTimeSeconds: number; state: "continue" | "end"; }
+export type MediaProcessRunner = (executable: string, args: string[], timeoutMs: number, signal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void) => Promise<MediaProcessResult>;
 export interface MediaToolInvocation { executable: string; args: string[]; }
 export class MediaToolError extends Error {
   constructor(readonly diagnostic: { code: "MEDIA_TOOL_UNAVAILABLE" | "MEDIA_TOOL_COMMAND_FAILED" | "MEDIA_ENCODER_UNAVAILABLE"; executable: string; args: string[]; message: string }) {
@@ -141,6 +142,7 @@ export interface MenuLoopMediaOptions {
   containerOverheadPercent?: number;
   signal?: AbortSignal;
   runProcess?: MediaProcessRunner;
+  onProgress?: (progress: MediaProcessProgress & { assetPath: string; durationSeconds: number }) => void;
 }
 export interface MediaPlan {
   status: "partial";
@@ -189,7 +191,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const ffprobe = options.ffprobePath ?? "ffprobe";
   const run = options.runProcess ?? runProcess;
   const invocations: MediaToolInvocation[] = [];
-  const invoke: MediaProcessRunner = async (executable, args, limit, signal) => {
+  const invoke: MediaProcessRunner = async (executable, args, limit, signal, onProgress) => {
     invocations.push({ executable, args: [...args] });
     if (signal?.aborted || options.signal?.aborted) throw new MediaJobError({ code: "MEDIA_JOB_CANCELLED", executable, args: [...args], message: `Media job '${executable}' was cancelled before launch.` });
     const controller = new AbortController();
@@ -206,7 +208,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectTimeout: ((error: Error) => void) | undefined;
     const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
-    const processPromise = run(executable, args, limit, controller.signal);
+    const processPromise = run(executable, args, limit, controller.signal, onProgress);
     timer = setTimeout(() => {
       controller.abort();
       rejectTimeout?.(new MediaJobError({ code: "MEDIA_JOB_TIMEOUT", executable, args: [...args], message: `Media job '${executable}' timed out after ${limit} ms.` }));
@@ -294,11 +296,12 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   try {
     created.push(backgroundAbsolute);
     await runWithBudget(ffmpeg, [
-      "-hide_banner", "-nostdin", "-loglevel", "error", "-n", "-i", input.sourcePath,
+      "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n", "-i", input.sourcePath,
       "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(durationSeconds(input)),
       "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-preset", preset, "-crf", String(crf), "-pix_fmt", "yuv420p", "-aspect", aspectRatio, "-fps_mode", "passthrough",
       "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
-    ], timeoutMs, output, resolve(input.sourcePath), backgroundAbsolute, options.maxAssetBytes, options.maxOutputBytes, invoke, options.signal);
+    ], timeoutMs, output, resolve(input.sourcePath), backgroundAbsolute, options.maxAssetBytes, options.maxOutputBytes, invoke, options.signal,
+    (progress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: durationSeconds(input) }));
     const backgroundProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
     let outputVideo: ProbeStream;
     let videoDuration: number;
@@ -320,11 +323,12 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       const absolutePath = resolve(output, relativePath);
       created.push(absolutePath);
       await runWithBudget(ffmpeg, [
-        "-hide_banner", "-nostdin", "-loglevel", "error", "-n", "-i", input.sourcePath,
+        "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n", "-i", input.sourcePath,
         "-ss", String(seekSeconds), "-map", pidSpecifier(track.pid), "-vn", "-sn", "-dn", "-t", String(expectedDuration),
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
         "-metadata:s:a:0", `language=${safeLanguage(track.language)}`, "-f", "ipod", absolutePath,
-      ], timeoutMs, output, resolve(input.sourcePath), absolutePath, options.maxAssetBytes, options.maxOutputBytes, invoke, options.signal);
+      ], timeoutMs, output, resolve(input.sourcePath), absolutePath, options.maxAssetBytes, options.maxOutputBytes, invoke, options.signal,
+      (progress) => options.onProgress?.({ ...progress, assetPath: relativePath, durationSeconds: expectedDuration }));
       const audioProbe = await probeEncodedOutput(ffprobe, absolutePath, timeoutMs, invoke);
       let audioDuration: number;
       try {
@@ -540,7 +544,7 @@ async function ensureAbsent(path: string): Promise<void> {
   catch (error) { if (error instanceof Error && error.message.startsWith("Media export target already exists:")) throw error; if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
 }
 
-async function runProcess(executable: string, args: string[], timeoutMs: number, signal?: AbortSignal): Promise<MediaProcessResult> {
+async function runProcess(executable: string, args: string[], timeoutMs: number, signal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
   return await new Promise((resolveResult, reject) => {
     const child = spawn(executable, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] });
     const stdout: Buffer[] = []; const stderr: Buffer[] = []; let size = 0; let finished = false; let requestedError: Error | undefined; let killTimer: ReturnType<typeof setTimeout> | undefined;
@@ -558,7 +562,28 @@ async function runProcess(executable: string, args: string[], timeoutMs: number,
       if (size > 4 * 1024 * 1024) { terminate(new MediaJobError({ code: "MEDIA_PROCESS_FAILED", executable, args: [...args], message: `${executable} output exceeded 4 MiB.` })); return; }
       target.push(chunk);
     };
-    child.stdout.on("data", collect(stdout)); child.stderr.on("data", collect(stderr));
+    let progressOutput = "";
+    let progressFields: Record<string, string> = {};
+    child.stdout.on("data", collect(stdout));
+    child.stderr.on("data", (chunk: Buffer) => {
+      collect(stderr)(chunk);
+      if (!onProgress) return;
+      progressOutput += chunk.toString("utf8");
+      const lines = progressOutput.split(/\r?\n/);
+      progressOutput = lines.pop() ?? "";
+      for (const line of lines) {
+        const separator = line.indexOf("=");
+        if (separator < 1) continue;
+        const key = line.slice(0, separator);
+        const value = line.slice(separator + 1);
+        progressFields[key] = value;
+        if (key === "progress" && (value === "continue" || value === "end")) {
+          const micros = Number(progressFields.out_time_us);
+          if (Number.isFinite(micros) && micros >= 0) onProgress({ outTimeSeconds: micros / 1_000_000, state: value });
+          progressFields = {};
+        }
+      }
+    });
     child.on("error", (error) => finish(error));
     child.on("close", (code, closeSignal) => {
       if (requestedError) return finish(requestedError);
@@ -592,11 +617,11 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
   };
 }
 
-async function runWithBudget(executable: string, args: string[], timeoutMs: number, output: string, sourcePath: string, assetPath: string, maxAssetBytes: number | null | undefined, maxOutputBytes: number | null | undefined, run: MediaProcessRunner, externalSignal?: AbortSignal): Promise<MediaProcessResult> {
+async function runWithBudget(executable: string, args: string[], timeoutMs: number, output: string, sourcePath: string, assetPath: string, maxAssetBytes: number | null | undefined, maxOutputBytes: number | null | undefined, run: MediaProcessRunner, externalSignal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
   const controller = new AbortController();
   let stopMonitor: (() => void) | undefined;
   let externalAbortHandler: (() => void) | undefined;
-  const processPromise = run(executable, args, timeoutMs, controller.signal);
+  const processPromise = run(executable, args, timeoutMs, controller.signal, onProgress);
   const monitorPromise = new Promise<never>((_resolve, reject) => {
     let checking = false;
     const check = async () => {
