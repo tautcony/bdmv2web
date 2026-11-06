@@ -1,0 +1,29 @@
+packages/igs/test/hdmv-navigation-packet-fixtures.test.ts
+  s_61cc47fe78d75c::t_85207e6a263b1c 11-18,51,61-62
+  s_61cc47fe78d75c::t_d45eb72685cc67 22
+packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts
+  s_61cc47fe78d75c::t_815ae8472677ad 62-70,188,214-215,273,318,346,397-399
+packages/igs/test/tamako-external-navigation.test.ts
+  s_61cc47fe78d75c::t_52ce485dc2f14d 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "991303382627dc6e0f5fca584fc0fb757735c32c",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_61cc47fe78d75c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1afa6-0d1f-79c3-a90b-e52f85c67937",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
