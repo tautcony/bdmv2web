@@ -67,7 +67,7 @@ describe("バジャのスタジオ offline headless navigation", () => {
         const queue: NavigationAction[] = [...vm.drainActions()];
         for (let budget = 0; queue.length && budget < 256; budget++) {
           const action = queue.shift()!;
-          const context = action.source.path.includes("STREAM/") ? "ig-button" : "movie-object";
+          const context = action.source.path.includes("STREAM/") ? "ig_object" : "object";
           if (action.type === "SET_BUTTON_PAGE" && typeof action.payload.packed === "number") menu.applySetButtonPage(action.payload.packed);
           else if ((action.type === "ENABLE_BUTTON" || action.type === "DISABLE_BUTTON") && typeof action.payload.button === "number") menu.setButtonEnabled(action.payload.button, action.type === "ENABLE_BUTTON");
           if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {

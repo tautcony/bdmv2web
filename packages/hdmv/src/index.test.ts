@@ -106,7 +106,7 @@ describe("M3 HDMV fixtures", () => {
     expect(initial).toMatchObject({ status: "idle", pc: 0, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(initial.registers.gpr[0]).toBe(0);
 
-    const result = vm.executeButtonProgram([m3Fixtures.move5], "ig-button");
+    const result = vm.executeButtonProgram([m3Fixtures.move5], "ig_object");
     expect(result).toMatchObject({ status: "running", fault: null, registers: { gpr: expect.arrayContaining([5]) } });
     expect(result.diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
     expect(observed.some((entry) => entry.diagnostic?.code === "HDMV_UNVERIFIED_OPCODE" && entry.status === "idle")).toBe(true);
@@ -192,7 +192,7 @@ describe("M3 HDMV fixtures", () => {
     const igButtonVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
     igButtonVm.registers.write({ kind: "gpr", index: 0xfeb }, 2);
     igButtonVm.registers.write({ kind: "gpr", index: 0xfec }, 1);
-    const igButtonState = igButtonVm.executeButtonCommand(igButtonCommand, undefined, "ig-button");
+    const igButtonState = igButtonVm.executeButtonCommand(igButtonCommand, undefined, "ig_object");
     expect(igButtonState.registers.psr[1]).toBe(2);
     expect(igButtonVm.actions[0]).toMatchObject({ type: "SET_STREAM", payload: {
       destinationRaw: 0x8febcfec, destinationValue: 0x8002c001, primaryAudioStream: 2,
@@ -208,14 +208,14 @@ describe("M3 HDMV fixtures", () => {
 
     const chosen = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
     chosen.registers.write({ kind: "gpr", index: 0 }, 1);
-    const chosenResult = chosen.executeButtonProgram(commands, "ig-button");
+    const chosenResult = chosen.executeButtonProgram(commands, "ig_object");
     expect(chosenResult.fault).toBeNull(); expect(chosenResult.terminated).toBe(true);
     expect(chosenResult.pc).toBe(0); expect(chosenResult.registers.psr[1]).toBe(2);
     expect(chosenResult.actions.filter((action) => action.type === "SET_STREAM")).toHaveLength(1);
     expect(chosenResult.actions[0]?.payload.primaryAudioStream).toBe(2);
 
     const skipped = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-    const skippedResult = skipped.executeButtonProgram(commands, "ig-button");
+    const skippedResult = skipped.executeButtonProgram(commands, "ig_object");
     expect(skippedResult.terminated).toBe(true); expect(skippedResult.actions.filter((action) => action.type === "SET_STREAM")).toHaveLength(0);
     expect(skippedResult.registers.psr[1]).toBe(0xff);
   });
@@ -233,7 +233,7 @@ describe("M3 HDMV fixtures", () => {
     const execute = (selectionFlag: number) => {
       const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
       vm.registers.write({ kind: "gpr", index: 0x0a28 }, selectionFlag);
-      return vm.executeButtonProgram(commands, "ig-button");
+      return vm.executeButtonProgram(commands, "ig_object");
     };
     const firstBranch = execute(0);
     const secondBranch = execute(1);
@@ -247,7 +247,7 @@ describe("M3 HDMV fixtures", () => {
   it("returns to idle at natural MovieObject end so later button programs can run", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.move5] }]);
     expect(vm.runTurn().status).toBe("idle"); expect(vm.snapshot().diagnostic).toBeNull();
-    const result = vm.executeButtonProgram([m3Fixtures.move5, m3Fixtures.break], "ig-button");
+    const result = vm.executeButtonProgram([m3Fixtures.move5, m3Fixtures.break], "ig_object");
     expect(result.terminated).toBe(true); expect(result.fault).toBeNull();
     expect(result.registers.gpr[0]).toBe(5);
   });
@@ -277,9 +277,10 @@ describe("M3 HDMV fixtures", () => {
       expect(vm.runTurn().status).toBe("suspended");
       expect(vm.actions[0]).toMatchObject({ type: actionType, payload, waitFor: "ended" });
       const igVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-      const result = igVm.executeButtonProgram([command], "ig-button");
+      const result = igVm.executeButtonProgram([command], "ig_object");
       expect(result.fault).toBeNull();
       expect(igVm.actions).toHaveLength(0);
+      expect(igVm.trace.find((entry) => entry.raw === (typeof command === "string" ? command : command.bytes))).toMatchObject({ diagnostic: { code: "HDMV_OPCODE_CONTEXT_SKIPPED", message: expect.stringContaining("ig_object") }, status: "running" });
     }
   });
   it("emits immediate IG page, button, popup, and still actions without invented waits", () => {
@@ -292,7 +293,7 @@ describe("M3 HDMV fixtures", () => {
     ] as const;
     for (const [command, actionType] of cases) {
       const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-      const result = vm.executeButtonProgram([command], "ig-button");
+      const result = vm.executeButtonProgram([command], "ig_object");
       expect(result.fault).toBeNull(); expect(result.actions[0]?.type).toBe(actionType);
       expect(result.actions[0]).not.toHaveProperty("waitFor");
       const movieObject = new HdmvVm([{ id: 0, instructions: [command] }]);
@@ -300,20 +301,33 @@ describe("M3 HDMV fixtures", () => {
       expect(movieObject.actions).toHaveLength(0);
     }
   });
-  it("faults unsupported declared system operations with raw instruction diagnostics", () => {
-    const commands = [
-      rawCommand(0x51c00002, 1, 1), // SET_NV_TIMER: no timer service
-      rawCommand(0x3180000a, 1), // SET_OUTPUT_MODE: profile-specific semantics unavailable
-      rawCommand(0x51c0000b, 0, 0), // SET_STREAM_SS: 3D semantics unavailable
-      rawCommand(0x51c00010, 0, 0), // private/unknown SETSYSTEM_0x10
-    ];
-    for (const command of commands) {
-      const vm = new HdmvVm([{ id: 0, instructions: [command] }]);
-      const state = vm.runTurn();
-      expect(state.diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
-      expect(vm.trace.at(-1)?.raw).toBe(command);
-      expect(vm.actions).toHaveLength(0);
-    }
+  it("matches libbluray timer, output-mode, and 3D subtitle command behavior", () => {
+    const timer = new HdmvVm([{ id: 0, instructions: [rawCommand(0x51c00002, 0, 5), m3Fixtures.break] }]);
+    timer.registers.gpr[5] = 5;
+    timer.runTurn();
+    expect(timer.registers.read({ kind: "psr", index: 9 })).toBe(5);
+
+    const output = new HdmvVm([{ id: 0, instructions: [rawCommand(0x3180000a, 1), m3Fixtures.break] }], { profile: { capabilityValues: { 31: 0x00130240 } } });
+    output.registers.gpr[1] = 1;
+    output.runTurn();
+    expect(output.registers.read({ kind: "psr", index: 22 }) & 1).toBe(1);
+
+    const twoD = new HdmvVm([{ id: 0, instructions: [rawCommand(0x51c0000b, 0, 0), m3Fixtures.break] }]);
+    expect(twoD.runTurn().status).toBe("stopped");
+    expect(twoD.snapshot().diagnostic).toBeNull();
+
+    const threeD = new HdmvVm([{ id: 0, instructions: [rawCommand(0x51c0000b, 0, 0)] }]);
+    threeD.registers.systemWrite(22, 1);
+    expect(threeD.runTurn().status).toBe("idle");
+    expect(threeD.trace.find((entry) => entry.raw === rawCommand(0x51c0000b, 0, 0))).toMatchObject({ diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" }, status: "running" });
+  });
+  it("writes the pinned libbluray SETSYSTEM private PSR value", () => {
+    const command = rawCommand(0x51000010, 0, 0);
+    const vm = new HdmvVm([{ id: 0, instructions: [command] }]);
+    vm.registers.gpr[0] = 77;
+    expect(vm.runTurn().status).toBe("idle");
+    expect(vm.registers.read({ kind: "psr", index: 103 })).toBe(77);
+    expect(vm.trace.find((entry) => entry.raw === command)).toMatchObject({ status: "running", registerDelta: { psr: { 103: 77 } } });
   });
   it("applies immediate SET_BUTTON_PAGE operands in MovieObject context", () => {
     const words: [number, number, number] = [0x51c00003, 0x8000002a, 0x80000007];
@@ -337,7 +351,7 @@ describe("M3 HDMV fixtures", () => {
     const words: [number, number, number] = [0x51c00003, 0x8000002a, 0xc0000003];
     const bytes = words.map((word) => word.toString(16).padStart(8, "0")).join("");
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-    const result = vm.executeButtonCommand(bytes, undefined, "ig-button");
+    const result = vm.executeButtonCommand(bytes, undefined, "ig_object");
     expect(result.buttonCommandTerminated).toBe(true); expect(result.status).toBe("running");
     expect(result.registers.psr[10]).toBe(0xffff); expect(result.registers.psr[11]).toBe(0);
     const action = vm.drainActions()[0]!;
@@ -349,7 +363,7 @@ describe("M3 HDMV fixtures", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
     vm.registers.write({ kind: "gpr", index: 0 }, 0x1234002a);
     vm.registers.write({ kind: "gpr", index: 1 }, 0x00000003);
-    const result = vm.executeButtonCommand(bytes, undefined, "ig-button");
+    const result = vm.executeButtonCommand(bytes, undefined, "ig_object");
     expect(result.buttonCommandTerminated).toBe(true); expect(result.status).toBe("running");
     expect(vm.drainActions()[0]?.payload).toEqual({ packed: 0xe003002a });
   });
@@ -537,7 +551,7 @@ describe("M3 HDMV fixtures", () => {
     ];
     const vm = new HdmvVm([
       { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
-      { id: 1, instructions: [m3Fixtures.break] },
+      { id: 1, instructions: [] },
       { id: 2, instructions: [m3Fixtures.resume] },
     ], { entries });
     expect(vm.runTurn()).toMatchObject({ status: "suspended", programId: 0, pc: 1 });
@@ -545,7 +559,7 @@ describe("M3 HDMV fixtures", () => {
     expect(playlistAction.type).toBe("PLAY_PLAYLIST");
     vm.drainActions();
 
-    const button = vm.executeButtonProgram([rawCommand(0x21830000, 1)], "ig-button");
+    const button = vm.executeButtonProgram([rawCommand(0x21830000, 1)], "ig_object");
     expect(button).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }] });
     expect(button.actions).toHaveLength(1);
     expect(button.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
@@ -605,7 +619,7 @@ describe("M3 HDMV fixtures", () => {
         rawCommand(0x50000001, 12, 0x8000000a), // MOVE GPR12, PSR10
         rawCommand(0x50000001, 0x00000fff, 12), // MOVE GPR4095, GPR12
         rawCommand(0x21810000, 1), // JUMP_TITLE #1
-      ], "ig-button");
+      ], "ig_object");
       expect(button.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
       const selectedTitle = vm.selectTitle(1);
       expect(selectedTitle.status).toBe("suspended");
@@ -622,7 +636,7 @@ describe("M3 HDMV fixtures", () => {
       rawCommand(0x50000001, 12, 0x8000000a),
       rawCommand(0x50000001, 0x00000fff, 12),
       rawCommand(0x21810000, 1),
-    ], "ig-button");
+    ], "ig_object");
     uninitialized.selectTitle(1);
     expect(uninitialized.actions.at(-1)).toMatchObject({ type: "PLAY_PLAYLIST_MARK", payload: { playlist: 0, playMark: 0xffff } });
   });
@@ -710,6 +724,22 @@ describe("M3 HDMV fixtures", () => {
     vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
     expect(vm.snapshot().programId).toBe(0); expect(vm.snapshot().registers.gpr[0]).toBe(0); expect(vm.snapshot().status).toBe("stopped");
   });
+  it("runs an IG JUMP_OBJECT while playlist playback is suspended and retires that wait", () => {
+    const vm = new HdmvVm([
+      { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
+      { id: 1, instructions: [] },
+    ]);
+    vm.runTurn();
+    const playlistAction = vm.snapshot().waiting!;
+
+    const result = vm.executeButtonProgram([rawCommand(0x21800000, 1)], "ig_object");
+
+    expect(result).toMatchObject({ status: "idle", programId: 1, waiting: null });
+    expect(result.actions.map((action) => action.type)).toContain("PLAY_STOP");
+    const afterLateMediaCompletion = vm.handleEvent({ type: "MEDIA_ENDED", generation: playlistAction.generation, responseTo: playlistAction.id });
+    expect(afterLateMediaCompletion).toMatchObject({ status: "idle", programId: 1, waiting: null });
+    expect(vm.trace.find((entry) => entry.decoded?.startsWith("JUMP_OBJECT"))).toMatchObject({ status: "running" });
+  });
   it("keeps stopped and faulted VMs terminal when old events arrive", () => {
     const faulted = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }], { maxQueueDepth: 1 });
     faulted.runTurn(); const oldAction = faulted.actions[0]!;
@@ -747,14 +777,14 @@ describe("M3 HDMV fixtures", () => {
   it("emits IG LINK actions without suspending the VM", () => {
     const linkMark = rawCommand(0x22850000, 7);
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-    const result = vm.executeButtonProgram([m3Fixtures.linkPlayItem3, linkMark], "ig-button"); const [item, mark] = vm.actions;
+    const result = vm.executeButtonProgram([m3Fixtures.linkPlayItem3, linkMark], "ig_object"); const [item, mark] = vm.actions;
     expect(result.status).toBe("running"); expect(result.waiting).toBeNull(); expect(item?.type).toBe("LINK_PLAY_ITEM"); expect(item).not.toHaveProperty("waitFor");
     expect(mark?.type).toBe("LINK_PLAY_MARK"); expect(mark).not.toHaveProperty("waitFor");
     expect(result.terminated).toBe(true);
   });
   it("emits PLAY_STOP and terminates an IG-button sequence without waiting for MEDIA_ENDED", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-    const result = vm.executeButtonProgram([m3Fixtures.terminatePlaylist], "ig-button");
+    const result = vm.executeButtonProgram([m3Fixtures.terminatePlaylist], "ig_object");
     expect(result.buttonCommandTerminated).toBe(true); expect(result.terminated).toBe(true);
     expect(result.status).toBe("running"); expect(result.waiting).toBeNull();
     expect(result.actions[0]?.type).toBe("PLAY_STOP"); expect(result.actions[0]).not.toHaveProperty("waitFor");
@@ -769,7 +799,7 @@ describe("M3 HDMV fixtures", () => {
     const playlistAction = vm.snapshot().waiting!;
     expect(playlistAction.type).toBe("PLAY_PLAYLIST"); expect(playlistAction.waitFor).toBe("ended");
 
-    const button = vm.executeButtonProgram([m3Fixtures.move5, m3Fixtures.terminatePlaylist], "ig-button");
+    const button = vm.executeButtonProgram([m3Fixtures.move5, m3Fixtures.terminatePlaylist], "ig_object");
     expect(button.buttonCommandTerminated).toBe(true); expect(button.actions.map((action) => action.type)).toEqual(["PLAY_STOP"]);
     expect(button.status).toBe("stopped"); expect(button.waiting).toBeNull(); expect(button.programId).toBe(0);
     expect(button.registers.gpr[0]).toBe(6); // button command sets 5; resumed MovieObject ADD executes next
@@ -863,7 +893,7 @@ describe("M3 HDMV fixtures", () => {
     const callVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.callObject1] }, { id: 1, instructions: [m3Fixtures.break] }], { maxCallDepth: 0 });
     expect(callVm.runTurn().diagnostic?.code).toBe("VM_CALL_DEPTH_LIMIT");
     const queueVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }], { maxQueueDepth: 2 });
-    expect(queueVm.executeButtonProgram([m3Fixtures.popupOff, m3Fixtures.popupOff, m3Fixtures.popupOff], "ig-button").diagnostic?.code).toBe("VM_QUEUE_LIMIT");
+    expect(queueVm.executeButtonProgram([m3Fixtures.popupOff, m3Fixtures.popupOff, m3Fixtures.popupOff], "ig_object").diagnostic?.code).toBe("VM_QUEUE_LIMIT");
   });
   it("releases action queue budget when completed or drained actions leave the queue", () => {
     const stream = rawCommand(0x51c00001, 0x80010000, 0);

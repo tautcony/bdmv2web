@@ -101,7 +101,7 @@ describe("HDMV control-flow boundaries", () => {
 
   it("emits LINK_PLAY_MARK as a non-waiting action for the maximum mark operand", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-    const result = vm.executeButtonCommand(command(0x22850000, 0xffff), undefined, "ig-button");
+    const result = vm.executeButtonCommand(command(0x22850000, 0xffff), undefined, "ig_object");
     expect(result).toMatchObject({ status: "running", pc: 0, buttonCommandTerminated: false });
     expect(vm.actions).toHaveLength(1);
     expect(vm.actions[0]).toMatchObject({ type: "LINK_PLAY_MARK", payload: { playMark: 0xffff } });

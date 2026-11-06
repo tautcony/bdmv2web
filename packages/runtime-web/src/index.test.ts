@@ -686,7 +686,7 @@ describe("offline menu primitives", () => {
       { bytes: "1112131415161718191a1b1c", sourceOffset: "52", source: { path: "BDMV/STREAM/00001.m2ts", origin: "primary", offset: "52" } },
     ];
     const menu = new MenuController(testScene, port); menu.handle("activate");
-    expect(commands).toEqual(testScene.pages[0]!.buttons[0]!.commands.map(({ bytes, source }) => ({ command: bytes, source, context: "ig-button" })));
+    expect(commands).toEqual(testScene.pages[0]!.buttons[0]!.commands.map(({ bytes, source }) => ({ command: bytes, source, context: "ig_object" })));
   });
   it("runs an activated button as one conditional program and dispatches only the selected SET_STREAM branch", () => {
     const make = (words: [number, number, number]) => { const normalized = words.map((word) => word >>> 0) as [number, number, number]; return { words: normalized, bytes: normalized.map((word) => word.toString(16).padStart(8, "0")).join(""), source: m3Fixtures.move5.source }; };
@@ -862,6 +862,22 @@ describe("offline menu primitives", () => {
     vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
     expect(vm.snapshot().status).toBe("idle"); expect(vm.snapshot().waiting).toBeNull(); expect(vm.snapshot().playback.status).toBe("ended");
     expect(reports).toEqual([]);
+  });
+  it("preserves menu video position across PLAY_STOP and a same-playlist restart", async () => {
+    const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
+    const video = { loop: false, src: "", currentTime: 0, paused: true, play: vi.fn(async function(this: { paused: boolean }) { this.paused = false; }), pause: vi.fn(function(this: { paused: boolean }) { this.paused = true; }) } as unknown as HTMLVideoElement;
+    const audio = { loop: false, src: "", currentTime: 0, duration: 60, readyState: 1, paused: true, play: vi.fn(async function(this: { paused: boolean }) { this.paused = false; }), pause: vi.fn(function(this: { paused: boolean }) { this.paused = true; }), load: vi.fn() } as unknown as HTMLAudioElement;
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 60 }, audioTracks: [{ streamNumber: 0, path: "audio.m4a", language: "eng" }] });
+    expect(await bridge.startMenuBackground()).toBe(true);
+    video.currentTime = 27.5;
+    await bridge.dispatch({ id: "stop", generation: 1, type: "PLAY_STOP", payload: {} });
+    expect(video.paused).toBe(true);
+    await bridge.dispatch({ id: "resume", generation: 2, type: "PLAY_PLAYLIST", payload: { playlist: 3 } });
+    expect(video.src).toBe("background.mp4");
+    expect(video.currentTime).toBe(27.5);
+    expect(video.play).toHaveBeenCalledTimes(2);
+    expect(audio.play).toHaveBeenCalledTimes(2);
+    expect(video.paused).toBe(false);
   });
   it("restores PSR1 and the previously selected track when the new variant cannot play", async () => {
     const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);

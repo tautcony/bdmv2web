@@ -33,7 +33,7 @@ describe("Tamako menu-to-feature navigation", () => {
     const button = scene.pages.find((page) => page.id === 1)!.buttons.find((item) => item.id === 0)!;
     for (let attempt = 0; attempt < 3; attempt++) {
       const before = vm.snapshot(); vm.beginMenuAction();
-      const selected = vm.executeButtonProgram(button.commands.map((command) => command.bytes), "ig-button");
+      const selected = vm.executeButtonProgram(button.commands.map((command) => command.bytes), "ig_object");
       expect(selected.actions).toContainEqual(expect.objectContaining({ type: "TITLE_SEARCH", payload: { title: 1 } }));
       vm.drainActions();
       const feature = vm.selectTitle(1);

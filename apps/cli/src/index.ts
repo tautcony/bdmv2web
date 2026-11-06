@@ -731,6 +731,11 @@ async function convert(): Promise<void> {
     const menuScene = menuSceneResult.scene;
     const adapted = adaptIgsScene(menuScene, extraction.assets);
     const scene = adapted.scene;
+    const menuPlaylistIds = disc.playlists.flatMap((playlist) => menuIgsSceneTargets(disc, playlist).length ? [Number(playlist.id)] : []);
+    const menuScenes = disc.playlists.flatMap((playlist) => {
+      const result = findMenuScene(disc, playlist, extraction.scenes);
+      return result.status === "found" ? [{ playlistId: Number(playlist.id), scene: adaptIgsScene(result.scene, extraction.assets).scene }] : [];
+    });
     const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
     const popupScenes = popupAdaptations.map((result) => result.scene);
     const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
@@ -743,7 +748,7 @@ async function convert(): Promise<void> {
     const vmInitialProgramId = typeof menuEntry?.target.target === "number" ? menuEntry.target.target : undefined;
     const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
     const vmFirstPlayProgramId = typeof firstPlay?.target.target === "number" ? firstPlay.target.target : undefined;
-    const referenced = referencedAssetIds([scene, ...popupScenes]);
+    const referenced = referencedAssetIds([scene, ...popupScenes, ...menuScenes.map((item) => item.scene)]);
     const graphics = extraction.assets.filter((asset) => referenced.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
     const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
       ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
@@ -783,7 +788,7 @@ async function convert(): Promise<void> {
     await buildMenuPackage({
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
-      scene, popupScenes, vmPrograms, vmEntries: disc.entries,
+      scene, popupScenes, menuScenes, menuPlaylistIds, vmPrograms, vmEntries: disc.entries,
       externalTargets: buildExternalTargets(disc, extraction.scenes),
       bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),

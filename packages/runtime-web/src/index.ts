@@ -425,7 +425,7 @@ export class MenuController {
           const decoded = decodeInstruction(bytes, source);
           return { bytes: decoded.bytes, words: decoded.words, source: decoded.source };
         });
-        const result = this.vm.executeButtonProgram(commands, "ig-button");
+        const result = this.vm.executeButtonProgram(commands, "ig_object");
         if (result.fault?.message) { this.hooks.diagnostic?.(result.fault.message); this.recoverMenuAction(); }
         else if (result.diagnostic?.message) { this.hooks.diagnostic?.(result.diagnostic.message); this.recoverMenuAction(); }
         else this.hooks.dispatchActions?.();
@@ -436,7 +436,7 @@ export class MenuController {
       this.hooks.activateButton?.(activatedPageId, button);
     } else if (this.vm.executeButtonCommand) {
       for (const command of button.commands) {
-        const result = this.vm.executeButtonCommand(command.bytes, command.source, "ig-button");
+        const result = this.vm.executeButtonCommand(command.bytes, command.source, "ig_object");
         if (result.diagnostic?.message) this.hooks.diagnostic?.(result.diagnostic.message);
         if (result.status === "faulted" || result.diagnostic?.message) this.recoverMenuAction();
         else this.hooks.dispatchActions?.();
@@ -717,6 +717,10 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       if (typeof stream === "number" && stream > 0) await this.selectAudioStream(stream, action.generation);
       return;
     }
+    if (action.type === "PLAY_STOP") {
+      this.stopMedia();
+      return;
+    }
     if (action.type !== "PLAY_PLAYLIST") return;
     if (action.payload?.playlist !== this.media.playlist) {
       this.report(`Playback unavailable in menu preview (PLAY_PLAYLIST ${String(action.payload?.playlist)}).`);
@@ -748,6 +752,16 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   private async startMedia(response?: { id: string; generation: number }): Promise<boolean> {
     if (this.started) {
       this.hooks.clearRetry?.();
+      if (this.video.paused || this.audio.paused) {
+        try {
+          await Promise.all([this.video.play(), this.audio.play()]);
+        } catch (error) {
+          const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+          this.report(`Menu media could not resume: ${message}`);
+          if (response) this.vm.handleEvent({ type: "MEDIA_ERROR", generation: response.generation, responseTo: response.id, payload: { message } });
+          return false;
+        }
+      }
       if (response) this.vm.handleEvent({ type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
       return true;
     }
@@ -783,6 +797,12 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     if (this.startPromise === attempt && !started) this.startPromise = null;
     if (started && response) this.vm.handleEvent({ type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
     return started;
+  }
+
+  private stopMedia(): void {
+    this.activePlaylistResponse = null;
+    this.video.pause();
+    this.audio.pause();
   }
 
   private isPending(response: { id: string; generation: number }): boolean {

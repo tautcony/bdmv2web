@@ -63,3 +63,8 @@
 
 - **WHEN** 指令因上下文不适用而被跳过
 - **THEN** trace 记录 `HDMV_OPCODE_CONTEXT_SKIPPED`（含 opcode 与上下文），执行继续，不出现无诊断的静默返回
+
+#### Scenario: 播放等待期间执行 IG button 跳转
+
+- **WHEN** MovieObject 正等待 `PLAY_PL`、`PLAY_PL_PI` 或 `PLAY_PL_PM` 完成，IG button program 执行 `JUMP_OBJECT`
+- **THEN** 按 libbluray 对象语义结束当前 playlist 等待、发出 `PLAY_STOP`、进入目标 MovieObject；旧媒体回执不得恢复已结束的等待

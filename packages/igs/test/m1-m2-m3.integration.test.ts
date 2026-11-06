@@ -61,7 +61,7 @@ describe("M1 to M2/M3 consumer handoff", () => {
       expect(buttonDecoded.bytes).toBe(m3Fixtures.move5.bytes);
       expect(buttonDecoded.source).toEqual(commandSource);
       const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-      vm.executeButtonCommand(command.bytes, commandSource, "ig-button");
+      vm.executeButtonCommand(command.bytes, commandSource, "ig_object");
       expect(vm.trace.at(-1)).toMatchObject({ raw: m3Fixtures.move5.bytes, source: commandSource, decoded: expect.stringContaining("MOVE") });
       expect(vm.snapshot().registers.gpr[0]).toBe(5);
       expect(disc.analysisStage).toBe("structural");

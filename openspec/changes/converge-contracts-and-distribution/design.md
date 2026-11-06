@@ -70,7 +70,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 决策：
 
-- `terminatesFlow` 改为 `(opcode, context)` 两参数，`context: "movie-object" | "playlist"`；MovieObject 上下文只有 `TERMINATE_PL` 之外的真终止码才终止，`LINK_*` 不终止。
+- `terminatesFlow` 改为 `(opcode, context)` 两参数，`context: "object" | "playlist"`；MovieObject 上下文只有 `TERMINATE_PL` 之外的真终止码才终止，`LINK_*` 不终止。
 - `buildNavigationGraph` 为 `JUMP_TITLE` 生成指向目标 entry 的 `sequence` 边（target = 目标 title 的首个 program），边来源标注为 `jump-title`，与 `jump` 边区分。
 - `CALL_TITLE` 当前建立 VM 标题调用上下文并挂起，发出 `TITLE_SEARCH`；浏览器动作分发器调用 `selectTitle()` 恢复 VM。任务应补齐该路径的目标不可用/错误行为与诊断，不额外引入重复的桥端 `responseTo` 事件路径。
 - 被上下文忽略的指令（`PLAY_PL*` / `LINK_*` 在错误上下文）必须记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级），替代当前静默 `return`（`vm.ts:460-470`）。没有诊断的"按了没反应"是排查成本最高的一类缺陷。

@@ -9,7 +9,7 @@ const input = {
     outputProfile: "portable", videoProfiles: [], audioProfiles: [],
   },
   initialRegisters: { PSR0: 1, GPR0: "0" },
-  stableEntry: "movie-object-0",
+  stableEntry: "object-0",
   seed: 7,
   events: [{ at90k: "0", type: "key", key: "enter" }, { at90k: "90000", type: "media-ended" }],
 };
