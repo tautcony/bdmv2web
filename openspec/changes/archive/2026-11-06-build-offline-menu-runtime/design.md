@@ -24,7 +24,7 @@ Bootloader 顺序：数据/schema 校验 → 资产预解码 → 初始化 Playe
 
 Video 底层、IG Canvas、输入层分离。Canvas 使用源分辨率坐标，视口等比缩放并 letterbox；pointer 用相同矩阵逆变换，黑边无命中。DPR 只改变 backing store，不改变按钮位置。依原始 z-order/裁剪合成，不从 DOM 文字/图片 alpha 推断区域。
 
-SceneController 持有 composition/page/BOG/selected/activated/popup/动画状态；默认选择、超时选择、自动动作按已核验场景规则执行。三态序列及进入退出效果由状态/时间驱动；无可用按钮时清空 selection，不保留前页悬空 buttonId。未知效果保留诊断。
+SceneController 持有 composition/page/BOG/selected/activated/popup/动画状态；默认选择与自动动作按已核验场景规则执行。三态对象帧及进入/退出效果按保留的 IGS 字段和 90kHz 时序推进；无可用按钮时清空 selection，不保留前页悬空 buttonId。libbluray 1.5.0 未实现 composition/selection timeout 自动触发，因此运行时不把这些字段当作已对齐的超时行为。
 
 ### 3. 输入与 VM 动作闭环
 
@@ -32,19 +32,19 @@ Arrow 对应显式邻接，Enter/Space 只激活有效选择；pointermove/click
 
 PreviewPlaybackBridge 对无法由菜单包处理的动作回送带 actionId 的 unavailable，结束对应 VM 等待并提示，不假发 MEDIA_ENDED。影片动作在浏览器入口由外部播放器交接路径处理；菜单页切换、按钮状态和 sound 仍通过 VM/菜单控制器执行。
 
-### 4. 时间与异步生命周期
+### 4. 时间、导航与参考行为
 
-运行时提供 EventScheduler 接口、可注入逻辑时钟、作用域取消和暂停恢复。旧页面任务不会影响新页面。当前尚未解释 IGS 动画帧序列及页面进入/退出效果的字节语义，也没有相应时序 golden；这些能力保持未实现，不据此声称动画或效果匹配原盘。
+IGS 动画帧、页面进入/退出效果、HDMV 导航与输入行为以 VideoLAN libbluray 1.5.0 为准，固定实现来源见 [`M2 IGS 参考`](../../../docs/references/stages/M2-igs-scenes.md) 和 [`M3 HDMV 参考`](../../../docs/references/stages/M3-hdmv-navigation.md)。运行时以可注入 EventScheduler 推进保留的 IGS 帧/效果字段，并支持作用域取消和暂停恢复。与该参考一致即通过，不要求另建独立 timing golden 或第二套参考 trace。libbluray 未实现的 composition/selection timeout 自动触发不列入一致性声明。
 
-### 5. 开始手势及模式声明
+### 5. 开始手势及产物状态
 
 play Promise 捕捉 NotAllowedError，显示可重试开始按钮，用户手势后只重试仍有效动作，不再次执行整条按钮指令序列。NotSupportedError/资源错误为能力或资产失败，不能伪装成自动播放限制。
 
-统一包的 UI、README 和报告说明影片依赖实际 M2TS 与系统关联程序；交接请求不可用时反馈 unavailable，状态按实际缺口判定。菜单资源离线且包内自包含；影片源文件可在包外。当前 manifest/report 使用 `menu-only` 模式值；该值与统一产物设计并存，不代表浏览器内完整播放影片。
+统一包的 UI、README 和报告说明影片依赖实际 M2TS 与系统关联程序；交接请求不可用时反馈 unavailable，状态按实际缺口判定。菜单资源离线且包内自包含；影片源文件可在包外。manifest/report 保留 `menu-only` 状态字段，不作为用户可选的产物模式。
 
 ## Verification / Exit Criteria
 
-scene fixture 验证多页/BOG/三态/自动动作/方向邻接/UO mask、letterbox/DPR/黑边命中、失焦和触屏。script 注入样本含 `</script>`、中文/空格/百分号路径，启动不执行源字符串。断网 file:// 启动、整目录移动、音效、拒绝播放恢复和 unavailable 后 VM 不挂死；PNG 图层截图与 golden 对比。目标矩阵无证据项目记录未验证，不声称通过。
+使用固定版本 libbluray 1.5.0 作为 IGS 动画/效果及 HDMV 导航行为依据，记录源文件位置、输入场景、操作序列和实现测试结果；实现与该版本行为一致即通过。统一产物验收同时核对生成包的 manifest/report/README、外部 M2TS 目标、BDMV 路径配置，以及默认和 strict 下的状态/退出结果是否符合项目审计决策。浏览器 file://、画面、音效及目标环境证据以 M6 历史记录为准，本次未重跑的项目不作新验证声明。
 
 ## Risks / Trade-offs
 

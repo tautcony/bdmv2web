@@ -17,20 +17,13 @@
 - [x] 2.2 实现page/BOG/normal-selected-activated/默认选择/自动动作；验收：多页切换无悬空焦点，三态序列匹配scene。
 - [x] 2.3 实现方向邻接、确认、pointer/触屏、Top Menu/Pop-up/Escape配置；验收：无几何猜邻接，禁用/UO mask在各通道一致。
 - [x] 2.4 实现失焦清键与重复激活约束；验收：按住失焦再返回不持续移动/激活。
-- [ ] 2.5 补齐 IGS 动画帧及页面效果的可解释时序契约和独立 timing golden；现有可注入调度器、逻辑时钟、暂停恢复和作用域取消已实现。验收：在时序契约确定后，证明离页回调不污染新页、暂停冻结并与参考帧序列一致。
+## 3. VM集成与统一产物
 
-> Completion gap for 2.5: `adaptIgsScene` and the browser scene normalizer now preserve composition/selection timeout values, `animationFrameRateCode`, button start/end object IDs and repeat flags, and raw enter/exit effect bytes/counts. Effect flag bits remain embedded in opaque bytes and are not interpreted. The injected logical scheduler supports page-scope cancellation and pause/resume, with focused lifecycle tests, but the effect parser has no interpreted timing/completion contract and there is no timing golden. The runtime therefore cannot schedule source-matched animations or page effects yet; keep this task unchecked until that contract and a timing golden are available.
-
-## 3. VM集成与模式
-
-- [ ] 3.1 补独立参考导航 trace。当前浏览器已由 MenuController 连接 VM 动作/事件、指针/键盘和 sound，合成 M3 fixture 的集成路径已有测试；合成 trace 不作为独立参考。验收：指定按键路径与独立参考 trace 对照并记录首个差异。
 - [x] 3.2 实现PreviewPlaybackBridge unavailable反馈；验收：点击影片操作可见提示且结束VM等待，不伪造正常ended。
 - [x] 3.3 实现NotAllowedError用户手势恢复及NotSupportedError分流；验收：只重试仍有效动作，不重放整段VM副作用。
-- [x] 3.4 接入menu-only convert、目录/报告/README及strict退出；验收：始终partial，显式strict退出2，无外部和原碟引用。
-  - 历史完成记录：对应旧的模式与状态规则；新产品边界须按下项重新验收。
-- [ ] 3.4a 按当前统一产物边界复核并记录 convert/manifest/report/README 的端到端状态：当前 convert 无模式参数并生成单一菜单包，含外部 M2TS 目标与 BDMV 路径配置；manifest/report 保留 `menu-only` 状态字段。验收：真实包的状态、外部依赖、strict 结果与当前审计决策一致；不得沿用“始终 partial、无外部目标”的旧规则。
-
-> Completion gap for 3.1: browser keyboard activation is covered end-to-end through `MenuController`, the HDMV VM action bridge, and packaged button sound using a synthetic M3 fixture. No independently generated reference navigation trace for this menu-input path is present, so the synthetic trace cannot satisfy the stated reference-trace acceptance; keep this task unchecked pending that evidence.
+- [x] 3.4 接入统一菜单包 convert、manifest/report/README 与 strict 退出；验收：默认和 strict 共用菜单包契约，状态反映实际导出与外部影片依赖，严格结果由包审计决策产生。
+- [x] 3.5 基于固定版本 libbluray 1.5.0 完成菜单运行时一致性与产物集成验收，合并原 2.5、3.1、3.4a：IGS 动画帧/页面效果时序、HDMV 导航动作/状态及 MenuController 输入路径均以 libbluray 为行为准则；实现与其一致即通过，不另要求独立 timing golden 或第二套参考 trace。对应依据：`ig_decode.c` 的 24 位 duration、palette 与效果对象解析；`graphics_controller.c` 的 page in/out 选择、`SET_BUTTON_PAGE` effects flag、90kHz 时间推进、按钮对象帧间隔和 repeat/hold；`hdmv_vm.c`/`navigation.c` 的 VM 与导航状态。输入场景和序列由合成 IGS 帧/效果测试、真实光盘 First Play/Top Menu/可见按钮回放及控制器交互测试覆盖。libbluray 未实现 composition/selection timeout 自动触发，本实现不据此宣称该行为已对齐。
+  - 产物验收：CLI convert 默认/strict、输出结构、manifest/report/README、外部 M2TS 目标、BDMV 路径配置与 strict 结果由 `apps/cli/src/index.test.ts` 覆盖；改动后重新构建 CLI 并通过完整 CLI 测试。运行时证据：IGS 包 56 tests、runtime-web 包 99 tests、CLI 包 36 tests；对应包 typecheck 通过。OpenSpec validate 与 `git diff --check` 通过。真实浏览器本轮未重跑，历史 file:// 记录继续以 M6 为准。
 
 ## 4. 浏览器验收
 

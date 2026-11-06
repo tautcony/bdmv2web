@@ -6,6 +6,9 @@ export { LinearPlaybackBridge } from "./linear-playback.js";
 export type { LinearPlaybackAsset, LinearPlaybackHooks, LinearPlaybackMedia, LinearTimelineMapPort, LinearTimelinePosition } from "./linear-playback.js";
 export interface Bounds { x: number; y: number; width: number; height: number }
 export interface ButtonState { bounds: Bounds; image?: CanvasImageSource; soundId?: number; startObjectId?: number; endObjectId?: number; repeat?: boolean }
+export interface MenuObject { image: CanvasImageSource; width: number; height: number }
+export interface MenuEffectObject { image: CanvasImageSource; x: number; y: number; width: number; height: number; crop?: { x: number; y: number; width: number; height: number } }
+export interface MenuEffectFrame { duration90k: number; objects: MenuEffectObject[] }
 export interface MenuButton {
   id: number; bog: number; enabled: boolean; autoAction?: boolean;
   neighbors: { up: number; down: number; left: number; right: number };
@@ -19,11 +22,12 @@ export interface MenuPage {
   defaultActivatedButtonId?: number;
   bogDefaults?: Array<{ bog: number; defaultButtonId: number }>;
   animationFrameRateCode?: number;
-  rawEffects?: { enterBytesHex: string; exitBytesHex: string; enterEffectCount: number; exitEffectCount: number };
+  objects?: ReadonlyMap<number, MenuObject>;
+  effects?: { enter: MenuEffectFrame[]; exit: MenuEffectFrame[] };
   buttons: MenuButton[];
   allowedActions?: Partial<Record<"activate" | "move" | "popup" | "topMenu", boolean>>;
 }
-export interface MenuScene { width: number; height: number; compositionTimeout90k?: string | null; selectionTimeout90k?: string | null; pages: MenuPage[] }
+export interface MenuScene { width: number; height: number; frameRateCode?: number; compositionTimeout90k?: string | null; selectionTimeout90k?: string | null; pages: MenuPage[] }
 export interface RuntimeVmPort {
   handleEvent(event: VmEvent): unknown;
   snapshot?(): VmSnapshot;
@@ -114,6 +118,8 @@ export interface MenuControllerCheckpoint {
   pageIndex: number; selectedButtonId: number | null; activatedButtonId: number | null;
   disabled: number[]; bogSelections: Array<[string, number]>; invalidUoMaskPages: number[];
   unsupportedTimeoutActivationPages: number[]; started: boolean; autoActionDepth: number;
+  animationIndices: Array<[number, number]>; animationElapsedMs: number; paused: boolean;
+  activeEffect: { frames: MenuEffectFrame[]; index: number; remainingMs: number; next: MenuEffectFrame[]; pendingAutoAction: boolean } | null;
   scheduler: unknown;
 }
 
@@ -180,6 +186,8 @@ function errorMessage(error: unknown): string { return error instanceof Error ? 
 export class MenuController {
   pageIndex = 0; selectedButtonId: number | null = null; activatedButtonId: number | null = null;
   private readonly disabled = new Set<number>(); private bogSelections = new Map<string, number>(); private readonly scheduler: MenuScheduler; private readonly invalidUoMaskPages = new Set<number>(); private readonly unsupportedTimeoutActivationPages = new Set<number>(); private started = false; private autoActionDepth = 0; private readonly inputConfig: MenuInputConfig;
+  private animationIndices = new Map<number, number>(); private animationElapsedMs = 0; private paused = false;
+  private activeEffect: MenuControllerCheckpoint["activeEffect"] = null;
   constructor(readonly scene: MenuScene, readonly vm: RuntimeVmPort, readonly hooks: RuntimeHooks = {}, schedulerOrConfig: MenuScheduler | Partial<MenuInputConfig> = new EventScheduler()) {
     if (!scene.pages.length) throw new TypeError("menu scene must contain a page");
     const scheduler = isMenuScheduler(schedulerOrConfig);
@@ -197,6 +205,8 @@ export class MenuController {
       pageIndex: this.pageIndex, selectedButtonId: this.selectedButtonId, activatedButtonId: this.activatedButtonId,
       disabled: [...this.disabled], bogSelections: [...this.bogSelections], invalidUoMaskPages: [...this.invalidUoMaskPages],
       unsupportedTimeoutActivationPages: [...this.unsupportedTimeoutActivationPages], started: this.started,
+      animationIndices: [...this.animationIndices], animationElapsedMs: this.animationElapsedMs, paused: this.paused,
+      activeEffect: this.activeEffect ? { ...this.activeEffect, frames: [...this.activeEffect.frames], next: [...this.activeEffect.next] } : null,
       autoActionDepth: this.autoActionDepth, scheduler: this.scheduler.saveCheckpoint(),
     };
   }
@@ -207,20 +217,51 @@ export class MenuController {
     this.pageIndex = state.pageIndex; this.selectedButtonId = state.selectedButtonId; this.activatedButtonId = state.activatedButtonId;
     this.disabled.clear(); for (const id of state.disabled) this.disabled.add(id);
     this.bogSelections.clear(); for (const [key, button] of state.bogSelections) this.bogSelections.set(key, button);
+    this.animationIndices = new Map(state.animationIndices); this.animationElapsedMs = state.animationElapsedMs; this.paused = state.paused;
+    this.activeEffect = state.activeEffect ? { ...state.activeEffect, frames: [...state.activeEffect.frames], next: [...state.activeEffect.next] } : null;
     this.invalidUoMaskPages.clear(); for (const page of state.invalidUoMaskPages) this.invalidUoMaskPages.add(page);
     this.unsupportedTimeoutActivationPages.clear(); for (const page of state.unsupportedTimeoutActivationPages) this.unsupportedTimeoutActivationPages.add(page);
     this.started = state.started; this.autoActionDepth = state.autoActionDepth;
     this.scheduler.restoreCheckpoint(schedulerCheckpoint);
   }
   schedulePageEffect(delayMs: number, callback: () => void): number { return this.scheduler.schedule(delayMs, `page:${this.page.id}`, callback); }
-  pause(): void { this.scheduler.pause(); }
-  resume(): void { this.scheduler.resume(); }
-  advanceWhileRunning(deltaMs: number): void { this.scheduler.advanceWhileRunning(deltaMs); }
+  pause(): void { this.paused = true; this.scheduler.pause(); }
+  resume(): void { this.paused = false; this.scheduler.resume(); }
+  advanceWhileRunning(deltaMs: number): void {
+    this.scheduler.advanceWhileRunning(deltaMs);
+    if (!this.started || this.paused || !Number.isFinite(deltaMs) || deltaMs < 0) return;
+    if (this.activeEffect) { this.advanceEffect(deltaMs); return; }
+    const interval = animationFrameIntervalMs(this.scene.frameRateCode ?? 0, this.page.animationFrameRateCode ?? 0);
+    if (!this.hasActiveAnimation()) return;
+    this.animationElapsedMs += deltaMs;
+    let steps = 0;
+    while ((interval === 0 ? steps === 0 : this.animationElapsedMs >= interval) && steps < 256) {
+      if (interval > 0) this.animationElapsedMs -= interval;
+      this.advanceButtonAnimations();
+      steps++;
+    }
+    if (steps) this.hooks.render?.();
+  }
+  get effectFrame(): MenuEffectFrame | null { return this.activeEffect?.frames[this.activeEffect.index] ?? null; }
+  get isAnimating(): boolean { return !!this.activeEffect || this.hasActiveAnimation(); }
+  visualState(button: MenuButton): ButtonState | undefined {
+    const state = !button.enabled ? button.states.normal : button.id === this.activatedButtonId ? button.states.activated : button.id === this.selectedButtonId ? button.states.selected : button.states.normal;
+    if (!state || state.startObjectId === undefined || state.endObjectId === undefined) return state;
+    const index = this.animationIndices.get(button.bog) ?? 0;
+    const objectId = index < 0 && state.endObjectId < 0xfffe ? state.endObjectId : state.startObjectId + Math.max(0, index);
+    const object = this.page.objects?.get(objectId);
+    if (!object) {
+      const { image: _image, ...withoutImage } = state;
+      return this.page.objects ? withoutImage : state;
+    }
+    return { ...state, image: object.image, bounds: { x: state.bounds.x, y: state.bounds.y, width: object.width, height: object.height } };
+  }
   start(): void {
     if (this.started) return;
     this.started = true;
     this.syncMenuContext();
-    if (this.button?.autoAction) this.runAutomaticAction(this.button);
+    this.beginPageEffects([], this.page.effects?.enter ?? [], this.button?.autoAction === true);
+    if (!this.activeEffect && this.button?.autoAction) this.runAutomaticAction(this.button);
   }
   syncVmContext(): void { this.syncMenuContext(); }
   setPage(index: number): void {
@@ -233,12 +274,11 @@ export class MenuController {
     const buttonFlag = (packed & 0x20000000) !== 0;
     const pageId = (packed >>> 16) & 0xff;
     const buttonId = packed & 0xffff;
-    if (effectsFlag) this.hooks.diagnostic?.(`SET_BUTTON_PAGE requests page effects for page ${pageId}; effects are not rendered in this preview.`);
     if (pageFlag) {
       if (pageId === this.page.id) return;
       const pageIndex = this.scene.pages.findIndex((page) => page.id === pageId);
       if (pageIndex < 0) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references missing page ${pageId}.`); return; }
-      this.changePage(pageIndex, !buttonFlag);
+      this.changePage(pageIndex, !buttonFlag, !effectsFlag);
     }
     if (!buttonFlag) return;
     if (buttonId === 0xffff) {
@@ -248,9 +288,68 @@ export class MenuController {
     if (!this.isPageMember(target)) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references unusable button ${buttonId} on page ${this.page.id}.`); return; }
     this.activateBogButton(target);
   }
-  private changePage(index: number, runAutoAction: boolean): void {
+  private changePage(index: number, runAutoAction: boolean, playOutEffects = true): void {
     if (!Number.isInteger(index) || index < 0 || index >= this.scene.pages.length) throw new RangeError("page index out of range");
-    this.scheduler.cancelScope(`page:${this.page.id}`); this.hooks.invalidateSound?.(); this.pageIndex = index; this.activatedButtonId = null; this.selectPageDefault(runAutoAction && this.started); this.hooks.render?.();
+    const oldPage = this.page;
+    this.scheduler.cancelScope(`page:${oldPage.id}`); this.hooks.invalidateSound?.(); this.pageIndex = index; this.activatedButtonId = null; this.selectPageDefault(false);
+    const out = playOutEffects ? oldPage.effects?.exit ?? [] : [];
+    const enter = this.page.effects?.enter ?? [];
+    this.beginPageEffects(out, enter, runAutoAction && this.started);
+    if (!this.activeEffect && runAutoAction && this.started && this.button?.autoAction) this.runAutomaticAction(this.button);
+    this.hooks.render?.();
+  }
+  private beginPageEffects(out: MenuEffectFrame[], enter: MenuEffectFrame[], pendingAutoAction: boolean): void {
+    const frames = out.length ? out : enter;
+    this.activeEffect = frames.length ? {
+      frames: [...frames], index: 0, remainingMs: frames[0]!.duration90k / 90,
+      next: out.length ? [...enter] : [], pendingAutoAction,
+    } : null;
+  }
+  private advanceEffect(deltaMs: number): void {
+    let remainingDelta = deltaMs;
+    let transitions = 0;
+    while (this.activeEffect && transitions < 512) {
+      const active = this.activeEffect;
+      if (active.remainingMs > remainingDelta) { active.remainingMs -= remainingDelta; break; }
+      remainingDelta = Math.max(0, remainingDelta - active.remainingMs);
+      if (active.index + 1 < active.frames.length) {
+        active.index++;
+        active.remainingMs = active.frames[active.index]!.duration90k / 90;
+      } else if (active.next.length) {
+        active.frames = active.next; active.next = []; active.index = 0;
+        active.remainingMs = active.frames[0]!.duration90k / 90;
+      } else {
+        const runAutoAction = active.pendingAutoAction;
+        this.activeEffect = null;
+        if (runAutoAction && this.button?.autoAction) this.runAutomaticAction(this.button);
+      }
+      transitions++;
+      if (remainingDelta === 0 && this.activeEffect?.remainingMs !== 0) break;
+    }
+    this.hooks.render?.();
+  }
+  private hasActiveAnimation(): boolean {
+    return this.page.buttons.some((button) => {
+      if (!this.isDisplayed(button)) return false;
+      const state = !button.enabled ? button.states.normal : button.id === this.activatedButtonId ? button.states.activated : button.id === this.selectedButtonId ? button.states.selected : button.states.normal;
+      return !!state && (this.animationIndices.get(button.bog) ?? 0) >= 0 && state.endObjectId !== undefined && state.startObjectId !== undefined && state.endObjectId > state.startObjectId;
+    });
+  }
+  private advanceButtonAnimations(): void {
+    const visibleBogs = new Set(this.page.buttons.filter((button) => this.isDisplayed(button)).map((button) => button.bog));
+    for (const bog of visibleBogs) {
+      const button = this.page.buttons.find((candidate) => candidate.bog === bog && this.isDisplayed(candidate));
+      if (!button) continue;
+      const state = !button.enabled ? button.states.normal : button.id === this.activatedButtonId ? button.states.activated : button.id === this.selectedButtonId ? button.states.selected : button.states.normal;
+      if (!state || state.startObjectId === undefined || state.endObjectId === undefined) continue;
+      const range = state.endObjectId - state.startObjectId;
+      if (range <= 0 || state.startObjectId >= 0xffff || state.endObjectId >= 0xffff) continue;
+      const current = this.animationIndices.get(bog) ?? 0;
+      if (current < 0) continue;
+      const next = current + 1;
+      if (state.repeat) this.animationIndices.set(bog, next % (range + 1));
+      else this.animationIndices.set(bog, next > range ? -1 : next);
+    }
   }
   setButtonEnabled(id: number, enabled: boolean): void {
     const target = this.page.buttons.find((button) => button.id === id);
@@ -266,6 +365,7 @@ export class MenuController {
     const key = this.bogSelectionKey(this.page.id, target.bog);
     const current = this.bogSelections.get(key);
     if (enabled) {
+      this.animationIndices.set(target.bog, 0);
       this.bogSelections.set(key, id);
       if (current === this.selectedButtonId) this.selectButton(id);
       else if (!this.isUsable(this.button)) {
@@ -283,6 +383,7 @@ export class MenuController {
     this.hooks.render?.();
   }
   handle(kind: InputKind): void {
+    if (this.activeEffect) return;
     if (kind === "escape") {
       if (!this.isUoAllowed(25)) return;
       const current = this.button;
@@ -427,6 +528,7 @@ export class MenuController {
       this.hooks.invalidateSound?.();
       this.activatedButtonId = null;
       this.selectedButtonId = id;
+      this.animationIndices.set(target.bog, 0);
       this.syncMenuContext();
       this.hooks.render?.();
       // Pointer selection passes false, so hover never activates an auto-action button.
@@ -436,6 +538,8 @@ export class MenuController {
   }
   private selectPageDefault(runAutoAction: boolean): void {
     const page = this.page;
+    this.animationIndices = new Map((page.bogDefaults ?? [...new Set(page.buttons.map((button) => button.bog))].map((bog) => ({ bog }))).map(({ bog }) => [bog, 0]));
+    this.animationElapsedMs = 0;
     const previousSelection = this.selectedButtonId;
     for (const key of [...this.bogSelections.keys()]) if (key.startsWith(`${page.id}:`)) this.bogSelections.delete(key);
     // The per-BOG default valid refs establish which button variant is enabled.
@@ -497,20 +601,36 @@ export function drawMenu(context: CanvasRenderingContext2D, scene: MenuScene, co
   if (layerContext) {
     layerContext.setTransform(1, 0, 0, 1, 0, 0);
     layerContext.clearRect(0, 0, scene.width, scene.height);
-    for (const button of controller.page.buttons) {
+    const effect = controller.effectFrame;
+    if (effect) drawEffectFrame(layerContext, effect);
+    else for (const button of controller.page.buttons) {
       if (!controller.isDisplayed(button)) continue;
-      const state = !button.enabled ? button.states.normal : button.id === controller.activatedButtonId ? button.states.activated : button.id === controller.selectedButtonId ? button.states.selected : button.states.normal;
+      const state = controller.visualState(button);
       if (state?.image) layerContext.drawImage(state.image, state.bounds.x, state.bounds.y, state.bounds.width, state.bounds.height);
     }
   }
   viewport.toCss(context, cssWidth, cssHeight, dpr); context.save(); context.beginPath(); context.rect(0, 0, scene.width, scene.height); context.clip();
   if (layerContext && pageLayer) context.drawImage(pageLayer, 0, 0, scene.width, scene.height);
+  else if (controller.effectFrame) drawEffectFrame(context, controller.effectFrame);
   else for (const button of controller.page.buttons) {
     if (!controller.isDisplayed(button)) continue;
-    const state = !button.enabled ? button.states.normal : button.id === controller.activatedButtonId ? button.states.activated : button.id === controller.selectedButtonId ? button.states.selected : button.states.normal;
+    const state = controller.visualState(button);
     if (state?.image) context.drawImage(state.image, state.bounds.x, state.bounds.y, state.bounds.width, state.bounds.height);
   }
   context.restore();
+}
+
+function drawEffectFrame(context: CanvasRenderingContext2D, frame: MenuEffectFrame): void {
+  context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+  for (const object of frame.objects) {
+    if (object.crop) context.drawImage(object.image, object.crop.x, object.crop.y, object.crop.width, object.crop.height, object.x, object.y, object.crop.width, object.crop.height);
+    else context.drawImage(object.image, object.x, object.y, object.width, object.height);
+  }
+}
+
+function animationFrameIntervalMs(videoFrameRateCode: number, animationFrameRateCode: number): number {
+  const frameTicks = [0, (90_000 / 1001) * 24, (90_000 / 1000) * 24, (90_000 / 1000) * 25, (90_000 / 1001) * 30, (90_000 / 1000) * 50, (90_000 / 1001) * 60, 0][videoFrameRateCode] ?? 0;
+  return frameTicks * (animationFrameRateCode + 1) / 90;
 }
 
 const menuPageLayers = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();

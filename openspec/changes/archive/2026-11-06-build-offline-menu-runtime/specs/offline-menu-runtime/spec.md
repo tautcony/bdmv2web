@@ -32,7 +32,7 @@
 
 ### Requirement: 交互与视觉状态
 
-系统 SHALL 根据页面/BOG/有效性/邻接/UO mask 呈现三态并经 MenuController/VM 处理输入，不用硬编码按钮业务。
+系统 SHALL 根据页面/BOG/有效性/邻接/UO mask 呈现三态并经 MenuController/VM 处理输入，不用硬编码按钮业务；HDMV 导航和输入行为以固定版本 libbluray 1.5.0 为准。
 
 #### Scenario: letterbox 点击
 
@@ -51,7 +51,7 @@
 
 ### Requirement: 动画与生命周期
 
-系统 SHALL 按源坐标/层次/裁剪和调度时钟呈现动画/效果，支持 DPI 且不让失效回调污染当前页。
+系统 SHALL 按源坐标/层次/裁剪和调度时钟呈现动画/效果，支持 DPI 且不让失效回调污染当前页；IGS 动画帧与页面效果时序以固定版本 libbluray 1.5.0 为准。
 
 #### Scenario: DPI 改变
 

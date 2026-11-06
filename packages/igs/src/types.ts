@@ -73,6 +73,27 @@ export interface IgsButton {
   commands: Array<{ bytes: Uint8Array; recordIndex: number; sourceOffset: string }>;
 }
 
+export interface IgsEffectObject {
+  objectId: number;
+  windowId: number;
+  forcedOn: boolean;
+  x: number;
+  y: number;
+  crop?: { x: number; y: number; width: number; height: number };
+}
+
+export interface IgsEffect {
+  /** Effect duration in 90 kHz ticks, matching libbluray's BD_IG_EFFECT.duration. */
+  duration90k: number;
+  paletteId: number;
+  objects: IgsEffectObject[];
+}
+
+export interface IgsEffectSequence {
+  windows: Array<{ id: number; x: number; y: number; width: number; height: number }>;
+  effects: IgsEffect[];
+}
+
 export interface IgsPage {
   id: number;
   scopeId?: string;
@@ -84,7 +105,7 @@ export interface IgsPage {
   buttons: IgsButton[];
   bogs: Array<{ defaultButtonId: number; buttonIds: number[] }>;
   animationFrameRateCode: number;
-  rawEffects: { enter: Uint8Array; exit: Uint8Array; enterEffectCount: number; exitEffectCount: number };
+  effects: { enter: IgsEffectSequence; exit: IgsEffectSequence };
 }
 
 export interface IgsScene {

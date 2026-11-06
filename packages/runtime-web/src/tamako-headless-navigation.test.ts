@@ -36,7 +36,7 @@ describe("Tamako current-source headless navigation", () => {
     const rawScene = extraction.scenes.find((scene) => menuClipIds.has(scene.clipId));
     expect(rawScene, `IGS scene linked from playlist ${menuPlaylist!.id}; no unrelated clip fallback`).toBeDefined();
     const adapted = adaptIgsScene(rawScene!, extraction.assets, { allowMissingAssets: true });
-    const scene = adapted.scene as MenuScene;
+    const scene = adapted.scene as unknown as MenuScene;
     const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({ id, instructions: instructions.map(({ words, bytes, source }) => ({ words, bytes, source: { path: "<MovieObject>", origin: source.origin, offset: source.offset } })), resumeIntention, menuCallMask, titleSearchMask }));
     const movieGraph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries });
     // IGS command sourceOffset is inside the decoded ICS command records; scene.packetOffset is a transport byte offset mapped by the sparse-packet sidecar.

@@ -42,10 +42,10 @@
 
 ### M2-SYN-TIME-EFFECT-04 — 动画字段、超时与效果
 
-- **Fixture / evidence / source:** `packages/igs/test/extraction.test.ts`，`keeps unknown effect semantics unverified and marks the page incomplete`；使用 `syntheticClip({ effects: true, richEffects: true, uiModelWithTimeouts: true, animated: true })`。
-- **Expected:** 保留可解析的时间、帧/循环字段及原始效果字节；未实现的效果不得静默解释成静态完整画面。
-- **Actual:** 测试断言 composition timeout `90000`、selection timeout `45000`、user timeout duration `123`、frame-rate code `1`、normal/selected visual object range `5..5` 与 repeat。进入/退出效果原始字节和数量保留；产生 `IGS_UNSUPPORTED_EFFECT`，scene 不完整，extract 为 `partial`。
-- **Result:** 字段保留及“未知效果保持未验证”断言通过。fixture 不提供动画逐帧参考、效果播放时序 golden 或用户可见结果，不能断言效果语义正确。
+- **Fixture / evidence / source:** `packages/igs/test/extraction.test.ts`，`decodes libbluray effect durations, palette refs, composition objects and crop data`；使用 `syntheticClip({ effects: true, richEffects: true, uiModelWithTimeouts: true, animated: true })`。
+- **Expected:** 解码效果持续时间、palette、composition 对象、裁剪区域，以及按钮动画帧率和循环字段。
+- **Actual:** 测试断言 composition timeout `90000`、selection timeout `45000`、user timeout duration `123`、frame-rate code `1`、normal/selected visual object range `5..5` 与 repeat，并逐字段校验进入/退出效果结构。`returns extracted effect data and rendered assets with the clip result` 校验效果字段与渲染资产共同返回。
+- **Result:** 合成输入上的效果解析、资产输出与动画字段测试通过。`MenuController` 的帧推进、页面效果时序和 checkpoint 恢复由 `packages/runtime-web/src/index.test.ts` 覆盖；libbluray 未实现的 composition/selection timeout 自动触发不作为已验证行为。
 
 ### M2-SYN-DAMAGE-05 — 缺失资源、损坏流与不完整 Display Set
 

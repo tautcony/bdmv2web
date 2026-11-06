@@ -22,7 +22,7 @@ function fixture(): { scene: IgsScene; assets: IgsAsset[] } {
         commands: [{ bytes: Uint8Array.of(0, 1, 2, 10, 15, 255), recordIndex: 0, sourceOffset: "417" }],
       }],
       bogs: [{ defaultButtonId: 11, buttonIds: [11] }],
-      rawEffects: { enter: new Uint8Array(), exit: new Uint8Array(), enterEffectCount: 0, exitEffectCount: 0 },
+      effects: { enter: { windows: [], effects: [] }, exit: { windows: [], effects: [] } },
       animationFrameRateCode: 5,
     }],
     objects: [21, 22, 23].map((id) => ({ id, version: 1, width: 30 + id, height: 40 + id, indices: new Uint8Array(), source })),
@@ -44,11 +44,12 @@ describe("adaptIgsScene", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.scene).toEqual({
       id: scene.id, clipId: scene.clipId, pid: scene.pid, streamModel: 0, uiModel: 0, source,
-      width: 1920, height: 1080, compositionTimeout90k: "90000", selectionTimeout90k: "4500",
+      width: 1920, height: 1080, frameRateCode: 1, compositionTimeout90k: "90000", selectionTimeout90k: "4500",
       pages: [{
         id: 2, uoMask: "0", defaultButtonId: 11, defaultActivatedButtonId: 12, bogDefaults: [{ bog: 0, defaultButtonId: 11 }],
         animationFrameRateCode: 5,
-        rawEffects: { enterBytesHex: "", exitBytesHex: "", enterEffectCount: 0, exitEffectCount: 0 },
+        objects: [21, 22, 23].map((id, index) => ({ id, width: 51 + index, height: 61 + index, assetId: assets[index]!.id })),
+        effects: { enter: [], exit: [] },
         buttons: [{
           id: 11, bog: 0, enabled: true, autoAction: true,
           neighbors: { up: 12, down: 13, left: 14, right: 15 },
@@ -84,20 +85,19 @@ describe("adaptIgsScene", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("marks unsupported animation and page effects partial while using only the declared starting frame", () => {
+  it("adapts button animation frames and timed page effects using libbluray fields", () => {
     const { scene, assets } = fixture(); const button = scene.pages[0]!.buttons[0]!;
     button.visuals.selected.endObjectId = 23;
     button.visuals.selected.repeat = true;
-    scene.pages[0]!.rawEffects.enterEffectCount = 1;
-    scene.pages[0]!.rawEffects.enter = new Uint8Array([0xa5, 0x02]);
-    scene.pages[0]!.rawEffects.exit = new Uint8Array([0xe0]);
-    scene.pages[0]!.rawEffects.exitEffectCount = 2;
+    scene.pages[0]!.effects.enter.effects.push({ duration90k: 45_000, paletteId: 3, objects: [{ objectId: 23, windowId: 0, forcedOn: false, x: 7, y: 9, crop: { x: 1, y: 2, width: 10, height: 11 } }] });
+    scene.pages[0]!.effects.exit.effects.push({ duration90k: 90_000, paletteId: 3, objects: [{ objectId: 21, windowId: 0, forcedOn: true, x: 3, y: 4 }] });
     const result = adaptIgsScene(scene, assets);
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("complete");
     expect(result.scene.pages[0]!.buttons[0]!.states.selected?.assetId).toBe(assets[1]!.id);
     expect(result.scene.pages[0]!.buttons[0]!.states.selected).toMatchObject({ startObjectId: 22, endObjectId: 23, repeat: true });
-    expect(result.scene.pages[0]!.rawEffects).toEqual({ enterBytesHex: "a502", exitBytesHex: "e0", enterEffectCount: 1, exitEffectCount: 2 });
-    expect(result.diagnostics.map(({ code }) => code)).toEqual(["IGS_UNSUPPORTED_ANIMATION", "IGS_UNSUPPORTED_EFFECT"]);
+    expect(result.scene.pages[0]!.effects?.enter[0]).toMatchObject({ duration90k: 45_000, objects: [{ objectId: 23, x: 7, y: 9, crop: { x: 1, y: 2, width: 10, height: 11 }, assetId: assets[2]!.id }] });
+    expect(result.scene.pages[0]!.effects?.exit[0]).toMatchObject({ duration90k: 90_000, objects: [{ objectId: 21, x: 3, y: 4, assetId: assets[0]!.id }] });
+    expect(result.diagnostics).toEqual([]);
   });
 
   it("preserves all source UO mask bits as an exact decimal string", () => {

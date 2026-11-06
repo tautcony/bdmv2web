@@ -6,24 +6,24 @@ const SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
 export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
   const assets: IgsAsset[] = []; const diagnostics: IgsDiagnostic[] = [];
   for (const page of scene.pages) {
-    if (page.rawEffects.enterEffectCount || page.rawEffects.exitEffectCount) {
-      scene.complete = false;
-      diagnostics.push({ severity: "warning", code: "IGS_UNSUPPORTED_EFFECT", message: `Page ${page.id} declares ${page.rawEffects.enterEffectCount} enter and ${page.rawEffects.exitEffectCount} exit effect(s); raw bytes are retained, visual timing is not interpreted`, source: scene.source, affectedSceneIds: [scene.id], details: { pageId: page.id, enterCount: page.rawEffects.enterEffectCount, exitCount: page.rawEffects.exitEffectCount } });
-    }
-    const palette = [...scene.palettes].reverse().find((p) => p.id === page.paletteId);
-    if (!palette) {
-      scene.complete = false;
-      diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${page.paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
-      continue;
-    }
-    const objectIds = new Set<number>();
+    const objectPalettes = new Map<string, { objectId: number; paletteId: number }>();
+    const add = (objectId: number, paletteId: number) => { if (objectId !== 0xffff) objectPalettes.set(`${objectId}:${paletteId}`, { objectId, paletteId }); };
     for (const button of page.buttons) {
       for (const state of [button.visuals.normal, button.visuals.selected, button.visuals.activated]) {
-        if (state.startObjectId !== 0xffff) objectIds.add(state.startObjectId);
-        if (state.endObjectId !== 0xffff) objectIds.add(state.endObjectId);
+        if (state.startObjectId !== 0xffff && state.endObjectId !== 0xffff && state.endObjectId >= state.startObjectId) {
+          for (const object of scene.objects) if (object.id >= state.startObjectId && object.id <= state.endObjectId) add(object.id, page.paletteId);
+          add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId);
+        } else { add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId); }
       }
     }
-    for (const objectId of objectIds) {
+    for (const sequence of [page.effects.enter, page.effects.exit]) for (const effect of sequence.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
+    for (const { objectId, paletteId } of objectPalettes.values()) {
+      const palette = [...scene.palettes].reverse().find((candidate) => candidate.id === paletteId);
+      if (!palette) {
+        scene.complete = false;
+        diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
+        continue;
+      }
       const object = [...scene.objects].reverse().find((item) => item.id === objectId);
       if (!object) {
         scene.complete = false;
@@ -65,24 +65,25 @@ export function validateIgsSceneAssets(scenes: readonly IgsScene[]): IgsDiagnost
   const diagnostics: IgsDiagnostic[] = [];
   for (const scene of scenes) {
     for (const page of scene.pages) {
-      if (page.rawEffects.enterEffectCount || page.rawEffects.exitEffectCount) {
-        scene.complete = false;
-        diagnostics.push({ severity: "warning", code: "IGS_UNSUPPORTED_EFFECT", message: `Page ${page.id} declares ${page.rawEffects.enterEffectCount} enter and ${page.rawEffects.exitEffectCount} exit effect(s); raw bytes are retained, visual timing is not interpreted`, source: scene.source, affectedSceneIds: [scene.id], details: { pageId: page.id, enterCount: page.rawEffects.enterEffectCount, exitCount: page.rawEffects.exitEffectCount } });
-      }
-      const palette = [...scene.palettes].reverse().find((item) => item.id === page.paletteId);
-      if (!palette) {
-        scene.complete = false;
-        diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${page.paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
-        continue;
-      }
-      const objectIds = new Set<number>();
+      const objectPalettes = new Map<string, { objectId: number; paletteId: number }>();
+      const add = (objectId: number, paletteId: number) => { if (objectId !== 0xffff) objectPalettes.set(`${objectId}:${paletteId}`, { objectId, paletteId }); };
       for (const button of page.buttons) for (const state of [button.visuals.normal, button.visuals.selected, button.visuals.activated]) {
-        if (state.startObjectId !== 0xffff) objectIds.add(state.startObjectId);
-        if (state.endObjectId !== 0xffff) objectIds.add(state.endObjectId);
+        if (state.startObjectId !== 0xffff && state.endObjectId !== 0xffff && state.endObjectId >= state.startObjectId) {
+          for (const object of scene.objects) if (object.id >= state.startObjectId && object.id <= state.endObjectId) add(object.id, page.paletteId);
+          add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId);
+        } else { add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId); }
       }
-      for (const objectId of objectIds) if (![...scene.objects].reverse().some((object) => object.id === objectId)) {
-        scene.complete = false;
-        diagnostics.push({ severity: "error", code: "UNRESOLVED_OBJECT", message: `Page ${page.id} references object ${objectId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
+      for (const sequence of [page.effects.enter, page.effects.exit]) for (const effect of sequence.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
+      for (const { objectId, paletteId } of objectPalettes.values()) {
+        if (![...scene.palettes].reverse().some((item) => item.id === paletteId)) {
+          scene.complete = false;
+          diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
+          continue;
+        }
+        if (![...scene.objects].reverse().some((object) => object.id === objectId)) {
+          scene.complete = false;
+          diagnostics.push({ severity: "error", code: "UNRESOLVED_OBJECT", message: `Page ${page.id} references object ${objectId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
+        }
       }
     }
   }

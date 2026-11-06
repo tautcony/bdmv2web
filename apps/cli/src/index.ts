@@ -500,7 +500,7 @@ function serializeIgsScene(scene: Awaited<ReturnType<typeof extractIgsScenes>>["
     compositionTimeout90k: scene.compositionTimeout90k, selectionTimeout90k: scene.selectionTimeout90k,
     userTimeoutDuration: scene.userTimeoutDuration, rawIcs: Array.from(scene.rawIcs), complete: scene.complete,
     source: mapIgsSource(scene.source),
-    pages: scene.pages.map((page) => ({ ...page, uoMask: page.uoMask.toString(10), rawEffects: { ...page.rawEffects, enter: Array.from(page.rawEffects.enter), exit: Array.from(page.rawEffects.exit) }, buttons: page.buttons.map((button) => ({ ...button, commands: button.commands.map((command) => ({ ...command, bytes: Array.from(command.bytes) })) })) })),
+    pages: scene.pages.map((page) => ({ ...page, uoMask: page.uoMask.toString(10), buttons: page.buttons.map((button) => ({ ...button, commands: button.commands.map((command) => ({ ...command, bytes: Array.from(command.bytes) })) })) })),
     objects: scene.objects.map((object) => ({ ...object, indices: Array.from(object.indices), source: mapIgsSource(object.source) })),
     palettes: scene.palettes.map((palette) => ({ id: palette.id, version: palette.version, entries: [...palette.entries].map(([id, entry]) => ({ id, ...entry })), source: mapIgsSource(palette.source) })),
   };

@@ -252,7 +252,7 @@ function parsePage(r: BitReader): IgsPage {
     }
     bogs.push({ defaultButtonId, buttonIds });
   }
-  return { id, version, uoMask, defaultSelectedButtonId, defaultActivatedButtonId, paletteId, buttons, bogs, animationFrameRateCode, rawEffects: { enter: enter.bytes, exit: exit.bytes, enterEffectCount: enter.effectCount, exitEffectCount: exit.effectCount } };
+  return { id, version, uoMask, defaultSelectedButtonId, defaultActivatedButtonId, paletteId, buttons, bogs, animationFrameRateCode, effects: { enter, exit } };
 }
 
 function validateButtonReferences(scene: IgsScene, diagnostics: IgsDiagnostic[]): boolean {
@@ -289,10 +289,26 @@ function validateButtonReferences(scene: IgsScene, diagnostics: IgsDiagnostic[])
   return invalid;
 }
 
-function parseEffectSequence(r: BitReader): { bytes: Uint8Array; effectCount: number } {
-  const start = r.position; const windows = r.u8(); r.skip(windows * 9); const effects = r.u8();
-  for (let i = 0; i < effects; i++) { r.u24(); r.u8(); const objects = r.u8(); for (let j = 0; j < objects; j++) { r.u16(); r.u8(); const flags = r.u8(); r.u16(); r.u16(); if (flags & 0x80) r.skip(8); } }
-  return { bytes: r.slice(start, r.position), effectCount: effects };
+function parseEffectSequence(r: BitReader): IgsPage["effects"]["enter"] {
+  const windowCount = r.u8();
+  const windows = Array.from({ length: windowCount }, () => ({ id: r.u8(), x: r.u16(), y: r.u16(), width: r.u16(), height: r.u16() }));
+  const effectCount = r.u8();
+  const effects = Array.from({ length: effectCount }, () => {
+    const duration90k = r.u24();
+    const paletteId = r.u8();
+    const objectCount = r.u8();
+    const objects = Array.from({ length: objectCount }, () => {
+      const objectId = r.u16();
+      const windowId = r.u8();
+      const flags = r.u8();
+      const x = r.u16();
+      const y = r.u16();
+      const crop = flags & 0x80 ? { x: r.u16(), y: r.u16(), width: r.u16(), height: r.u16() } : undefined;
+      return { objectId, windowId, forcedOn: (flags & 0x40) !== 0, x, y, ...(crop ? { crop } : {}) };
+    });
+    return { duration90k, paletteId, objects };
+  });
+  return { windows, effects };
 }
 
 export class IgsError extends Error { constructor(readonly code: string, message: string) { super(message); this.name = "IgsError"; } }
@@ -309,7 +325,6 @@ class BitReader {
   u24(): number { this.align(); return this.bits(24); }
   bytes(n: number): Uint8Array { this.align(); const start = this.position; this.skip(n); return this.data.slice(start, start + n); }
   skip(n: number): void { this.align(); if (!Number.isSafeInteger(n) || n < 0 || this.bit + n * 8 > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS skip of ${n} bytes exceeds segment`); this.bit += n * 8; }
-  slice(start: number, end: number): Uint8Array { return this.data.slice(start, end); }
   private align(): void { this.bit = (this.bit + 7) & ~7; }
 }
 

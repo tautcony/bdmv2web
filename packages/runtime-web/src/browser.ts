@@ -1,5 +1,5 @@
 import { HdmvVm, type TraceEntry, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
-import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuButton, type MenuInputConfig, type MenuLoopMediaPackage, type MenuScene, type PlaybackBridge } from "./index.js";
+import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuButton, type MenuInputConfig, type MenuLoopMediaPackage, type MenuPage, type MenuScene, type PlaybackBridge } from "./index.js";
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 
@@ -172,6 +172,20 @@ async function boot(): Promise<void> {
     let removePopupPointer: (() => void) | undefined;
     let removeKeyboard: (() => void) | undefined;
     let inputStarted = false;
+    let animationFrameHandle: number | undefined;
+    let lastAnimationFrameTime: number | undefined;
+    const animateMenus = (time: number) => {
+      animationFrameHandle = undefined;
+      const delta = lastAnimationFrameTime === undefined ? 0 : Math.max(0, time - lastAnimationFrameTime);
+      lastAnimationFrameTime = time;
+      controller?.advanceWhileRunning(delta);
+      popupController?.advanceWhileRunning(delta);
+      if (controller?.isAnimating || popupController?.isAnimating) animationFrameHandle = requestAnimationFrame(animateMenus);
+      else lastAnimationFrameTime = undefined;
+    };
+    const ensureAnimationLoop = () => {
+      if (animationFrameHandle === undefined && (controller?.isAnimating || popupController?.isAnimating)) animationFrameHandle = requestAnimationFrame(animateMenus);
+    };
     const closePopup = () => {
       const wasOpen = popupController !== null;
       if (!wasOpen) return;
@@ -216,6 +230,7 @@ async function boot(): Promise<void> {
               if (!popupController || !popupViewport || !popupCanvas) return;
               const rect = popupCanvas.getBoundingClientRect(); const context = popupCanvas.getContext("2d");
               if (context) drawMenu(context, popupScene, popupController, popupViewport, rect.width, rect.height, window.devicePixelRatio || 1);
+              ensureAnimationLoop();
             };
             popupController = new MenuController(popupScene, vm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate() }, data.inputConfig);
             const rect = popupCanvas.getBoundingClientRect(); popupViewport.resize(popupCanvas, rect.width, rect.height, window.devicePixelRatio || 1);
@@ -280,6 +295,7 @@ async function boot(): Promise<void> {
       if (!controller) return;
       const rect = canvas.getBoundingClientRect(); const context = canvas.getContext("2d");
       if (context) drawMenu(context, scene, controller, viewport, rect.width, rect.height, window.devicePixelRatio || 1);
+      ensureAnimationLoop();
     };
     controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
     start.hidden = false; start.disabled = false; showStatus("Images decoded. Select Start menu preview to enable input.");
@@ -354,6 +370,7 @@ function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageEl
   return {
     width: source.width,
     height: source.height,
+    ...(source.frameRateCode !== undefined ? { frameRateCode: source.frameRateCode } : {}),
     compositionTimeout90k: source.compositionTimeout90k,
     selectionTimeout90k: source.selectionTimeout90k,
     pages: source.pages.map((page) => ({
@@ -361,7 +378,14 @@ function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageEl
     ...(page.defaultActivatedButtonId !== undefined ? { defaultActivatedButtonId: page.defaultActivatedButtonId } : {}),
     ...(page.bogDefaults ? { bogDefaults: page.bogDefaults } : {}),
     animationFrameRateCode: page.animationFrameRateCode,
-    rawEffects: page.rawEffects,
+    ...(page.objects ? { objects: new Map(page.objects.flatMap((object) => {
+      const image = assets.get(object.assetId);
+      return image ? [[object.id, { image, width: object.width, height: object.height }] as const] : [];
+    })) } : {}),
+    ...(page.effects ? { effects: {
+      enter: normalizeEffects(page.effects.enter, assets),
+      exit: normalizeEffects(page.effects.exit, assets),
+    } } : {}),
     ...(page.allowedActions ? { allowedActions: page.allowedActions } : {}),
     buttons: page.buttons.map((button) => ({
       id: button.id, bog: button.bog ?? 0, enabled: button.enabled ?? true, ...(button.autoAction !== undefined ? { autoAction: button.autoAction } : {}), neighbors: button.neighbors,
@@ -372,6 +396,16 @@ function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageEl
       }, commands: button.commands ?? [],
     })),
   })) };
+}
+
+function normalizeEffects(effects: NonNullable<SerializedScene["pages"][number]["effects"]>["enter"], assets: Map<string, HTMLImageElement>): NonNullable<MenuPage["effects"]>["enter"] {
+  return effects.map((effect) => ({
+    duration90k: effect.duration90k,
+    objects: effect.objects.flatMap((object) => {
+      const image = assets.get(object.assetId);
+      return image ? [{ ...object, image }] : [];
+    }),
+  }));
 }
 
 function normalizeState(state: SerializedMenuState, assets: Map<string, HTMLImageElement>): NonNullable<MenuButton["states"]["normal"]> {

@@ -20,6 +20,11 @@
 - **WHEN** 源标题或元数据含 </script> 与 HTML 片段
 - **THEN** 作为数据/文字呈现，不执行脚本，不破坏脚本加载顺序
 
+#### Scenario: 菜单图像使用 PNG
+
+- **WHEN** 菜单或弹出菜单引用 IGS 图像并生成离线包
+- **THEN** 图像对象先编码为 PNG，再以 `data:image/png;base64` 嵌入图形资源脚本；非 PNG 图像字节不得进入图形资源批次
+
 #### Scenario: 版本不兼容
 
 - **WHEN** Bootloader 装载未知 schema

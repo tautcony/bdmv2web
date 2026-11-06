@@ -48,7 +48,7 @@ describe("バジャのスタジオ offline headless navigation", () => {
     const rawScene = extraction.scenes.find((scene) => menuClipIds.has(scene.clipId));
     expect(rawScene, `IGS scene linked from playlist ${menuPlaylist!.id}; no unrelated clip fallback`).toBeDefined();
     const adapted = adaptIgsScene(rawScene!, extraction.assets);
-    const scene = adapted.scene as MenuScene;
+    const scene = adapted.scene as unknown as MenuScene;
     const movieGraph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries });
     // IGS command sourceOffset is inside the decoded ICS command records; scene.packetOffset is a transport byte offset mapped by the sparse-packet sidecar.
     const buttonGraphs = rawScene!.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length).map((button, id) => buildNavigationGraph([{ id, instructions: button.commands.map((command) => {

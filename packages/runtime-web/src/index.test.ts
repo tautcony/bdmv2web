@@ -741,6 +741,36 @@ describe("offline menu primitives", () => {
     controller.advanceWhileRunning(1);
     expect(scheduler.now).toBe(10); expect(completionCount).toBe(1);
   });
+  it("advances button object frames on the source frame interval and restores the animation checkpoint", () => {
+    const testScene = scene(); testScene.frameRateCode = 2;
+    testScene.pages[0]!.animationFrameRateCode = 1;
+    const imageA = {} as CanvasImageSource; const imageB = {} as CanvasImageSource;
+    testScene.pages[0]!.objects = new Map([[10, { image: imageA, width: 8, height: 9 }], [11, { image: imageB, width: 12, height: 13 }]]);
+    testScene.pages[0]!.buttons[0]!.states = { selected: { bounds: bounds(0), startObjectId: 10, endObjectId: 11, repeat: true } };
+    testScene.pages[0]!.buttons[1]!.states = {};
+    const controller = new MenuController(testScene, { handleEvent: vi.fn() }, { render: vi.fn() }); controller.start();
+    expect(controller.visualState(controller.button!)?.image).toBe(imageA);
+    controller.advanceWhileRunning(47); expect(controller.visualState(controller.button!)?.image).toBe(imageA);
+    const checkpoint = controller.saveCheckpoint(); controller.advanceWhileRunning(1);
+    expect(controller.visualState(controller.button!)?.image).toBe(imageB);
+    controller.advanceWhileRunning(48); expect(controller.visualState(controller.button!)?.image).toBe(imageA);
+    controller.restoreCheckpoint(checkpoint); expect(controller.visualState(controller.button!)?.image).toBe(imageA);
+    controller.advanceWhileRunning(48); expect(controller.visualState(controller.button!)?.image).toBe(imageB);
+  });
+  it("runs page out then in effects by duration and blocks input until the sequence ends", () => {
+    const testScene = scene(); const render = vi.fn(); const executeButtonProgram = vi.fn();
+    const imageA = {} as CanvasImageSource; const imageB = {} as CanvasImageSource;
+    testScene.pages[1]!.defaultButtonId = 9;
+    testScene.pages[0]!.effects = { enter: [], exit: [{ duration90k: 45_000, objects: [{ image: imageA, x: 1, y: 2, width: 3, height: 4 }] }] };
+    testScene.pages[1]!.effects = { enter: [{ duration90k: 90_000, objects: [{ image: imageB, x: 5, y: 6, width: 7, height: 8 }] }], exit: [] };
+    const controller = new MenuController(testScene, { handleEvent: vi.fn(), executeButtonProgram }, { render }); controller.start(); controller.setPage(1);
+    expect(controller.effectFrame?.objects[0]?.image).toBe(imageA);
+    controller.handle("activate"); expect(executeButtonProgram).not.toHaveBeenCalled();
+    controller.advanceWhileRunning(500); expect(controller.effectFrame?.objects[0]?.image).toBe(imageB);
+    controller.advanceWhileRunning(999); expect(controller.isAnimating).toBe(true);
+    controller.advanceWhileRunning(1); expect(controller.isAnimating).toBe(false);
+    controller.handle("activate"); expect(executeButtonProgram).toHaveBeenCalledOnce();
+  });
   it("returns an unavailable media response correlated to the waiting VM action", () => {
     const vm = new HdmvVm([{ id: 0, instructions: ["220000000000000100000000"] }]);
     vm.runTurn(); const action = vm.drainActions()[0]!;

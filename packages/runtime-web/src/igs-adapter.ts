@@ -24,8 +24,11 @@ export interface SerializedMenuPage {
   uoMask: string;
   defaultButtonId: number;
   animationFrameRateCode: number;
-  /** Raw effect records as lowercase hex; embedded flag bits remain uninterpreted. */
-  rawEffects: { enterBytesHex: string; exitBytesHex: string; enterEffectCount: number; exitEffectCount: number };
+  objects?: Array<{ id: number; width: number; height: number; assetId: string }>;
+  effects?: {
+    enter: Array<{ duration90k: number; objects: Array<{ objectId: number; x: number; y: number; width: number; height: number; assetId: string; crop?: { x: number; y: number; width: number; height: number } }> }>;
+    exit: Array<{ duration90k: number; objects: Array<{ objectId: number; x: number; y: number; width: number; height: number; assetId: string; crop?: { x: number; y: number; width: number; height: number } }> }>;
+  };
   defaultActivatedButtonId?: number;
   bogDefaults?: Array<{ bog: number; defaultButtonId: number }>;
   buttons: SerializedMenuButton[];
@@ -42,6 +45,7 @@ export interface SerializedScene {
   source?: IgsSource;
   width: number;
   height: number;
+  frameRateCode?: number;
   compositionTimeout90k: string | null;
   selectionTimeout90k: string | null;
   pages: SerializedMenuPage[];
@@ -111,9 +115,6 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
           };
         }
 
-        if (visual.endObjectId !== visual.startObjectId || ("repeat" in visual && visual.repeat)) {
-          diagnostic("IGS_UNSUPPORTED_ANIMATION", `Button ${button.id} ${name} animation is represented by its declared starting frame only`, scene, diagnostics, page.id, button.id, { startObjectId: visual.startObjectId, endObjectId: visual.endObjectId, repeat: "repeat" in visual ? visual.repeat : false });
-        }
         return {
           bounds: { x: button.x, y: button.y, width: asset.width, height: asset.height },
           assetId: asset.id,
@@ -156,11 +157,13 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
       uoMask: page.uoMask.toString(10),
       defaultButtonId: page.defaultSelectedButtonId,
       animationFrameRateCode: page.animationFrameRateCode,
-      rawEffects: {
-        enterBytesHex: toHex(page.rawEffects.enter),
-        exitBytesHex: toHex(page.rawEffects.exit),
-        enterEffectCount: page.rawEffects.enterEffectCount,
-        exitEffectCount: page.rawEffects.exitEffectCount,
+      objects: scene.objects.flatMap((object) => {
+        const asset = resolveAsset(scene, page.paletteId, object.id, assets);
+        return asset ? [{ id: object.id, width: asset.width, height: asset.height, assetId: asset.id }] : [];
+      }),
+      effects: {
+        enter: adaptEffectSequence(scene, page.effects.enter, assets, page.id, diagnostics),
+        exit: adaptEffectSequence(scene, page.effects.exit, assets, page.id, diagnostics),
       },
       defaultActivatedButtonId: page.defaultActivatedButtonId,
       bogDefaults,
@@ -169,9 +172,6 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
   });
 
   for (const page of scene.pages) {
-    if (page.rawEffects.enterEffectCount || page.rawEffects.exitEffectCount) {
-      diagnostic("IGS_UNSUPPORTED_EFFECT", `Page ${page.id} has unsupported enter/exit effects (${page.rawEffects.enterEffectCount}/${page.rawEffects.exitEffectCount})`, scene, diagnostics, page.id, undefined, { enterEffectCount: page.rawEffects.enterEffectCount, exitEffectCount: page.rawEffects.exitEffectCount });
-    }
   }
 
   return {
@@ -184,6 +184,7 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
       source: scene.source,
       width: scene.width,
       height: scene.height,
+      frameRateCode: scene.frameRateCode,
       compositionTimeout90k: scene.compositionTimeout90k,
       selectionTimeout90k: scene.selectionTimeout90k,
       pages,
@@ -191,6 +192,21 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
     status: scene.complete && diagnostics.length === 0 ? "complete" : "partial",
     diagnostics,
   };
+}
+
+function adaptEffectSequence(scene: IgsScene, sequence: IgsScene["pages"][number]["effects"]["enter"], assets: readonly IgsAsset[], pageId: number, diagnostics: IgsAdapterDiagnostic[]): NonNullable<SerializedMenuPage["effects"]>["enter"] {
+  return sequence.effects.map((effect, effectIndex) => ({
+    duration90k: effect.duration90k,
+    objects: effect.objects.flatMap((item) => {
+      const object = resolveObject(scene, item.objectId);
+      const asset = resolveAsset(scene, effect.paletteId, item.objectId, assets);
+      if (!object || !asset) {
+        diagnostic("IGS_UNRESOLVED_EFFECT_ASSET", `Page ${pageId} effect ${effectIndex} references object ${item.objectId} without a rendered asset for palette ${effect.paletteId}`, scene, diagnostics, pageId, undefined, { effectIndex, objectId: item.objectId, paletteId: effect.paletteId });
+        return [];
+      }
+      return [{ objectId: item.objectId, x: item.x, y: item.y, width: asset.width, height: asset.height, assetId: asset.id, ...(item.crop ? { crop: item.crop } : {}) }];
+    }),
+  }));
 }
 
 /** Resolve the active title popup by its source clip/PID and composition PTS. */

@@ -79,7 +79,7 @@ function makePage(effects: boolean, pageId: number, missingObject = false, inval
   const effectWindow = concat(Uint8Array.of(3), u16(10), u16(20), u16(30), u16(40));
   const effectObject = concat(u16(5), Uint8Array.of(3, 0x80), u16(1), u16(2), u16(3), u16(4), u16(5), u16(6));
   const enter = effects ? (richEffects ? concat(Uint8Array.of(1), effectWindow, Uint8Array.of(1), Uint8Array.of(0, 0, 1, 1, 1), effectObject) : Uint8Array.of(0, 1, 0, 0, 1, 0, 0)) : Uint8Array.of(0, 0);
-  const exit = effects ? (richEffects ? Uint8Array.of(0, 1, 0, 0, 2, 2, 0) : Uint8Array.of(0, 0)) : Uint8Array.of(0, 0);
+  const exit = effects ? (richEffects ? Uint8Array.of(0, 1, 0, 0, 2, 2, 0) : Uint8Array.of(0, 1, 0, 0, 2, 0, 0)) : Uint8Array.of(0, 0);
   const command = buttonCommand ?? Uint8Array.from({ length: 12 }, (_, i) => i + 1);
   const objectId = missingObject ? 9 : 5;
   const button = concat(u16(1), u16(0), Uint8Array.of(invalidReferences ? 0x80 : 0), u16(0), u16(0), u16(invalidReferences ? 2 : 0xffff), u16(0xffff), u16(0xffff), u16(0xffff), u16(objectId), u16(objectId), Uint8Array.of(animated ? 0x80 : 0), Uint8Array.of(6), u16(objectId), u16(objectId), Uint8Array.of(animated ? 0x80 : 0), Uint8Array.of(9), u16(objectId), u16(objectId), u16(1), command);

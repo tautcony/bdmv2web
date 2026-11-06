@@ -116,7 +116,7 @@ describe("offline browser boot", () => {
       popupScenes: [{
         id: "00001:4608:popup", clipId: "00001", pid: 0x1200, uiModel: 1, streamModel: 0,
         width: 100, height: 60, compositionTimeout90k: null, selectionTimeout90k: null,
-        pages: [{ id: 0, uoMask: "0", defaultButtonId: 1, animationFrameRateCode: 0, rawEffects: { enterBytesHex: "", exitBytesHex: "", enterEffectCount: 0, exitEffectCount: 0 }, buttons: [{
+        pages: [{ id: 0, uoMask: "0", defaultButtonId: 1, animationFrameRateCode: 0, buttons: [{
           id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
           states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo", startObjectId: 1, endObjectId: 1 } },
           commands: [{ bytes: m3Fixtures.popupOff.bytes }],

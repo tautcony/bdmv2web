@@ -178,20 +178,17 @@ describe("synthetic IGS extraction", () => {
     expect(await extract(1, 2)).toEqual([expect.objectContaining({ referencedButtonId: 2, referenceKind: "page-default-activated" })]);
   });
 
-  it("keeps unknown effect semantics unverified and marks the page incomplete", async () => {
+  it("decodes libbluray effect durations, palette refs, composition objects and crop data", async () => {
     const bytes = syntheticClip({ effects: true, richEffects: true, uiModelWithTimeouts: true, animated: true });
     const result = await extractIgsFromChunks("00001", chunks(bytes, 64), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
     expect(result.scenes).toHaveLength(1);
     const scene = result.scenes[0]!;
-    expect(scene).toMatchObject({ streamModel: 0, uiModel: 1, compositionTimeout90k: "90000", selectionTimeout90k: "45000", userTimeoutDuration: 123, complete: false });
+    expect(scene).toMatchObject({ streamModel: 0, uiModel: 1, compositionTimeout90k: "90000", selectionTimeout90k: "45000", userTimeoutDuration: 123 });
     expect(scene.pages[0]?.animationFrameRateCode).toBe(1);
     expect(scene.pages[0]?.buttons[0]?.visuals.normal).toMatchObject({ startObjectId: 5, endObjectId: 5, repeat: true });
     expect(scene.pages[0]?.buttons[0]?.visuals.selected).toMatchObject({ startObjectId: 5, endObjectId: 5, repeat: true });
-    expect([...scene.pages[0]!.rawEffects.enter]).toEqual([1, 3, 0, 10, 0, 20, 0, 30, 0, 40, 1, 0, 0, 1, 1, 1, 0, 5, 3, 128, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6]);
-    expect([...scene.pages[0]!.rawEffects.exit]).toEqual([0, 1, 0, 0, 2, 2, 0]);
-    expect(scene.pages[0]?.rawEffects).toMatchObject({ enterEffectCount: 1, exitEffectCount: 1 });
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "IGS_UNSUPPORTED_EFFECT", severity: "warning", affectedSceneIds: [scene.id], details: { pageId: 1, enterCount: 1, exitCount: 1 } }));
-    expect(result.status).toBe("partial");
+    expect(scene.pages[0]?.effects.enter).toEqual({ windows: [{ id: 3, x: 10, y: 20, width: 30, height: 40 }], effects: [{ duration90k: 1, paletteId: 1, objects: [{ objectId: 5, windowId: 3, forcedOn: false, x: 1, y: 2, crop: { x: 3, y: 4, width: 5, height: 6 } }] }] });
+    expect(scene.pages[0]?.effects.exit).toEqual({ windows: [], effects: [{ duration90k: 2, paletteId: 2, objects: [] }] });
   });
 
   it("does not submit a Display Set when the END marker is missing", async () => {
@@ -396,7 +393,7 @@ describe("synthetic IGS extraction", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
-  it("keeps render assets and diagnostics from a clip result without rendering it twice", async () => {
+  it("returns extracted effect data and rendered assets with the clip result", async () => {
     const root = await mkdtemp(join(tmpdir(), "igs-single-render-"));
     try {
       await mkdir(join(root, "STREAM"), { recursive: true });
@@ -413,7 +410,7 @@ describe("synthetic IGS extraction", () => {
       const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
       expect(result.scenes).toHaveLength(1);
       expect(result.assets).toHaveLength(1);
-      expect(result.diagnostics.filter((item) => item.code === "IGS_UNSUPPORTED_EFFECT")).toHaveLength(1);
+      expect(result.scenes[0]?.pages[0]?.effects.enter.effects).toEqual([{ duration90k: 1, paletteId: 0, objects: [] }]);
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 });
