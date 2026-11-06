@@ -1,0 +1,22 @@
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  h_3705811fa4502c 90-99
+openspec/changes/export-playable-media/tasks.md
+  h_3705811fa4502c 82-83
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 281
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 227,233-290
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 320-323,332-377,423-426
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7a61977aa0eff8dd670c29c0c14f1852af681de2",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
