@@ -658,7 +658,8 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
     } else if (action.type === "MENU_CALL") {
       this.report("Popup composition is unavailable because this package does not have an in-browser title overlay context.");
-      this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
+    } else if (["STILL_ON", "STILL_OFF", "MENU_RETURN"].includes(action.type)) {
+      this.report(`${action.type} is not available in menu preview.`);
     }
   }
   isCurrent(generation: number): boolean { return generation === this.currentGeneration; }
@@ -689,6 +690,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   private startPromise: Promise<boolean> | null = null;
   private retryGeneration = 0;
   private activePlaylistResponse: { id: string; generation: number } | null = null;
+  private lastTimeUpdateSecond = -1;
   constructor(
     private readonly vm: HdmvVm,
     private readonly video: HTMLVideoElement,
@@ -706,6 +708,14 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       this.activePlaylistResponse = null;
       this.vm.handleEvent({ type: "MEDIA_ENDED", generation: response.generation, responseTo: response.id });
     });
+    this.video.addEventListener?.("timeupdate", () => {
+      const response = this.activePlaylistResponse;
+      if (!response) return;
+      const second = Math.floor(this.video.currentTime);
+      if (second === this.lastTimeUpdateSecond) return;
+      this.lastTimeUpdateSecond = second;
+      this.vm.handleEvent({ type: "TIME_UPDATED", generation: response.generation, responseTo: response.id, payload: { presentationTime: Math.max(0, Math.round(this.video.currentTime * 45_000)) } });
+    });
   }
 
   async dispatch(action: PlaybackAction): Promise<void> {
@@ -719,6 +729,10 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     }
     if (action.type === "PLAY_STOP") {
       this.stopMedia();
+      return;
+    }
+    if (["LINK_PLAY_ITEM", "LINK_PLAY_MARK", "STILL_ON", "STILL_OFF", "MENU_RETURN"].includes(action.type)) {
+      this.report(`${action.type} is not available in the packaged menu loop.`);
       return;
     }
     if (action.type !== "PLAY_PLAYLIST") return;

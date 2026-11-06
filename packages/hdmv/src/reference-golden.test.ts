@@ -78,7 +78,7 @@ describe("source-derived reference golden: pinned libbluray 1.5.0", () => {
     expectTraceCheckpoints(vm, [
       { programId: 0, pc: 0, decoded: "PLAY_PL #42", status: "suspended" },
       { programId: 0, pc: 1, decoded: "ADD gpr[0],#1", status: "running" },
-      { programId: 0, pc: 2, decoded: "BREAK", status: "stopped" },
+      { programId: 0, pc: 2, decoded: "BREAK", status: "running" },
     ]);
   });
 });

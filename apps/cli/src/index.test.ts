@@ -154,8 +154,9 @@ describe("M4 convert output", () => {
         expect(packageText).not.toContain(await realpath(disc));
         expect(await readFile(join(output, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
         expect(packageText).toContain("STREAM/00002.m2ts");
-        expect(discData).toContain("igs-00002-");
-        expect(discData).not.toContain("igs-00001-");
+        const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { scene: { pages: Array<{ objects: Array<{ assetId: string }> }> }; menuScenes?: Array<{ playlistId: number }> };
+        expect(menuData.scene.pages[0]!.objects[0]!.assetId).toContain("igs-00002-");
+        expect(menuData.menuScenes?.map((item) => item.playlistId)).toEqual(expect.arrayContaining([7]));
         expect(packageText).toContain("iina://open?url=");
       }
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -293,8 +294,8 @@ describe("M4 convert output", () => {
       const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
-      expect(discData).toContain("igs-00002-");
-      expect(discData).not.toContain("igs-00001-");
+      const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { scene: { pages: Array<{ objects: Array<{ assetId: string }> }> } };
+      expect(menuData.scene.pages[0]!.objects[0]!.assetId).toContain("igs-00002-");
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

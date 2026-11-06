@@ -43,7 +43,7 @@ describe("M3 HDMV fixtures", () => {
   });
   it("runs uint32 register arithmetic and records deltas", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.move5, m3Fixtures.add7, m3Fixtures.break] }]);
-    const state = vm.runTurn(); expect(state.registers.gpr[0]).toBe(12); expect(state.status).toBe("stopped");
+    const state = vm.runTurn(); expect(state.registers.gpr[0]).toBe(12); expect(state.status).toBe("idle");
     expect(vm.trace.flatMap((x) => Object.entries(x.registerDelta.gpr))).toContainEqual(["0", 12]);
     expect(vm.trace.find((x) => x.decoded?.startsWith("MOVE"))?.pc).toBe(0);
   });
@@ -63,7 +63,7 @@ describe("M3 HDMV fixtures", () => {
     const checkpoint = checkpointVm.saveCheckpoint();
     checkpointVm.reset();
     checkpointVm.restoreCheckpoint(checkpoint);
-    expect(checkpointVm.snapshot()).toEqual(expect.objectContaining({ status: "stopped" }));
+    expect(checkpointVm.snapshot()).toEqual(expect.objectContaining({ status: "idle" }));
     expect(checkpointVm.trace.filter((entry) => entry.decoded?.startsWith("RND")).map((entry) => entry.registerDelta.gpr[0])).toEqual([4, 2, 1]);
 
     const overrideVm = new HdmvVm([{ id: 0, instructions: [rnd, rnd, rnd, m3Fixtures.break] }], { randomSeed: 1 });
@@ -75,7 +75,7 @@ describe("M3 HDMV fixtures", () => {
   it("returns one and records the reference diagnostic for a zero RND range", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [rawCommand(0x50400008, 0, 0), m3Fixtures.break] }]);
     const result = vm.runTurn();
-    expect(result.status).toBe("stopped");
+    expect(result.status).toBe("idle");
     expect(result.registers.gpr[0]).toBe(1);
     expect(vm.diagnostics.map((diagnostic) => diagnostic.code)).toContain("HDMV_RND_ZERO_RANGE");
   });
@@ -103,7 +103,7 @@ describe("M3 HDMV fixtures", () => {
       onTrace: (entry) => observed.push(entry),
     });
     const initial = vm.runTurn();
-    expect(initial).toMatchObject({ status: "idle", pc: 0, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
+    expect(initial).toMatchObject({ status: "idle", pc: 1, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(initial.registers.gpr[0]).toBe(0);
 
     const result = vm.executeButtonProgram([m3Fixtures.move5], "ig_object");
@@ -313,13 +313,13 @@ describe("M3 HDMV fixtures", () => {
     expect(output.registers.read({ kind: "psr", index: 22 }) & 1).toBe(1);
 
     const twoD = new HdmvVm([{ id: 0, instructions: [rawCommand(0x51c0000b, 0, 0), m3Fixtures.break] }]);
-    expect(twoD.runTurn().status).toBe("stopped");
+    expect(twoD.runTurn().status).toBe("idle");
     expect(twoD.snapshot().diagnostic).toBeNull();
 
     const threeD = new HdmvVm([{ id: 0, instructions: [rawCommand(0x51c0000b, 0, 0)] }]);
     threeD.registers.systemWrite(22, 1);
     expect(threeD.runTurn().status).toBe("idle");
-    expect(threeD.trace.find((entry) => entry.raw === rawCommand(0x51c0000b, 0, 0))).toMatchObject({ diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" }, status: "running" });
+    expect(threeD.trace.find((entry) => entry.raw === rawCommand(0x51c0000b, 0, 0))).toMatchObject({ diagnostic: { code: "HDMV_3D_SUBTITLE_ALIGNMENT_UNIMPLEMENTED" }, status: "running" });
   });
   it("writes the pinned libbluray SETSYSTEM private PSR value", () => {
     const command = rawCommand(0x51000010, 0, 0);
@@ -423,7 +423,7 @@ describe("M3 HDMV fixtures", () => {
       { id: 0, instructions: [m3Fixtures.callObject1, m3Fixtures.move5, m3Fixtures.break] },
       { id: 1, instructions: [m3Fixtures.add7, m3Fixtures.resume] },
     ]);
-    const state = vm.runTurn(); expect(state.registers.gpr[0]).toBe(5); expect(state.programId).toBe(0); expect(state.status).toBe("stopped");
+    const state = vm.runTurn(); expect(state.registers.gpr[0]).toBe(5); expect(state.programId).toBe(0); expect(state.status).toBe("idle");
   });
   it("restores only the pinned PSR backup range on CALL/RESUME and keeps GPRs", () => {
     const addOne = rawCommand(0x50400003, 0, 1);
@@ -438,7 +438,7 @@ describe("M3 HDMV fixtures", () => {
     vm.registers.write({ kind: "gpr", index: 0 }, 99);
     expect(vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id }).status).toBe("suspended");
     const returned = vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
-    expect(returned.status).toBe("stopped"); expect(returned.programId).toBe(0);
+    expect(returned.status).toBe("idle"); expect(returned.programId).toBe(0);
     expect(returned.registers.gpr[0]).toBe(100); // GPRs are not part of bd_psr_save_state.
     expect(returned.registers.psr.slice(4, 9)).toEqual([0xffff, 0xffff, 0, 0, 0]);
     expect(returned.registers.psr.slice(10, 13)).toEqual([0xffff, 0, 0xff]);
@@ -453,18 +453,21 @@ describe("M3 HDMV fixtures", () => {
       { id: 1, instructions: [call2, m3Fixtures.resume] },
       { id: 2, instructions: [m3Fixtures.resume] },
     ]);
-    expect(vm.runTurn().status).toBe("faulted");
+    expect(vm.runTurn().status).toBe("idle");
     expect(vm.snapshot().programId).toBe(1); // inner Resume returns to the latest caller
-    expect(vm.snapshot().diagnostic?.code).toBe("HDMV_RESUME_WITHOUT_CALL"); // the earlier suspended caller was replaced
+    expect(vm.snapshot().diagnostic).toBeNull();
+    expect(vm.trace.find((entry) => entry.programId === 1 && entry.decoded === "RESUME")).toMatchObject({ diagnostic: { code: "HDMV_RESUME_WITHOUT_CALL" } }); // the earlier suspended caller was replaced
 
     const badJump = rawCommand(0x21800000, 99, 0);
     const invalid = new HdmvVm([{ id: 0, instructions: [badJump] }]);
-    expect(invalid.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
-    expect(invalid.snapshot().programId).toBe(0); expect(invalid.snapshot().callStack).toEqual([]);
+    expect(invalid.runTurn()).toMatchObject({ status: "idle", programId: 0, callStack: [] });
+    expect(invalid.snapshot().diagnostic).toBeNull();
+    expect(invalid.trace.find((entry) => entry.decoded?.startsWith("JUMP_OBJECT"))).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
     const badCall = rawCommand(0x21820000, 99, 0);
     const invalidCall = new HdmvVm([{ id: 0, instructions: [badCall] }]);
-    expect(invalidCall.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
-    expect(invalidCall.snapshot().callStack).toEqual([]);
+    expect(invalidCall.runTurn()).toMatchObject({ status: "idle", programId: 0, callStack: [] });
+    expect(invalidCall.snapshot().diagnostic).toBeNull();
+    expect(invalidCall.trace.find((entry) => entry.decoded?.startsWith("CALL_OBJECT"))).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
   });
   it("validates title targets from M1 entries and emits JUMP_TITLE without a VM wait", () => {
     const jumpTitle = rawCommand(0x21810000, 1);
@@ -481,29 +484,37 @@ describe("M3 HDMV fixtures", () => {
     const titleAction = vm.actions[0];
     expect(titleAction?.type).toBe("TITLE_SEARCH"); expect(titleAction?.payload).toEqual({ title: 1 });
     expect(titleAction).not.toHaveProperty("waitFor");
-    expect(result.status).toBe("stopped"); expect(result.programId).toBe(1); expect(result.pc).toBe(2);
+    expect(result.status).toBe("suspended"); expect(result.programId).toBe(1); expect(result.pc).toBe(1);
     expect(result.callStack).toEqual([]); expect(result.registers.psr.slice(36, 41)).toEqual([0xffff, 0xffff, 0, 0, 0]);
 
     const outOfRange = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, 2)] }], { entries });
-    expect(outOfRange.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
+    expect(outOfRange.runTurn()).toMatchObject({ status: "idle", pc: 1 });
+    expect(outOfRange.snapshot().diagnostic).toBeNull();
+    expect(outOfRange.trace.find((entry) => entry.decoded?.startsWith("JUMP_TITLE"))).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
     expect(outOfRange.actions).toHaveLength(0);
 
     for (const title of [0, 0xffff]) {
       const boundary = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, title), m3Fixtures.break] }], { entries });
-      expect(boundary.runTurn().status).toBe("stopped");
+      expect(boundary.runTurn().status).toBe("suspended");
       expect(boundary.actions[0]?.payload).toEqual({ title });
       expect(boundary.actions[0]).not.toHaveProperty("waitFor");
     }
 
     const missingTopMenu = entries.map((entry) => entry.kind === "topMenu" ? { ...entry, target: { ...entry.target, objectType: "unknown" as const, target: null } } : entry);
     const noMenu = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, 0)] }], { entries: missingTopMenu });
-    expect(noMenu.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
+    const noMenuResult = noMenu.runTurn();
+    expect(noMenuResult).toMatchObject({ status: "idle", pc: 1 });
+    expect(noMenuResult.diagnostic).toBeNull();
+    expect(noMenu.trace.find((entry) => entry.decoded?.startsWith("JUMP_TITLE"))).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
     const missingFirstPlay = entries.map((entry) => entry.kind === "firstPlay" ? { ...entry, target: { ...entry.target, objectType: "unknown" as const, target: null } } : entry);
     const noFirstPlay = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, 0xffff)] }], { entries: missingFirstPlay });
-    expect(noFirstPlay.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
+    const noFirstPlayResult = noFirstPlay.runTurn();
+    expect(noFirstPlayResult).toMatchObject({ status: "idle", pc: 1 });
+    expect(noFirstPlayResult.diagnostic).toBeNull();
+    expect(noFirstPlay.trace.find((entry) => entry.decoded?.startsWith("JUMP_TITLE"))).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
 
     const noMetadata = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, 77), m3Fixtures.break] }]);
-    expect(noMetadata.runTurn().status).toBe("stopped");
+    expect(noMetadata.runTurn().status).toBe("suspended");
     expect(noMetadata.actions[0]?.payload).toEqual({ title: 77 });
     expect(noMetadata.actions[0]).not.toHaveProperty("waitFor");
 
@@ -523,24 +534,37 @@ describe("M3 HDMV fixtures", () => {
     expect(called.selectTitle(2)).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }] });
     expect(called.trace.at(-1)).toMatchObject({ decoded: "TITLE_SEARCH_RESPONSE_IGNORED", status: "suspended", callDepth: 1, diagnostic: { code: "HDMV_TITLE_RESPONSE_MISMATCH" } });
     const resumed = called.selectTitle(1);
-    expect(resumed).toMatchObject({ status: "stopped", programId: 0, registers: { gpr: expect.arrayContaining([5]), psr: expect.arrayContaining([12]) } });
+    expect(resumed).toMatchObject({ status: "idle", programId: 0, registers: { gpr: expect.arrayContaining([5]), psr: expect.arrayContaining([12]) } });
     expect(resumed.registers.psr[4]).toBe(12);
     expect(called.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))?.registerDelta.psr[4]).toBeUndefined();
     expect(called.trace.find((entry) => entry.decoded === "TITLE_SELECTED title=1 object=1")?.registerDelta.psr[4]).toBe(1);
     expect(called.trace.some((entry) => entry.decoded?.startsWith("RESUME") && entry.programId === 1)).toBe(true);
     const badCallTitle = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21830000, 2)] }], { entries });
-    expect(badCallTitle.runTurn().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
-    expect(badCallTitle.snapshot().callStack).toEqual([]);
+    expect(badCallTitle.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 1, callStack: [] });
+    expect(badCallTitle.snapshot().diagnostic).toBeNull();
+    expect(badCallTitle.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))).toMatchObject({ status: "running", diagnostic: { code: "HDMV_INVALID_TARGET" } });
     const unresolvedCallEntries = callEntries.map((entry) => entry.kind === "title" ? { ...entry, target: { ...entry.target, objectType: "unknown" as const, target: null } } : entry);
     const unresolvedCall = new HdmvVm([{ id: 0, instructions: [callTitle] }], { entries: unresolvedCallEntries });
-    expect(unresolvedCall.runTurn()).toMatchObject({ status: "faulted", programId: 0, pc: 1, callStack: [], diagnostic: { code: "HDMV_INVALID_TARGET" } });
+    expect(unresolvedCall.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 1, callStack: [] });
+    expect(unresolvedCall.snapshot().diagnostic).toBeNull();
+    expect(unresolvedCall.trace.find((entry) => entry.decoded?.startsWith("CALL_TITLE"))).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
     expect(unresolvedCall.actions).toHaveLength(0);
     const bdjCallEntries = callEntries.map((entry) => entry.kind === "title" ? { ...entry, target: { ...entry.target, objectType: "BDJ" as const, target: "00001" } } : entry);
     const bdjCall = new HdmvVm([{ id: 0, instructions: [callTitle] }], { entries: bdjCallEntries });
-    expect(bdjCall.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 0, callStack: [], diagnostic: { code: "HDMV_UNVERIFIED_OPCODE", message: expect.stringContaining("unsupported BD-J") } });
+    expect(bdjCall.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 1, callStack: [], diagnostic: { code: "HDMV_UNVERIFIED_OPCODE", message: expect.stringContaining("unsupported BD-J") } });
     expect(bdjCall.actions).toHaveLength(0);
     const missingTable = new HdmvVm([{ id: 0, instructions: [callTitle] }]);
     expect(missingTable.runTurn().diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
+  });
+  it("releases a title transition when the title table or player cannot start the title", () => {
+    const jump = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, 1)] }]);
+    expect(jump.runTurn()).toMatchObject({ status: "suspended" });
+    expect(jump.snapshot().waiting).toBeNull();
+    expect(jump.handleEvent({ type: "MEDIA_UNAVAILABLE" })).toMatchObject({ status: "idle", diagnostic: { code: "HDMV_MEDIA_UNAVAILABLE" } });
+
+    const select = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21810000, 1)] }]);
+    select.runTurn();
+    expect(select.selectTitle(1)).toMatchObject({ status: "idle", diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
   });
   it("restores an IG playlist continuation after CALL_TITLE selection and RESUME", () => {
     const source = m3Fixtures.move5.source;
@@ -561,16 +585,19 @@ describe("M3 HDMV fixtures", () => {
 
     const button = vm.executeButtonProgram([rawCommand(0x21830000, 1)], "ig_object");
     expect(button).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }] });
-    expect(button.actions).toHaveLength(1);
-    expect(button.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
-    expect(button.actions[0]).not.toHaveProperty("waitFor");
+    expect(button.actions.map((action) => action.type)).toEqual(["PLAY_STOP", "TITLE_SEARCH"]);
+    expect(button.actions[1]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
+    expect(button.actions[1]).not.toHaveProperty("waitFor");
 
     const resumed = vm.selectTitle(1);
+    const replayed = resumed.waiting!;
+    expect(replayed).toMatchObject({ type: "PLAY_PLAYLIST", payload: { playlist: 42 }, waitFor: "ended" });
+    expect(replayed.id).not.toBe(playlistAction.id);
     expect(resumed).toMatchObject({
-      status: "suspended", programId: 0, pc: 1, callStack: [], waiting: { id: playlistAction.id, type: "PLAY_PLAYLIST" },
-      playback: { status: "requested", playlist: 42, pendingActionId: playlistAction.id },
+      status: "suspended", programId: 0, pc: 1, callStack: [],
+      playback: { status: "requested", playlist: 42, pendingActionId: replayed.id },
     });
-    expect(vm.handleEvent({ type: "MEDIA_ENDED", generation: playlistAction.generation, responseTo: playlistAction.id })).toMatchObject({ status: "stopped", programId: 0, pc: 2 });
+    expect(vm.handleEvent({ type: "MEDIA_ENDED", generation: replayed.generation, responseTo: replayed.id })).toMatchObject({ status: "idle", programId: 0, pc: 2 });
     expect(vm.trace.some((entry) => entry.decoded?.startsWith("CALL_TITLE") && entry.status === "suspended" && entry.callDepth === 1)).toBe(true);
     expect(vm.trace.some((entry) => entry.decoded?.startsWith("RESUME") && entry.programId === 2 && entry.status === "suspended")).toBe(true);
   });
@@ -588,16 +615,16 @@ describe("M3 HDMV fixtures", () => {
       ...[1, 2].map((target, index) => ({ id: `title:${index}`, kind: "title" as const, target: { objectType: "HDMV" as const, playbackType: 0, target, accessType: 0, source }, source })),
     ];
     const uninitialized = new HdmvVm([{ id: 0, instructions: jumpViaSelectedButton }], { entries });
-    expect(uninitialized.runTurn()).toMatchObject({
-      status: "faulted",
-      diagnostic: { code: "HDMV_INVALID_TARGET", message: "Title target 65537 is not present in the supplied ParsedDisc entries" },
-    });
+    expect(uninitialized.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 4 });
+    expect(uninitialized.snapshot().diagnostic).toBeNull();
+    expect(uninitialized.trace.find((entry) => entry.decoded?.startsWith("JUMP_TITLE"))).toMatchObject({ status: "running", diagnostic: { code: "HDMV_INVALID_TARGET" } });
+    expect(uninitialized.actions).toHaveLength(0);
 
     const vm = new HdmvVm([{ id: 0, instructions: jumpViaSelectedButton }], { entries });
     vm.applyMenuContext(5, 0);
     expect(vm.snapshot().registers.psr[10]).toBe(0);
     expect(vm.snapshot().registers.psr[11]).toBe(5);
-    expect(vm.runTurn().status).toBe("stopped");
+    expect(vm.runTurn().status).toBe("suspended");
     expect(vm.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 2 } });
     expect(vm.trace.find((entry) => entry.decoded === "MENU_CONTEXT page=5 button=0")?.registerDelta.psr).toEqual({ 10: 0, 11: 5 });
   });
@@ -644,20 +671,66 @@ describe("M3 HDMV fixtures", () => {
     const emptyTarget = new HdmvVm([{ id: 0, instructions: [m3Fixtures.jumpObject1] }, { id: 1, instructions: [] }]);
     expect(emptyTarget.runTurn()).toMatchObject({ programId: 1, pc: 0, status: "idle" });
     const pastEnd = new HdmvVm([{ id: 0, instructions: [rawCommand(0x20810000, 2)] }]);
-    expect(pastEnd.runTurn().diagnostic?.code).toBe("HDMV_INVALID_PC");
+    expect(pastEnd.runTurn()).toMatchObject({ status: "idle", pc: 2 });
+    expect(pastEnd.snapshot().diagnostic).toBeNull();
     const movieLink = new HdmvVm([{ id: 0, instructions: [m3Fixtures.linkPlayItem3] }]);
     expect(movieLink.runTurn().status).toBe("idle"); expect(movieLink.actions).toHaveLength(0);
+  });
+  it("updates PSR5-8 from playlist and playback status events", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
+    const action = vm.runTurn().waiting!;
+    expect(vm.registers.psr[5]).toBe(0xffff);
+    expect(vm.registers.psr[6]).toBe(42);
+    expect(vm.registers.psr[7]).toBe(0);
+    expect(vm.registers.psr[8]).toBe(0);
+    vm.handleEvent({ type: "PLAYITEM_CHANGED", generation: action.generation, responseTo: action.id, payload: { playItem: 2 } });
+    expect(vm.registers.psr[7]).toBe(2);
+    vm.handleEvent({ type: "TIME_UPDATED", generation: action.generation, responseTo: action.id, payload: { mediaTimeSeconds: 1.5 } });
+    expect(vm.registers.psr[8]).toBe(67_500);
+    vm.handleEvent({ type: "MEDIA_SEEKED", payload: { presentationTime: 90_000 } });
+    expect(vm.registers.psr[8]).toBe(90_000);
+    expect(vm.snapshot().waiting?.id).toBe(action.id);
+  });
+  it("allows TOP_MENU and POPUP_MENU while a playlist wait is pending", () => {
+    const popupVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
+    const popupAction = popupVm.runTurn().waiting!;
+    const popup = popupVm.handleEvent({ type: "POPUP_MENU" });
+    expect(popup.status).toBe("suspended");
+    expect(popupVm.actions.at(-1)?.type).toBe("MENU_CALL");
+    expect(popupVm.snapshot().waiting?.id).toBe(popupAction.id);
+
+    const topVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }], { entries: [] });
+    topVm.runTurn();
+    const top = topVm.handleEvent({ type: "TOP_MENU" });
+    expect(top.status).toBe("idle");
+    expect(topVm.actions.at(-1)?.type).toBe("TITLE_SEARCH");
+    expect(topVm.snapshot().waiting).toBeNull();
+  });
+  it("runs IG CALL_OBJECT while a playlist wait is pending and parks the playing position", () => {
+    const vm = new HdmvVm([
+      { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
+      { id: 1, instructions: [m3Fixtures.move5, m3Fixtures.resume] },
+    ]);
+    const playlist = vm.runTurn().waiting!;
+    const result = vm.executeButtonProgram([rawCommand(0x21820000, 1)], "ig_object");
+    expect(result.status).toBe("suspended");
+    expect(result.registers.gpr[0]).toBe(5);
+    expect(result.actions.map((action) => action.type)).toEqual(expect.arrayContaining(["PLAY_STOP", "PLAY_PLAYLIST"]));
+    const replayed = vm.snapshot().waiting!;
+    expect(replayed.id).not.toBe(playlist.id);
+    expect(vm.handleEvent({ type: "MEDIA_ENDED", generation: replayed.generation, responseTo: replayed.id }).status).toBe("idle");
   });
   it("suspends on playlist action until matching MEDIA_ENDED, not MEDIA_STARTED", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
     expect(vm.runTurn().status).toBe("suspended");
     const action = vm.actions[0]!; expect(action.waitFor).toBe("ended");
     expect(vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id }).status).toBe("suspended");
-    expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_EVENT_NOT_READY");
+    expect(vm.snapshot().playback.status).toBe("playing");
+    expect(vm.trace.at(-1)?.diagnostic).toBeUndefined();
     expect(vm.trace.find((x) => x.action?.id === action.id)?.action?.waitFor).toBe("ended");
-    expect(vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id }).status).toBe("stopped");
+    expect(vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id }).status).toBe("idle");
     vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
-    expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_EVENT_AFTER_TERMINAL");
+    expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_DUPLICATE_EVENT");
   });
   it("faults unknown opcodes with raw/source evidence and bounds loops", () => {
     const unknownVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.unknown] }]);
@@ -666,12 +739,14 @@ describe("M3 HDMV fixtures", () => {
     const loopVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.goto0] }], { maxInstructionsPerTurn: 4 });
     expect(loopVm.runTurn().diagnostic?.code).toBe("VM_EXECUTION_LIMIT");
   });
-  it("rejects nonzero reserved bits and program writes to PSRs", () => {
+  it("reports nonzero reserved bits and ignores program PSR writes", () => {
     const reserved = Uint8Array.from(m3Fixtures.move5.bytes.match(/../g)!, (x) => Number.parseInt(x, 16)); reserved[2] = reserved[2]! | 0x10;
     expect(decodeInstruction(reserved, m3Fixtures.move5.source).issues).toContain("HDMV_RESERVED_BITS_NONZERO");
     const words: [number, number, number] = [m3Fixtures.move5.words[0], 0x80000004, 5]; const bytes = words.map((x) => x.toString(16).padStart(8, "0")).join("");
     const vm = new HdmvVm([{ id: 0, instructions: [{ words, bytes, source: m3Fixtures.move5.source }] }]);
-    expect(vm.runTurn().diagnostic?.code).toBe("INVALID_REGISTER_ACCESS");
+    expect(vm.runTurn()).toMatchObject({ status: "idle" });
+    expect(vm.snapshot().diagnostic).toBeNull();
+    expect(vm.trace.find((entry) => entry.raw === bytes)?.diagnostic?.code).toBe("HDMV_ILLEGAL_OPERAND");
     const invalidReg = Uint8Array.from(m3Fixtures.move5.bytes.match(/../g)!, (x) => Number.parseInt(x, 16)); invalidReg.set([0, 0, 0x10, 0], 4);
     expect(decodeInstruction(invalidReg, m3Fixtures.move5.source).issues).toContain("HDMV_INVALID_REGISTER_ENCODING");
   });
@@ -703,26 +778,24 @@ describe("M3 HDMV fixtures", () => {
     const pending = vm.snapshot().waiting!;
     vm.handleEvent({ type: "MEDIA_STARTED", channel: "system", generation: pending.generation, responseTo: pending.id, payload: { uoAllowed: false } });
     expect(vm.snapshot().status).toBe("suspended");
-    expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_EVENT_NOT_READY");
-    expect(vm.trace.at(-1)?.diagnostic?.code).not.toBe("HDMV_UO_BLOCKED");
+    expect(vm.snapshot().playback.status).toBe("playing");
+    expect(vm.trace.at(-1)?.diagnostic).toBeUndefined();
 
     vm.handleEvent({ type: "MEDIA_ENDED", channel: "system", generation: pending.generation, responseTo: pending.id, payload: { uoAllowed: false } });
-    expect(vm.snapshot().status).toBe("stopped");
+    expect(vm.snapshot().status).toBe("idle");
     expect(vm.snapshot().waiting).toBeNull();
     expect(vm.trace.filter((entry) => entry.event?.type === "MEDIA_ENDED").at(-1)?.event?.channel).toBe("system");
   });
-  it("rejects navigation input while a media continuation is suspended", () => {
-    const target = { ...m3Fixtures.move5, words: [m3Fixtures.move5.words[0], 0, 9] as [number, number, number], bytes: [m3Fixtures.move5.words[0], 0, 9].map((x) => x.toString(16).padStart(8, "0")).join("") };
-    const vm = new HdmvVm([
-      { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
-      { id: 1, instructions: [target, m3Fixtures.break] },
-    ]);
+  it("runs a button program while a media continuation is suspended", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
     vm.runTurn(); const action = vm.actions[0]!; const pending = vm.snapshot();
-    vm.handleEvent({ type: "MENU_INPUT", input: "activate", channel: "keyboard", payload: { objectId: 1 } });
+    const button = vm.executeButtonProgram([m3Fixtures.move5], "ig_object");
+    expect(button.status).toBe("suspended");
+    expect(button.registers.gpr[0]).toBe(5);
+    expect(vm.snapshot().waiting?.id).toBe(action.id);
     expect(vm.snapshot().programId).toBe(pending.programId); expect(vm.snapshot().pc).toBe(pending.pc);
-    expect(vm.snapshot().waiting?.id).toBe(action.id); expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_INPUT_WHILE_SUSPENDED");
     vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
-    expect(vm.snapshot().programId).toBe(0); expect(vm.snapshot().registers.gpr[0]).toBe(0); expect(vm.snapshot().status).toBe("stopped");
+    expect(vm.snapshot().programId).toBe(0); expect(vm.snapshot().registers.gpr[0]).toBe(5); expect(vm.snapshot().status).toBe("idle");
   });
   it("runs an IG JUMP_OBJECT while playlist playback is suspended and retires that wait", () => {
     const vm = new HdmvVm([
@@ -750,14 +823,19 @@ describe("M3 HDMV fixtures", () => {
     expect(faulted.snapshot().status).toBe("faulted"); expect(faulted.snapshot().pc).toBe(faultedBefore.pc);
     expect(faulted.snapshot().registers).toEqual(faultedBefore.registers); expect(faulted.trace.at(-1)?.diagnostic?.code).toBe("HDMV_EVENT_AFTER_TERMINAL");
 
-    const stopped = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }, { id: 1, instructions: [m3Fixtures.break] }]);
-    stopped.runTurn(); stopped.handleEvent({ type: "MENU_INPUT", payload: { objectId: 1 } });
+    const stopped = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }, { id: 1, instructions: [m3Fixtures.break] }]);
+    stopped.runTurn(); const waiting = stopped.snapshot().waiting!;
+    stopped.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: waiting.generation, responseTo: waiting.id });
+    expect(stopped.snapshot().status).toBe("stopped");
+    stopped.handleEvent({ type: "MENU_INPUT", payload: { objectId: 1 } });
     expect(stopped.snapshot().status).toBe("stopped"); expect(stopped.snapshot().programId).toBe(0);
   });
   it("turns invalid user targets and action queue overflow into VM diagnostics", () => {
     const badTarget = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
     expect(() => badTarget.handleEvent({ type: "MENU_INPUT", payload: { objectId: 77 } })).not.toThrow();
-    expect(badTarget.snapshot().status).toBe("faulted"); expect(badTarget.snapshot().diagnostic?.code).toBe("HDMV_INVALID_TARGET");
+    expect(badTarget.snapshot().status).toBe("idle");
+    expect(badTarget.snapshot().diagnostic).toBeNull();
+    expect(badTarget.trace.find((entry) => entry.event?.type === "MENU_INPUT")).toMatchObject({ diagnostic: { code: "HDMV_INVALID_TARGET" } });
     expect(badTarget.trace.at(-1)?.event?.type).toBe("MENU_INPUT");
 
     const fullQueue = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }], { maxQueueDepth: 0 });
@@ -765,14 +843,18 @@ describe("M3 HDMV fixtures", () => {
     expect(fullQueue.snapshot().status).toBe("faulted"); expect(fullQueue.snapshot().diagnostic?.code).toBe("VM_QUEUE_LIMIT");
     expect(fullQueue.trace.at(-1)?.event?.type).toBe("TOP_MENU");
   });
-  it("installs continuations for menu actions that advertise started waits", () => {
-    for (const [input, actionType] of [["TOP_MENU", "TOP_MENU"], ["POPUP_MENU", "MENU_CALL"]] as const) {
-      const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-      expect(vm.handleEvent({ type: input }).status).toBe("suspended");
-      const pending = vm.snapshot().waiting!; expect(pending.type).toBe(actionType); expect(pending.waitFor).toBe("started");
-      expect(vm.handleEvent({ type: "MEDIA_STARTED", generation: pending.generation, responseTo: pending.id }).status).toBe("stopped");
-      expect(vm.snapshot().waiting).toBeNull();
-    }
+  it("routes top menu to title selection and emits popup requests without a VM wait", () => {
+    const top = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
+    expect(top.handleEvent({ type: "TOP_MENU" }).status).toBe("idle");
+    expect(top.snapshot().waiting).toBeNull();
+    expect(top.actions.at(-1)).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 0 } });
+    expect(top.actions.at(-1)).not.toHaveProperty("waitFor");
+
+    const popup = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
+    expect(popup.handleEvent({ type: "POPUP_MENU" }).status).toBe("idle");
+    expect(popup.snapshot().waiting).toBeNull();
+    expect(popup.actions.at(-1)).toMatchObject({ type: "MENU_CALL" });
+    expect(popup.actions.at(-1)).not.toHaveProperty("waitFor");
   });
   it("emits IG LINK actions without suspending the VM", () => {
     const linkMark = rawCommand(0x22850000, 7);
@@ -801,7 +883,7 @@ describe("M3 HDMV fixtures", () => {
 
     const button = vm.executeButtonProgram([m3Fixtures.move5, m3Fixtures.terminatePlaylist], "ig_object");
     expect(button.buttonCommandTerminated).toBe(true); expect(button.actions.map((action) => action.type)).toEqual(["PLAY_STOP"]);
-    expect(button.status).toBe("stopped"); expect(button.waiting).toBeNull(); expect(button.programId).toBe(0);
+    expect(button.status).toBe("idle"); expect(button.waiting).toBeNull(); expect(button.programId).toBe(0);
     expect(button.registers.gpr[0]).toBe(6); // button command sets 5; resumed MovieObject ADD executes next
     expect(vm.trace.findIndex((entry) => entry.action?.type === "PLAY_STOP")).toBeLessThan(vm.trace.findIndex((entry) => entry.decoded === "ADD gpr[0],#1"));
 
@@ -899,11 +981,11 @@ describe("M3 HDMV fixtures", () => {
     const stream = rawCommand(0x51c00001, 0x80010000, 0);
     const drained = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, stream, m3Fixtures.break] }], { maxQueueDepth: 1 });
     drained.runTurn(); const first = drained.drainActions()[0]!;
-    expect(drained.handleEvent({ type: "MEDIA_ENDED", generation: first.generation, responseTo: first.id }).status).toBe("stopped");
+    expect(drained.handleEvent({ type: "MEDIA_ENDED", generation: first.generation, responseTo: first.id }).status).toBe("idle");
     expect(drained.snapshot().diagnostic).toBeNull(); expect(drained.drainActions()).toHaveLength(1);
     const completed = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, stream, m3Fixtures.break] }], { maxQueueDepth: 1 });
     completed.runTurn(); const action = completed.actions[0]!;
-    expect(completed.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id }).status).toBe("stopped");
+    expect(completed.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id }).status).toBe("idle");
     expect(completed.snapshot().diagnostic).toBeNull();
   });
   it("produces stable trace for the same profile and command input", () => {

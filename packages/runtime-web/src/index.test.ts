@@ -156,7 +156,7 @@ describe("offline menu primitives", () => {
     testScene.pages[0]!.buttons[0]!.neighbors.down = 2;
     testScene.pages[0]!.buttons[1]!.commands = [{ bytes: m3Fixtures.move5.bytes }];
     const vm = new HdmvVm([{ id: 0, instructions: ["218300000000000100000000", m3Fixtures.add7] }]);
-    expect(vm.runTurn()).toMatchObject({ status: "idle", pc: 0, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
+    expect(vm.runTurn()).toMatchObject({ status: "idle", pc: 1, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(vm.handleEvent({ type: "RETURN" })).toMatchObject({ status: "idle", diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(vm.actions.at(-1)?.type).toBe("MENU_RETURN");
 
@@ -167,7 +167,7 @@ describe("offline menu primitives", () => {
     expect(vm.snapshot().registers.gpr[0]).toBe(5);
     expect(vm.snapshot().status).not.toBe("faulted");
   });
-  it("restores the menu and registers after a failed button command", () => {
+  it("keeps the menu usable after an ignored invalid button target", () => {
     const testScene = scene();
     testScene.pages[0]!.buttons[0]!.neighbors.down = 2;
     testScene.pages[0]!.buttons[0]!.commands = [{ bytes: m3Fixtures.move5.bytes }, { bytes: "210000000000000000000000" }];
@@ -175,9 +175,10 @@ describe("offline menu primitives", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [] }]);
     const diagnostic = vi.fn(); const controller = new MenuController(testScene, vm, { diagnostic });
     controller.handle("activate");
-    expect(diagnostic).toHaveBeenCalled();
+    expect(diagnostic).not.toHaveBeenCalled();
     expect(vm.snapshot().status).not.toBe("faulted");
-    expect(vm.snapshot().registers.gpr[0]).toBe(0);
+    expect(vm.snapshot().registers.gpr[0]).toBe(5);
+    expect(vm.trace.find((entry) => entry.decoded?.startsWith("JUMP_OBJECT"))?.diagnostic?.code).toBe("HDMV_INVALID_TARGET");
     controller.handle("down"); controller.handle("activate");
     expect(vm.snapshot().registers.gpr[0]).toBe(5);
   });
@@ -789,7 +790,7 @@ describe("offline menu primitives", () => {
     const messages: string[] = [];
     new PreviewPlaybackBridge(vm, (message) => messages.push(message)).dispatch(action);
     expect(messages).toEqual(["Popup composition is unavailable because this package does not have an in-browser title overlay context."]);
-    expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(true);
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(false);
   });
   it("routes an activated movie button to the visible unavailable report", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [] }]);
@@ -846,7 +847,8 @@ describe("offline menu primitives", () => {
     await bridge.dispatch(action);
     expect(video.loop).toBe(true); expect(video.src).toBe("assets/media/background.mp4"); expect(audio.src).toBe("assets/media/audio-1100-eng.m4a");
     expect(vm.snapshot().status).toBe("suspended"); expect(vm.snapshot().waiting?.id).toBe(action.id);
-    expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED" && record.event.responseTo === action.id && record.diagnostic?.code === "HDMV_EVENT_NOT_READY")).toBe(true);
+    expect(vm.snapshot().playback.status).toBe("playing");
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED" && record.event.responseTo === action.id && record.diagnostic === undefined)).toBe(true);
     video.currentTime = 42.5;
     video.pause();
     vm.registers.systemWrite(1, 2);
@@ -867,7 +869,7 @@ describe("offline menu primitives", () => {
     const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
     const video = { loop: false, src: "", currentTime: 0, paused: true, play: vi.fn(async function(this: { paused: boolean }) { this.paused = false; }), pause: vi.fn(function(this: { paused: boolean }) { this.paused = true; }) } as unknown as HTMLVideoElement;
     const audio = { loop: false, src: "", currentTime: 0, duration: 60, readyState: 1, paused: true, play: vi.fn(async function(this: { paused: boolean }) { this.paused = false; }), pause: vi.fn(function(this: { paused: boolean }) { this.paused = true; }), load: vi.fn() } as unknown as HTMLAudioElement;
-    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 60 }, audioTracks: [{ streamNumber: 0, path: "audio.m4a", language: "eng" }] });
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 60 }, audioTracks: [{ streamNumber: 0, path: "audio.m4a", language: "eng" }] }, () => {});
     expect(await bridge.startMenuBackground()).toBe(true);
     video.currentTime = 27.5;
     await bridge.dispatch({ id: "stop", generation: 1, type: "PLAY_STOP", payload: {} });

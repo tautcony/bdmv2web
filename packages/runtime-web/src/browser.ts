@@ -221,7 +221,6 @@ async function boot(): Promise<void> {
             : { status: "not-found" as const };
           if (selected.status !== "selected" || !popupCanvas) {
             showStatus("No unambiguous popup IGS composition matches the active menu clip and PID.");
-            vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
           } else {
             closePopup();
             const popupScene = normalizeScene(selected.scene, assetMap);
@@ -238,10 +237,9 @@ async function boot(): Promise<void> {
             removePopupPointer = installCanvasPointerInput(popupCanvas, popupViewport, popupController, () => { const size = popupCanvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
             popupController.start();
             if (inputStarted) queueMicrotask(() => { removeKeyboard?.(); if (popupController) removeKeyboard = installKeyboardInput(window, popupController); });
-            vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id });
             drawPopup();
           }
-        } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number" && data.vmEntries) {
+        } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {
           closePopup();
           const selected = vm.selectTitle(action.payload.title);
           if (selected.diagnostic) {

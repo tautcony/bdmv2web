@@ -56,7 +56,10 @@ export function decodeInstruction(input: MovieInstruction | RawCommand | Uint8Ar
   const compareOption = (w0 >>> 8) & 0xf;
   const setOption = w0 & 0x1f;
   const issues: string[] = [];
-  if ((w0 & 0x0030f8e0) !== 0) issues.push("HDMV_RESERVED_BITS_NONZERO");
+  // Reserved fields are word-0 bits 21-20, 15-12, and 7-5. libbluray skips
+  // these fields without rejecting the command; group-specific option bits
+  // (for example the compare option) are not reserved.
+  if ((w0 & 0x0030f0e0) !== 0) issues.push("HDMV_RESERVED_BITS_NONZERO");
   if (opCount > 2) issues.push("HDMV_INVALID_OPERAND_COUNT");
   const specialRegisterWords = group === 2 && subGroup === 1 && [1, 3, 6].includes(setOption);
   const operands: [Operand | null, Operand | null] = [opCount > 0 ? specialRegisterWords && !immOp1 ? { kind: "encoded", value: w1 >>> 0, raw: w1 >>> 0 } : operand(w1, immOp1) : null, opCount > 1 ? specialRegisterWords && !immOp2 ? { kind: "encoded", value: w2 >>> 0, raw: w2 >>> 0 } : operand(w2, immOp2) : null];
@@ -74,7 +77,11 @@ export function decodeInstruction(input: MovieInstruction | RawCommand | Uint8Ar
   if (opcode && opCount !== expected) issues.push("HDMV_ILLEGAL_OPERAND_COUNT");
   if (operands.some((x) => x?.kind === "immediate") && opcode && ["MOVE", "SWAP", "ADD", "SUB", "MUL", "DIV", "MOD", "AND", "OR", "XOR", "BITSET", "BITCLR", "SHL", "SHR"].includes(opcode) && operands[0]?.kind === "immediate") issues.push("HDMV_ILLEGAL_DESTINATION");
   if (opcode === "RND" && operands[0]?.kind !== "gpr") issues.push("HDMV_ILLEGAL_DESTINATION");
-  return { ...raw, source: source ?? raw.source, group, subGroup, opCount, immOp1, immOp2, branchOption, compareOption, setOption, opcode, operands, issues, status: issues.length ? "invalid" : "reference-only" };
+  // Tolerated encoding issues are recorded for diagnostics, but only an
+  // undecodable group/opcode makes the instruction invalid. libbluray logs
+  // reserved bits, extra operands, and invalid register encodings and then
+  // executes the instruction with the operands it can resolve.
+  return { ...raw, source: source ?? raw.source, group, subGroup, opCount, immOp1, immOp2, branchOption, compareOption, setOption, opcode, operands, issues, status: !opcode ? "invalid" : issues.length ? "unverified" : "reference-only" };
 }
 
 export function disassemble(input: MovieInstruction | RawCommand | Uint8Array | string, source?: SourceLocation): string {

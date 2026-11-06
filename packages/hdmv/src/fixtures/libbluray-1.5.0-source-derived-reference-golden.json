@@ -56,10 +56,10 @@
             { "programId": 0, "pc": 0, "decoded": "EQ gpr[0],#7", "status": "running" },
             { "programId": 0, "pc": 1, "decoded": "MOVE gpr[1],#99", "status": "running" },
             { "programId": 0, "pc": 2, "decoded": "MOVE gpr[2],#2", "status": "running" },
-            { "programId": 0, "pc": 3, "decoded": "BREAK", "status": "stopped" }
+            { "programId": 0, "pc": 3, "decoded": "BREAK", "status": "running" }
           ],
           "expectedGpr": { "0": 7, "1": 99, "2": 2 },
-          "expectedStatus": "stopped"
+          "expectedStatus": "idle"
         },
         {
           "id": "not-equal",
@@ -67,10 +67,10 @@
           "expectedTrace": [
             { "programId": 0, "pc": 0, "decoded": "EQ gpr[0],#7", "status": "running" },
             { "programId": 0, "pc": 2, "decoded": "MOVE gpr[2],#2", "status": "running" },
-            { "programId": 0, "pc": 3, "decoded": "BREAK", "status": "stopped" }
+            { "programId": 0, "pc": 3, "decoded": "BREAK", "status": "running" }
           ],
           "expectedGpr": { "0": 6, "1": 0, "2": 2 },
-          "expectedStatus": "stopped"
+          "expectedStatus": "idle"
         }
       ]
     },
@@ -86,11 +86,11 @@
         { "programId": 1, "pc": 0, "decoded": "ADD gpr[0],#3" },
         { "programId": 1, "pc": 1, "decoded": "RESUME", "callStack": [] },
         { "programId": 0, "pc": 1, "decoded": "ADD gpr[0],#7" },
-        { "programId": 0, "pc": 2, "decoded": "BREAK", "status": "stopped" }
+        { "programId": 0, "pc": 2, "decoded": "BREAK", "status": "running" }
       ],
       "expectedPsr": { "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11, "12": 12, "36": 65535, "37": 65535, "38": 0, "39": 0, "40": 0, "42": 65535, "43": 0, "44": 255 },
       "expectedGpr": { "0": 10 },
-      "expectedStatus": "stopped"
+      "expectedStatus": "idle"
     },
     {
       "id": "playlist-completion-restores-next-command",
@@ -107,7 +107,7 @@
       "expectedAfterCompletion": {
         "programId": 0,
         "pc": 3,
-        "status": "stopped",
+        "status": "idle",
         "registers": { "gpr": { "0": 1 } },
         "waiting": null
       }

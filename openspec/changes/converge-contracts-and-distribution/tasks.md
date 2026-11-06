@@ -30,12 +30,12 @@
 
 ## C. 图与 VM 语义（D11）
 
-- [ ] C.1 `packages/hdmv/src/graph.ts:63` 的 `terminatesFlow` 改为按上下文判定：签名 `(opcode, context: "object" | "playlist")`；MovieObject 上下文中 `LINK_PI` / `LINK_MK` / `JUMP_TITLE` 不终止，`TERMINATE_PL` 仅在 playlist 上下文终止。验收：单测覆盖两种上下文 × 四个 opcode 共 8 组判定。
+- [ ] C.1 `packages/hdmv/src/graph.ts:63` 的 `terminatesFlow` 改为按上下文判定：签名 `(opcode, context: "object" | "playlist")`；MovieObject 上下文中 `LINK_PI` / `LINK_MK` 不终止，`JUMP_TITLE` 结束当前 run 且不生成到下一条指令的 `sequence` 边，`TERMINATE_PL` 仅在 playlist 上下文终止。验收：单测覆盖两种上下文 × 四个 opcode 共 8 组判定。
 - [ ] C.2 `buildNavigationGraph` 为 `JUMP_TITLE` 生成 `sequence` 边，指向目标 entry 的首个 program，边带 `origin: "jump-title"` 以便区分静态 `jump` 边。验收：最小 `JUMP_TITLE` 程序的图同时含 `jump` 与 `sequence` 两类边（当前只有 `jump`）；目标 entry 在可达集合中。
-- [ ] C.3 核对当前 `CALL_TITLE` 恢复路径：VM 暂停并发出 `TITLE_SEARCH`，runtime 调用 `selectTitle()`。验收覆盖有效 HDMV 目标、不可用目标及 BD-J/无效目标；VM 不永久 suspended，trace 保留结果与来源。不新增与现行直接选择路径重复的 `responseTo` 桥接机制。
+- [x] C.3 核对当前 `CALL_TITLE` 恢复路径：VM 暂停并发出 `TITLE_SEARCH`，runtime 调用 `selectTitle()`。验收覆盖有效 HDMV 目标、不可用目标及 BD-J/无效目标；VM 不永久 suspended，trace 保留结果与来源。不新增与现行直接选择路径重复的 `responseTo` 桥接机制。2026-11-06 审计修复：`selectTitle()` 失败释放标题切换，BD-J/缺表使用 `unsupportedOperation`；回归在 `packages/hdmv/src/index.test.ts`。
 - [ ] C.4 桥端只对 `waitFor` 匹配的动作回复：`runtime-web` 的 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 增加"是否有匹配等待"的检查，不再把任意事件交给 `handleEvent` 试。验收：无等待时收到事件不产生副作用（trace 记录 discarded 原因）。
-- [ ] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 MovieObject 上下文放入 `PLAY_PL` 指令，trace 出现该诊断且 VM 继续执行；`docs/support/hdmv-support.md` 补充该码说明。
-- [ ] C.6 回归：现有 74 个 hdmv 用例全部通过；新增用例不少于 6 条（C.1 两组上下文、C.2 可达性、C.3 两条、C.5）。验收：`corepack pnpm --filter @bdmv2web/hdmv test` 计数 ≥ 80 且无跳过。
+- [x] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 IG 上下文放入 `PLAY_PL` 或 MovieObject 上下文放入 `LINK_PI`，trace 出现该诊断且 VM 继续执行；`docs/support/hdmv-support.md` 已补充该码说明。回归在 `packages/hdmv/src/index.test.ts`。
+- [x] C.6 回归：现有 74 个 hdmv 用例全部通过；新增用例不少于 6 条（C.1 两组上下文、C.2 可达性、C.3 两条、C.5）。验收：`corepack pnpm --filter @bdmv2web/hdmv test` 计数 ≥ 80 且无跳过。2026-11-06：88 项通过；新增 JUMP_TITLE 单动作、标题切换释放、IG CALL_OBJECT、PSR5–8、播放等待期间 POPUP/TOP/按钮、CALL_OBJECT 缺目标继续等回归。
 - [ ] C.7 对 `.reference-cache/libbluray-1.5.0/src/libbluray/hdmv/hdmv_vm.c` 的每个已解码 opcode 建立实现状态表；逐项确认上下文、PC、寄存器、事件/等待和诊断。修复与参考行为不符的可实现语义；参考本身未实现的操作保持显式状态。验收：表覆盖 `decode.ts` 的全部 opcode；每项有直接回归；不把 `ig_object` 规则绑定到单张碟片。
 
 ## D. 源位置保真（D12）

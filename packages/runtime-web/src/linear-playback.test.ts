@@ -123,7 +123,7 @@ describe("linear playback generation cancellation", () => {
     oldEnded(new Event("ended"));
 
     expect(vm.snapshot().waiting?.id).toBe(currentAction.id);
-    expect(vm.snapshot().playback.status).toBe("requested");
+    expect(vm.snapshot().playback.status).toBe("playing");
     expect(vm.trace.some((entry) => entry.event?.type === "MEDIA_ENDED" && entry.event.responseTo === oldAction.id)).toBe(false);
   });
 

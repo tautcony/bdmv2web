@@ -173,7 +173,7 @@ export class LinearPlaybackBridge implements PlaybackBridge {
     try {
       this.validateTarget(seconds);
       await this.seekMedia(active, seconds);
-      if (this.isActive(active)) this.vm.handleEvent({ type: "MEDIA_SEEKED", generation: action.generation, responseTo: action.id, payload: { playlistId: active.asset.playlistId, mediaTimeSeconds: this.media.currentTime } });
+      if (this.isActive(active)) this.vm.handleEvent({ type: "MEDIA_SEEKED", generation: action.generation, responseTo: action.id, payload: { playlistId: active.asset.playlistId, mediaTimeSeconds: this.media.currentTime, presentationTime: Math.max(0, Math.round(this.media.currentTime * 45_000)) } });
     } catch (error) {
       if (this.isActive(active)) this.hooks.report(`${action.type} failed: ${errorMessage(error)}`);
     }

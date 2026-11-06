@@ -25,4 +25,5 @@
 ## 历史资料
 
 - [2026-11-04 评审记录](review-2026-11-04/index.md)：评审结论、阶段记录与修复清单。
+- [2026-11-06 HDMV VM 一致性审计](review-2026-11-06-hdmv-vm-conformance/index.md)：对照 libbluray/libhdmv 的逐指令核对、运行模型差异、复现记录与修复顺序。
 - [归档文档](archive/README.md)：历史决策和已完成评审资料。
