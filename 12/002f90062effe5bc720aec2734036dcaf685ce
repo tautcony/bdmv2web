@@ -1,0 +1,42 @@
+apps/cli/tsconfig.dev.json
+  s_9a96d462fb9bc1::t_806c48be9a6b9d 4
+  s_9a96d462fb9bc1::t_fbfb87b9410538 1-3,5-19
+AGENTS.md
+  s_9a7f81ec08da80::t_eb21fd675e1fef 32
+package.json
+  s_9a96d462fb9bc1::t_2d27950c95d4ee 9,19
+README.md
+  s_9a96d462fb9bc1::t_71dfaf54062865 33
+  h_3705811fa4502c 97
+pnpm-lock.yaml
+  s_9a96d462fb9bc1::t_2a88dc6e807fd1 20-22,28,794-796,857-859,892-896,1261,1267,1385-1388,1441-1442,1495-1501,1506,1517,1519,1522,1539
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12002f90062effe5bc720aec2734036dcaf685ce",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_9a7f81ec08da80": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4d95e0f1-ab28-4e3b-bb92-b133a6fb0ec5",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_9a96d462fb9bc1": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3eb99ba9-2215-4d47-bff9-cefdf615357f",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
