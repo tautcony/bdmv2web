@@ -1,0 +1,85 @@
+packages/test-runner/src/report.ts
+  s_73be6d6c0c1a12::t_29b23764de5783 26
+packages/test-runner/src/release-summary.ts
+  s_73be6d6c0c1a12::t_29b23764de5783 9,89,95
+openspec/changes/export-playable-media/tasks.md
+  s_73be6d6c0c1a12::t_ac05a27742cfdc 48
+  s_73be6d6c0c1a12::t_f497c88b52460f 39
+packages/runtime-web/src/index.test.ts
+  s_73be6d6c0c1a12::t_697aef4e0151e3 802
+packages/test-runner/src/browser-evidence.ts
+  s_73be6d6c0c1a12::t_29b23764de5783 115,127
+README.md
+  s_73be6d6c0c1a12::t_dc90edb94c29cd 47
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  s_73be6d6c0c1a12::t_a9723793548108 16,79
+packages/test-runner/src/browser-evidence.test.ts
+  s_73be6d6c0c1a12::t_a336b00e20f1c9 27,30,42
+openspec/changes/export-playable-media/design.md
+  s_73be6d6c0c1a12::t_ac05a27742cfdc 11
+docs/archive/README.md
+  s_73be6d6c0c1a12::t_ce1366e7db154d 1-3
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_73be6d6c0c1a12::t_ac05a27742cfdc 73
+docs/browser-matrix.md
+  s_73be6d6c0c1a12::t_122173367c121d 8
+  s_73be6d6c0c1a12::t_a9723793548108 14
+packages/runtime-web/src/index.ts
+  s_73be6d6c0c1a12::t_697aef4e0151e3 47,657,722
+  s_73be6d6c0c1a12::t_122173367c121d 650
+packages/package-builder/src/index.ts
+  s_73be6d6c0c1a12::t_49863c89e542b3 251
+  s_73be6d6c0c1a12::t_29b23764de5783 19,114,130,166,168
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_73be6d6c0c1a12::t_a9723793548108 29
+docs/bdmv_hdmv_offline_web_architecture.md
+  s_73be6d6c0c1a12::t_ac05a27742cfdc 34,70
+docs/development.md
+  s_73be6d6c0c1a12::t_f497c88b52460f 69
+docs/igs-support.md
+  s_73be6d6c0c1a12::t_a9723793548108 19
+apps/cli/src/index.ts
+  s_73be6d6c0c1a12::t_dc90edb94c29cd 25,926-927
+  s_73be6d6c0c1a12::t_e6bb98752a2c2f 575,689,697,784,787
+packages/test-runner/src/release-summary.test.ts
+  s_73be6d6c0c1a12::t_a336b00e20f1c9 35,50,52,60,69
+apps/cli/src/index.test.ts
+  s_73be6d6c0c1a12::t_2c549c3b67488f 118-120,137
+  s_73be6d6c0c1a12::t_a76f4af50c64e2 18,24,88,130-133,140,248,500,505
+  s_73be6d6c0c1a12::t_a48ad112388f29 595,616-617,655-656,662-664,668-669,674
+openspec/changes/export-playable-media/proposal.md
+  s_73be6d6c0c1a12::t_ac05a27742cfdc 9
+openspec/changes/verify-offline-release/tasks.md
+  s_73be6d6c0c1a12::t_e118488b1196b5 17-18
+packages/package-builder/src/index.test.ts
+  s_73be6d6c0c1a12::t_a336b00e20f1c9 100
+openspec/changes/READINESS_REVIEW.md
+  s_73be6d6c0c1a12::t_e118488b1196b5 26
+packages/test-runner/src/index.test.ts
+  s_73be6d6c0c1a12::t_a336b00e20f1c9 41,158-161,170-171,181-183,232
+packages/runtime-web/src/browser.test.ts
+  s_73be6d6c0c1a12::t_697aef4e0151e3 205
+openspec/specs/cli-delivery-status/spec.md
+  s_73be6d6c0c1a12::t_47646961e7e6da 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "78c52983e6a4bb52ea9b1dee8c6f42191b3553c1",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_73be6d6c0c1a12": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1ae65-6088-73d3-8341-b9425bcdf9e2",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
