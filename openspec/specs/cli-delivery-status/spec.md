@@ -55,17 +55,17 @@
 
 ### Requirement: 单一产物形态
 
-系统 SHALL 只产出 `menu-only` 形态的菜单包，产物形态不得作为"交付不完整"的判定依据；不支持的模式必须在产生任何输出前被拒绝。
+系统 SHALL 通过 `convert` 产出唯一的离线菜单包，且不提供模式参数；manifest/report 中的 `menu-only` 是现有状态字段，不作为用户可选的产物模式。产物形态不得作为"交付不完整"的判定依据。
 
 #### Scenario: 裸跑转换
 
-- **WHEN** 执行 `convert INPUT` 不带模式参数
-- **THEN** 使用 `menu-only` 并按实际缺口判定状态；无缺口时退出 0
+- **WHEN** 执行 `convert INPUT`
+- **THEN** 生成统一离线菜单包，并按实际缺口判定状态；无缺口时退出 0
 
-#### Scenario: 请求未支持模式
+#### Scenario: 传入已移除的模式参数
 
-- **WHEN** 传入 `--mode standalone-full`
-- **THEN** 在任何输出目录或事务创建前返回 `CLI_UNSUPPORTED_MODE`，退出码 1，磁盘无新目录
+- **WHEN** `convert` 收到 `--mode`
+- **THEN** 在任何输出目录或事务创建前返回 `CLI_UNKNOWN_OPTION`，退出码 1，磁盘无新目录
 
 #### Scenario: 状态判定不含模式
 

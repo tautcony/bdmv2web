@@ -16,7 +16,7 @@
 
 先读 manifest/schema，再核对资产存在、实体引用、命令支持、影片目标、所有运行文件 URL 和证据。缺报告也显式记录，不能相信包里已有 status。输出 checks[] 含 checkId/result(pass/fail/not-verified)/entityId/source/evidence。
 
-manifest 列出运行文件路径和长度。审计不计算文件内容摘要；浏览器证据记录 profile、mode、生成媒体路径与长度、矩阵、环境和生成工具版本。对应值变化后重新执行相关场景。
+manifest 可列出运行文件路径和长度作为清单信息。审计不计算文件内容摘要或用文件长度判定交付通过；浏览器证据适用性由 profile、mode、生成媒体路径、矩阵、环境和生成工具版本决定。当前证据绑定仍把 byteLength 纳入变化比较，需按任务 4.3 调整。
 
 ### 2. 离线和路径审计
 
@@ -32,28 +32,28 @@ HTML src/href/srcset、CSS url/@import、数据脚本/IR 资产、JS 静态资�
 
 ### 4. 参考对照
 
-compare 输入序列文件含 fixtureId/sourceLabel、PlayerProfile、初始寄存器/稳定入口、确定性 seed、按逻辑时间排序的用户/媒体事件。适配 libbluray/BDedit 等可用参考输出，记录工具版本/调用方法；不为外部原盘样本生成哈希。参考资料缺席为 not-verified，不能用自身 trace 自证。
+compare 输入序列文件含 fixtureId/sourceLabel、PlayerProfile、初始寄存器/稳定入口、确定性 seed、按逻辑时间排序的用户/媒体事件。适配 libbluray/BDedit 等可用参考输出，记录工具版本/调用方法；不为外部原盘样本生成内容指纹。参考资料缺席为 not-verified，不能用自身 trace 自证。
 
 VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随机 ID 等非语义字段；差异报告首个分歧及双方源位置。使用同类工具对同一现有案例生成参考输出，记录工具版本及导出条件；IG 纯图层按相同分辨率/时间戳/颜色规则逐像素比较，要求不透明及透明 RGBA 规则一致；菜单背景视频另报质量，不把视频编码误差算 IG 错误。逐元素比较各按钮状态引用的 PNG 资源，整页合成截图不作为图像保真验收前提。
 
 ### 5. 矩阵与 A–J 证据
 
-V1 验收使用 Google Chrome，不限定操作系统。M0 建立单行模板，M4/M5 记录冒烟，M6 锁定 Chrome 完整版本及自动化工具版本；不在没有实际浏览器时编造通过。菜单直接 `file://`、断网、无未声明后台、复制到中文/空格新路径；影片交接另在源 M2TS 可用时验证，移走原盘后应报告影片不可用；人工双击测试也保存可复查记录，HTTP 冒烟不能替代。V1 不要求跨浏览器矩阵。
+V1 验收使用 Google Chrome，不限定操作系统。M6 锁定 Chrome 完整版本及自动化工具版本；缺少实际浏览器证据时记为未验证。菜单直接 `file://`、断网并复制到中文/空格新路径；影片交接另在源 M2TS 可用时验证，源不可用时报告该缺口。证据绑定 profile、mode、生成媒体路径、矩阵和浏览器环境，不使用制品内容指纹。HTTP 冒烟不能替代直接 `file://` 验收。
 
 | 场景 | 验收主责与证据 |
 | --- | --- |
 | A 静态三态 | M2/M4；PNG、坐标与交互 trace |
 | B 动态背景/音效 | M4/M5；循环、首次手势、音频实播 |
 | C 多页/条件 | M3/M4；页/焦点/返回/寄存器 |
-| D 多 PlayItem/章节 | M5；文件映射及不能等价播放 Playlist 的限制 |
-| E Pop-up | M3/M4；菜单范围的行为及外部播放期间无法叠加的限制 |
-| F 分片/调色板/动画 | M2/M4；逐像素、版本、时序 |
+| D 多 PlayItem/影片目标 | M5；源 M2TS、PlayItem 区间与实际交接范围；章节由外部播放器负责 |
+| E Pop-up | M3/M4；仅验证已打包的菜单 popup；外部播放器中的正片不由网页叠加控制 |
+| F 分片/调色板/动画 | M2/M4；IG 图像逐像素对照；动画和效果无时序 golden 时保持未验证 |
 | G PSR/GPR/Call/Resume | M3；参考 golden trace，外部播放器状态不假定可回传 |
 | H 混合 BD-J | M1/M6；入口保留、partial/strict 退出2 |
 | I 破损/缺失/循环 | 各模块/M6；预算内终止与准确诊断 |
 | J Chrome 环境/分辨率/路径 | M4–M6；Chrome 版本、DPI、移动包证据 |
 
-每份证据含 caseId/fixtureId/inputSequence/profile/mode/generatedMedia/Chrome版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。
+每份证据含 caseId/fixtureId/inputSequence/profile/mode/generatedMedia/Chrome版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。生成媒体路径参与适用性判断；文件长度不作为发布验证条件，制品内容指纹不属于证据字段。
 
 ### 6. 发布与失败保留
 

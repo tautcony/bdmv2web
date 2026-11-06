@@ -1,6 +1,6 @@
 # Tasks
 
-前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
+当前基线：core、parser、IGS、HDMV 与菜单运行时均已存在。这里只保留实现尚未覆盖或验收证据仍缺少的项目。
 
 共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。文中命令/文件是目标交付物，当前未实现。
 
@@ -17,18 +17,18 @@
 - [x] 2.2 实现page/BOG/normal-selected-activated/默认选择/自动动作；验收：多页切换无悬空焦点，三态序列匹配scene。
 - [x] 2.3 实现方向邻接、确认、pointer/触屏、Top Menu/Pop-up/Escape配置；验收：无几何猜邻接，禁用/UO mask在各通道一致。
 - [x] 2.4 实现失焦清键与重复激活约束；验收：按住失焦再返回不持续移动/激活。
-- [ ] 2.5 实现可注入时钟/动画/效果调度和作用域取消；验收：离页后旧完成事件不改变新页，暂停按逻辑时钟冻结。
+- [ ] 2.5 补齐 IGS 动画帧及页面效果的可解释时序契约和独立 timing golden；现有可注入调度器、逻辑时钟、暂停恢复和作用域取消已实现。验收：在时序契约确定后，证明离页回调不污染新页、暂停冻结并与参考帧序列一致。
 
 > Completion gap for 2.5: `adaptIgsScene` and the browser scene normalizer now preserve composition/selection timeout values, `animationFrameRateCode`, button start/end object IDs and repeat flags, and raw enter/exit effect bytes/counts. Effect flag bits remain embedded in opaque bytes and are not interpreted. The injected logical scheduler supports page-scope cancellation and pause/resume, with focused lifecycle tests, but the effect parser has no interpreted timing/completion contract and there is no timing golden. The runtime therefore cannot schedule source-matched animations or page effects yet; keep this task unchecked until that contract and a timing golden are available.
 
 ## 3. VM集成与模式
 
-- [ ] 3.1 以统一MenuController连接VM动作/事件和sound，不在DOM硬编码播放；验收：指定按键路径产生参考导航trace。
+- [ ] 3.1 补独立参考导航 trace。当前浏览器已由 MenuController 连接 VM 动作/事件、指针/键盘和 sound，合成 M3 fixture 的集成路径已有测试；合成 trace 不作为独立参考。验收：指定按键路径与独立参考 trace 对照并记录首个差异。
 - [x] 3.2 实现PreviewPlaybackBridge unavailable反馈；验收：点击影片操作可见提示且结束VM等待，不伪造正常ended。
 - [x] 3.3 实现NotAllowedError用户手势恢复及NotSupportedError分流；验收：只重试仍有效动作，不重放整段VM副作用。
 - [x] 3.4 接入menu-only convert、目录/报告/README及strict退出；验收：始终partial，显式strict退出2，无外部和原碟引用。
   - 历史完成记录：对应旧的模式与状态规则；新产品边界须按下项重新验收。
-- [ ] 3.4a 将既有 menu-only 产物迁移为统一 convert 产物；报告说明源 M2TS 外部依赖，strict 根据实际状态判定。旧实现不等于新验收已通过。
+- [ ] 3.4a 按当前统一产物边界复核并记录 convert/manifest/report/README 的端到端状态：当前 convert 无模式参数并生成单一菜单包，含外部 M2TS 目标与 BDMV 路径配置；manifest/report 保留 `menu-only` 状态字段。验收：真实包的状态、外部依赖、strict 结果与当前审计决策一致；不得沿用“始终 partial、无外部目标”的旧规则。
 
 > Completion gap for 3.1: browser keyboard activation is covered end-to-end through `MenuController`, the HDMV VM action bridge, and packaged button sound using a synthetic M3 fixture. No independently generated reference navigation trace for this menu-input path is present, so the synthetic trace cannot satisfy the stated reference-trace acceptance; keep this task unchecked pending that evidence.
 

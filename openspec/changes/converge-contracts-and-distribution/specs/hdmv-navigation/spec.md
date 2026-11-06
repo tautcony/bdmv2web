@@ -27,8 +27,8 @@
 
 #### Scenario: 跨对象调用不可用
 
-- **WHEN** 程序执行 `CALL_TITLE` 后目标 title 无法启动，桥回不可用
-- **THEN** 该回执按 responseTo 关联并解除等待，VM 报告不可用并继续可执行路径，不永久 suspended
+- **WHEN** 程序执行 `CALL_TITLE` 并发出 `TITLE_SEARCH` 后，runtime 的 `selectTitle()` 无法解析或启动目标
+- **THEN** VM 解除标题调用等待，保留不可用诊断并保持菜单可操作，不永久 suspended；实现使用当前 `TITLE_SEARCH → selectTitle()` 路径
 
 #### Scenario: 无等待时的事件
 

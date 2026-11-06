@@ -6,9 +6,9 @@
 
 - **同一契约有两套数值**：`core` 的 `DEFAULT_LIMITS` 是 `maxCallDepth 128 / maxQueueDepth 1024`，`hdmv` 的私有 `DEFAULTS` 是 `64 / 256`；`DEFAULT_PLAYER_PROFILE` 也有两份。数值型仿真契约一旦分叉，各包测试会各自为政。
 - **证据链与实际能力不符**：旧报告记录的制品完整性信息并未由审计重新核对，浏览器证据也没有透明记录其适用的配置范围。
-- **静态图与 VM 语义不一致**：`graph.ts` 把 `JUMP_TITLE` / `LINK_*` / `TERMINATE_PL` 当终止流，VM 在 MovieObject 上下文却继续执行；`CALL_TITLE` 不建立 continuation，桥的 `MEDIA_UNAVAILABLE` 被当作可丢弃事件。
+- **静态图与 VM 语义不一致**：`graph.ts` 仍把 `JUMP_TITLE` / `LINK_*` / `TERMINATE_PL` 当终止流，VM 在 MovieObject 上下文却继续执行。当前 `CALL_TITLE` 暂停后通过 `TITLE_SEARCH → selectTitle()` 恢复；剩余工作是核实失败路径和诊断，不再按旧假设强制改成桥端 `responseTo` continuation。
 - **源位置在交付层丢失**：`createMenuDiscIR` 写入占位的 `source/structural` + offset 0，`vmPrograms` 改写为 `<MovieObject>`，IGS 结构诊断落到 `BDMV/STREAM/.m2ts`。这直接使"首分歧可定位""诊断可回到源文件"两条验收失效。
-- **运行时生命周期缺口**：无媒体包不执行初始 `runTurn`/First Play；非循环背景没有 `ended`/`error` 监听，VM 永久 suspended；菜单音轨选择不写回 PSR1，按钮程序读到 `0xff`。
+- **运行时剩余缺口**：无菜单媒体包仍不执行初始 `runTurn`/First Play；只有 normal 图像的可用按钮仍可能无法命中。背景 `ended` 回执和主音轨选择后的 PSR1 写回已在当前实现中存在，需保留回归验收但不再列为待实现。
 - **发布布局不可移植**：`package-builder` 在构建期读 `../../runtime-web/src/browser.ts` 并把 `hdmv` alias 到 `.ts` 源码，按 `dist/` 发布即断。
 - **性能热点无数据**：五处 O(n²)/重复系统调用（`buildGraph`、`PES.append`、`hex()` 比较、10ms 全树轮询、重复 `realpath`）目前只有静态判断，没有基准，无法决定优先级。
 
@@ -22,7 +22,7 @@
 - **发布布局可构建（D7）**：`runtime-web` 产出预构建 browser entry，`package-builder` 只依赖产物；两包补 `files` 白名单。
 - **性能基准先行（D5=B）**：先建立可复现基准并记录数据，只修有数据支撑的热点；无数据的保留并记录。
 
-**明确不做（D6 决策"先不修改"）**：本地桥的 GET/`<img>` 触发方式与 token 位置不变；审计规则对模板字面量 URL 的采集缺口继续保持 `BUNDLE_DYNAMIC_ACCESS` 的 `not-verified` 兜底。该缺口在 README / 报告里保留已知问题条目。
+**当前交接边界**：浏览器使用操作系统 URL Protocol 请求打开映射的 M2TS。当前运行时没有本地 HTTP bridge，也不使用 `<img>` 请求影片；本 change 不新增本地服务。
 
 ## Capabilities
 
@@ -52,15 +52,13 @@
 
 `distribution-budget` 的基准须在提交中给出机器/版本/样本与前后对比，否则视为未验证。
 
-## 归档前置（重要）
+## 当前实现与归档状态（2026-11-06）
 
-本 change 的 5 个能力 delta 全部是 `MODIFIED`，而 `openspec/specs/` 目前为空——这些能力只存在于**未归档**的 change 里。`openspec validate --strict` 通过，但 archive 会拒绝：
+本 change 的初始问题清单描述的是当时的代码状态，现已部分过时：内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回和菜单 VM/sound 集成已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
 
-```text
-target spec does not exist; only ADDED requirements are allowed for new specs
-```
+原归档前置表也已过时。当前主规格已存在 `disc-contracts`、`hdmv-navigation` 和 `interactive-graphics-extraction`；`offline-menu-runtime` 与 `offline-delivery-assurance` 主规格仍缺失。归档前应根据 status 的 `existingOutputPaths` 重新做 delta 对照；不要机械套用“先归档旧上游 change”的原步骤。
 
-按 `openspec list` 的实际状态，两类处理不同：
+原始计划如下，仅作历史背景，不作为当前执行指令：
 
 | 能力 | 上游 change | 上游状态 | 处理 |
 | --- | --- | --- | --- |

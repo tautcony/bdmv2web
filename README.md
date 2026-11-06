@@ -42,11 +42,11 @@ corepack pnpm build
 | `extract <BDMV> --out DIR` | 必须指定 `--type hdmv\|igs\|sup` 或 `--all`；`--strict` | 按类型写协议分析 JSON 及 `manifest.json`。HDMV 命令和结构、IGS 场景/来源映射、SUP 轨道索引分目录保存；不输出 PNG 或 SUP 文件 |
 | `list-assets <BDMV>` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--format table\|json`、`--out FILE` | stdout 默认显示资源汇总和明细，包括 M2TS clip、PID、IGS 图像对象属性及 SUP 轨道；`--out` 写完整 JSON |
 | `export-assets <BDMV> --out DIR` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` | 导出所选 PID 的 igstools 兼容 `.mnu` 和/或已验证的 `.sup`；指定 `--decode png` 时另外输出图像 PNG；附 `assets-manifest.json` |
-| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--mode menu-only`、`--player-profile FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
+| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
 | `validate <菜单包目录> --offline` | `--format json`、`--strict` | 更新 `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
 | `compare <输入>` | `--mode`、`--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
-`partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 仅支持 `menu-only`，`--limits` 尚未实现。输出目录已存在时，`convert` 需加 `--overwrite`。
+`partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 生成统一离线菜单包；输出目录已存在时需加 `--overwrite`。`--limits` 尚未实现。
 
 `extract` 面向协议分析，保留场景、命令、轨道及来源信息；`export-assets` 按 M2TS clip 和 PID 导出 IGS `.mnu` 与 SUP 文件，`--decode png` 可额外生成 PNG。`--m2ts` 和 `--pid` 使用 `list-assets` 表格或 JSON 中的 clip 与 PID 值。
 

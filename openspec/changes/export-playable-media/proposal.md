@@ -6,11 +6,11 @@
 
 ## What Changes
 
-- 将原 menu-only 与 standalone-full 合并为一个离线菜单产物和 `convert INPUT --out DIR` 入口，不再以模式区分交付。
+- `convert INPUT --out DIR` 当前生成一种离线菜单产物；manifest/report 保留现有 `menu-only` 模式值。该值描述浏览器内资源范围，不意味着另有 standalone-full 路径。
 - 根据结构和导航信息确定影片动作对应的源 M2TS，保留 Playlist、PlayItem、来源、时间范围及无法确定的映射。
 - 通过操作系统 URL Protocol 将实际 M2TS 交给 macOS 上的 IINA 或 Windows 上的 PotPlayer。
-- 菜单背景与音效仍可在网页中播放；不将影片转码、章节控制、字幕渲染、影片时钟或播放结束反馈作为浏览器功能。
-- 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime。BD-J 仍不实施。
+- 菜单背景与音效在网页中播放；影片由系统 URL Protocol 交给外部播放器。网页不承诺正片播放控制、章节/字幕渲染、影片时钟或外部播放状态回传。
+- 当前边界：只维护实际菜单包、菜单媒体导出、源 M2TS 映射和外部播放器交接。BD-J 仍不实施。
 
 ## Capabilities
 
@@ -24,7 +24,7 @@
 
 ## Impact
 
-CLI、package-builder、runtime 播放动作桥、源文件映射与发布验证。原媒体转码和浏览器影片播放代码属于既有实现，不因本规格修改而自动删除或视为新需求已完成。
+CLI、package-builder、runtime 播放动作分发、源文件映射与发布验证。未接入的线性媒体/浏览器播放原语不构成当前产品交付路径。
 
 ## Acceptance Boundary
 

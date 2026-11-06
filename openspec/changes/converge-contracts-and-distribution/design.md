@@ -16,11 +16,17 @@
 
 基线见 [IMPLEMENTATION_BASELINE.md](../IMPLEMENTATION_BASELINE.md) §2（共享数据）、§4（状态与证据）、§5（首期固定选择）。
 
+## 当前实现复核（2026-11-06）
+
+以下事项已在代码中落地，剩余验收不得重复要求实现：内容摘要字段与计算已移除；菜单背景 `ended` 回执、主音轨选择后的 PSR1 写回、菜单输入与 VM/sound 集成已存在；浏览器的外部影片路径使用 URL Protocol，不使用本地桥。菜单循环结束和音轨变化仍需按各自 change 的验收证据确认。
+
+仍未完成的实现项包括：HDMV 默认 Limits 收敛和 `--limits` 接线、导航图上下文边、交付层真实来源路径、无菜单媒体时启动 VM、normal-only 按钮命中，以及 builder 不再读取 workspace 源码。媒体结束回执和 PSR1 写回已实现但本 change 的完整回归尚未复核。性能基准未建立。
+
 ## Goals / Non-Goals
 
 **Goals:** 每个事实只有一个来源；已声明的契约要么成立、要么显式标记未验证；性能优先级由数据决定。
 
-**Non-Goals:** 实现字节级完整性校验（D9=C 明确不做）；改本地桥的请求方式与 token 位置（D6）；实现 `standalone-full`；引入 CI（D1=A）；BD-J 执行；把 `maxCallDepth` 做成真正的多帧栈（结构改动，单列后续 change）。
+**Non-Goals:** 实现字节级完整性校验；实现浏览器内 `standalone-full` 正片播放；引入 CI；BD-J 执行；把 `maxCallDepth` 做成真正的多帧栈（结构改动，单列后续 change）；新增本地 HTTP bridge。
 
 ## Decisions
 
@@ -66,7 +72,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 - `terminatesFlow` 改为 `(opcode, context)` 两参数，`context: "movie-object" | "playlist"`；MovieObject 上下文只有 `TERMINATE_PL` 之外的真终止码才终止，`LINK_*` 不终止。
 - `buildNavigationGraph` 为 `JUMP_TITLE` 生成指向目标 entry 的 `sequence` 边（target = 目标 title 的首个 program），边来源标注为 `jump-title`，与 `jump` 边区分。
-- `CALL_TITLE` 建立 continuation：`{ actionId, generation, waitFor: "started" }` 记入等待表，`selectTitle` 的结果（`started` / `unavailable`）都按 `responseTo` 恢复。桥端只在 `waitFor` 匹配时回复，不再对任意事件尝试 `handleEvent`。
+- `CALL_TITLE` 当前建立 VM 标题调用上下文并挂起，发出 `TITLE_SEARCH`；浏览器动作分发器调用 `selectTitle()` 恢复 VM。任务应补齐该路径的目标不可用/错误行为与诊断，不额外引入重复的桥端 `responseTo` 事件路径。
 - 被上下文忽略的指令（`PLAY_PL*` / `LINK_*` 在错误上下文）必须记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级），替代当前静默 `return`（`vm.ts:460-470`）。没有诊断的"按了没反应"是排查成本最高的一类缺陷。
 
 ### 4. `SourceRef` 一条规则贯通到底（D12）
@@ -86,10 +92,10 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 三处缺口分开修：
 
 - **初始 VM 与媒体解耦**：`browser.ts:164-173` 把 `runTurn()` / First Play 放在 `data.media && video && audio` 条件内，无媒体包因此不执行 MovieObject。改为无条件执行初始 `runTurn`，媒体播放作为其产生的 action 处理。这条是菜单正确性的前提——没有媒体的包也必须跑初始化。
-- **桥补 `ended` / `error` / `abort`**：`MenuLoopPlaybackBridge`（`runtime-web/src/index.ts:496-588`）当前只听 `loadeddata`/`started`。非循环背景的 `PLAY_PLAYLIST` 以 `waitFor: "ended"` 等待，永远收不到事件 → 永久 suspended。补监听并按 `responseTo` 回执。
-- **`loop=false` 结束语义**：选择回 `MEDIA_ENDED`（不引入 `MEDIA_HELD`）。理由：product 上"背景停最后一帧"需要新的等待语义与 UI 约定，属新能力；当前先让 VM 不挂死，画面是否停在末帧由渲染层自然结果决定（视频元素 `ended` 后保持末帧）。若后续产品要求显式 `HELD` 状态，单列 change。
-- **PSR1 写回**：`confirmedPrimaryAudioStream` 只在构造时读 PSR1（`index.ts:512-513`），选轨后不写回，`registers.ts` 的 PSR1 默认是 `0xff`。改为选轨成功后 `systemWrite(1, psrStreamNumber)`，并保证该写入走"系统事件授权入口"而不是程序写入路径（基线要求程序不能写只读 PSR）。
-- **命中几何统一**：`MenuController.hit()` 只用 `states.selected` 的 bounds（`index.ts:292`），而 `igs-adapter` 允许只有 `normal` 的按钮被启用（`igs-adapter.ts:109-118`），造成"可聚焦不可点"。改为按"可用性判定"决定命中集：可用即用 `selected ?? normal` 的几何。
+- **背景媒体生命周期**：`MenuLoopPlaybackBridge` 当前已有 `ended` 监听和按动作回执的实现。该能力列为回归验收，不再描述为缺失代码；浏览器真实播放与错误路径的证据按 M6 任务记录。
+- **`loop=false` 结束语义**：当前代码回 `MEDIA_ENDED`，不引入 `MEDIA_HELD`。运行时已有 `ended` 监听；真实浏览器结束行为仍属于待验证证据。
+- **PSR1 写回**：当前主音轨切换成功及回滚路径均调用 `systemWrite(1, streamNumber)`。保留既有测试并在回归中验证，不再视为待实现功能。
+- **命中几何统一**：当前 `MenuController.hit()` 仍只用 `states.selected` 的 bounds，而 adapter 允许只有 `normal` 图形的按钮可用，造成可聚焦但不可点。实现与验收仍待完成。
 
 ### 6. builder 依赖产物，不依赖源码树（D7）
 
@@ -119,7 +125,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 - **M6 取消勾选会让"发布完成"后退**：这是有意为之。当前勾选本身就是错的；退回去比留着假通过安全。
 - **`CALL_TITLE` 改 continuation 会动 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 的接口**：两个桥都要改，且 `browser.ts` 的 TITLE_SEARCH 分支与它语义重叠——本 change 只保证"不可用能解除等待"，不合并两处语义（合并属更大重构）。
 - **`SourceRef` 改为真实路径后输出体积上升**：每条指令带 path/offset 会让 IR 变大。用"同文件短索引 + 文件表"记路径可缓解，但会增加一层间接。先按可读性优先（逐条 path），体积问题在有实测数据后处理。
-- **D6 不做**：本地桥仍是 GET + token 在 URL，审计仍无法归因该调用。这是已知残余风险，写入 README 的"已知限制"，不假装已解决。
+- **系统交接**：当前正片动作使用 URL Protocol。M6 需记录实际请求、目标 M2TS 和系统播放器观察；没有播放器回传时不声称实际播放状态。
 
 ## Migration Plan
 
@@ -132,5 +138,5 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 1. **一致性**：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -rn "source/structural\|<MovieObject>" packages apps` 无命中；产品代码、测试、缓存清单和生成脚本不记录文件内容校验值。参考缓存清单只记录上游仓库地址和固定 revision，fetch 脚本按该 revision clone/check out。
 2. **行为**：见 `tasks.md` 每条的正反例，尤其 `JUMP_TITLE` 后继可达、`CALL_TITLE` 不可用能解除等待、无媒体包执行初始 VM、非循环背景 `ended` 后恢复、PSR1 随选轨更新。
-3. **诚实**：`verify-offline-release` 的 1.1 / 4.3 未勾选；`offline-delivery-assurance` 的篡改场景为 `not-verified` 语义；README 记录当前尚未实现的完整性检查与本地桥 token 处理限制。
+3. **诚实**：`verify-offline-release` 的包审计和浏览器证据任务只有在当前验收完成后才勾选；`offline-delivery-assurance` 不承诺字节级内容校验；README 描述系统播放器交接边界与当前未验证项。
 4. **基准**：`benchmark.md` 记录每项 case 的机器/版本/样本/前后数据；修复项均有对应数据。

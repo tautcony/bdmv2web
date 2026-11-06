@@ -4,6 +4,10 @@
 
 前置：第 1 批 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/tasks.md) 完成——本 change 的验收依赖 `build` / `typecheck` / `test:all` 可跑，且 `dist` 不再含测试产物。共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。决策与证据来源见 [`docs/code-review.md`](../../../docs/code-review.md)。
 
+## 当前实现复核（2026-11-06）
+
+内容摘要计算与字段已删除。媒体 `ended` 回执、主音轨 PSR1 写回、菜单 VM/sound 连接均有实现；这些项仍需按任务回归要求确认，不作为代码缺口重复实现。无菜单媒体启动、normal-only 按钮命中、VM Limits 接线、来源路径保真、上下文导航图、builder 发布布局和性能基准仍未完成。`CALL_TITLE` 当前由 `TITLE_SEARCH` 动作触发浏览器侧 `selectTitle()`，任务按此实际调用方式定义。
+
 ## A. 契约常量收敛（D3）
 
 - [ ] A.1 `packages/hdmv/src/vm.ts:30` 的 `DEFAULTS` 改为从 `@bdmv2web/core` 的 `DEFAULT_LIMITS` 派生（三个字段逐项引用，不写字面量）。验收：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -n "DEFAULT_LIMITS" packages/hdmv/src/vm.ts` 有命中。
@@ -28,7 +32,7 @@
 
 - [ ] C.1 `packages/hdmv/src/graph.ts:63` 的 `terminatesFlow` 改为按上下文判定：签名 `(opcode, context: "movie-object" | "playlist")`；MovieObject 上下文中 `LINK_PI` / `LINK_MK` / `JUMP_TITLE` 不终止，`TERMINATE_PL` 仅在 playlist 上下文终止。验收：单测覆盖两种上下文 × 四个 opcode 共 8 组判定。
 - [ ] C.2 `buildNavigationGraph` 为 `JUMP_TITLE` 生成 `sequence` 边，指向目标 entry 的首个 program，边带 `origin: "jump-title"` 以便区分静态 `jump` 边。验收：最小 `JUMP_TITLE` 程序的图同时含 `jump` 与 `sequence` 两类边（当前只有 `jump`）；目标 entry 在可达集合中。
-- [ ] C.3 `CALL_TITLE` 建立 continuation：`vm.ts:437-458` 记录 `{ actionId, generation, waitFor: "started" }` 到等待表，`selectTitle` 的 `started` 与 `unavailable` 都按 `responseTo` 恢复；移除"无 continuation 即 suspended"的路径。验收：单测构造 `CALL_TITLE` → 桥回 `MEDIA_UNAVAILABLE` → VM 恢复且状态为预期的 unavailable；trace 中不再出现 `HDMV_IGNORED_EVENT`。
+- [ ] C.3 核对当前 `CALL_TITLE` 恢复路径：VM 暂停并发出 `TITLE_SEARCH`，runtime 调用 `selectTitle()`。验收覆盖有效 HDMV 目标、不可用目标及 BD-J/无效目标；VM 不永久 suspended，trace 保留结果与来源。不新增与现行直接选择路径重复的 `responseTo` 桥接机制。
 - [ ] C.4 桥端只对 `waitFor` 匹配的动作回复：`runtime-web` 的 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 增加"是否有匹配等待"的检查，不再把任意事件交给 `handleEvent` 试。验收：无等待时收到事件不产生副作用（trace 记录 discarded 原因）。
 - [ ] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 MovieObject 上下文放入 `PLAY_PL` 指令，trace 出现该诊断且 VM 继续执行；`docs/hdmv-support.md` 补充该码说明。
 - [ ] C.6 回归：现有 74 个 hdmv 用例全部通过；新增用例不少于 6 条（C.1 两组上下文、C.2 可达性、C.3 两条、C.5）。验收：`corepack pnpm --filter @bdmv2web/hdmv test` 计数 ≥ 80 且无跳过。
@@ -44,8 +48,8 @@
 ## E. 运行时生命周期（D13）
 
 - [ ] E.1 `packages/runtime-web/src/browser.ts:164-173` 的初始 `runTurn()` / First Play 与 `data.media` 解耦：无条件执行初始 turns，媒体播放作为其产生的 action 处理。验收：构造无 `media` 字段的包，打开后 VM 有初始动作（trace 非空、`status` 进入预期状态）。
-- [ ] E.2 `MenuLoopPlaybackBridge`（`runtime-web/src/index.ts:496-588`）补 `ended` / `error` / `abort` 监听，按 `responseTo` 回执；`loop=false` 且单 PlayItem 结束时回 `MEDIA_ENDED`。验收：非循环背景播放结束后 VM 从等待恢复（当前永久 suspended）；错误路径回 `MEDIA_ERROR` 并解除等待。
-- [ ] E.3 音轨选择写回 PSR1：选轨成功后经系统事件入口 `systemWrite(1, psrStreamNumber)`，不通过程序写入路径。验收：选轨后 `snapshot().registers.psr` 的 PSR1 等于所选流号；单测断言按钮程序读到该值（当前读到 `0xff`）。
+- [ ] E.2 回归已实现的菜单媒体 `ended`/`error`/`abort` 回执：按 action/responseTo 关联，非循环背景结束发 `MEDIA_ENDED`，错误解除等待并保留诊断。实现已存在；本项只在相关回归证据确认后勾选。
+- [ ] E.3 回归已实现的音轨 PSR1 写回：成功选择和失败回滚均经 `systemWrite(1, streamNumber)` 更新系统寄存器；验证按钮程序读取所选值。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.4 命中几何统一：`MenuController.hit()` 按可用性决定命中集（可用即 `selected ?? normal` 的 bounds）。验收：只有 `normal` 视觉的启用按钮可被点击命中；单测覆盖"仅 normal""selected 与 normal 不同几何"两种情况。
 - [ ] E.5 `docs/browser-matrix.md` 记录 `loop=false` 结束语义为"回 `MEDIA_ENDED`，画面停留末帧由渲染决定"，并注明如需 `MEDIA_HELD` 属后续能力。验收：文档含该条，且未声称支持 `HELD`。
 - [ ] E.6 回归：`corepack pnpm --filter @bdmv2web/runtime-web test` 现有 91 用例通过；`tamako-headless-navigation.test.ts` 仍通过（该用例 50s，若因此变慢需在本 change 记录耗时）。
@@ -78,10 +82,10 @@
   验收：三条命令的输出与上述口径逐字一致；第 3 条若在代码内有命中，说明 B.1 漏删，不得以"仅剩迁移说明"放过。
 - [ ] H.2 行为回归：`corepack pnpm build && corepack pnpm typecheck && corepack pnpm test:all` 全绿；hdmv ≥ 80 用例、runtime-web ≥ 95 用例（含新增），其余包不低于第 1 批基线。
 - [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `内容摘要字段` 字段移除与源位置字段变真实）。
-- [ ] H.4 诚实性检查：README「已知限制」含"未实现字节级完整性校验""本地桥 token 在 URL（审计无法归因）""`loop=false` 不支持独立末帧状态"三条；M6 的 1.1 / 4.3 未勾选。
-- [ ] H.5 范围守界：`git diff --stat` 不包含本地桥实现改动（D6）、不包含 `standalone-full` 实现、不包含新增 CI workflow。
-- [ ] H.6 规格归属处理（apply 的第一步，先于任何代码改动）：`openspec validate` 通过但 archive 会拒绝 5 个 MODIFIED delta。按 `proposal.md` 的表执行——`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 的上游 change 已标记 Complete，先 `openspec archive` 使主规格存在；`offline-menu-runtime`（`build-offline-menu-runtime` 13/16）与 `offline-delivery-assurance`（`verify-offline-release` 14/17）上游未完成，把本 delta 内容并入上游 `spec.md` 后删除本 change 的对应目录。验收：处理后 `openspec archive converge-contracts-and-distribution --dry-run`（或等效检查）不再报"target spec does not exist"；删除的 delta 内容可在上游 spec.md 中原样检出。
+- [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；浏览器证据范围如实绑定 profile/mode/媒体清单/矩阵/环境，不记录制品哈希；M6 未验证项保持未勾选。
+- [ ] H.5 范围守界：不实现浏览器内正片播放；影片使用系统 URL Protocol 交接；不新增未经计划的 CI workflow。
+- [ ] H.6 归档前按当前 status 的 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 主规格已存在；`offline-menu-runtime` 与 `offline-delivery-assurance` 主规格尚缺失，且其上游 change 仍活动。确定并记录这些 delta 的同步归属和顺序，使 archive 不丢失需求、不向缺失主规格应用 MODIFIED-only delta。不得再执行旧版“先归档已完成上游 change”的指令。
 
-## I. 明确不做（D6）
+## I. 已移出范围
 
-- [ ] I.1 记录而非修改：在 `README` / `docs/browser-matrix.md` 的已知限制中写明"本地桥以 `<img src>` 发起 GET 且 token 在 URL；离线审计无法把该调用归因到具体规则，仅以 `BUNDLE_DYNAMIC_ACCESS` 记 `not-verified`"。验收：文档含该条；`grep -rn "127.0.0.1" packages/runtime-web/src/browser.ts` 仍为 1 处（确认未改）。
+原 I.1 针对本地 GET bridge 和 URL token。当前浏览器正片路径使用操作系统 URL Protocol；`runtime-web/src/browser.ts` 不含该本地桥。旧任务已移出当前范围。外部目标约束与审计由 `export-playable-media` 和 `verify-offline-release` 跟踪。

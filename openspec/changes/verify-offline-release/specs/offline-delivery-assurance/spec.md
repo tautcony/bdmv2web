@@ -87,10 +87,15 @@
 - **WHEN** V1 Google Chrome 版本记录或场景证据缺失
 - **THEN** 记not-verified并阻止complete，不以其他浏览器的结果代替
 
-#### Scenario: 制品变动
+#### Scenario: 证据绑定维度变动
 
-- **WHEN** 获得浏览器证据后运行bundle或profile变化
+- **WHEN** 获得浏览器证据后 profile、mode、生成媒体清单、矩阵或 Chrome 环境变化
 - **THEN** 相关证据失效，要求重验，不能复用旧截图宣称通过
+
+#### Scenario: 制品字节变化
+
+- **WHEN** 生成文件内容变化但证据绑定维度未变
+- **THEN** 审计不声称自动检测字节变化；旧证据不构成对当前制品内容的校验结论
 
 ### Requirement: 直接打开与便携性
 

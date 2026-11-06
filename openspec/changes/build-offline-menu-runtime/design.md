@@ -2,7 +2,7 @@
 
 ## Context
 
-依赖 M0–M3，对应架构 §6.3、§9、§11。共同契约见 [实施基线](../IMPLEMENTATION_BASELINE.md)。M4 交付统一产物的菜单运行时；M5 将影片动作交给系统默认程序，菜单调试不依赖影片接入。
+共同契约见 [实施基线](../IMPLEMENTATION_BASELINE.md)。当前运行时已交付一个离线菜单产物；菜单资源随包提供，影片动作使用源 M2TS 与系统 URL Protocol 交接。本文记录现有运行时和仍未完成的菜单视觉行为，不规划浏览器内正片播放器。
 
 ## Goals / Non-Goals
 
@@ -30,17 +30,17 @@ SceneController 持有 composition/page/BOG/selected/activated/popup/动画状�
 
 Arrow 对应显式邻接，Enter/Space 只激活有效选择；pointermove/click 与触屏遵守页面、BOG、UO mask。激活经统一 MenuController → VM raw 命令，不能在 HTML onClick 写 play。邻接缺省不按几何位置猜。菜单键明确展示 Top Menu/Pop-up，Escape 作为可配置映射；失焦清遗留按键，禁用状态不发命令。重叠按钮按来源层次/规则选取，歧义不得靠 DOM 顺序解决。
 
-M4 的 PreviewPlaybackBridge 对未打包播放动作回送带 actionId 的 unavailable，结束 VM 对应等待并提示，不假发 MEDIA_ENDED。菜单页切换、按钮状态、sound 仍是真实 VM 动作。M5 替换桥，不改指令语义。
+PreviewPlaybackBridge 对无法由菜单包处理的动作回送带 actionId 的 unavailable，结束对应 VM 等待并提示，不假发 MEDIA_ENDED。影片动作在浏览器入口由外部播放器交接路径处理；菜单页切换、按钮状态和 sound 仍通过 VM/菜单控制器执行。
 
 ### 4. 时间与异步生命周期
 
-M4 提供 EventScheduler 接口和可注入逻辑时钟：静态预览动画按逻辑时间，暂停/页面更换取消旧任务；M5 接入外部文件交接，不依赖影片播放时钟。所有回调携 generation，页面/媒体变更只取消对应作用域任务。异步资源加载错误不重入 VM。动画结束与页面效果完成进入同一序列队列。
+运行时提供 EventScheduler 接口、可注入逻辑时钟、作用域取消和暂停恢复。旧页面任务不会影响新页面。当前尚未解释 IGS 动画帧序列及页面进入/退出效果的字节语义，也没有相应时序 golden；这些能力保持未实现，不据此声称动画或效果匹配原盘。
 
 ### 5. 开始手势及模式声明
 
 play Promise 捕捉 NotAllowedError，显示可重试开始按钮，用户手势后只重试仍有效动作，不再次执行整条按钮指令序列。NotSupportedError/资源错误为能力或资产失败，不能伪装成自动播放限制。
 
-统一包的 UI、README 和报告说明影片依赖实际 M2TS 与系统关联程序；未接入或不可用时反馈 unavailable，状态按实际缺口判定。菜单资源离线且包内自包含；影片源文件可在包外。缺真实动态背景时不得宣称视频保真。
+统一包的 UI、README 和报告说明影片依赖实际 M2TS 与系统关联程序；交接请求不可用时反馈 unavailable，状态按实际缺口判定。菜单资源离线且包内自包含；影片源文件可在包外。当前 manifest/report 使用 `menu-only` 模式值；该值与统一产物设计并存，不代表浏览器内完整播放影片。
 
 ## Verification / Exit Criteria
 
@@ -52,4 +52,4 @@ scene fixture 验证多页/BOG/三态/自动动作/方向邻接/UO mask、letter
 
 ## Migration Plan
 
-无旧播放器。先用合成场景和模拟桥，再接 M1/M2/M3 的真实 IR；M5 通过同一桥/调度接口增加媒体能力。
+当前菜单包使用合成 fixture 与解析得到的真实 IGS/HDMV 数据；影片通过 URL Protocol 请求外部播放器。浏览器内正片播放不属于此 change。

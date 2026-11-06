@@ -1,8 +1,8 @@
 # Tasks
 
-> 当前交付包括离线菜单、菜单背景媒体和通过 URL Protocol 打开源 M2TS。下方按章节记录实现状态和验证证据。
+> 当前交付路径为离线菜单、包内菜单背景媒体和通过 URL Protocol 请求系统播放器打开源 M2TS。浏览器内正片播放不属于本 change 的交付目标。
 
-前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime。接口可提前消费；完成集成验收前必须取得上游契约及相关验收。
+所有任务以当前仓库实现和下方明确列出的验证缺口为准。未接入的线性媒体 API 不等于产品路径已集成。
 
 共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。文中命令/文件是目标交付物，当前未实现。
 
@@ -16,23 +16,18 @@
 
 - [x] 2.1 接入FFprobe/FFmpeg探测及参数数组spawn；验收：记录版本/参数，无shell拼接，缺工具/编码器和特殊路径负例正确。
 - [x] 2.2 实现线性预合成、分支独立片段及菜单背景资产；验收：AVC/H.264 与 HEVC 源均转成 H.264/AAC/faststart，循环条件和单次 PlayItem 播放模式明确，比例/帧率/质量参数明确，不引用原 M2TS。
-- [ ] 2.3 实现job取消/超时/进程失败/缓存key及输出探测；验收：半成品不入manifest，坏缓存不复用，ffprobe失败不以退出0判成功。
+- [ ] 2.3 完成媒体导出 job 的取消、超时、进程失败和输出探测验收；半成品不得进入 manifest，FFprobe 失败不得以退出码 0 判成功。持久转码缓存当前关闭；菜单覆盖时已有媒体计划匹配复用是独立的目录事务行为，不扩展为内容指纹或通用缓存 key。
 - [x] 2.4 实现MediaTimelineMap双向映射/半开边界/45k/epoch；验收：设计中225000→PI1源495000和线性2.5秒数值准确，重复Clip不碰撞。
 - [x] 2.5 实现章节seek/loadedmetadata/seeked校准；验收：跨PlayItem和非零PTS seek误差不超过一帧，实际成功后才反馈。
 
 ## 3. 播放、轨道与PGS
 
-- [ ] 3.1 替换M4预览桥，连接播放/停止/PlayItem/结束/错误/返回；验收：相同菜单输入导航行为不变，媒体错误解除等待。
-- [ ] 3.2 实现currentTime主时钟、pause/seek重建、有限/无限still与背景循环；验收：暂停冻结，回退不重放历史导航副作用。
-- [ ] 3.3 实现pop-up在当前播放上下文叠加及generation取消；验收：换媒体/seek后旧Promise/ended/定时器不能污染当前状态。
 - [x] 3.4 实现主音轨本地变体/逻辑时间恢复/PSR闭环；验收：暂停切轨、播放切轨、失败回退状态正确，不依赖audioTracks。
-- [ ] 3.5 实现普通PGS分段/对象/palette/位图及时间层；验收：独立像素golden、选择/off/seek/PSR闭环，PG不当IG或OCR文本。
-- [x] 3.6 为无缝/角度/PiP/HDR/强制字幕/TextST等未支持项建立影响报告；验收：可达缺口保留partial，不能关闭strict升级。
+- [x] 3.6 为源 Playlist 中不适合单文件交接的边界及未支持声明保留影响报告；外部播放器是否支持无缝、角度、PiP、HDR、强制字幕或 TextST 不由网页运行时承诺。
 
 ## 4. 集成与证据
 
-- [ ] 4.1 接入standalone-full打包、资产闭包和状态；验收：缺必需资产failed，功能或验证缺口partial，资源全部包内。
-- [ ] 4.2 执行菜单→正片→章节→切轨/字幕→pop-up→结束返回file://链路；验收：ffprobe/时间/trace/截图证据齐全，浏览器缺席不称complete。
+浏览器内正片、章节控制、影片字幕渲染和播放中 popup 已移出当前产品范围，由外部播放器负责；相关原语不作为待交付功能。
 
 ## Completed evidence notes
 
@@ -41,11 +36,7 @@
 ## Remaining work
 
 - 2.3 remains open. Persistent media-asset caching stays disabled by user decision; no cache-key implementation is included.
-- 3.1 has an isolated/exported `LinearPlaybackBridge` draft with generation, seek, end, error, stop and playlist-target tests. The browser/package path does not construct this bridge for `standalone-full`, so replacement/integration acceptance remains open.
-- 3.2 has `MediaClockScheduler`, still timer and background-loop clock primitives with focused unit tests. Media pause/seek/ended handlers and a pure scene rebuild hook are not integrated.
-- 3.3 keeps an active linear media element across a `MENU_CALL` and cancels stale wait listeners/timers on replacement. The VM/browser pop-up path is not integrated as an actual overlay, so this task remains open.
-- 3.5 has SUP segment, palette, object-fragment, PCS crop, RLE bitmap and 90 kHz timeline primitives. Tests use synthetic bytes only; independent pixel golden, player rendering, subtitle PSR closure and real seek evidence are missing.
-- 4.1/4.2 require the standalone-full package path and user-connected Google Chrome `file://` run. V1 is Chrome-only; acceptance does not require a cross-browser matrix or specify an operating system.
+- Browser full-feature playback tasks 3.1–3.3, PGS rendering task 3.5 and standalone-full tasks 4.1–4.2 were removed from this change's delivery scope. Existing library primitives remain code, not a browser playback product promise.
 
 
 ## 当前范围：默认关联播放器接入
@@ -54,9 +45,9 @@
 
 ## 5. 单一产物与目标映射
 
-- [ ] 5.1 将 `convert INPUT --out DIR` 接入统一菜单产物；移除产品模式分支，明确旧 `--mode` 参数及旧包的迁移和诊断，并更新 CLI、manifest、README 与状态测试。
+- [ ] 5.1 对齐统一菜单产物的 CLI/文档契约：convert 直接生成唯一菜单产物，不提供模式参数；manifest/report 保留当前 `menu-only` 状态字段。CLI、README 和开发文档已更新，测试已改为不传模式参数并检查旧参数被拒绝；待运行相关测试确认。
 - [x] 5.4 默认在发现的 BDMV 同级生成 HTML 目录，`--out` 可指定不重叠的其他目标；为 BDMV 自身与父目录输入、路径冲突及既有目录添加验证。
-- [ ] 5.5 生成可编辑 BDMV 路径配置，默认相对 HTML 目录指向同级 BDMV；支持相对和绝对路径、重新加载、菜单与本地接入一致消费，验证共同移动和单独迁移后的重新配置。
+- [ ] 5.5 验收现有可编辑 BDMV 路径配置：CLI 已写入相对/绝对路径，浏览器读取 `runtime/bdmv-config.js`；验证共同移动、单独移动、编辑配置和 reload 后的 M2TS 目标。
 - [ ] 5.2 复用结构和导航信息映射可达影片动作至实际 M2TS；保留 Playlist/PlayItem/Clip、IN/OUT、来源和分支，未知目标不猜测。
 - [ ] 5.3 验证多 PlayItem、重复 Clip、非零 IN/OUT 与缺失源文件；展示实际打开范围，不承诺完整 Playlist 语义。
 
@@ -77,7 +68,7 @@
 ## 2026-11-03 implementation evidence
 
 - 5.2/5.3: `extract` now emits `external-media-targets.json` from structural, MovieObject, and IGS button graphs. Known immediate playlist and HDMV title operands and later MovieObject continuation are represented; unresolved paths conservatively widen the set. A source target resolver retains each PlayItem occurrence, half-open 90 kHz bounds, and mark offsets; it reports missing or invalid targets and does not claim the system player will enforce ranges or continue automatically.
-- Remaining: integrate the mapping with unified menu conversion and URL Protocol handoff, then verify actual opening and source-time mapping with an available feature stream. Tasks 5.2 and 5.3 remain open.
+- Remaining: verify the delivered package and actual external handoff against available feature media, including repeated Clip, nonzero IN/OUT and missing source. Mapping code is already included by `convert`.
 
 - Reference: pinned libbluray 1.5.0 `src/libbluray/hdmv/hdmv_vm.c` `_play_at` and `src/libbluray/bluray.c` `_process_hdmv_vm_event`, PSR8 and clip interval handling; the system default player is not assumed to implement the same playlist timeline.
 

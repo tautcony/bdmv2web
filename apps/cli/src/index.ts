@@ -20,7 +20,7 @@ const supported = new Set(["inspect", "extract", "convert", "validate", "compare
 const commandOptions: Record<string, { flags: ReadonlySet<string>; values: ReadonlySet<string> }> = {
   inspect: { flags: new Set(["--strict", "--no-strict", "--allow-partial"]), values: new Set(["--out", "--format"]) },
   extract: { flags: new Set(["--strict", "--no-strict", "--all"]), values: new Set(["--out", "--format", "--type"]) },
-  convert: { flags: new Set(["--strict", "--no-strict", "--overwrite"]), values: new Set(["--out", "--mode", "--player-profile", "--limits", "--title", "--format"]) },
+  convert: { flags: new Set(["--strict", "--no-strict", "--overwrite"]), values: new Set(["--out", "--player-profile", "--limits", "--title", "--format"]) },
   validate: { flags: new Set(["--strict", "--no-strict", "--offline"]), values: new Set(["--format"]) },
   compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--mode", "--format"]) },
   "list-assets": { flags: new Set([]), values: new Set(["--type", "--format", "--out", "--m2ts", "--pid", "--decode"]) },
@@ -77,7 +77,7 @@ function strictDefault(): boolean {
   return false;
 }
 function inputPath(): string | undefined {
-  const takesValue = new Set(["--format", "--out", "--mode", "--player-profile", "--limits", "--title", "--type", "--m2ts", "--pid", "--decode"]);
+  const takesValue = new Set(["--format", "--out", "--player-profile", "--limits", "--title", "--type", "--m2ts", "--pid", "--decode"]);
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg.startsWith("--")) { if (!arg.includes("=") && takesValue.has(arg)) i++; continue; }
@@ -663,8 +663,6 @@ async function convert(): Promise<void> {
   // Argument contract first: every option value is resolved before the input is parsed and
   // before any output transaction exists. A missing value must never be masked by disc
   // diagnostics, and a late failure must never leave a staging directory behind.
-  const mode = optionValue("--mode") ?? "menu-only";
-  if (mode !== "menu-only") fail("CLI_UNSUPPORTED_MODE", `convert only produces menu-only packages; '${mode}' is not implemented`);
   if (lookupOption("--limits").found) {
     optionValue("--limits"); // A bare `--limits` is a missing value, not an unimplemented feature.
     fail("CLI_NOT_IMPLEMENTED", "--limits is not wired yet; it will apply once VmOptions.limits lands (batch 2, D3)");

@@ -65,14 +65,11 @@
 - 对所有盘片内容做无条件、不可证明的 100% 兼容承诺。
 - 必须运行在服务器上的在线播放器、动态 API、数据库、云转码、浏览器扩展或本地代理。
 
-### 1.3 两种导出模式
+### 1.3 统一导出产物
 
-| 模式 | 用途 | 是否完整离线 | 是否完整菜单行为 |
-|---|---|---|---|
-| `standalone-full`（默认） | 对终端用户交付可交互菜单和关联播放资源 | 是 | 对声明支持且验证通过的 HDMV 子集应完整 |
-| `menu-only`（显式选择） | 图形审阅、导航调试、快速查看按钮/页面 | 是 | **否**；播放正片等缺失资源的操作标明 unavailable |
+`convert` 生成统一的离线菜单包。菜单资源随包提供；影片动作通过系统 URL Protocol 请求默认关联播放器打开源 M2TS。manifest/report 中的 `menu-only` 是当前状态字段，不是用户可选模式。
 
-**原则**：不能把 `menu-only` 的“播放按钮弹出提示”描述成完整菜单转换。默认 `standalone-full` 必须把可到达且需要播放的媒体转换并打包；对无法导出的分支严格失败或标记降级。
+影片是否成功交接由实际播放器状态决定，菜单导航保持可用。
 
 ---
 
@@ -686,17 +683,10 @@ bdmv2web inspect /path/to/BDMV --format json --out disc-inspection.json
 # 仅提取并保留可追踪原始信息
 bdmv2web extract /path/to/BDMV --out ./extracted
 
-# 默认：转换可达播放链路，严格检查，产生独立离线包
+# 生成统一离线菜单包；影片动作交接给系统关联播放器
 bdmv2web convert /path/to/BDMV \
-  --mode standalone-full \
-  --offline-profile portable \
   --strict \
   --out ./my-disc-web
-
-# 调试用途：仅菜单图形/结构，非完整播放功能
-bdmv2web convert /path/to/BDMV \
-  --mode menu-only \
-  --out ./menu-preview
 
 # 验证输出资源、引用、安全和指令覆盖
 bdmv2web validate ./my-disc-web --offline --strict

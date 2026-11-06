@@ -28,14 +28,14 @@ describe("menu-only convert CLI", () => {
     expect(result.stderr.toString()).toContain("CLI_MISSING_INPUT");
     expect(result.stdout.toString()).toBe("");
   });
-  it("rejects unsupported mode names", () => {
-    const unsupported = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--mode", "invalid", "--format", "json"]);
-    expect(unsupported.status).toBe(1); expect(JSON.parse(unsupported.stderr.toString()).code).toBe("CLI_UNSUPPORTED_MODE");
+  it("rejects the removed mode option", () => {
+    const removed = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--mode", "menu-only", "--format", "json"]);
+    expect(removed.status).toBe(1); expect(JSON.parse(removed.stderr.toString()).code).toBe("CLI_UNKNOWN_OPTION");
   });
   it("does not create an output when conversion arguments are invalid", async () => {
     const dir = await mkdtemp(join(tmpdir(), "bdmv cli ")); const target = join(dir, "package");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--mode", "menu-only", "--out", target]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--out", target]);
       expect(result.status).toBe(1); await expect(access(target)).rejects.toThrow();
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
@@ -117,7 +117,7 @@ describe("M4 menu-only convert output", () => {
         [regular, [], 0],
         [strict, ["--strict"], 0],
       ] as const) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output, "--title", "Offline Menu", ...args]);
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title", "Offline Menu", ...args]);
         expect(result.status).toBe(exitCode);
         expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "complete", mode: "menu-only", output: await realpath(output) });
         expect(result.stderr.toString()).toBe("");
@@ -244,7 +244,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert no scene "));
     const disc = await makeMenuDisc(parent, { includeMenuStream: false }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_NOT_FOUND", output: await realpath(output) });
       expect(JSON.parse(await readFile(join(output, "report.json"), "utf8"))).toMatchObject({ status: "failed", code: "MENU_SCENE_NOT_FOUND", mode: "menu-only" });
@@ -264,7 +264,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert unknown playlist "));
     const disc = await makeMenuDisc(parent, { topMenuObject: 1 }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" });
       expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_PLAYLIST_NOT_RESOLVED");
@@ -277,7 +277,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert clpi cue "));
     const disc = await makeMenuDisc(parent, { menuCueMode: "clpi-only" }); const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       expect(discData).toContain("igs-00002-");
@@ -289,7 +289,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert ambiguous scene "));
     const disc = await makeMenuDisc(parent, { multipleMenuScenes: true }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
       expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
@@ -302,7 +302,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert duplicate scene id "));
     const disc = await makeMenuDisc(parent, { duplicateMenuSceneIds: true }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
       const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
@@ -317,7 +317,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert per-item clpi cue "));
     const disc = await makeMenuDisc(parent, { explicitIgPriority: true, repeatedMenuPlayItemWithoutIg: true }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
       expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
@@ -330,7 +330,7 @@ describe("M4 menu-only convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert explicit ig priority "));
     const disc = await makeMenuDisc(parent, { explicitIgPriority: true }); const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       expect(discData).toContain("igs-00002-288-");
@@ -499,20 +499,20 @@ describe("stage and argument contracts", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("rejects unimplemented modes and unwired limits before creating output", async () => {
+  it("rejects the removed mode option and unwired limits before creating output", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv stage args "));
     try {
       const disc = await emptyDisc(parent);
       const modeTarget = join(parent, "mode-reject");
-      const mode = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "standalone-full", "--out", modeTarget]);
+      const mode = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "menu-only", "--out", modeTarget]);
       expect(mode.status).toBe(1);
-      expect(mode.stderr.toString()).toContain("CLI_UNSUPPORTED_MODE");
+      expect(mode.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
       await expect(access(modeTarget)).rejects.toThrow();
 
       const limits = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", join(parent, "limits.json")]);
       expect(limits.status).toBe(1);
       expect(limits.stderr.toString()).toContain("CLI_NOT_IMPLEMENTED");
-      expect(limits.stderr.toString()).not.toContain("CLI_UNSUPPORTED_MODE");
+      expect(limits.stderr.toString()).not.toContain("CLI_UNKNOWN_OPTION");
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -520,7 +520,7 @@ describe("stage and argument contracts", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv stage missing value "));
     try {
       const disc = await emptyDisc(parent);
-      for (const args of [["inspect", disc, "--out"], ["convert", disc, "--mode"]]) {
+      for (const args of [["inspect", disc, "--out"], ["convert", disc, "--out"]]) {
         const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), ...args]);
         expect(result.status).toBe(1);
         expect(result.stderr.toString()).toContain("CLI_MISSING_VALUE");
@@ -535,7 +535,7 @@ describe("stage and argument contracts", () => {
       const disc = await emptyDisc(parent);
       // `--out` on an empty disc must report the argument error, not the disc's fatal diagnostic,
       // and a bare `--limits` is a missing value rather than an unimplemented feature.
-      for (const args of [["inspect", disc, "--out="], ["convert", disc, "--mode="], ["convert", disc, "--out"], ["convert", disc, "--limits"]]) {
+      for (const args of [["inspect", disc, "--out="], ["convert", disc, "--out="], ["convert", disc, "--out"], ["convert", disc, "--limits"]]) {
         const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), ...args]);
         expect(result.status, args.join(" ")).toBe(1);
         expect(result.stderr.toString(), args.join(" ")).toContain("CLI_MISSING_VALUE");

@@ -8,8 +8,8 @@
 
 - 实现输出包独立 validate、文件引用/URL/脚本依赖审计及完整度/strict 决策。
 - 建立有分母的支持统计、VM/IG 独立参考对照和安全回归。
-- V1 在 Google Chrome 执行直接 `file://` 及 A–J 适用场景，记录 Chrome 完整版本并绑定制品指纹后形成发布摘要；不按操作系统限定验收范围。
-- 前置依赖：establish-core-contracts、parse-bdmv-structure、extract-igs-scenes、execute-hdmv-navigation、build-offline-menu-runtime、export-playable-media。可基于稳定契约先开发，集成验收须等待相应上游结果。
+- V1 在 Google Chrome 执行直接 `file://` 及当前产品边界内的适用场景，记录 Chrome 完整版本、profile、mode、生成媒体清单、矩阵和环境后形成发布摘要；不按操作系统限定验收范围。
+- 验收以当前 parser、IGS、HDMV、菜单运行时及系统播放器交接实现为准；未验证项明确保留。
 - 范围保持首期 HDMV；BD-J 仅识别和保留扩展槽，不实施解密、Java 执行或输出后台服务。
 
 ## Capabilities
