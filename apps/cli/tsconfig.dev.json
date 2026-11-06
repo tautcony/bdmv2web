@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "paths": {
+      "@bdmv2web/bdmv-io": ["../../packages/bdmv-io/src/index.ts"],
+      "@bdmv2web/bdmv-parser": ["../../packages/bdmv-parser/src/index.ts"],
+      "@bdmv2web/core": ["../../packages/core/src/index.ts"],
+      "@bdmv2web/core/*": ["../../packages/core/src/*"],
+      "@bdmv2web/hdmv": ["../../packages/hdmv/src/index.ts"],
+      "@bdmv2web/igs": ["../../packages/igs/src/index.ts"],
+      "@bdmv2web/media-export": ["../../packages/media-export/src/index.ts"],
+      "@bdmv2web/media-export/*": ["../../packages/media-export/src/*"],
+      "@bdmv2web/package-builder": ["../../packages/package-builder/src/index.ts"],
+      "@bdmv2web/runtime-web": ["../../packages/runtime-web/src/index.ts"],
+      "@bdmv2web/test-runner": ["../../packages/test-runner/src/index.ts"]
+    }
+  }
+}

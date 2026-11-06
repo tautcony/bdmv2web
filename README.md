@@ -30,7 +30,7 @@ corepack pnpm build
 
 包内脚本统一写 `corepack pnpm`：根脚本里的嵌套调用（如 `build` = `generate:contracts` + `-r build`）因此不依赖全局 `pnpm`，版本也由 `packageManager` 锁定。
 
-命令行入口为 `apps/cli/dist/index.js`，包内 bin 名为 `bdmv2web`。
+包内 bin `bdmv2web` 指向 `apps/cli/dist/index.js`。仓库开发命令 `corepack pnpm run cli:dev <命令和参数>` 。
 
 ## 使用
 
@@ -94,6 +94,7 @@ corepack pnpm build
 
 ```sh
 corepack pnpm build         # 编译运行时代码
+corepack pnpm run cli:dev inspect /path/to/BDMV  # 直接运行 CLI
 corepack pnpm typecheck     # 类型检查，包括测试文件
 corepack pnpm test          # 运行各包测试
 corepack pnpm test:all      # 运行各包测试，不加 --bail
