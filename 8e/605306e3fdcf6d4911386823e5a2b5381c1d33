@@ -1,0 +1,80 @@
+apps/cli/src/index.ts
+  s_5a59cb5b0e867d::t_5dec368092a333 208
+packages/media-export/package.json
+  s_5a59cb5b0e867d::t_58e722963fe3df 10
+README.md
+  h_3705811fa4502c 18,79
+  s_f463fe72520371::t_af1f90dacdf984 37,39,41-43,46-47,49
+  s_f463fe72520371::t_e3906d66946fb6 21
+  s_5a59cb5b0e867d::t_815f80d8f980b4 20,44
+  s_f463fe72520371::t_3aa2f212ef1046 45
+openspec/changes/bdmvkit-interoperability/specs/pgs-subtitle-playback/spec.md
+  s_5a59cb5b0e867d::t_900a4baa62ac37 25,30,47-55
+  s_5a59cb5b0e867d::t_2e6fb8fcecf598 37-41
+  s_5a59cb5b0e867d::t_c5f6bdaad3b086 56
+packages/media-export/src/index.ts
+  s_5a59cb5b0e867d::t_0a0493d38a34c6 36,53-56
+  s_5a59cb5b0e867d::t_daa6e03f6eb77d 3,5,30-33,37-38,46-51,57-70,72-75,78
+  s_5a59cb5b0e867d::t_08078f7be4bd41 42-43
+  s_5a59cb5b0e867d::t_eb8e4255ba1c24 44
+  s_5a59cb5b0e867d::t_68d6b6133c731b 71,86-89
+  s_5a59cb5b0e867d::t_f3e127aa67c41f 21,25-26
+  s_5a59cb5b0e867d::t_0ac8e68ae01f20 34-35,39-41,45,52
+  s_5a59cb5b0e867d::t_ca94221d948191 90-91
+packages/package-builder/src/index.ts
+  s_5a59cb5b0e867d::t_731fe013cc1cf2 4,47,273,280-325
+  s_5a59cb5b0e867d::t_34957f03b7db3e 274
+  s_5a59cb5b0e867d::t_b2b2da5ed4f18a 10,34,45-46
+  s_5a59cb5b0e867d::t_7ff4187a9d6e3d 48
+  s_5a59cb5b0e867d::t_e2b68865ea92dc 326
+openspec/changes/build-offline-menu-runtime/specs/offline-menu-runtime/spec.md
+  s_5a59cb5b0e867d::t_e41866df9e5a3a 23-27
+packages/package-builder/src/index.test.ts
+  s_5a59cb5b0e867d::t_8e5dcf9ca9ad8e 59,65-66
+  s_5a59cb5b0e867d::t_38ded7a3a0b9b8 87-91,93-96
+openspec/changes/bdmvkit-interoperability/design.md
+  s_5a59cb5b0e867d::t_46807dc8aa6de0 15,27
+packages/media-export/src/pgs.test.ts
+  s_5a59cb5b0e867d::t_10d86587aa0ff7 29,32
+  s_5a59cb5b0e867d::t_acabfac2b6c69e 28
+  s_5a59cb5b0e867d::t_684aaede47b663 23
+  s_5a59cb5b0e867d::t_5e3794a2efc224 27
+openspec/changes/build-offline-menu-runtime/tasks.md
+  s_5a59cb5b0e867d::t_a32fdc953ff4fd 10
+packages/igs/src/transport.ts
+  s_5a59cb5b0e867d::t_51a43b1da49b0a 283-284,286-292,295
+openspec/changes/bdmvkit-interoperability/tasks.md
+  s_5a59cb5b0e867d::t_16e2786ab61fc4 27-28
+  s_5a59cb5b0e867d::t_661fd951d3ed65 29
+pnpm-lock.yaml
+  s_5a59cb5b0e867d::t_862a9190b14a6e 143-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8e605306e3fdcf6d4911386823e5a2b5381c1d33",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_5a59cb5b0e867d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1ae43-17dd-7230-9aaa-59fbeece3d6a",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_f463fe72520371": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1aa7e-8018-7a21-8e53-a5c714f8cbf2",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
