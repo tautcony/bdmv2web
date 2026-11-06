@@ -3,7 +3,8 @@ import { link, lstat, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } fr
 import { basename, dirname, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { assertDisjointRoots, beginOutputTransaction, resolveInputFile } from "@bdmv2web/bdmv-io";
-import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
+import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
+import { DEFAULT_LIMITS, validateLimits } from "@bdmv2web/core/limits";
 import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { encodeRgbaPng, extractIgsScenes } from "@bdmv2web/igs";
 import { buildNavigationGraph, HdmvVm, profileWord } from "@bdmv2web/hdmv";
@@ -146,6 +147,18 @@ async function loadPlayerProfile(path: string | undefined): Promise<PlayerProfil
     videoProfiles: (record.videoProfiles as string[] | undefined) ?? [],
     audioProfiles: (record.audioProfiles as string[] | undefined) ?? [],
   };
+}
+
+/** Read and validate VM limits before parsing input or opening an output transaction. */
+async function loadLimits(path: string | undefined): Promise<Limits> {
+  if (path === undefined) return { ...DEFAULT_LIMITS };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(resolve(path), "utf8"));
+  } catch (error) {
+    throw new ContractError("INVALID_LIMITS_FILE", "/", `--limits could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return validateLimits(parsed);
 }
 
 /**
@@ -585,11 +598,11 @@ function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; cl
   return parseDiscIR({ schemaVersion: "1.0", entries, programs, menus, playlists, mediaAssets: [], diagnostics });
 }
 
-function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile): ParsedDisc["playlists"][number] | undefined {
+function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, limits: Limits): ParsedDisc["playlists"][number] | undefined {
   const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV");
   const topMenu = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV");
   if (typeof firstPlay?.target.target !== "number" || typeof topMenu?.target.target !== "number") return undefined;
-  const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, profile });
+  const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, profile, limits });
   // First Play may initialize PSRs/GPRs before it jumps to a feature title.
   // Run that initialization, then enter the explicit index.bdmv Top Menu entry
   // via selectTitle(0). The playlist emitted there is the menu playlist; do not
@@ -663,10 +676,7 @@ async function convert(): Promise<void> {
   // Argument contract first: every option value is resolved before the input is parsed and
   // before any output transaction exists. A missing value must never be masked by disc
   // diagnostics, and a late failure must never leave a staging directory behind.
-  if (lookupOption("--limits").found) {
-    optionValue("--limits"); // A bare `--limits` is a missing value, not an unimplemented feature.
-    fail("CLI_NOT_IMPLEMENTED", "--limits is not wired yet; it will apply once VmOptions.limits lands (batch 2, D3)");
-  }
+  const limits = await loadLimits(optionValue("--limits"));
   const profile = await loadPlayerProfile(optionValue("--player-profile"));
   const outOption = optionValue("--out");
   const titleOption = optionValue("--title");
@@ -681,7 +691,7 @@ async function convert(): Promise<void> {
   const title = titleOption ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const extraction = await extractIgsScenes(disc);
-  const menuPlaylist = findTopMenuPlaylist(disc, profile);
+  const menuPlaylist = findTopMenuPlaylist(disc, profile, limits);
   const menuMedia = await menuLoopMediaInput(disc, menuPlaylist);
   const transaction = await beginOutputTransaction(roots.output, { overwrite });
   try {
@@ -776,7 +786,7 @@ async function convert(): Promise<void> {
       bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
       ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }),
-      graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile,
+      graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, vmLimits: limits,
       ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),

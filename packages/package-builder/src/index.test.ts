@@ -170,6 +170,17 @@ describe("menu package primitives", () => {
       expect(manifest.profile).toEqual(playerProfile);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
+  it("embeds the configured HDMV limits in runtime data", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv-menu-limits-"));
+    const outputDirectory = resolve(parent, "limits preview");
+    try {
+      const vmLimits = { maxReadWindowBytes: 4096, maxSegmentBytes: 8192, maxReassemblyBytes: 16384, maxObjectPixels: 1024, maxInstructionsPerTurn: 77, maxQueueDepth: 12, maxCallDepth: 0, maxExplorationStates: 100, maxOutputBytes: null };
+      await buildMenuPackage({ outputDirectory, title: "Limits preview", ir, scene, graphics: [], vmLimits });
+      const embedded: { __BDMV_MENU_DATA__?: { limits?: unknown } } = {};
+      runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
+      expect(embedded.__BDMV_MENU_DATA__?.limits).toEqual(vmLimits);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
   it("generates a complete local folder with a classic ES2020 IIFE and no dangling HTML references", async () => {
     const preserveOutput = process.env.BDMV_MENU_FIXTURE_OUT;
     const parent = preserveOutput ? resolve(preserveOutput) : await mkdtemp(resolve(tmpdir(), "bdmv-menu-package-"));

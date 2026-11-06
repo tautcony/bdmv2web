@@ -23,4 +23,4 @@
 
 - [x] 3.1 统一CLI退出码、strict缺省和stdout/stderr；验收：未实现命令明确失败，不生成假成功文件。
 - [x] 3.2 建立二进制构建器、golden manifest及许可/来源登记；验收：下游可加载最小IR、混合入口和损坏fixture。
-- [x] 3.3 提交 docs/development.md、protocol-support模板及浏览器矩阵模板；验收：记录精确工具版本、PlayerProfile字段和测试命令，缺环境明确未验证。
+- [x] 3.3 提交 docs/guides/development.md、protocol-support模板及浏览器矩阵模板；验收：记录精确工具版本、PlayerProfile字段和测试命令，缺环境明确未验证。

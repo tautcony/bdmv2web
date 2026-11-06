@@ -20,7 +20,7 @@
 
 以下事项已在代码中落地，剩余验收不得重复要求实现：内容摘要字段与计算已移除；菜单背景 `ended` 回执、主音轨选择后的 PSR1 写回、菜单输入与 VM/sound 集成已存在；浏览器的外部影片路径使用 URL Protocol，不使用本地桥。菜单循环结束和音轨变化仍需按各自 change 的验收证据确认。
 
-仍未完成的实现项包括：HDMV 默认 Limits 收敛和 `--limits` 接线、导航图上下文边、交付层真实来源路径、无菜单媒体时启动 VM、normal-only 按钮命中，以及 builder 不再读取 workspace 源码。媒体结束回执和 PSR1 写回已实现但本 change 的完整回归尚未复核。性能基准未建立。
+HDMV 默认 Limits 已从 core 派生，`convert --limits FILE` 已将配置传入转换时与打包后的 HDMV VM；仍未完成的实现项包括：导航图上下文边、交付层真实来源路径、无菜单媒体时启动 VM、normal-only 按钮命中，以及 builder 不再读取 workspace 源码。媒体结束回执和 PSR1 写回已实现但本 change 的完整回归尚未复核。性能基准未建立。
 
 ## Goals / Non-Goals
 
@@ -48,7 +48,7 @@ const DEFAULTS = {
 
 **关于 `maxCallDepth` 的当前语义**：代码里只有 `if (this.opts.maxCallDepth < 1) throw ...`（`vm.ts:409,447`），且 `callStack` 只保存一帧——它不是深度上限，而是"CALL 是否允许"的开关。这与 `Limits` 中"128 = 保护性预算"的声明不符。
 
-本 change 选择**如实标注**而不是改结构：字段名保留（`Limits` 是对外契约，改名会波及 schema 与配置），在 `IMPLEMENTATION_BASELINE` §5 与 `docs/hdmv-support.md` 写明"当前为 CALL 开关（0 禁用），真正的深度限制需多帧调用栈，列为后续 change"。同时补一条测试锁定"`maxCallDepth` 为 0 时 `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`"，防止改动时无声漂移。
+本 change 选择**如实标注**而不是改结构：字段名保留（`Limits` 是对外契约，改名会波及 schema 与配置），在 `IMPLEMENTATION_BASELINE` §5 与 `docs/support/hdmv-support.md` 写明"当前为 CALL 开关（0 禁用），真正的深度限制需多帧调用栈，列为后续 change"。同时补一条测试锁定"`maxCallDepth` 为 0 时 `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`"，防止改动时无声漂移。
 
 若后续要做真深度上限，必须同时改 `callStack` 结构、`MenuCheckpoint` 与 `libbluray` 单帧行为的对照结论——那是独立 change，不在本批夹带。
 

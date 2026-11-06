@@ -25,7 +25,7 @@
 | HDMV 执行预算 | `pnpm --filter @bdmv2web/hdmv test` | 74/74 | 同步跳转/按钮循环以 `VM_EXECUTION_LIMIT` 终止；预算耗尽的图保留 unknown frontier。 |
 | 离线审计、对照、证据与发布摘要 | `pnpm --filter @bdmv2web/test-runner test` | 50/50 | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、浏览器绑定失效、发布缺口汇总。 |
 
-计数于 2026-11-04 用 `corepack pnpm test:all` 逐包重测（Node `24.18.0` / pnpm `11.25.0`）；逐包明细见 [`docs/development.md` 的测试基线表](../../development.md#test-baseline)。旧计数（42/40/56/51）是 `dist/**/*.test.js` 与 `src` 被重复收集时的结果，不再使用。
+计数于 2026-11-04 用 `corepack pnpm test:all` 逐包重测（Node `24.18.0` / pnpm `11.25.0`）；逐包明细见 [`docs/guides/development.md` 的测试基线表](../../guides/development.md#test-baseline)。旧计数（42/40/56/51）是 `dist/**/*.test.js` 与 `src` 被重复收集时的结果，不再使用。
 
 这些结果来源于仓库合成 fixtures 及已提供的本地 IGS 样本。
 
@@ -34,7 +34,7 @@ M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IM
 <a id="v1-chrome-file-evidence"></a>
 ## V1 Chrome `file://` 实测证据 — 2026-11-03（唯一证据位置）
 
-**结论：已完成 macOS Chrome `file://` 实测。** [`docs/browser-matrix.md`](../../browser-matrix.md) 与 [`docs/development.md`](../../development.md) 只引用本节，不另立说法。
+**结论：已完成 macOS Chrome `file://` 实测。** [`docs/guides/browser-matrix.md`](../../guides/browser-matrix.md) 与 [`docs/guides/development.md`](../../guides/development.md) 只引用本节，不另立说法。
 
 | 项目 | 结果 |
 | --- | --- |

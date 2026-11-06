@@ -16,7 +16,7 @@
 
 decoder 输入 raw 三个 uint32 与 SourceRef，输出 opcode/group/operand/raw/source。指令来源为 MOBJ 或按钮，不分叉执行器。保留立即数标记、GPR/PSR 类型、非法组合、保留位；未知不丢字节。
 
-提交 docs/hdmv-support.md：精确编码/助记符、操作数、寄存器权限、PC/栈变化、发出的 Action、等待条件、固定实现 revision/源文件/许可、fixture/golden provenance 和支持状态。以 pinned libbluray 1.5.0 的实际行为为主要语义依据；Alpha 实现等仅交叉核对，冲突须记双方 revision、证据和选择理由。BDA 历史公开白皮书只在实际覆盖范围内提供架构背景，引用标题/版本/印刷页码，不将其当规范正文。授权 BDA 文本不是实现前置。首期逐类覆盖 Branch/Compare/Set、Jump/Call/Resume、PlayPL/PlayPLatPI/LinkPI、SetStream/SetButtonPage/PopupOff/Still 及会影响路径的其它命令；这是核验清单，不把类别名称当全部已支持指令。未知可达编码阻止完整，不允许 no-op 后继续称成功。
+提交 docs/support/hdmv-support.md：精确编码/助记符、操作数、寄存器权限、PC/栈变化、发出的 Action、等待条件、固定实现 revision/源文件/许可、fixture/golden provenance 和支持状态。以 pinned libbluray 1.5.0 的实际行为为主要语义依据；Alpha 实现等仅交叉核对，冲突须记双方 revision、证据和选择理由。BDA 历史公开白皮书只在实际覆盖范围内提供架构背景，引用标题/版本/印刷页码，不将其当规范正文。授权 BDA 文本不是实现前置。首期逐类覆盖 Branch/Compare/Set、Jump/Call/Resume、PlayPL/PlayPLatPI/LinkPI、SetStream/SetButtonPage/PopupOff/Still 及会影响路径的其它命令；这是核验清单，不把类别名称当全部已支持指令。未知可达编码阻止完整，不允许 no-op 后继续称成功。
 
 ### 2. VM 状态与寄存器
 

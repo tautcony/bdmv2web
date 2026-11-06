@@ -44,6 +44,8 @@ describe("exact time and byte offsets", () => {
     expect(DEFAULT_LIMITS.maxOutputBytes).toBeNull();
     expect(DEFAULT_PLAYER_PROFILE.menuLanguage).toBe("eng");
     expect(() => validateLimits({ maxReadWindowBytes: 0 })).toThrow(/INVALID_LIMIT/);
+    expect(() => validateLimits({ maxReadWindowByte: 10 })).toThrow(/INVALID_LIMIT/);
+    expect(validateLimits({ maxCallDepth: 0, maxQueueDepth: 0 })).toMatchObject({ maxCallDepth: 0, maxQueueDepth: 0 });
     expect(() => assertWithinLimit(DEFAULT_LIMITS.maxSegmentBytes + 1, "maxSegmentBytes")).toThrow(/LIMIT_EXCEEDED/);
     expect(() => assertWithinLimit(DEFAULT_LIMITS.maxObjectPixels + 1, "maxObjectPixels")).toThrow(/LIMIT_EXCEEDED/);
     expect(allocateBoundedBytes(4, "maxReadWindowBytes")).toHaveLength(4);

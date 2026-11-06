@@ -37,6 +37,8 @@ corepack pnpm test
 | `maxExplorationStates` | 100,000 |
 | `maxOutputBytes` | `null` |
 
+`@bdmv2web/hdmv` derives its default instruction, queue, and call settings from `DEFAULT_LIMITS`. `maxCallDepth` is currently a CALL enable switch: values below 1 reject `CALL_OBJECT` and `CALL_TITLE`, while positive values do not enforce a nested call-depth limit. `convert --limits FILE` validates a JSON `Limits` object and applies it to the conversion-time and packaged HDMV VMs. The VM options are visible on each trace entry. `convert` does not yet pass the other fields to BDMV parsing, IGS extraction, or media export.
+
 Use `allocateBoundedBytes` or `checkedObjectPixels` before allocating according to these limits. `readFileChunks` enforces `maxReadWindowBytes` on each stream window.
 
 ## Parsing tolerance
@@ -68,11 +70,11 @@ Delivery status is decided only by failure evidence. `complete` means "no known 
 
 Every on-disk report of one `validate` run comes from the same summary, including `dependency-audit.json`.
 
-Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra positional arguments with `CLI_USAGE`; a flag with no value fails with `CLI_MISSING_VALUE`; `validate` rejects `--format` values other than `json` (`CLI_INVALID_FORMAT`) before touching any file. `--player-profile FILE` must be a valid `PlayerProfile` JSON (`CLI_INVALID_PROFILE` otherwise): the three language fields and `country` must be exactly 3 and 2 ASCII letters (PSR rule), case is normalised, and the profile is recorded in the packaged `manifest.json`. `--limits FILE` is not wired yet and fails with `CLI_NOT_IMPLEMENTED` rather than being ignored. `--strict`/`--no-strict` only change whether an acceptable `partial` is rejected; they never change the diagnostic facts.
+Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra positional arguments with `CLI_USAGE`; a flag with no value fails with `CLI_MISSING_VALUE`; `validate` rejects `--format` values other than `json` (`CLI_INVALID_FORMAT`) before touching any file. `--player-profile FILE` must be a valid `PlayerProfile` JSON (`CLI_INVALID_PROFILE` otherwise): the three language fields and `country` must be exactly 3 and 2 ASCII letters (PSR rule), case is normalised, and the profile is recorded in the packaged `manifest.json`. `convert --limits FILE` reads a JSON `Limits` object before parsing the disc or creating output; malformed JSON returns `INVALID_LIMITS_FILE`, and an invalid limit or unknown key returns `INVALID_LIMIT`. `--strict`/`--no-strict` only change whether an acceptable `partial` is rejected; they never change the diagnostic facts.
 
 ## Test baseline
 
-Per-package counts, measured 2026-11-05 with Node `24.18.0` / pnpm `11.25.0`:
+The baseline was measured 2026-11-05 with Node `24.18.0` / pnpm `11.25.0`. The CLI package was re-run 2026-11-06 after `--limits` integration; its current result is 36 passed. Other rows remain the 2026-11-05 measurements.
 
 | Package | Command | Tests |
 | --- | --- | ---: |
@@ -86,9 +88,9 @@ Per-package counts, measured 2026-11-05 with Node `24.18.0` / pnpm `11.25.0`:
 | `@bdmv2web/package-builder` | `corepack pnpm --filter @bdmv2web/package-builder test` | 10 |
 | `@bdmv2web/test-fixtures` | `corepack pnpm --filter @bdmv2web/test-fixtures test` | 5 |
 | `@bdmv2web/test-runner` | `corepack pnpm --filter @bdmv2web/test-runner test` | 51 |
-| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 33 |
+| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 36 |
 
-Total 461 passed + 1 skipped; `corepack pnpm test:all` equals the sum of these rows. Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded (they are no longer emitted at all, see below). A package whose configuration matches no test file fails instead of reporting success.
+The 2026-11-05 full-workspace result was 461 passed + 1 skipped. The table now combines that package baseline with the 2026-11-06 CLI result; it is not a new full-workspace total. Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded (they are no longer emitted at all, see below). A package whose configuration matches no test file fails instead of reporting success.
 
 Any change to these counts must update this table in the same change, with the reason recorded.
 
@@ -106,6 +108,7 @@ Round-2 review fixes (2026-11-05) moved four rows:
 - `test-runner` 50 → 51: `decideDelivery` now separates failure evidence from missing evidence, so the browser-evidence, empty-check and release-summary cases assert `notVerified` on a `complete` verdict instead of a `partial` one (P2-P2-3).
 - `runtime-web` 92 → 93: the persistent-toast path and the removed `#disc-title` write-back are asserted separately (P3-P2-1, P3-INFO-1).
 - `cli` 28 → 33: misspelled options, extra positionals, four invalid `--player-profile` values, "no report written when validate arguments are invalid", disk-vs-stdout dependency audit, and the assumed-mode fallback (P2-P2-1, P2-P2-2, P2-P2-4, P2-P2-6, P2-P2-7).
+- CLI re-run on 2026-11-06: 36 passed, including valid `--limits` propagation into the offline package and rejection of invalid values before output creation.
 
 
 ## Build gate
@@ -142,4 +145,4 @@ They are left as-is. New fixtures larger than 1 MiB must be generated by a scrip
 
 Run `corepack pnpm test` for the shared contracts, cursor, file I/O, path, transaction, CLI and fixture tests. Synthetic fixtures in `@bdmv2web/test-fixtures` are authored for interface checks. They are not BDMV protocol evidence. No commercial disc, licensed Blu-ray standard, or third-party parser output is included.
 
-V1 browser acceptance targets Google Chrome and does not specify an operating system; cross-browser testing is outside the first-version gate. **已完成 Google Chrome `file://` 实测，证据未绑定制品指纹**：结果与 console 记录见[唯一证据位置](references/stages/M6-release-verification.md#v1-chrome-file-evidence)（[browser-matrix.md](browser-matrix.md) 引用同一处）。"未绑定制品指纹"意味着证据不能反证某个具体提交产出的包，而不是说场景没有跑过。
+V1 browser acceptance targets Google Chrome and does not specify an operating system; cross-browser testing is outside the first-version gate. **已完成 Google Chrome `file://` 实测，证据未绑定制品指纹**：结果与 console 记录见[唯一证据位置](../references/stages/M6-release-verification.md#v1-chrome-file-evidence)（[browser-matrix.md](browser-matrix.md) 引用同一处）。"未绑定制品指纹"意味着证据不能反证某个具体提交产出的包，而不是说场景没有跑过。

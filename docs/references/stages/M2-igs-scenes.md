@@ -1,6 +1,6 @@
 # M2 — TS/PES 与 IGS 场景参考
 
-对应 change：[tasks.md](../../../openspec/changes/extract-igs-scenes/tasks.md) / [design.md](../../../openspec/changes/extract-igs-scenes/design.md)。
+对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-04-extract-igs-scenes/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-04-extract-igs-scenes/design.md)。
 
 | 来源 | 任务 | 精确入口 | 用途和限制 |
 | --- | --- | --- | --- |

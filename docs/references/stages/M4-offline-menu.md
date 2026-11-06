@@ -1,6 +1,6 @@
 # M4 — 离线菜单运行时参考
 
-对应 change：[tasks.md](../../../openspec/changes/build-offline-menu-runtime/tasks.md) / [design.md](../../../openspec/changes/build-offline-menu-runtime/design.md)。
+对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-06-build-offline-menu-runtime/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-06-build-offline-menu-runtime/design.md)。
 
 | 来源 | 任务 | 可用内容 | 使用边界 |
 | --- | --- | --- | --- |

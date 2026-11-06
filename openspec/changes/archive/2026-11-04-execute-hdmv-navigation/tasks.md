@@ -6,7 +6,7 @@
 
 ## 1. 支持矩阵与解码
 
-- [x] 1.1 建立docs/hdmv-support.md逐编码/操作数/PC栈/Action等待条件矩阵；验收：每个supported项有固定参考revision及fixture，未知不作no-op。
+- [x] 1.1 建立docs/support/hdmv-support.md逐编码/操作数/PC栈/Action等待条件矩阵；验收：每个supported项有固定参考revision及fixture，未知不作no-op。
 - [x] 1.2 实现统一12字节decoder与反汇编；验收：MOBJ/按钮相同raw同语义，立即数/寄存器/保留位/非法组合负例保留来源。
 - [x] 1.3 锁定PlayerProfile默认值与 pinned libbluray 对应的 PSR 字段映射；验收：语言/地区/输出能力重置一致并写入trace，映射和默认值均有来源与测试，不能任意清零所有PSR。
 

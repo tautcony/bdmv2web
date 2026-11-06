@@ -1,4 +1,4 @@
-> 范围更新：本文保留原架构设计记录。影片播放已调整为由系统默认程序打开实际 M2TS，且交付模式合并；现行要求以 [OpenSpec 实施基线](openspec/changes/IMPLEMENTATION_BASELINE.md) 及 M4–M6 active change 为准。
+> **文档定位：历史架构方案，不是当前实现规格。** 下文包含原定目标、未实现设计和早期包结构；不能据此判断功能已交付。当前能力以 [开发指南](../guides/development.md)、[协议支持矩阵](../support/protocol-support.md)、[HDMV 支持](../support/hdmv-support.md)、[IGS 支持](../support/igs-support.md)、[浏览器验收记录](../guides/browser-matrix.md) 和 [OpenSpec 实施基线](../../openspec/changes/IMPLEMENTATION_BASELINE.md) 为准。当前影片播放通过配置的外部播放器打开 M2TS；离线菜单包采用统一交付模式。
 
 # BDMV HDMV 菜单提取与离线 HTML 复现工具——详细技术设计方案
 
@@ -139,7 +139,7 @@ flowchart LR
 
 ## 4. TypeScript 项目组织
 
-> **历史设计（非当前实现）**：下面这棵目录树是 2026-11 初版的设想名，实际仓库没有 `apps/studio`，且 `m2ts-demux`、`igs-decoder`、`navigation-hdmv`、`ir-builder` 四个包没有独立存在。对照关系见本节末尾的映射表。读当前布局请直接看仓库根目录或 `docs/development.md`。
+> **历史设计（非当前实现）**：下面这棵目录树是 2026-11 初版的设想名，实际仓库没有 `apps/studio`，且 `m2ts-demux`、`igs-decoder`、`navigation-hdmv`、`ir-builder` 四个包没有独立存在。对照关系见本节末尾的映射表。读当前布局请直接看仓库根目录或 `docs/guides/development.md`。
 
 ```text
 bdmv2web/

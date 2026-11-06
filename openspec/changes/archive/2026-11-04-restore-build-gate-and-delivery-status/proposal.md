@@ -29,7 +29,7 @@
 
 ## Impact
 
-`packages/test-runner`、`packages/runtime-web`、`apps/cli`、全部包的 `tsconfig*.json` / `package.json` / `vitest.config.ts`、根 `package.json`、`docs/development.md`、`docs/igs-support.md`、`docs/references/stages/M6-release-verification.md`、`bdmv_hdmv_offline_web_architecture.md`、`.gitignore`。
+`packages/test-runner`、`packages/runtime-web`、`apps/cli`、全部包的 `tsconfig*.json` / `package.json` / `vitest.config.ts`、根 `package.json`、`docs/guides/development.md`、`docs/support/igs-support.md`、`docs/references/stages/M6-release-verification.md`、`bdmv_hdmv_offline_web_architecture.md`、`.gitignore`。
 
 ## Acceptance Boundary
 
@@ -39,6 +39,6 @@
 
 ## Related
 
-决策来源：[`docs/code-review.md`](../../../docs/code-review.md) 第 1 批（D1、D2、D4、D8、D10）。第 2 批见 [`converge-contracts-and-distribution`](../converge-contracts-and-distribution/proposal.md)。
+决策来源：[`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md) 第 1 批（D1、D2、D4、D8、D10）。第 2 批见 [`converge-contracts-and-distribution`](../converge-contracts-and-distribution/proposal.md)。
 
 评审里标 `⚠需确认` 但本 change 已按某个假设推进的 6 项，见 [`assumptions.md`](assumptions.md)——每条都写了反选后的改动点。

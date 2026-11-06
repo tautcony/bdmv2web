@@ -161,7 +161,7 @@
 - [x] 回归测试：四类非法值（`USA`、`jp`、`eng `、`日本語`）→ `CLI_INVALID_PROFILE`、无 `E_IO`、不创建目录；大小写规范化断言 `eng` / `US` 写入 manifest
 - [x] 相邻路径验证：合法 profile 仍写入 `manifest.profile` 与 `runtime/disc-data.js`
 - [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
-- [x] 发布/监控/文档：`docs/development.md` 与 README 的 profile 字段规则改成 PSR 口径（3/3/3/2 ASCII + 大小写规范化）
+- [x] 发布/监控/文档：`docs/guides/development.md` 与 README 的 profile 字段规则改成 PSR 口径（3/3/3/2 ASCII + 大小写规范化）
 - 最后更新: 2026-11-05
 
 ## P2-P2-5 — [P2] 失败 `report.json` 与成功路径是两套 schema
@@ -235,7 +235,7 @@
 ### Checklist
 - [x] 决策：**无案例不处理**（2026-11-05，D-4）
 - [x] 前提核实：`test-data/bdmv/` 的两张碟（baja、tamako）均为 16:9，视频与 scene 比例一致，无法复现
-- [x] 文档动作（本轮已做）：`docs/browser-matrix.md` 的「Known limitations」记录"素材比例 ≠ scene 比例时 background 与 canvas 各自 letterbox 可能错位，尚未验证"
+- [x] 文档动作（本轮已做）：`docs/guides/browser-matrix.md` 的「Known limitations」记录"素材比例 ≠ scene 比例时 background 与 canvas 各自 letterbox 可能错位，尚未验证"
 - [ ] **触发条件**：新增 4:3 或非等比例菜单素材，或拿到"视频分辨率 ≠ scene 尺寸"的真实包
 - [ ] 触发后：由 JS 用同一份 letterbox rect 同时设置 video 与 canvas，而非各自交给 CSS `contain`
 - [ ] 触发后回归：加"scene 比例与视频比例不同仍对齐"的布局断言（可用 mock 尺寸）
@@ -256,7 +256,7 @@
 - [~] 回归验证：此前记录本机全量测试连续 3 次通过（451 → 461 passed）；文档另记录 `bash scripts/ci.sh` 一次通过。新 CI workflow 尚未执行，等待流水线连续运行确认稳定
 - [x] 相邻路径验证：门禁总耗时仍在可接受范围（全量测试约 2 分 10 秒）
 - [~] 验证命令与证据：`index.md` 记录 `bash scripts/ci.sh` exit 0（2m32s）；该结果未在本轮重跑。旧版“缺少 pnpm 可执行文件”备注已由脚本改用 `corepack pnpm` 解决
-- [x] 发布/监控/文档：`docs/development.md` 新增 **Load assumption** 段落说明 15000 的理由与"门禁失败只在机器未被压满时有意义"
+- [x] 发布/监控/文档：`docs/guides/development.md` 新增 **Load assumption** 段落说明 15000 的理由与"门禁失败只在机器未被压满时有意义"
 - 最后更新: 2026-11-05
 
 ## P1-INFO-1 — [INFO] 0x24 只读部分属性位，注释与实现不符
@@ -390,7 +390,7 @@
   - [ ] 回归测试：篡改 runtime profile 时 audit 产生 fail，并确认旧包无 profile 不报错
   - [ ] 相邻路径/兼容性：`validate --offline` 对真实包无回归
   - [ ] 验证命令与证据：待补回归测试后运行 cli / test-runner 验证
-  - [ ] 发布/监控/文档：`docs/browser-matrix.md` 补 profile 相关限制
+  - [ ] 发布/监控/文档：`docs/guides/browser-matrix.md` 补 profile 相关限制
   - 最后更新: 2026-11-05
 
 ## P3-INFO-4 — [INFO] 首帧未 resize（既有问题，被全屏布局放大）
@@ -413,5 +413,5 @@
   - [x] 实施修复：新增 `.github/workflows/ci.yml`，在 master push、PR 与手动触发时运行 `bash scripts/ci.sh`
   - [x] 使用仓库锁定 Node 版本；workflow 仅授予 `contents: read`
   - [ ] 验证命令与证据：等待 GitHub Actions 首次运行成功
-  - [x] 文档：`docs/development.md` 更新为说明 CI workflow 已接入
+  - [x] 文档：`docs/guides/development.md` 更新为说明 CI workflow 已接入
   - 最后更新: 2026-11-05

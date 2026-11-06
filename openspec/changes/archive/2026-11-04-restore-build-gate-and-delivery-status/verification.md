@@ -1,6 +1,6 @@
 # Verification record
 
-本文件记录本 change 各任务的实测证据。每次记录都写明命令原文、退出码与关键输出，便于事后对比。测量环境：Node `24.18.0`、pnpm `11.25.0`、TypeScript `5.9.3`、Vitest `4.0.8`（与 `docs/development.md` 的 pinned toolchain 一致）。
+本文件记录本 change 各任务的实测证据。每次记录都写明命令原文、退出码与关键输出，便于事后对比。测量环境：Node `24.18.0`、pnpm `11.25.0`、TypeScript `5.9.3`、Vitest `4.0.8`（与 `docs/guides/development.md` 的 pinned toolchain 一致）。
 
 ## 门禁失败快照（任务 0.2，修复前）
 
@@ -141,9 +141,9 @@ $ tsc -p tsconfig.build.json     # 退出 0
 
 **与 0.1 参考值的差异**：`package-builder` 参考值 18 = 2×9，是 `dist` 与 `src` 同时被收集时的重复计数；重测值 9 为源码口径。`test-runner` 41→50、`cli` 20→25 是本 change 新增用例（`classifyDiagnostics`/`decideStageOutcome`/`mode` 断言、阶段与参数契约、`--player-profile`）。
 
-**计数说明**：上表与合计 427 是本节测量时（复评修复前）的数字，保留为当时的实测记录。复评修复新增 5 条用例后，当前口径为 runtime-web 92、package-builder 10、cli 28，合计 **432 passed + 1 skipped**，以「评审修复（独立复评第 2 轮）」一节和 `docs/development.md` 基线表为准。
+**计数说明**：上表与合计 427 是本节测量时（复评修复前）的数字，保留为当时的实测记录。复评修复新增 5 条用例后，当前口径为 runtime-web 92、package-builder 10、cli 28，合计 **432 passed + 1 skipped**，以「评审修复（独立复评第 2 轮）」一节和 `docs/guides/development.md` 基线表为准。
 
-**`--no-bail` 的实际语义**：在某叶子包（`apps/cli`）植入失败用例时，其余 10 个包全部执行；在 `packages/core` 植入失败时，pnpm 按拓扑顺序跳过依赖它的包（只跑了 core 与 test-runner）。这是 pnpm 的依赖顺序保护，不是 `--no-bail` 失效；`docs/development.md` 的基线表与聚合命令不受影响。
+**`--no-bail` 的实际语义**：在某叶子包（`apps/cli`）植入失败用例时，其余 10 个包全部执行；在 `packages/core` 植入失败时，pnpm 按拓扑顺序跳过依赖它的包（只跑了 core 与 test-runner）。这是 pnpm 的依赖顺序保护，不是 `--no-bail` 失效；`docs/guides/development.md` 的基线表与聚合命令不受影响。
 
 ## 阶段三：CLI 阶段状态与退出码（任务 4.1–4.6）
 
@@ -216,15 +216,15 @@ $ report.json: status=partial、mode=menu-only、blockingDiagnostics=37（首条
 
 ## 阶段五：文档与仓库卫生（任务 6.1–6.7、0.1、1.5、1.6）
 
-- **0.1** `docs/development.md` 新增「Test baseline」表（11 行 + 合计 427/1 skipped），带测量日期、per-package 命令与参考值差异说明。
+- **0.1** `docs/guides/development.md` 新增「Test baseline」表（11 行 + 合计 427/1 skipped），带测量日期、per-package 命令与参考值差异说明。
 - **6.1** 新增「CLI status」表：`inspect`/`extract`/`convert`/`validate` 已实现、`compare` 未实现、`convert` 仅 `menu-only`；不再有「五个命令都返回 `E_NOT_IMPLEMENTED`」的表述。
-- **6.2** 三处统一为「已完成 macOS Chrome `file://` 实测，证据未绑定制品指纹」，并都指向 `M6-release-verification.md#v1-chrome-file-evidence`；`docs/browser-matrix.md` 不再出现 `not-verified`。未改动任何 tasks 勾选状态。
-- **6.3** `docs/igs-support.md` 的 Tamako 结论改为：包 partial 的原因是 Clip 00043 缺失；`0xffff`/`0xfffe` 已确立为「无选择 / 激活当前选择」哨兵，因此场景保持 `complete: true` 且不产生 `IGS_INVALID_BUTTON_REFERENCE`，与 `packages/igs/test/tamako-real-smoke.test.ts` 的断言一致。
+- **6.2** 三处统一为「已完成 macOS Chrome `file://` 实测，证据未绑定制品指纹」，并都指向 `M6-release-verification.md#v1-chrome-file-evidence`；`docs/guides/browser-matrix.md` 不再出现 `not-verified`。未改动任何 tasks 勾选状态。
+- **6.3** `docs/support/igs-support.md` 的 Tamako 结论改为：包 partial 的原因是 Clip 00043 缺失；`0xffff`/`0xfffe` 已确立为「无选择 / 激活当前选择」哨兵，因此场景保持 `complete: true` 且不产生 `IGS_INVALID_BUTTON_REFERENCE`，与 `packages/igs/test/tamako-real-smoke.test.ts` 的断言一致。
 - **6.4** M6 的计数替换为 7/47/54/74/50，并注明测量日期、命令与旧计数失效原因。
 - **6.5** 架构文档的旧包布局与旧 `DiscIR` 形状都加了「历史设计」标注，并补「设计名 → 实际位置」映射表（`apps/studio` 标注未实施）。
 - **6.6** `.gitignore` 增加 `.DS_Store` 与 `**/.DS_Store`；`touch packages/core/.DS_Store` 后 `git status --short` 无相关条目。
-- **6.7** `docs/development.md` 记录大二进制策略与两个既存大文件（11.0 MB / 8.5 MB，实测 `git ls-tree` 口径）。
-- **1.5** `docs/development.md` 的「Build gate」小节记录：门禁目前靠人工执行 `scripts/ci.sh`，流水线属后续独立 change，仓库不含 `.github/`。
+- **6.7** `docs/guides/development.md` 记录大二进制策略与两个既存大文件（11.0 MB / 8.5 MB，实测 `git ls-tree` 口径）。
+- **1.5** `docs/guides/development.md` 的「Build gate」小节记录：门禁目前靠人工执行 `scripts/ci.sh`，流水线属后续独立 change，仓库不含 `.github/`。
 - **1.6** `scripts/ci.sh`（可执行）依次执行 `install --frozen-lockfile` → `generate:contracts` → `-r build` → `-r typecheck` → `test:all`，逐步打印命令与耗时，失败即停。干净工作区 `bash scripts/ci.sh` → exit 0（install 3s / contracts 2s / build 18s / typecheck 24s / test 113s）；在 `packages/bdmv-io/src/index.ts` 植入类型错误后 → `build` 步骤 exit 2，脚本在 `Gate failed at: pnpm -r build` 处结束，后续步骤未执行。
 
 ## 整体验收（任务 7.1–7.5）
@@ -257,7 +257,7 @@ $ report.json: status=partial、mode=menu-only、blockingDiagnostics=37（首条
 ### 本轮门禁与计数
 
 - `generate:contracts → build → typecheck → test:all` 四步退出码 0；`find packages apps -path "*/dist/*" -name "*.test.*" | wc -l` = 0。
-- 逐包用例：core 14、bdmv-io 7、bdmv-parser 47、igs 54、hdmv 74、media-export 51+1 skipped、runtime-web 92、package-builder 10、test-fixtures 5、test-runner 50、cli 28，合计 **432 passed + 1 skipped**（较上一版 +5：runtime-web +1、package-builder +1、cli +3）。`docs/development.md` 基线表已同步。
+- 逐包用例：core 14、bdmv-io 7、bdmv-parser 47、igs 54、hdmv 74、media-export 51+1 skipped、runtime-web 92、package-builder 10、test-fixtures 5、test-runner 50、cli 28，合计 **432 passed + 1 skipped**（较上一版 +5：runtime-web +1、package-builder +1、cli +3）。`docs/guides/development.md` 基线表已同步。
 
 ## 记录口径说明
 

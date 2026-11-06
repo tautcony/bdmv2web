@@ -1,6 +1,6 @@
 # M1 — BDMV 结构解析参考
 
-对应 change：[tasks.md](../../../openspec/changes/parse-bdmv-structure/tasks.md) / [design.md](../../../openspec/changes/parse-bdmv-structure/design.md)。主要行为依据为固定 revision 开源实现并记录精确文件、许可和 fixture 来源；BDA 历史白皮书只作概述背景。
+对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-04-parse-bdmv-structure/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-04-parse-bdmv-structure/design.md)。主要行为依据为固定 revision 开源实现并记录精确文件、许可和 fixture 来源；BDA 历史白皮书只作概述背景。
 
 | 来源 | 任务 | 精确入口 | 证据范围/限制 |
 | --- | --- | --- | --- |

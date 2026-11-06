@@ -1,5 +1,6 @@
 import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
 import { DEFAULT_PLAYER_PROFILE } from "@bdmv2web/core/defaults";
+import { DEFAULT_LIMITS, validateLimits, type Limits } from "@bdmv2web/core/limits";
 import type { PlayerProfile as CorePlayerProfile } from "@bdmv2web/core";
 import { decodeInstruction, type DecodedInstruction, type Operand, type RawCommand } from "./decode.js";
 import { RegisterFile, RegisterFault, type PlayerProfile, type RegisterRef } from "./registers.js";
@@ -12,7 +13,7 @@ export type MediaEventType = "MEDIA_STARTED" | "MEDIA_SEEKED" | "PLAYITEM_CHANGE
 export interface VmEvent { type: MediaEventType; generation?: number; responseTo?: string; payload?: Record<string, unknown>; input?: string | number; channel?: "keyboard" | "pointer" | "system"; }
 export interface VmDiagnostic { code: string; message: string; source: SourceLocation | null; }
 export interface PlaybackContext { status: "idle" | "requested" | "playing" | "ended" | "error" | "unavailable"; playlist: number | null; playItem: number | null; presentationTime: number | null; pendingActionId: string | null; }
-export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; status: VmStatus; diagnostic?: VmDiagnostic; }
+export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; limits: Readonly<Limits>; status: VmStatus; diagnostic?: VmDiagnostic; }
 export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
 export interface HdmvVmCheckpoint {
   status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>;
@@ -25,7 +26,7 @@ export interface HdmvVmCheckpoint {
   consumedResponses: string[]; eventQueue: VmEvent[]; actionQueue: NavigationAction[];
   trace: TraceEntry[]; actions: NavigationAction[]; diagnostics: VmDiagnostic[];
 }
-export interface VmOptions { maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; }
+export interface VmOptions { limits?: Limits; maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
 export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
 export type ButtonCommandContext = "movie-object" | "ig-button";
@@ -39,7 +40,11 @@ type MenuCheckpoint = {
   pendingTitleCall: number | null; playback: PlaybackContext; queuedActionIds: Set<string>;
   diagnostic: VmDiagnostic | null; firstAction: number; randomState: bigint;
 };
-const DEFAULTS = { maxInstructionsPerTurn: 10_000, maxCallDepth: 64, maxQueueDepth: 256 };
+const DEFAULTS = {
+  maxInstructionsPerTurn: DEFAULT_LIMITS.maxInstructionsPerTurn,
+  maxCallDepth: DEFAULT_LIMITS.maxCallDepth,
+  maxQueueDepth: DEFAULT_LIMITS.maxQueueDepth,
+};
 const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
 const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "ended", PLAY_PLAYLIST_ITEM: "ended", PLAY_PLAYLIST_MARK: "ended", TOP_MENU: "started", MENU_CALL: "started" };
 const RANDOM_MULTIPLIER = 6_364_136_223_846_793_005n;
@@ -48,6 +53,7 @@ const RANDOM_MASK = 0xffff_ffff_ffff_ffffn;
 function textInstruction(d: DecodedInstruction): string { return `${d.opcode ?? "UNKNOWN"} ${d.operands.filter((x) => x !== null).map((x) => x.kind === "immediate" ? `#${x.value}` : `${x.kind}[${x.value}]`).join(",")}`.trim(); }
 
 export class HdmvVm {
+  readonly limits: Readonly<Limits>;
   readonly registers: RegisterFile;
   readonly trace: TraceEntry[] = [];
   readonly actions: NavigationAction[] = [];
@@ -63,7 +69,23 @@ export class HdmvVm {
   private readonly onTrace: VmOptions["onTrace"];
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
   constructor(programs: Array<VmProgram | MovieObject>, options: VmOptions = {}) {
-    this.opts = { ...DEFAULTS, ...options }; this.entries = options.entries; this.onTrace = options.onTrace; this.profile = normalizeProfile(options.profile); this.registers = new RegisterFile(this.profile);
+    this.limits = Object.freeze(validateLimits(options.limits ?? {
+      ...DEFAULT_LIMITS,
+      ...(options.maxInstructionsPerTurn === undefined ? {} : { maxInstructionsPerTurn: options.maxInstructionsPerTurn }),
+      ...(options.maxCallDepth === undefined ? {} : { maxCallDepth: options.maxCallDepth }),
+      ...(options.maxQueueDepth === undefined ? {} : { maxQueueDepth: options.maxQueueDepth }),
+    }));
+    this.opts = {
+      maxInstructionsPerTurn: this.limits.maxInstructionsPerTurn,
+      maxCallDepth: this.limits.maxCallDepth,
+      maxQueueDepth: this.limits.maxQueueDepth,
+    };
+    this.entries = options.entries; this.onTrace = options.onTrace; this.profile = normalizeProfile(options.profile); this.registers = new RegisterFile(this.profile);
+    if (options.limits && [options.maxInstructionsPerTurn, options.maxCallDepth, options.maxQueueDepth].some((value) => value !== undefined)) {
+      const diagnostic = { code: "VM_LIMITS_OVERRIDDEN", message: "The limits object takes precedence over scalar VM limit options.", source: null };
+      this.diagnostics.push(diagnostic);
+      this.record({ source: null, raw: null, decoded: "LIMITS", registerDelta: EMPTY_DELTA, status: "idle", diagnostic });
+    }
     this.randomSeed = normalizeRandomSeed(options.randomSeed); this.randomState = BigInt(this.randomSeed);
     for (const p of programs) this.addProgram(p as VmProgram);
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)} seed=${this.randomSeed}`, registerDelta: EMPTY_DELTA, status: "idle" });
@@ -704,8 +726,8 @@ export class HdmvVm {
     const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
-  private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
-    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
+  private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
+    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
     this.trace.push(trace);
     try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }

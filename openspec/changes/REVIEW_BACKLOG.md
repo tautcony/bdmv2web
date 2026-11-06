@@ -1,6 +1,6 @@
 # 评审遗留问题登记
 
-来源：[`docs/code-review.md`](../../../docs/code-review.md)。这里只登记**已确认存在、但当前两个批次（`restore-build-gate-and-delivery-status`、`converge-contracts-and-distribution`）不承接**的问题。
+来源：[`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md)。这里只登记**已确认存在、但当前两个批次（`restore-build-gate-and-delivery-status`、`converge-contracts-and-distribution`）不承接**的问题。
 
 登记的目的不是"以后再说"，而是让它们有明确归属：
 

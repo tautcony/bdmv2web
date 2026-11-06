@@ -7,7 +7,7 @@
 - 解析 `index.bdmv`、`MovieObject.bdmv`、MPLS、CLPI 和 `sound.bdmv`，提取光盘结构与导航信息。
 - 解析 M2TS 中的 IGS 菜单，提取按钮、图形、调色板和指令。
 - 执行 HDMV 导航指令，支持寄存器、分支、比较、MovieObject 和播放列表调用。
-- 导出菜单背景视频、音轨和按钮音效，生成可在 Chrome 中打开的菜单包。
+- 导出菜单背景视频、音轨和按钮音效，生成可离线打开的菜单包；当前浏览器实测记录见[浏览器验收文档](docs/guides/browser-matrix.md)。
 - 通过操作系统 URL Protocol 调用 IINA 或 PotPlayer，打开菜单关联的原始 M2TS 文件。
 - 导出结构数据、菜单图形与诊断信息，校验生成的菜单包。
 
@@ -42,11 +42,21 @@ corepack pnpm build
 | `extract <BDMV> --out DIR` | 必须指定 `--type hdmv\|igs\|sup` 或 `--all`；`--strict` | 按类型写协议分析 JSON 及 `manifest.json`。HDMV 命令和结构、IGS 场景/来源映射、SUP 轨道索引分目录保存；不输出 PNG 或 SUP 文件 |
 | `list-assets <BDMV>` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--format table\|json`、`--out FILE` | stdout 默认显示资源汇总和明细，包括 M2TS clip、PID、IGS 图像对象属性及 SUP 轨道；`--out` 写完整 JSON |
 | `export-assets <BDMV> --out DIR` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` | 导出所选 PID 的 igstools 兼容 `.mnu` 和/或已验证的 `.sup`；指定 `--decode png` 时另外输出图像 PNG；附 `assets-manifest.json` |
-| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
+| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--limits FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
 | `validate <菜单包目录> --offline` | `--format json`、`--strict` | 更新 `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
 | `compare <输入>` | `--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
-`partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 生成统一离线菜单包；输出目录已存在时需加 `--overwrite`。`--limits` 尚未实现。
+`partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 生成统一离线菜单包；输出目录已存在时需加 `--overwrite`。
+
+`convert --limits FILE` 接受 JSON 限制对象；省略的字段使用[默认 Limits](packages/core/src/limits.ts)。配置应用于转换时的 HDMV VM 和生成菜单包里的 HDMV VM。VM 使用 `maxInstructionsPerTurn`、`maxQueueDepth` 和 `maxCallDepth`；当前 `maxCallDepth` 是 CALL 开关（0 禁用），不是多层调用深度上限。其它字段会校验并随配置保留，但 `convert` 尚未把它们传入 BDMV 解析、IGS 提取和媒体导出阶段。
+
+```json
+{
+  "maxInstructionsPerTurn": 20000,
+  "maxQueueDepth": 1024,
+  "maxCallDepth": 128
+}
+```
 
 `extract` 面向协议分析，保留场景、命令、轨道及来源信息；`export-assets` 按 M2TS clip 和 PID 导出 IGS `.mnu` 与 SUP 文件，`--decode png` 可额外生成 PNG。`--m2ts` 和 `--pid` 使用 `list-assets` 表格或 JSON 中的 clip 与 PID 值。
 
@@ -121,16 +131,18 @@ python3 scripts/fetch-reference-cache.py
 
 ## 文档
 
+项目文档按开发指南、支持范围、架构、参考资料和历史记录分类，入口见[文档索引](docs/README.md)。
+
 | 文档 | 内容 |
 | --- | --- |
-| [docs/development.md](docs/development.md) | 工具链、契约、CLI 和测试 |
-| [docs/protocol-support.md](docs/protocol-support.md) | 结构解析范围 |
-| [docs/hdmv-support.md](docs/hdmv-support.md) | HDMV 指令与虚拟机支持 |
-| [docs/igs-support.md](docs/igs-support.md) | IGS 提取与色域处理 |
-| [docs/browser-matrix.md](docs/browser-matrix.md) | 浏览器验收环境 |
-| [docs/references/README.md](docs/references/README.md) | 参考实现与许可 |
-| [openspec/specs/](openspec/specs/) | 项目规格 |
-| [docs/bdmv_hdmv_offline_web_architecture.md](docs/bdmv_hdmv_offline_web_architecture.md) | 技术设计记录 |
+| [开发指南](docs/guides/development.md) | 工具链、契约、CLI 和测试 |
+| [协议支持矩阵](docs/support/protocol-support.md) | BDMV 格式解析状态和证据 |
+| [HDMV 支持](docs/support/hdmv-support.md) | 指令与虚拟机支持范围 |
+| [IGS 支持](docs/support/igs-support.md) | 场景提取与图像处理 |
+| [浏览器验收](docs/guides/browser-matrix.md) | 浏览器验收环境 |
+| [架构说明](docs/architecture/bdmv_hdmv_offline_web_architecture.md) | 技术设计记录 |
+| [开发参考](docs/references/README.md) | 参考实现、许可与阶段资料 |
+| [OpenSpec](openspec/specs/) | 项目规格 |
 
 ## 许可
 

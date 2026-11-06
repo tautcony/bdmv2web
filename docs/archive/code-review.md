@@ -155,7 +155,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 1. **契约常量有两份**：`DEFAULT_PLAYER_PROFILE`（core / hdmv 各一份）、`maxCallDepth` / `maxQueueDepth`（core 为 128/1024，hdmv 为 64/256）。数值型仿真契约一旦分叉，各包测试会各自为政——这是本仓库最该优先消除的隐患。
 2. **性能热点统一是"大输入 + 二次方"**：`buildGraph` O(n²)、`PesAssembler.append` O(n²)、`hex()` 全量字符串比较、`directoryBytesExcluding` 每 10ms 全树轮询、`buildInputFileTable` 重复 `realpath`。真实 UHD 碟会先在这五处顶墙。
 3. **构建产物污染**：`dist/` 内含 `*.test.js` / `*.test.d.ts`（未入 Git，但会进 npm 包）。
-4. **文档漂移**：`docs/development.md` 仍写"CLI 五个命令目前都返回 `E_NOT_IMPLEMENTED`"，实际 `inspect` / `extract` / `convert` / `validate` 均已实现（仅 `compare` 未实现）。
+4. **文档漂移**：`docs/guides/development.md` 仍写"CLI 五个命令目前都返回 `E_NOT_IMPLEMENTED`"，实际 `inspect` / `extract` / `convert` / `validate` 均已实现（仅 `compare` 未实现）。
 5. **仓库卫生**：`.gitignore` 缺 `.DS_Store`；`test-data/fixtures/.../00043.m2ts_ig-packets.bin` 11MB、`00005` 8.7MB 直接进 Git 历史（建议 Git LFS 或按 manifest 脚本生成）。
 6. **测试聚合链路不稳**：`pnpm -r test` 时 `media-export` / `igs` 报 "no tests"，单独 `cd` 进去却分别正常跑 51 / 54 用例。各包 `test` 脚本不统一（`vitest run` vs `vitest run src`），建议统一并加 `--reporter=verbose`。
 8. **失败状态没有贯穿 CLI**：`extract` / `inspect` 对 `fatal` 诊断仍 `exit 0` 并生成包；`convert` 只用"有没有 scene"判失败，没有统一走 `decideDelivery`。这与 baseline §3/§4 的状态表和退出码直接冲突。详见 D10。
@@ -213,7 +213,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 >
 > - **本批做**：落一份与平台无关的门禁脚本 `scripts/ci.sh`（`install --frozen-lockfile` → `generate:contracts` → `-r build` → `-r typecheck` → `-r test`），任何人/任何平台都可用同一条命令复现门禁。对应 `restore-build-gate-and-delivery-status` 任务 1.6。
 > - **本批不做**：`.github/workflows/` 等任何平台专属配置、pre-commit / pre-push 钩子。
-> - **单独立项**：流水线本身（触发条件、缓存、超时、是否联网装依赖）留给后续 change；本批只在 `docs/development.md` 记录"门禁未接入流水线"的已知风险。
+> - **单独立项**：流水线本身（触发条件、缓存、超时、是否联网装依赖）留给后续 change；本批只在 `docs/guides/development.md` 记录"门禁未接入流水线"的已知风险。
 >
 > ⚠需确认（不影响本批执行）：托管在哪（GitHub / GitLab / 内网自建）、是否允许联网安装依赖（内网通常要离线缓存或私有 registry）。脚本形态与平台无关，故本批可先落地。______
 
@@ -324,7 +324,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 >
 > 决策：先不修改（本轮不做）。本地桥继续以 `<img src>` 发 GET、token 继续留在 URL；审计继续以 `BUNDLE_DYNAMIC_ACCESS` 记 `not-verified`。
 >
-> 承接方式：**记录而非实现**——`README` 与 `docs/browser-matrix.md` 的已知限制各写一条（`converge` 任务 I.1）；本批不新增审计规则、不改 `browser.ts`、不改 `local-player-bridge.ts`。
+> 承接方式：**记录而非实现**——`README` 与 `docs/guides/browser-matrix.md` 的已知限制各写一条（`converge` 任务 I.1）；本批不新增审计规则、不改 `browser.ts`、不改 `local-player-bridge.ts`。
 >
 > 后续归属：D6-2 独立 change，需先回答下面两个问题。
 >
@@ -366,7 +366,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 
 **建议**：B。重写 Git 历史成本高且影响所有协作者，收益主要是克隆体积；先把"会误导人"和"会漏跑测试"的部分解决。
 
-> 决策：【预填】B —— 改 `docs/development.md` 的 CLI 状态表（标注 `compare` 未实现、`convert` 仅 menu-only）、补 `.gitignore` 的 `.DS_Store`、统一各包 `test` 脚本为 `vitest run`；同时按上方"第二轮补充"修正浏览器验收事实、Tamako 场景结论、M6 计数与架构文档的旧布局。大二进制**不动**。
+> 决策：【预填】B —— 改 `docs/guides/development.md` 的 CLI 状态表（标注 `compare` 未实现、`convert` 仅 menu-only）、补 `.gitignore` 的 `.DS_Store`、统一各包 `test` 脚本为 `vitest run`；同时按上方"第二轮补充"修正浏览器验收事实、Tamako 场景结论、M6 计数与架构文档的旧布局。大二进制**不动**。
 >
 > 大二进制处理方式：保留现状。理由：两个文件已在历史中，重写历史会打断所有协作者的本地 clone，而收益只是克隆体积；若将来新增 >1MB 的 fixture，改为按 manifest 脚本生成而非入库。⚠需确认：这两个 fixture 是否被测试直接读取（若只是"生成后比对用的样本"，可以改成脚本生成并从此不入库）。______
 >
@@ -374,7 +374,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 
 **第二轮补充（D8 范围内一并处理）**：
 
-- `docs/igs-support.md:22` 说 Tamako 场景 incomplete、0xfffe 语义未建立，但 `packages/igs/test/tamako-real-smoke.test.ts:29-40` 断言 `complete: true` 且 0xfffe 是 activated 哨兵；包 partial 的真实原因是 Clip 00043 缺失。需要改掉这段原因。
+- `docs/support/igs-support.md:22` 说 Tamako 场景 incomplete、0xfffe 语义未建立，但 `packages/igs/test/tamako-real-smoke.test.ts:29-40` 断言 `complete: true` 且 0xfffe 是 activated 哨兵；包 partial 的真实原因是 Clip 00043 缺失。需要改掉这段原因。
 - `docs/references/stages/M6-release-verification.md:22-26` 的测试计数（42/40/56/51）已过期。当前实测：parser 47、igs 54、hdmv 74、runtime-web 91、test-runner **5 个文件 / 41 用例**（修复 P0 前为 2 failed + 8 passed / 42，因 `dist/*.test.js` 被重复执行）。修复 P0 后按 `pnpm test:all` 统一重算。
 - `bdmv_hdmv_offline_web_architecture.md:145-168` 的包布局（`m2ts-demux` / `igs-decoder` / `navigation-hdmv` / `ir-builder` / `apps/studio`）和 `:530-538` 的 `DiscIR`（`kind`/`role`）仍是旧设计，应标注为历史设计或补"设计名 → 实际包/字段"映射。
 
@@ -470,7 +470,7 @@ D9 的历史方案已由 `converge-contracts-and-distribution` 收敛；当前�
 
 > "第 3 批"已取消：D8 的 `test` 脚本统一提前到第 1 批（它决定后续所有计数基线），D7 与 D5 剩余项并入第 2 批。
 >
-> 不属于 D1–D13、但评审中确认存在的问题（CLPI HEVC 属性长度、`sound.bdmv` 损坏中止 `inspect`、`EventScheduler` 零延迟自旋、`summarizeCheckResult` 误分类、`validateLimits` 未知键静默失效）登记在 [`openspec/changes/REVIEW_BACKLOG.md`](../openspec/changes/REVIEW_BACKLOG.md)，每条附触发条件，本轮不展开。
+> 不属于 D1–D13、但评审中确认存在的问题（CLPI HEVC 属性长度、`sound.bdmv` 损坏中止 `inspect`、`EventScheduler` 零延迟自旋、`summarizeCheckResult` 误分类、`validateLimits` 未知键静默失效）登记在 [`openspec/changes/REVIEW_BACKLOG.md`](../../openspec/changes/REVIEW_BACKLOG.md)，每条附触发条件，本轮不展开。
 
 > 其它需要纳入本轮的问题、约束或优先级调整：
 >

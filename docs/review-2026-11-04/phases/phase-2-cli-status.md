@@ -61,7 +61,7 @@
 
 - 位置: `apps/cli/src/index.ts:71-79`（只要求非空字符串）；`packages/hdmv/src/registers.ts:45-49`（`profileWord(value, 3|2)` 的 ASCII/长度规则）
 - 触发条件: `{"country":"USA"}`、`{"menuLanguage":"jp"}`、`{"subtitleLanguage":"eng "}`
-- 影响: 通过 CLI 校验后在 `findTopMenuPlaylist` 构造 `HdmvVm` 时抛 `TypeError`，被 `main().catch` 归为 `E_IO`，与 `docs/development.md` 承诺的 `CLI_INVALID_PROFILE` 不符。失败发生在事务创建前，**不会产出坏包**，所以影响是错误码与可诊断性。
+- 影响: 通过 CLI 校验后在 `findTopMenuPlaylist` 构造 `HdmvVm` 时抛 `TypeError`，被 `main().catch` 归为 `E_IO`，与 `docs/guides/development.md` 承诺的 `CLI_INVALID_PROFILE` 不符。失败发生在事务创建前，**不会产出坏包**，所以影响是错误码与可诊断性。
 - 置信度: 高（代码路径；错误码映射在 `index.ts:572-578`）
 - 修复方向: `loadPlayerProfile` 复用同一套 word 规则（长度 2/3、ASCII、大小写规范化），或捕获 VM 构造错误转成 `ContractError("CLI_INVALID_PROFILE")`。
 

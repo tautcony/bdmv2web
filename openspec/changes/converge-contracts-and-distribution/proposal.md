@@ -40,7 +40,7 @@
 
 ## Impact
 
-`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/hdmv-support.md`、`docs/protocol-support.md`、`docs/browser-matrix.md`。
+`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`、`docs/guides/browser-matrix.md`。
 
 ## Acceptance Boundary
 
@@ -54,7 +54,7 @@
 
 ## 当前实现与归档状态（2026-11-06）
 
-本 change 的初始问题清单描述的是当时的代码状态，现已部分过时：内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回和菜单 VM/sound 集成已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
+本 change 的初始问题清单描述的是当时的代码状态，现已部分过时：内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回、菜单 VM/sound 集成、HDMV 默认 Limits 收敛与 `convert --limits` 接线已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
 
 原归档前置表也已过时。当前主规格已存在 `disc-contracts`、`hdmv-navigation` 和 `interactive-graphics-extraction`；`offline-menu-runtime` 与 `offline-delivery-assurance` 主规格仍缺失。归档前应根据 status 的 `existingOutputPaths` 重新做 delta 对照；不要机械套用“先归档旧上游 change”的原步骤。
 
@@ -74,8 +74,8 @@
 
 ## Related
 
-决策来源：[`docs/code-review.md`](../../../docs/code-review.md) 第 2 批（D3、D5、D6、D7、D9、D11、D12、D13）。第 1 批见 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/proposal.md)。
+决策来源：[`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md) 第 2 批（D3、D5、D6、D7、D9、D11、D12、D13）。第 1 批见 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/proposal.md)。
 
 批次说明：评审文档的"第 3 批"已取消——D8 的 `test` 脚本统一提前到第 1 批（它决定后续所有计数基线），D7 与 D5 的剩余项并入本批（都需要第 1 批的产物布局作前提）。D4 的 `--limits` 真正接线条目（A.6）也在本批。
 
-评审里标 `⚠需确认` 但本 change 已按某个假设推进的 7 项，见 [`assumptions.md`](assumptions.md)。其中 **R2-1（`maxCallDepth` 的 64/256 来历）** 只有决策者能确认，若与假设相反，A.1–A.4 需要改派生方向。
+评审里标 `⚠需确认`、并在本 change 中按已记录决策推进的假设见 [`assumptions.md`](assumptions.md)。R2-1 已按 core 是公开单一契约来源的决策完成收敛。

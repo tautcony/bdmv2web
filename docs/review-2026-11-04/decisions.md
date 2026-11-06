@@ -141,7 +141,7 @@
 - `seqLen < 2`、`tsTypeLength < 5` 从 `throw` 改为 warning，按文件边界继续解析。
 - 目标：`BDMV_MISSING_CLPI` 不再因字段不自洽而出现；graph/media plan 退化的概率下降。
 
-### 统一原则（本轮沉淀，写进 `docs/development.md`）
+### 统一原则（本轮沉淀，写进 `docs/guides/development.md`）
 
 > 无法从参考实现确认的字段长度/取值，默认降级为诊断，不得直接判定整块数据不可用。
 
@@ -172,7 +172,7 @@
 ### 处理方式
 
 - 代码动作挂起，`fix-checklist.md` 中标记为条件触发。
-- 文档动作保留：在 `docs/browser-matrix.md` 的已知限制里写明「素材比例 ≠ scene 比例时，video 与 canvas 各自 letterbox 可能导致按钮错位，尚未验证」。
+- 文档动作保留：在 `docs/guides/browser-matrix.md` 的已知限制里写明「素材比例 ≠ scene 比例时，video 与 canvas 各自 letterbox 可能导致按钮错位，尚未验证」。
 - 触发条件：`test-data/bdmv/` 新增一张 4:3 或非等比例菜单素材，或拿到"视频分辨率 ≠ scene 尺寸"的真实包。
 - 触发后的首选方案不变：由 JS 用同一份 letterbox rect 同时设置 video 与 canvas，而不是各自交给 CSS `contain`。
 
@@ -243,8 +243,8 @@
 2. `cli-delivery-status/spec.md`：修订 `:30`（`status: "failed"` → `stageStatus: "failed"`，D-5）。
 3. manifest 相关 spec：写明 `manifest.status` 允许 `complete`，`validate` 不回写、不一致时报 `MANIFEST_STATUS_UNVERIFIED`（D-2R）。
 4. `bdmv-disc-inspection/spec.md`：写明"可选元数据损坏不影响导航解析"（`P1-P1-1`）+ "声明长度不自洽不导致整块不可用"（D-3）。
-5. `docs/development.md`：新增"无法从参考实现确认的字段默认降级为诊断"原则（D-3）。
-6. `docs/browser-matrix.md`：letterbox 已知限制（D-4）。
+5. `docs/guides/development.md`：新增"无法从参考实现确认的字段默认降级为诊断"原则（D-3）。
+6. `docs/guides/browser-matrix.md`：letterbox 已知限制（D-4）。
 7. `cli-delivery-status/spec.md`：补 mode 来源与回退（D-13），以及"落盘报告与 stdout 必须同源"（D-12）。
 
 ## 仍未决策

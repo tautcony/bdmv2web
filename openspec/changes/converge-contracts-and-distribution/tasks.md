@@ -2,20 +2,20 @@
 
 对应决策：D3（契约常量）、D5（性能基准先行）、D7（builder 解耦）、D9=C（证据链减承诺）、D11（图/VM 语义）、D12（源位置保真）、D13（运行时生命周期）。D6 明确不做，见 §I。
 
-前置：第 1 批 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/tasks.md) 完成——本 change 的验收依赖 `build` / `typecheck` / `test:all` 可跑，且 `dist` 不再含测试产物。共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。决策与证据来源见 [`docs/code-review.md`](../../../docs/code-review.md)。
+前置：第 1 批 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/tasks.md) 完成——本 change 的验收依赖 `build` / `typecheck` / `test:all` 可跑，且 `dist` 不再含测试产物。共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。决策与证据来源见 [`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md)。
 
 ## 当前实现复核（2026-11-06）
 
-内容摘要计算与字段已删除。媒体 `ended` 回执、主音轨 PSR1 写回、菜单 VM/sound 连接均有实现；这些项仍需按任务回归要求确认，不作为代码缺口重复实现。无菜单媒体启动、normal-only 按钮命中、VM Limits 接线、来源路径保真、上下文导航图、builder 发布布局和性能基准仍未完成。`CALL_TITLE` 当前由 `TITLE_SEARCH` 动作触发浏览器侧 `selectTitle()`，任务按此实际调用方式定义。
+内容摘要计算与字段已删除。媒体 `ended` 回执、主音轨 PSR1 写回、菜单 VM/sound 连接、HDMV 默认 Limits 收敛与 `convert --limits` 接线均已实现；这些项仍需按任务回归要求确认，不作为代码缺口重复实现。无菜单媒体启动、normal-only 按钮命中、来源路径保真、上下文导航图、builder 发布布局和性能基准仍未完成。`CALL_TITLE` 当前由 `TITLE_SEARCH` 动作触发浏览器侧 `selectTitle()`，任务按此实际调用方式定义。
 
 ## A. 契约常量收敛（D3）
 
-- [ ] A.1 `packages/hdmv/src/vm.ts:30` 的 `DEFAULTS` 改为从 `@bdmv2web/core` 的 `DEFAULT_LIMITS` 派生（三个字段逐项引用，不写字面量）。验收：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -n "DEFAULT_LIMITS" packages/hdmv/src/vm.ts` 有命中。
-- [ ] A.2 删除 `packages/hdmv/src/vm.ts:31-35` 的 `DEFAULT_PLAYER_PROFILE` 复制品，改为引用 `@bdmv2web/core` 的同名导出。验收：`grep -rn "menuLanguage: \"eng\"" packages` 仅在 `core/src/index.ts` 命中一次。
-- [ ] A.3 `VmOptions` 增加 `limits?: Limits`；内部 `this.limits = validateLimits(options.limits ?? DEFAULT_LIMITS)`；散字段与 `limits` 同时出现时以 `limits` 为准并记一条 `VM_LIMITS_OVERRIDDEN` 诊断。验收：单测覆盖"仅散字段""仅 limits""两者并存"三种构造，第三种产出该诊断且取 limits 值。
-- [ ] A.4 补漂移锁：单测断言 `new HdmvVm([])` 的 `maxCallDepth` / `maxQueueDepth` / `maxInstructionsPerTurn` 等于 `DEFAULT_LIMITS` 对应字段。验收：故意把 `DEFAULTS` 改成字面量 64，该测试失败（验证后还原）。
-- [ ] A.5 `maxCallDepth` 语义如实标注：在 `IMPLEMENTATION_BASELINE.md` §5 与 `docs/hdmv-support.md` 写明"当前为 CALL 开关（0 禁用），非深度上限；真正的多帧栈限制列为后续 change"，并补单测锁定 `maxCallDepth: 0` → `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`。验收：两处文档有该表述；测试存在且通过。
-- [ ] A.6 `--limits` 接线：`apps/cli` 的 `convert` 读取文件 → `validateLimits` → 传入 `VmOptions.limits`；删除第 1 批中临时加的 `CLI_NOT_IMPLEMENTED` 分支。验收：`convert <样本> --limits <合法 json>` 成功且 VM 使用该值（可通过 trace 中的 limit 字段观察）；非法值 → `exit 1` 且错误码为 `INVALID_LIMIT`；`grep -n "CLI_NOT_IMPLEMENTED" apps/cli/src/index.ts` 无命中。
+- [x] A.1 `packages/hdmv/src/vm.ts:30` 的 `DEFAULTS` 改为从 `@bdmv2web/core` 的 `DEFAULT_LIMITS` 派生（三个字段逐项引用，不写字面量）。验收：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -n "DEFAULT_LIMITS" packages/hdmv/src/vm.ts` 有命中。
+- [x] A.2 删除 `packages/hdmv/src/vm.ts:31-35` 的 `DEFAULT_PLAYER_PROFILE` 复制品，改为引用 `@bdmv2web/core` 的同名导出。验收：默认对象定义只存在于 `packages/core/src/defaults.ts`，消费方通过 core 导出引用。
+- [x] A.3 `VmOptions` 增加 `limits?: Limits`；内部 `this.limits = validateLimits(options.limits ?? DEFAULT_LIMITS)`；散字段与 `limits` 同时出现时以 `limits` 为准并记一条 `VM_LIMITS_OVERRIDDEN` 诊断。验收：单测覆盖"仅散字段""仅 limits""两者并存"三种构造，第三种产出该诊断且取 limits 值。
+- [x] A.4 补漂移锁：单测断言 `new HdmvVm([])` 的 `maxCallDepth` / `maxQueueDepth` / `maxInstructionsPerTurn` 等于 `DEFAULT_LIMITS` 对应字段。验收：故意把 `DEFAULTS` 改成字面量 64，该测试失败（验证后还原）。
+- [x] A.5 `maxCallDepth` 语义如实标注：在 `IMPLEMENTATION_BASELINE.md` §5 与 `docs/support/hdmv-support.md` 写明"当前为 CALL 开关（0 禁用），非深度上限；真正的多帧栈限制列为后续 change"，并补单测锁定 `maxCallDepth: 0` → `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`。验收：两处文档有该表述；测试存在且通过。
+- [x] A.6 `--limits` 接线：`apps/cli` 的 `convert` 读取文件 → `validateLimits` → 传入 `VmOptions.limits`；删除第 1 批中临时加的 `CLI_NOT_IMPLEMENTED` 分支。验收：`convert <样本> --limits <合法 json>` 成功且 VM 使用该值（可通过 trace 中的 limit 字段观察）；非法值 → `exit 1` 且错误码为 `INVALID_LIMIT`；`grep -n "CLI_NOT_IMPLEMENTED" apps/cli/src/index.ts` 无命中。
 
 ## B. 证据链减承诺（D9=C）
 
@@ -34,7 +34,7 @@
 - [ ] C.2 `buildNavigationGraph` 为 `JUMP_TITLE` 生成 `sequence` 边，指向目标 entry 的首个 program，边带 `origin: "jump-title"` 以便区分静态 `jump` 边。验收：最小 `JUMP_TITLE` 程序的图同时含 `jump` 与 `sequence` 两类边（当前只有 `jump`）；目标 entry 在可达集合中。
 - [ ] C.3 核对当前 `CALL_TITLE` 恢复路径：VM 暂停并发出 `TITLE_SEARCH`，runtime 调用 `selectTitle()`。验收覆盖有效 HDMV 目标、不可用目标及 BD-J/无效目标；VM 不永久 suspended，trace 保留结果与来源。不新增与现行直接选择路径重复的 `responseTo` 桥接机制。
 - [ ] C.4 桥端只对 `waitFor` 匹配的动作回复：`runtime-web` 的 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 增加"是否有匹配等待"的检查，不再把任意事件交给 `handleEvent` 试。验收：无等待时收到事件不产生副作用（trace 记录 discarded 原因）。
-- [ ] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 MovieObject 上下文放入 `PLAY_PL` 指令，trace 出现该诊断且 VM 继续执行；`docs/hdmv-support.md` 补充该码说明。
+- [ ] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 MovieObject 上下文放入 `PLAY_PL` 指令，trace 出现该诊断且 VM 继续执行；`docs/support/hdmv-support.md` 补充该码说明。
 - [ ] C.6 回归：现有 74 个 hdmv 用例全部通过；新增用例不少于 6 条（C.1 两组上下文、C.2 可达性、C.3 两条、C.5）。验收：`corepack pnpm --filter @bdmv2web/hdmv test` 计数 ≥ 80 且无跳过。
 
 ## D. 源位置保真（D12）
@@ -43,7 +43,7 @@
 - [ ] D.2 `apps/cli/src/index.ts:303` 的 `vmPrograms` 保留原始指令 `source.path` / `offset` / `instructionIndex`。验收：`grep -rn "<MovieObject>" apps packages` 无命中；trace 中任一指令能回读到源文件与字节偏移。
 - [ ] D.3 `packages/igs/src/extract.ts:178` 的 `toIgsSource` 改为接收真实 `path` / `clipId` / `pid` / `origin`；IGS 结构诊断直接携带 `SourceLocation`。验收：对 Tamako 样本执行 `extract`，`source-map.json` 的 `diagnostics[].source` 不再出现 `BDMV/STREAM/.m2ts`，且含 `clipId` 与 `pid`。
 - [ ] D.4 路径约定锁定为"相对 BDMV 根"（`PLAYLIST/00001.mpls`，不带 `BDMV/` 前缀）；`parseDiscIR` 对旧占位值（`source/structural`、`<MovieObject>`）报 `SCHEMA_SOURCE_PLACEHOLDER` 并拒绝。验收：单测用旧 IR 断言拒绝；新 IR 通过；`grep` 确认 parser 与 CLI 只用一种写法。
-- [ ] D.5 `docs/protocol-support.md` / `docs/hdmv-support.md` 的 Sources 章节补充"路径相对 BDMV 根"的约定与示例。验收：两份文档含该约定且示例路径符合格式。
+- [ ] D.5 `docs/support/protocol-support.md` / `docs/support/hdmv-support.md` 的 Sources 章节补充"路径相对 BDMV 根"的约定与示例。验收：两份文档含该约定且示例路径符合格式。
 
 ## E. 运行时生命周期（D13）
 
@@ -51,7 +51,7 @@
 - [ ] E.2 回归已实现的菜单媒体 `ended`/`error`/`abort` 回执：按 action/responseTo 关联，非循环背景结束发 `MEDIA_ENDED`，错误解除等待并保留诊断。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.3 回归已实现的音轨 PSR1 写回：成功选择和失败回滚均经 `systemWrite(1, streamNumber)` 更新系统寄存器；验证按钮程序读取所选值。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.4 命中几何统一：`MenuController.hit()` 按可用性决定命中集（可用即 `selected ?? normal` 的 bounds）。验收：只有 `normal` 视觉的启用按钮可被点击命中；单测覆盖"仅 normal""selected 与 normal 不同几何"两种情况。
-- [ ] E.5 `docs/browser-matrix.md` 记录 `loop=false` 结束语义为"回 `MEDIA_ENDED`，画面停留末帧由渲染决定"，并注明如需 `MEDIA_HELD` 属后续能力。验收：文档含该条，且未声称支持 `HELD`。
+- [ ] E.5 `docs/guides/browser-matrix.md` 记录 `loop=false` 结束语义为"回 `MEDIA_ENDED`，画面停留末帧由渲染决定"，并注明如需 `MEDIA_HELD` 属后续能力。验收：文档含该条，且未声称支持 `HELD`。
 - [ ] E.6 回归：`corepack pnpm --filter @bdmv2web/runtime-web test` 现有 91 用例通过；`tamako-headless-navigation.test.ts` 仍通过（该用例 50s，若因此变慢需在本 change 记录耗时）。
 
 ## F. 发布布局可构建（D7）

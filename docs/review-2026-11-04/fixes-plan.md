@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | A（9 条） | A1–A9 | 9 条全部完成 | 解析层 3 条 + CLI 6 条，无对外契约变更 |
 | B（3 条） | B1–B3 | 3 条全部完成 | B2 与 builder 的 `status` 参数化同批合入，没有出现"report 说 complete、manifest 说 partial"的中间态 |
-| C（2 条 + 1 挂起） | C1、C3；C2 挂起 | C1、C3 完成；C2 只做文档动作 | `docs/browser-matrix.md` 记录 letterbox 限制，代码未动 |
+| C（2 条 + 1 挂起） | C1、C3；C2 挂起 | C1、C3 完成；C2 只做文档动作 | `docs/guides/browser-matrix.md` 记录 letterbox 限制，代码未动 |
 | D（3 条） | D1–D3 | D2、D3 完成；D1 部分完成 | 三包 timeout 已落地；GitHub Actions 已接入，等待首次运行与连续稳定证据 |
 | 观察项（7 条） | 不在本批 | 额外做了 `P2-INFO-4`（死代码） | 删除 `PLAYER_PROFILE_KEYS` / `reportedStatus`，其余 6 条不动 |
 
@@ -63,7 +63,7 @@ A1/A5/A6 只动 `bdmv-parser`，可独立并行；A2/A3/A4/A7/A8/A9 只动 `apps
 | C2（挂起） | `P3-P2-2` video/canvas letterbox 一致性 | **D-4：挂起，无案例不处理** | 触发后才动 `package-builder/src/index.ts:208-209`、`runtime-web/src/index.ts:54-60` |
 | C3 | `P3-INFO-1` 清理 `disc-title` 死代码 | **D-8**：删除，标题只留 `<title>` | `browser.ts:98-99`、两侧测试断言 |
 
-C2 本轮只做文档动作（`docs/browser-matrix.md` 已知限制），代码不动。触发条件与首选方案见 [`decisions.md`](./decisions.md)。
+C2 本轮只做文档动作（`docs/guides/browser-matrix.md` 已知限制），代码不动。触发条件与首选方案见 [`decisions.md`](./decisions.md)。
 
 ### Batch D — 门禁稳定与测试补强（3 条）
 

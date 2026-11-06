@@ -8,6 +8,7 @@
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
     "./defaults": { "types": "./dist/defaults.d.ts", "import": "./dist/defaults.js" },
+    "./limits": { "types": "./dist/limits.d.ts", "import": "./dist/limits.js" },
     "./browser": "./dist/browser.js",
     "./schema": "./schema/disc-ir.schema.json"
   },

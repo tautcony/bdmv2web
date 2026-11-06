@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { deflateSync } from "node:zlib";
 import { build } from "esbuild";
-import { parseDiscIR, type DiscIR, type PlayerProfile } from "@bdmv2web/core";
+import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
 import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput, type PgsDisplaySet } from "@bdmv2web/media-export";
 
@@ -93,6 +93,7 @@ export interface MenuPackageInput {
   /** Entry counts recorded for report consumers; they never decide the status. */
   entryCounts?: { declared: number; hdmv: number };
   playerProfile?: PlayerProfile;
+  vmLimits?: Limits;
   vmPrograms?: VmProgram[];
   vmEntries?: VmOptions["entries"];
   externalTargets?: ExternalMediaTargets;
@@ -144,7 +145,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   ];
   await Promise.all([
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize, !!input.externalTargets)),
-    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}) })),
+    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}) })),
     ...(input.externalTargets ? [writeFile(resolve(runtimeDirectory, "bdmv-config.js"), `globalThis.__BDMV_BDMV_PATH__=${serializeSafeScriptData(input.bdmvPath ?? "../BDMV")};\n`)] : []),
     writeFile(resolve(runtimeDirectory, "style.css"), MENU_STYLE),
     writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status) + (input.externalTargets ? "\nThe menu runs First Play initialization and then enters Top Menu. IINA 1.4.4 or later receives the selected chapter position through `mpv_start`; Windows opens the selected M2TS in PotPlayer.\n" : "")),

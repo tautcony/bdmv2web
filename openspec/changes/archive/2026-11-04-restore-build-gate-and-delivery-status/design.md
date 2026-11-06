@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | `pnpm build` / `pnpm typecheck` 通过 | `-r build` 2 失败、`-r typecheck` 失败 | `test-runner/src/index.test.ts:109-118`、`igs-adapter.test.ts:14` |
 | `dist/` 是发布产物 | `dist/` 含 70 个 `*.test.js` / `*.test.d.ts` | `find packages apps -path "*/dist/*" -name "*.test.*" \| wc -l` |
-| 退出码区分状态（基线 §3/§4） | 空 BDMV `extract` 输出 `{"status":"partial"}` 并 `exit 0` | 复现命令见 `docs/code-review.md` §五 |
+| 退出码区分状态（基线 §3/§4） | 空 BDMV `extract` 输出 `{"status":"partial"}` 并 `exit 0` | 复现命令见 `docs/review-2026-11-04/index.md` §五 |
 | `convert` 默认可用 | 默认 `standalone-full` 未实现，裸跑恒定 `exit 2` | `apps/cli/src/index.ts:26,257` |
 
 基线见 [IMPLEMENTATION_BASELINE.md](../IMPLEMENTATION_BASELINE.md) §3（CLI 与输出事务）、§4（状态统一判定）。
@@ -88,11 +88,11 @@ M6 的测试计数（42/40/56/51）按本 change 第 1 节记录的逐包基线�
 
 ## Migration Plan
 
-无数据迁移。旧产物 `dist/` 需清理重建一次（`rm -rf packages/*/dist apps/*/dist && pnpm build`），因为清理前 `dist` 里的测试产物会让 `vitest run` 继续误执行。旧包的 CLI 行为变化（裸跑 `convert` 从退 2 变退 0）写入 `docs/development.md` 的 CLI 状态表。
+无数据迁移。旧产物 `dist/` 需清理重建一次（`rm -rf packages/*/dist apps/*/dist && pnpm build`），因为清理前 `dist` 里的测试产物会让 `vitest run` 继续误执行。旧包的 CLI 行为变化（裸跑 `convert` 从退 2 变退 0）写入 `docs/guides/development.md` 的 CLI 状态表。
 
 ## Verification / Exit Criteria
 
 1. `pnpm generate:contracts && pnpm build && pnpm typecheck && pnpm test:all` 四步全绿；`find packages apps -path "*/dist/*" -name "*.test.*" | wc -l` 为 0。
-2. 逐包用例数与 `docs/development.md` 的基线表一致；`pnpm test:all` 的总数等于逐包之和，且日志中无 "No test files found"。
+2. 逐包用例数与 `docs/guides/development.md` 的基线表一致；`pnpm test:all` 的总数等于逐包之和，且日志中无 "No test files found"。
 3. 四条 CLI 行为用固定命令可复现（见 `tasks.md` §7）。
 4. 文档一致性清单逐条通过（同一事实只有一种表述，且都带证据链接）。

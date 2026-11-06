@@ -2,11 +2,11 @@
 
 对应决策：D1（P0 修复，CI 单独立项）、D2（构建/测试配置拆分）、D4（convert 单一形态）、D8（文档与仓库卫生）、D10（失败状态与退出码）。
 
-共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现与所列验收命令的输出；不得只勾"已改代码"。决策与证据来源见 [`docs/code-review.md`](../../../docs/code-review.md)。
+共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现与所列验收命令的输出；不得只勾"已改代码"。决策与证据来源见 [`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md)。
 
 ## 0. 基线记录
 
-- [x] 0.1 在 `docs/development.md` 增加"测试基线"表，逐包记录用例数。参考值（清理 `dist` 后的源码口径，执行时需重测并覆盖）：core 14、bdmv-io 7、bdmv-parser 47、igs 54、hdmv 74、media-export 51+1 skipped、runtime-web 91、package-builder 18、test-fixtures 5、test-runner **41（5 个测试文件）**、cli 20。
+- [x] 0.1 在 `docs/guides/development.md` 增加"测试基线"表，逐包记录用例数。参考值（清理 `dist` 后的源码口径，执行时需重测并覆盖）：core 14、bdmv-io 7、bdmv-parser 47、igs 54、hdmv 74、media-export 51+1 skipped、runtime-web 91、package-builder 18、test-fixtures 5、test-runner **41（5 个测试文件）**、cli 20。
   
   **test-runner 的计数必须按"清理 dist 后"的口径记录**：当前 `vitest run` 会同时匹配 `src/*.test.ts` 与 `dist/*.test.js`，同一用例被算两遍（实测 `2 failed | 8 passed (10) / 42 passed`）。删除 `dist` 测试产物并修好 1.1 后为 `5 passed (5) / 41 passed`。若基线表写成清理前的数字，后续所有比对都会偏移一倍。
   
@@ -31,7 +31,7 @@
   
   注意：`tsc` 默认在报错时仍 emit，所以"build 失败但产物仍生成"是当前现象之一——这也是测试产物能进 `dist` 的机制。先删再建，不要只建不删。
 - [x] 1.4 全量门禁。验收：`corepack pnpm generate:contracts && corepack pnpm build && corepack pnpm typecheck && corepack pnpm -r --no-bail test` 依次返回 0；`-r build` 无 `failed` 项（11 个 workspace 包均有 `build` 脚本，逐个确认都有 "Done" 或等效输出）。
-- [x] 1.5 记录"门禁未接入 CI 流水线"的已知风险。验收：`docs/development.md` 增加一段，说明当前门禁靠人工执行 `scripts/ci.sh`，流水线（触发条件、缓存、凭据）属后续独立 change；本 change 不新建 `.github/` 或任何平台专属配置（D1=A）。
+- [x] 1.5 记录"门禁未接入 CI 流水线"的已知风险。验收：`docs/guides/development.md` 增加一段，说明当前门禁靠人工执行 `scripts/ci.sh`，流水线（触发条件、缓存、凭据）属后续独立 change；本 change 不新建 `.github/` 或任何平台专属配置（D1=A）。
 - [x] 1.6 落地平台无关门禁脚本 `scripts/ci.sh`（可执行）：依次执行 `pnpm install --frozen-lockfile` → `pnpm generate:contracts` → `pnpm -r build` → `pnpm -r typecheck` → `pnpm test:all`，任一步失败即 `exit 1`，每步打印命令与耗时。这是 D1=A 里"CI 单独立项"的承接物——脚本不是流水线，但保证平台确定后只需加一层薄 workflow。
   验收：`bash scripts/ci.sh` 在干净工作区退出 0；故意让某一步失败（如临时改坏一个类型）时脚本在对应步骤退出非 0 且后续步骤不执行；脚本头部注释写明"不跑 test-data 大文件完整性校验"。`git diff --stat` 中不出现 `.github/`。
 
@@ -71,13 +71,13 @@
 
 ## 6. 文档与仓库卫生（D8）
 
-- [x] 6.1 `docs/development.md` 的 CLI 状态改为当前事实：`inspect` / `extract` / `convert` / `validate` 已实现，`compare` 未实现，`convert` 仅 `menu-only`。验收：文档中不再出现"五个命令都返回 `E_NOT_IMPLEMENTED`"一类表述；逐条与实际 CLI 行为对照通过。
-- [x] 6.2 统一"V1 Chrome `file://`"的表述为"已完成 macOS Chrome 实测，证据未绑定制品指纹"，并在 `docs/browser-matrix.md`、`docs/references/stages/M6-release-verification.md`、`docs/development.md` 三处引用同一证据位置。**不修改**任何 tasks 勾选状态（属 D9）。验收：三处措辞一致且互相引用；`grep -rn "not-verified" docs/browser-matrix.md` 与阶段文档不再矛盾。
-- [x] 6.3 `docs/igs-support.md:22` 的 Tamako 结论改为：包为 partial 的原因是 Clip 00043 缺失；0xfffe 语义已建立（activated 哨兵，见 `packages/igs/test/tamako-real-smoke.test.ts`）。验收：文档结论与测试断言（`complete: true`）不再互相否定。
+- [x] 6.1 `docs/guides/development.md` 的 CLI 状态改为当前事实：`inspect` / `extract` / `convert` / `validate` 已实现，`compare` 未实现，`convert` 仅 `menu-only`。验收：文档中不再出现"五个命令都返回 `E_NOT_IMPLEMENTED`"一类表述；逐条与实际 CLI 行为对照通过。
+- [x] 6.2 统一"V1 Chrome `file://`"的表述为"已完成 macOS Chrome 实测，证据未绑定制品指纹"，并在 `docs/guides/browser-matrix.md`、`docs/references/stages/M6-release-verification.md`、`docs/guides/development.md` 三处引用同一证据位置。**不修改**任何 tasks 勾选状态（属 D9）。验收：三处措辞一致且互相引用；`grep -rn "not-verified" docs/guides/browser-matrix.md` 与阶段文档不再矛盾。
+- [x] 6.3 `docs/support/igs-support.md:22` 的 Tamako 结论改为：包为 partial 的原因是 Clip 00043 缺失；0xfffe 语义已建立（activated 哨兵，见 `packages/igs/test/tamako-real-smoke.test.ts`）。验收：文档结论与测试断言（`complete: true`）不再互相否定。
 - [x] 6.4 用 0.1 的基线表替换 `docs/references/stages/M6-release-verification.md:22-26` 的旧计数（42/40/56/51）。验收：文档计数与 `pnpm test:all` 实测一致，并注明测量日期与命令。
 - [x] 6.5 `bdmv_hdmv_offline_web_architecture.md` 的旧包布局（`:145-168`）与旧 `DiscIR` 形状（`:530-538`）加"历史设计"标注，并补"设计名 → 实际包/字段"映射表（`m2ts-demux` → `@bdmv2web/igs`、`navigation-hdmv` → `@bdmv2web/hdmv`、`ir-builder` → CLI/parser 侧、`apps/studio` → 未实施）。验收：文档中任一旧名称都能在同一页找到对应实际位置或"未实施"标注。
 - [x] 6.6 `.gitignore` 增加 `.DS_Store` 与 `**/.DS_Store`。验收：`touch packages/core/.DS_Store && git status --short` 无输出；删除临时文件。
-- [x] 6.7 大二进制保持现状，但写入策略：新增 >1 MiB 的 fixture 必须由脚本按 manifest 生成，不入库。验收：`docs/development.md` 有该约定，并列出两个既存大文件路径与体积（11 MB / 8.7 MB）作为历史遗留。
+- [x] 6.7 大二进制保持现状，但写入策略：新增 >1 MiB 的 fixture 必须由脚本按 manifest 生成，不入库。验收：`docs/guides/development.md` 有该约定，并列出两个既存大文件路径与体积（11 MB / 8.7 MB）作为历史遗留。
 
 ## 7. 整体验收
 

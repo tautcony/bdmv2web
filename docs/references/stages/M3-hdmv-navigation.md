@@ -1,6 +1,6 @@
 # M3 — HDMV 导航 VM 参考
 
-对应 change：[tasks.md](../../../openspec/changes/execute-hdmv-navigation/tasks.md) / [design.md](../../../openspec/changes/execute-hdmv-navigation/design.md)。
+对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-04-execute-hdmv-navigation/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-04-execute-hdmv-navigation/design.md)。
 
 | 来源 | 任务 | 精确入口 | 用途和限制 |
 | --- | --- | --- | --- |

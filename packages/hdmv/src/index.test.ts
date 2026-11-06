@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_LIMITS, validateLimits } from "@bdmv2web/core";
 import { buildNavigationGraph, decodeInstruction, disassemble, HdmvVm, m3Fixtures, M3_FIXTURE_IDS, RegisterFile } from "./index.js";
 
 function rawCommand(w0: number, w1 = 0, w2 = 0): string {
@@ -6,6 +7,30 @@ function rawCommand(w0: number, w1 = 0, w2 = 0): string {
 }
 
 describe("M3 HDMV fixtures", () => {
+  it("uses shared defaults and accepts the shared Limits object", () => {
+    const defaults = new HdmvVm([]);
+    expect(defaults.limits).toEqual(DEFAULT_LIMITS);
+    expect(defaults.trace[0]?.limits).toEqual(DEFAULT_LIMITS);
+
+    const scalar = new HdmvVm([], { maxInstructionsPerTurn: 17, maxCallDepth: 0, maxQueueDepth: 3 });
+    expect(scalar.limits).toMatchObject({ maxInstructionsPerTurn: 17, maxCallDepth: 0, maxQueueDepth: 3 });
+
+    const limits = validateLimits({ maxInstructionsPerTurn: 23, maxCallDepth: 0, maxQueueDepth: 4 });
+    const configured = new HdmvVm([], { limits });
+    expect(configured.limits).toEqual(limits);
+    expect(configured.trace[0]?.limits).toEqual(limits);
+
+    const both = new HdmvVm([], { limits, maxInstructionsPerTurn: 99 });
+    expect(both.limits.maxInstructionsPerTurn).toBe(23);
+    expect(both.diagnostics.filter((item) => item.code === "VM_LIMITS_OVERRIDDEN")).toHaveLength(1);
+    expect(both.trace.some((entry) => entry.diagnostic?.code === "VM_LIMITS_OVERRIDDEN")).toBe(true);
+  });
+  it("keeps the default VM budgets aligned with DEFAULT_LIMITS", () => {
+    const vm = new HdmvVm([]);
+    expect(vm.limits.maxCallDepth).toBe(DEFAULT_LIMITS.maxCallDepth);
+    expect(vm.limits.maxQueueDepth).toBe(DEFAULT_LIMITS.maxQueueDepth);
+    expect(vm.limits.maxInstructionsPerTurn).toBe(DEFAULT_LIMITS.maxInstructionsPerTurn);
+  });
   it("decodes the shared 12-byte MOBJ/button representation and preserves source/raw", () => {
     const decoded = decodeInstruction(m3Fixtures.move5);
     expect(decoded.bytes).toBe(m3Fixtures.move5.bytes); expect(decoded.words).toEqual(m3Fixtures.move5.words);

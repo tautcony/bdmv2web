@@ -1,6 +1,6 @@
 # M0 — 核心契约参考
 
-对应 change：[tasks.md](../../../openspec/changes/establish-core-contracts/tasks.md) / [design.md](../../../openspec/changes/establish-core-contracts/design.md)。
+对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-04-establish-core-contracts/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-04-establish-core-contracts/design.md)。
 
 | 来源 | 任务 | 可用内容与定位 | 使用边界 |
 | --- | --- | --- | --- |

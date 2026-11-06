@@ -1,6 +1,8 @@
 import { Ajv2020 } from "ajv/dist/2020.js";
 import schema from "../schema/disc-ir.schema.json" with { type: "json" };
 import type { DiscIR as GeneratedDiscIR } from "./disc-ir.generated.js";
+import { ContractError } from "./contract-error.js";
+import { DEFAULT_LIMITS, type Limits } from "./limits.js";
 
 export type DiscIR = GeneratedDiscIR;
 export type Time90k = string;
@@ -10,6 +12,9 @@ export type NavigationDescriptor = DiscIR["entries"][number]["navigation"];
 export type AssetReference = DiscIR["mediaAssets"][number];
 export type Diagnostic = DiscIR["diagnostics"][number];
 export { DEFAULT_PLAYER_PROFILE } from "./defaults.js";
+export { ContractError } from "./contract-error.js";
+export { DEFAULT_LIMITS, validateLimits } from "./limits.js";
+export type { Limits } from "./limits.js";
 
 export interface ActionEnvelope<T> {
   sessionId: string;
@@ -35,37 +40,6 @@ export interface PlayerProfile {
   outputProfile: "portable";
   videoProfiles: string[];
   audioProfiles: string[];
-}
-
-export interface Limits {
-  maxReadWindowBytes: number;
-  maxSegmentBytes: number;
-  maxReassemblyBytes: number;
-  maxObjectPixels: number;
-  maxInstructionsPerTurn: number;
-  maxQueueDepth: number;
-  maxCallDepth: number;
-  maxExplorationStates: number;
-  maxOutputBytes: number | null;
-}
-
-export const DEFAULT_LIMITS: Readonly<Limits> = Object.freeze({
-  maxReadWindowBytes: 8 * 1024 * 1024,
-  maxSegmentBytes: 16 * 1024 * 1024,
-  maxReassemblyBytes: 64 * 1024 * 1024,
-  maxObjectPixels: 16_777_216,
-  maxInstructionsPerTurn: 10_000,
-  maxQueueDepth: 1024,
-  maxCallDepth: 128,
-  maxExplorationStates: 100_000,
-  maxOutputBytes: null,
-});
-
-export class ContractError extends Error {
-  constructor(readonly code: string, readonly path: string, message: string) {
-    super(`${code} at ${path}: ${message}`);
-    this.name = "ContractError";
-  }
 }
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
@@ -112,16 +86,6 @@ export function from45k(value: string): Time90k {
 }
 export function serializeOffset(value: bigint): string { return serializeTime90k(value); }
 export function parseOffset(value: string): bigint { return parseTime90k(value); }
-
-export function validateLimits(value: unknown): Limits {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new ContractError("INVALID_LIMITS", "/", "Limits must be an object");
-  const merged = { ...DEFAULT_LIMITS, ...value } as Record<string, unknown>;
-  for (const [key, v] of Object.entries(merged)) {
-    if (key === "maxOutputBytes" && v === null) continue;
-    if (typeof v !== "number" || !Number.isSafeInteger(v) || v <= 0) throw new ContractError("INVALID_LIMIT", `/${key}`, "Limit must be a positive safe integer");
-  }
-  return merged as unknown as Limits;
-}
 
 export function assertWithinLimit(value: number | bigint, key: keyof Limits, limits: Limits = DEFAULT_LIMITS): void {
   const cap = limits[key];

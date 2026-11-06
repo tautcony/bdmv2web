@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 import { dirname, join, resolve } from "node:path";
 import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
 import { encodeTimestampForFixture } from "@bdmv2web/igs";
@@ -157,6 +158,20 @@ describe("M4 convert output", () => {
         expect(discData).not.toContain("igs-00001-");
         expect(packageText).toContain("iina://open?url=");
       }
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+  it("applies --limits to conversion-time and packaged menu VMs", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv menu limits "));
+    const disc = await makeMenuDisc(parent);
+    const limitsPath = join(parent, "limits.json"); const output = join(parent, "limited output");
+    try {
+      await writeFile(limitsPath, JSON.stringify({ maxInstructionsPerTurn: 77, maxCallDepth: 0, maxQueueDepth: 12 }));
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", limitsPath, "--out", output]);
+      expect(result.status, result.stderr.toString()).toBe(0);
+      const embedded: { __BDMV_MENU_DATA__?: { limits?: Record<string, unknown> } } = {};
+      runInNewContext(await readFile(join(output, "runtime/disc-data.js"), "utf8"), embedded);
+      expect(embedded.__BDMV_MENU_DATA__?.limits).toMatchObject({ maxInstructionsPerTurn: 77, maxCallDepth: 0, maxQueueDepth: 12 });
+      expect(embedded.__BDMV_MENU_DATA__?.limits?.maxReadWindowBytes).toBeGreaterThan(0);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -497,7 +512,7 @@ describe("stage and argument contracts", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("rejects removed options and unwired limits before creating output", async () => {
+  it("rejects removed options and invalid limits before creating output", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv stage args "));
     try {
       const disc = await emptyDisc(parent);
@@ -507,10 +522,12 @@ describe("stage and argument contracts", () => {
       expect(mode.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
       await expect(access(modeTarget)).rejects.toThrow();
 
-      const limits = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", join(parent, "limits.json")]);
+      const limitsPath = join(parent, "limits.json"); const limitsTarget = join(parent, "limits-reject");
+      await writeFile(limitsPath, JSON.stringify({ maxInstructionsPerTurn: 0 }));
+      const limits = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", limitsPath, "--out", limitsTarget]);
       expect(limits.status).toBe(1);
-      expect(limits.stderr.toString()).toContain("CLI_NOT_IMPLEMENTED");
-      expect(limits.stderr.toString()).not.toContain("CLI_UNKNOWN_OPTION");
+      expect(limits.stderr.toString()).toContain("INVALID_LIMIT");
+      await expect(access(limitsTarget)).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -531,14 +548,12 @@ describe("stage and argument contracts", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv stage empty value "));
     try {
       const disc = await emptyDisc(parent);
-      // `--out` on an empty disc must report the argument error, not the disc's fatal diagnostic,
-      // and a bare `--limits` is a missing value rather than an unimplemented feature.
+      // `--out` on an empty disc must report the argument error, not the disc's fatal diagnostic.
       for (const args of [["inspect", disc, "--out="], ["convert", disc, "--out="], ["convert", disc, "--out"], ["convert", disc, "--limits"]]) {
         const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), ...args]);
         expect(result.status, args.join(" ")).toBe(1);
         expect(result.stderr.toString(), args.join(" ")).toContain("CLI_MISSING_VALUE");
         expect(result.stderr.toString()).not.toContain("BDMV_REQUIRED_FILE_MISSING");
-        expect(result.stderr.toString()).not.toContain("CLI_NOT_IMPLEMENTED");
         expect(result.stdout.toString()).toBe("");
       }
     } finally { await rm(parent, { recursive: true, force: true }); }

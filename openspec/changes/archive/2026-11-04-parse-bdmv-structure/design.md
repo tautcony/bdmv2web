@@ -38,7 +38,7 @@
 | CLPI | ProgramInfo、PID/编码/语言、CPI/EP 时间与 SPN | M2、M5 |
 | sound | 索引、编码/采样率/声道/长度、原始样本范围 | M4 WAV 输出 |
 
-支持版本和准确位域在 docs/protocol-support.md 逐项登记固定参考 revision、源码位置和字节 fixture，不从示意图补造数值。每种未知版本有负例。sound 可缺省，但后续按钮引用不存在声音构成功能缺口。
+支持版本和准确位域在 docs/support/protocol-support.md 逐项登记固定参考 revision、源码位置和字节 fixture，不从示意图补造数值。每种未知版本有负例。sound 可缺省，但后续按钮引用不存在声音构成功能缺口。
 
 ### 3. 图及异常引用
 

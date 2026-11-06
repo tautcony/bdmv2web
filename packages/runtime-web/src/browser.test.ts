@@ -352,4 +352,12 @@ describe("offline browser boot", () => {
     expect(() => createMenuVm({ ir: structuredClone(validIr), scene: null, profile: "jpn" } as unknown as Parameters<typeof createMenuVm>[0])).toThrow("Embedded player profile must be a JSON object.");
   });
 
+  it("applies packaged Limits to the menu VM and its trace", async () => {
+    const { createMenuVm } = await import("./browser.js");
+    const limits = { maxReadWindowBytes: 4096, maxSegmentBytes: 8192, maxReassemblyBytes: 16384, maxObjectPixels: 1024, maxInstructionsPerTurn: 77, maxQueueDepth: 12, maxCallDepth: 0, maxExplorationStates: 100, maxOutputBytes: null };
+    const vm = createMenuVm({ ir: structuredClone(validIr), scene: null, limits });
+    expect(vm.limits).toEqual(limits);
+    expect(vm.trace[0]?.limits).toEqual(limits);
+  });
+
 });
