@@ -1,0 +1,48 @@
+packages/runtime-web/src/tamako-headless-navigation.test.ts
+  s_61cc47fe78d75c::t_91a775ae97f095 66,107,159-161
+packages/media-export/src/index.ts
+  s_61cc47fe78d75c::t_f7d7385708bdfa 194
+  s_61cc47fe78d75c::t_8072078a2eaef4 111-112,145
+  s_61cc47fe78d75c::t_f80471ff31097e 211,299,303-304,326,330-331,547,565-586,620,624
+packages/runtime-web/src/index.test.ts
+  s_61cc47fe78d75c::t_b6046b2fc5068e 34,50
+  s_61cc47fe78d75c::t_983afbf3b83048 1024
+  s_61cc47fe78d75c::t_b713dd77a78206 842,872,892,915,929,944,979,1062,1086,1093,1105,1116,1131
+packages/runtime-web/src/index.ts
+  s_61cc47fe78d75c::t_25f0f52dcca74c 844-845
+  s_61cc47fe78d75c::t_f7e970ea90c8dc 848,883,909-923,926-927,929-932
+  s_61cc47fe78d75c::t_5b85a6f5c35679 850,924-925,928
+  s_61cc47fe78d75c::t_30e4b537086452 899
+  s_61cc47fe78d75c::t_91f25716e0cf48 847
+  s_61cc47fe78d75c::t_463f0037db4d30 853
+  s_61cc47fe78d75c::t_3363e1829ee2f0 669,671,852
+  s_61cc47fe78d75c::t_a1e8c56ceaec5a 933-934
+apps/cli/src/index.ts
+  s_61cc47fe78d75c::t_61787f859822b3 781-782,794,796-806
+  s_61cc47fe78d75c::t_65b2a28d5be73f 795
+packages/package-builder/src/index.ts
+  s_61cc47fe78d75c::t_80a3001b6d473a 110,131
+  s_61cc47fe78d75c::t_39cfeda492035d 149
+  s_61cc47fe78d75c::t_b79388720ac58e 259,261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "efadff18e7eb5a09d70bb4ba18496769fdbd74a9",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  },
+  "sessions": {
+    "s_61cc47fe78d75c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1afa6-0d1f-79c3-a90b-e52f85c67937",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
