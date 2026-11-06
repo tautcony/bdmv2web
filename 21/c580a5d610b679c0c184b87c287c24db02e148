@@ -1,0 +1,68 @@
+.codex/config.toml
+  h_3705811fa4502c 1-3
+.gitignore
+  h_3705811fa4502c 3-4
+AGENTS.md
+  h_3705811fa4502c 36-46
+docs/guides/development.md
+  h_3705811fa4502c 77,82-88,90,93
+llm-wiki/README.md
+  h_3705811fa4502c 1-113
+llm-wiki/architecture.md
+  h_3705811fa4502c 1-84
+llm-wiki/contracts.md
+  h_3705811fa4502c 1-142
+llm-wiki/diagnostics.md
+  h_3705811fa4502c 1-227
+llm-wiki/features/cli-commands.md
+  h_3705811fa4502c 1-180
+llm-wiki/features/igs-extraction.md
+  h_3705811fa4502c 1-88
+llm-wiki/features/media.md
+  h_3705811fa4502c 1-105
+llm-wiki/features/navigation.md
+  h_3705811fa4502c 1-99
+llm-wiki/features/offline-menu.md
+  h_3705811fa4502c 1-118
+llm-wiki/features/verification.md
+  h_3705811fa4502c 1-123
+llm-wiki/glossary.md
+  h_3705811fa4502c 1-88
+llm-wiki/index.json
+  h_3705811fa4502c 1-202
+llm-wiki/packages/bdmv-parser.md
+  h_3705811fa4502c 1-114
+llm-wiki/packages/cli.md
+  h_3705811fa4502c 1-122
+llm-wiki/packages/foundation.md
+  h_3705811fa4502c 1-86
+llm-wiki/packages/hdmv.md
+  h_3705811fa4502c 1-153
+llm-wiki/packages/igs.md
+  h_3705811fa4502c 1-117
+llm-wiki/packages/media-export.md
+  h_3705811fa4502c 1-117
+llm-wiki/packages/package-builder.md
+  h_3705811fa4502c 1-105
+llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 1-137
+llm-wiki/packages/test-fixtures.md
+  h_3705811fa4502c 1-44
+llm-wiki/packages/test-runner.md
+  h_3705811fa4502c 1-113
+llm-wiki/testing.md
+  h_3705811fa4502c 1-84
+llm-wiki/troubleshooting.md
+  h_3705811fa4502c 1-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "21c580a5d610b679c0c184b87c287c24db02e148",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
