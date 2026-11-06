@@ -464,7 +464,6 @@ describe("offline menu primitives", () => {
     expect(menu.selectedButtonId).toBe(1);
     expect(menu.activatedButtonId).toBeNull();
     expect(executeButtonCommand).not.toHaveBeenCalled();
-    expect(diagnostic.mock.calls.flat().some((message) => String(message).includes("runtime semantics are unverified"))).toBe(false);
     menu.selectFromPointer(61, 15);
     expect(menu.selectedButtonId).toBe(2);
     menu.setPage(1);

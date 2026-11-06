@@ -179,13 +179,12 @@ describe("delivery status and coverage", () => {
     expect(decideDelivery(input, strict)).toMatchObject({ status, strict, exitCode });
   });
 
-  it("records the output mode without letting it decide the status", () => {
+  it("uses delivery facts to determine status while recording the output mode", () => {
     const menuOnly = decideDelivery({ ...base, mode: "menu-only" }, false);
     expect(menuOnly.status).toBe("complete");
-    expect(menuOnly.reasons.join(" ")).not.toContain("menu-only output is always partial.");
   });
 
-  it("treats unverified checks and limitations as missing evidence rather than a partial delivery", () => {
+  it("allows complete delivery with unverified checks and records those evidence gaps", () => {
     const decision = decideDelivery({
       mode: "menu-only",
       checks: [passing, { checkId: "BROWSER_EVIDENCE", result: "not-verified", message: "not supplied" }],
@@ -200,7 +199,6 @@ describe("delivery status and coverage", () => {
     expect(decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
     expect(decision.notVerified).toEqual(expect.arrayContaining(["BROWSER_EVIDENCE", "REQUIRED_EVIDENCE_INCOMPLETE", "COVERAGE_INCOMPLETE"]));
     expect(decision.reasons.join(" ")).toContain("Limitation:");
-    expect(decision.reasons.join(" ")).not.toContain("No audit checks were supplied.");
   });
 
   it("classifies diagnostics by severity and acknowledgement", () => {

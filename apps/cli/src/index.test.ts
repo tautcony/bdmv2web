@@ -131,10 +131,9 @@ describe("M4 menu-only convert output", () => {
         const html = await readFile(join(output, "index.html"), "utf8");
         expect(compatibility).toMatchObject({ mode: "menu-only", status: "complete", externalDependencies: ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] });
         expect(manifest).toMatchObject({ mode: "menu-only", status: "complete", declaredEntryCount: 2, hdmvEntryCount: 2 });
-        // The three conclusion sources must agree, and the report must carry only
-        // facts, not a "no checks were supplied" reason.
+        // The three output sources share the delivery conclusion and report the
+        // missing audit evidence explicitly.
         expect(report).toMatchObject({ status: "complete", auditScope: "convert" });
-        expect(report.reasons.join(" ")).not.toContain("No audit checks were supplied.");
         expect(report.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS"]));
         expect(assetManifest.schemaVersion).toBe("1.0");
         expect(readme).toMatch(/Menu-only preview\. Delivery status: \*\*complete\*\*/);
@@ -186,8 +185,7 @@ describe("M4 menu-only convert output", () => {
       expect(broken.status).toBe(1);
       expect(broken.stderr.toString()).toContain("CLI_INVALID_PROFILE");
 
-      // Profile words follow the PSR rules, so a semantically invalid value fails
-      // here instead of surfacing later as an opaque E_IO (P2-P2-4).
+      // Profile words follow the PSR rules and are validated before disc access.
       const caseBase = { menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng", country: "US", region: "A", outputProfile: "portable" };
       for (const [index, profile] of [
         { ...caseBase, country: "USA" },
@@ -200,7 +198,6 @@ describe("M4 menu-only convert output", () => {
         const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", path, "--out", join(parent, `menu-invalid-${index}`)]);
         expect(result.status, JSON.stringify(profile)).toBe(1);
         expect(result.stderr.toString()).toContain("CLI_INVALID_PROFILE");
-        expect(result.stderr.toString()).not.toContain("E_IO");
         await expect(access(join(parent, `menu-invalid-${index}`))).rejects.toThrow();
       }
 

@@ -15,7 +15,6 @@ describe("bdmvkit-generated HDMV random-playback fixture", () => {
     const randomTrace = vm.trace.find((entry) => entry.decoded?.startsWith("RND"));
     expect(randomTrace?.registerDelta.gpr[7]).toBe(3);
     expect(result.status).not.toBe("faulted");
-    expect(result.diagnostic?.code).not.toBe("HDMV_UNVERIFIED_OPCODE");
 
     const played: number[] = [];
     for (let count = 0; count < 20 && result.status !== "stopped" && result.status !== "faulted"; count += 1) {

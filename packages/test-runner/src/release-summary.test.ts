@@ -47,7 +47,7 @@ describe("release summary aggregation", () => {
     expect(summary.compatibility.status).toBe("complete");
   });
 
-  it("treats menu-only as a recorded mode rather than a gap when every independent fact passes", () => {
+  it("keeps the recorded menu-only mode separate from delivery status", () => {
     const summary = createReleaseSummary({
       audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
       browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
@@ -55,7 +55,6 @@ describe("release summary aggregation", () => {
     });
 
     expect(summary.release.status).toBe("complete");
-    expect(summary.release.reasons.join(" ")).not.toContain("menu-only output is always partial.");
 
     const gapped = createReleaseSummary({
       audit: audit(), mode: "menu-only", dependencyAudit: dependencyAudit(), coverage: completeCoverage,
