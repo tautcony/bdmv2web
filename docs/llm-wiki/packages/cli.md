@@ -137,7 +137,7 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --format
 
 ## 测试
 
-`src/index.test.ts`（31 例）：profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度、资产与 PNG 导出。参数解析本身由 `commander` 覆盖，测试不再重复断言未知选项、缺值与多余位置参数。`src/synthetic-all-features.test.ts`（8 例）在 `test-data/fixtures/synthetic-all-features/` 上覆盖解析、HDMV 解码与 VM、IGS 多页与弹出菜单、双语言 PGS、循环点、按钮音效与一站式交接。
+`tests/e2e/index.test.ts`（31 例）：profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度、资产与 PNG 导出。参数解析本身由 `commander` 覆盖，测试不再重复断言未知选项、缺值与多余位置参数。`tests/integration/synthetic-all-features.test.ts`（8 例）在 `test-data/fixtures/synthetic-all-features/` 上覆盖解析、HDMV 解码与 VM、IGS 多页与弹出菜单、双语言 PGS、循环点、按钮音效与一站式交接。
 
 ## 改动入口
 

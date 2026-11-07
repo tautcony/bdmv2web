@@ -34,14 +34,16 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 | 层 | 位置 | 特点 |
 | --- | --- | --- |
-| 单元 | `packages/*/src/*.test.ts` | 与被测代码同目录；`igs` 用 `packages/igs/test/` |
-| 集成 | `packages/igs/test/m1-m2-m3.integration.test.ts` | 解析 → 场景 → 命令来源 |
-| 无头导航 | `runtime-web/src/*headless*.test.ts` | 用工作区样本跑 DFS/按钮路径 |
-| 真实样本 | `igs/test/tamako-real-smoke.test.ts`、`runtime-web/src/tamako-*` | 数据缺失时跳过 |
-| 一站式 | `apps/cli/src/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |
-| 独立参考 | `packages/igs/test/igs-reference-element-summary.test.ts` | 重算 IGS 渲染并与 pinned igstools 参考 PNG 的逐元素像素值比对 |
-| 独立参考 | `packages/igs/test/libbluray-igs-baseline.test.ts` | 对 8 个 clip 的 display set、ICS、页面/BOG/按钮/效果、256 项调色板与 RLE 对象与 libbluray 解码结果逐项比对 |
-| 独立参考 | `apps/cli/src/libbluray-navigation-baseline.test.ts` | 对 4 个真实盘的 index、逐命令反汇编、标题结构、完整 CFG 及 VM playlist 事件与 libbluray 基线比对 |
+| 单元 | `packages/*/src/*.test.ts` | 与被测代码同目录 |
+| 集成 | `packages/*/tests/integration/`、`apps/cli/tests/integration/` | 跨模块或跨包，读 `test-data` 夹具与基线 |
+| 辅助 | `packages/*/tests/helpers/` | 仅供测试使用的夹具构造，不进 `dist` |
+| 端到端 | `apps/cli/tests/e2e/index.test.ts` | spawn 构建后的 `dist/index.js`，检查完整离线包 |
+| 无头导航 | `runtime-web/tests/integration/*headless*.test.ts` | 用工作区样本跑 DFS/按钮路径 |
+| 真实样本 | `igs/tests/integration/tamako-external-navigation.test.ts`、`runtime-web/tests/integration/tamako-*` | 数据缺失时跳过 |
+| 一站式 | `apps/cli/tests/integration/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |
+| 独立参考 | `packages/igs/tests/integration/igs-reference-element-summary.test.ts` | 重算 IGS 渲染并与 pinned igstools 参考 PNG 的逐元素像素值比对 |
+| 独立参考 | `packages/igs/tests/integration/libbluray-igs-baseline.test.ts` | 对 8 个 clip 的 display set、ICS、页面/BOG/按钮/效果、256 项调色板与 RLE 对象与 libbluray 解码结果逐项比对 |
+| 独立参考 | `apps/cli/tests/integration/libbluray-navigation-baseline.test.ts` | 对 4 个真实盘的 index、逐命令反汇编、标题结构、完整 CFG 及 VM playlist 事件与 libbluray 基线比对 |
 | 浏览器 | `runtime-web/src/browser.test.ts` | 最小 DOM 桩，不是真实浏览器 |
 
 ## 夹具与基线来源
@@ -64,15 +66,15 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 | 基线 | 产出工具 | 入库文件 | 消费测试 |
 | --- | --- | --- | --- |
-| 逐元素 RGBA | `SAPikachu/igstools` @ `34a13315` 的 `picture_to_png` | `test-data/baselines/igs-reference-element-summary.json` | `packages/igs/test/igs-reference-element-summary.test.ts` |
-| IGS display set 与元素 | libbluray 1.5.0 `graphics_processor_decode_ts()` | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | `packages/igs/test/libbluray-igs-baseline.test.ts` |
-| index / 反汇编 / 标题 / CFG / VM 事件 | libbluray 1.5.0 `bd_info`、`bd_list_titles -a`、`mobj_dump -d`、`bd_play()` | `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` | `apps/cli/src/libbluray-navigation-baseline.test.ts` |
+| 逐元素 RGBA | `SAPikachu/igstools` @ `34a13315` 的 `picture_to_png` | `test-data/baselines/igs-reference-element-summary.json` | `packages/igs/tests/integration/igs-reference-element-summary.test.ts` |
+| IGS display set 与元素 | libbluray 1.5.0 `graphics_processor_decode_ts()` | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | `packages/igs/tests/integration/libbluray-igs-baseline.test.ts` |
+| index / 反汇编 / 标题 / CFG / VM 事件 | libbluray 1.5.0 `bd_info`、`bd_list_titles -a`、`mobj_dump -d`、`bd_play()` | `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` | `apps/cli/tests/integration/libbluray-navigation-baseline.test.ts` |
 
 三份基线由固定 revision 的外部实现产出，测试只读入库 JSON 与夹具，运行时不需要本机 libbluray 或 igstools。libbluray IGS 基线与 igstools RGBA 基线的 object id 集合逐 clip 交叉核对。
 
 基线 JSON 采用受限深度格式：外层两级展开，`cases` 的每一项占一行，更深的值保持单行紧凑。`scripts/generate-libbluray-baselines.py` 按同一格式写出，重新生成时只改动发生变化的 case 行。
 
-`scripts/generate-libbluray-baselines.py` 与 `scripts/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 用本地 DFS explorer 与 libbluray 导航基线对照：index 条目数、静态 playlist 目标集合（`observedPlaylists ⊇ libblurayPlayTargets`）以及 explorer 的边记账不变量。
+`scripts/generate-libbluray-baselines.py` 与 `scripts/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/tests/integration/hdmv-navigation-corpus-dfs.test.ts` 用本地 DFS explorer 与 libbluray 导航基线对照：index 条目数、静态 playlist 目标集合（`observedPlaylists ⊇ libblurayPlayTargets`）以及 explorer 的边记账不变量。
 
 ## 新增测试
 

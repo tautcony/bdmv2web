@@ -7,9 +7,10 @@
   },
   "include": [
     "apps/*/src/**/*.ts",
+    "apps/*/tests/**/*.ts",
     "apps/*/vitest.config.ts",
     "packages/*/src/**/*.ts",
-    "packages/*/test/**/*.ts",
+    "packages/*/tests/**/*.ts",
     "packages/*/vitest.config.ts"
   ]
 }

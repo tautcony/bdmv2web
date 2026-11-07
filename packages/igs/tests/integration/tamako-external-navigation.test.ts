@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { HdmvVm } from "@bdmv2web/hdmv";
-import { extractIgsFromChunks } from "../src/extract.js";
+import { extractIgsFromChunks } from "../../src/extract.js";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const root = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
 
 describe("Tamako menu-to-feature navigation", () => {

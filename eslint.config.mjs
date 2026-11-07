@@ -1,7 +1,7 @@
 // Flat ESLint configuration for the bdmv2web workspace.
 //
 // Linting is type-aware through `tsconfig.lint.json`, which spans every linted
-// TypeScript file (package sources, `packages/*/test`, `vitest.config.ts`).
+// TypeScript file (package sources, `{apps,packages}/*/tests`, `vitest.config.ts`).
 // Cross-package imports resolve through each package's built declarations, so
 // run lint after `pnpm build` - the order `scripts/ci.sh` uses.
 //
@@ -13,9 +13,10 @@ import tseslint from "typescript-eslint";
 
 const TYPED_FILES = [
   "apps/*/src/**/*.ts",
+  "apps/*/tests/**/*.ts",
   "apps/*/vitest.config.ts",
   "packages/*/src/**/*.ts",
-  "packages/*/test/**/*.ts",
+  "packages/*/tests/**/*.ts",
   "packages/*/vitest.config.ts",
 ];
 const TEST_FILES = ["**/*.test.ts", "**/*.test-d.ts"];

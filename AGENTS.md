@@ -26,6 +26,15 @@ This file records cross-cutting requirements repeated in Codex conversations for
 - Report only verification that was actually run. State unverified browser, real-disc, and CI behavior as unverified; keep environment-specific observations as historical evidence, not as universal platform requirements.
 - Avoid adding checks that the project explicitly removed, redundant guard layers, or tests whose only purpose is to prove an absence. Add or run verification that is relevant to the change and its stated acceptance criteria.
 
+## Test layout and coverage
+
+- Place a test beside the module it covers as `src/**/*.test.ts` when it exercises one module. Place a test that combines modules, combines packages, or drives the built CLI under `<package>/tests/integration/`; place one that spawns the built executable under `<package>/tests/e2e/`. Put test-only code in `<package>/tests/helpers/` and test data in `<package>/tests/fixtures/`.
+- List both `src/**/*.test.ts` and `tests/**/*.test.ts` in the `include` of `vitest.config.ts` for every package that has a `tests/` directory. Keep the existing `testTimeout` and per-test timeout budgets unchanged when files move.
+- Keep `tests/**/*.ts` inside the main `tsconfig.json` so `typecheck` covers test sources. Keep `rootDir: "src"` and the `src`-only `include` in `tsconfig.build.json` so `build` emits neither tests nor test helpers.
+- Cover `apps/*/tests/**/*.ts` and `packages/*/tests/**/*.ts` in `tsconfig.lint.json` and the `TYPED_FILES` list of `eslint.config.mjs`, so relocated tests stay under type-aware lint rules.
+- Move test files with `git mv` and change only import specifiers and repository-root path depth. Test logic, assertions, and timeout budgets stay identical.
+- The root scripts run each package's Vitest, so a root-level `tests/` directory is not collected. Add root tests only together with a Vitest projects configuration.
+
 ## Documentation and collaboration
 
 - Write user-facing documentation directly: state supported capabilities and how to use them. Remove rhetorical questions, self-answering sections, and explanations that do not help a user complete a task. Keep necessary limitations beside the affected command or workflow.

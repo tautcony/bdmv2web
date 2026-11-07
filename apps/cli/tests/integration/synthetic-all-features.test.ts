@@ -10,7 +10,7 @@ import { convertSounds } from "@bdmv2web/package-builder";
 import { decodeInstruction, HdmvVm } from "@bdmv2web/hdmv";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/synthetic-all-features/BDMV");
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../test-data/fixtures/synthetic-all-features/BDMV");
 const hex = (bytes: Uint8Array) => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 /** The generated disc is a single fixture covering the union of features used by the test-data menus. */

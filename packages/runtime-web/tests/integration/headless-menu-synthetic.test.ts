@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HdmvVm } from "@bdmv2web/hdmv";
-import { MenuController, type MenuButton, type MenuScene } from "./index.js";
+import { MenuController, type MenuButton, type MenuScene } from "../../src/index.js";
 
 function rawCommand(word0: number, word1 = 0, word2 = 0): string {
   return [word0, word1, word2].map((word) => (word >>> 0).toString(16).padStart(8, "0")).join("");

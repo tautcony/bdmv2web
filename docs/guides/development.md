@@ -24,7 +24,7 @@ corepack pnpm test
 
 ## Linting
 
-`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `packages/*/test`, `vitest.config.ts`, and `scripts/*.mjs`. `corepack pnpm lint:fix` applies the automatic fixes.
+`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/*.mjs`. `corepack pnpm lint:fix` applies the automatic fixes.
 
 Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. Run `corepack pnpm build` before linting; `scripts/ci.sh` runs lint between the build and the typecheck.
 
@@ -117,11 +117,13 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 
 Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded. A package whose configuration matches no test file fails instead of reporting success.
 
+Tests live in `src/` when they cover one module, and in `tests/integration/` or `tests/e2e/` when they combine modules, packages, or the built CLI. `tests/helpers/` holds test-only fixtures. Shared `test-data/` files are addressed from the repository root.
+
 The reference comparisons read committed baselines: `test-data/baselines/libbluray-1.5.0-igs-baseline.json` for IG decoder output, `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` for the index, per-command disassembly, title list, VM events and control-flow graph, and the igstools element-level RGBA dumps. The tests read those files and the checked-in fixtures, so CI needs no local libbluray or igstools.
 
 ## Build gate
 
-`build` compiles with each package's `tsconfig.build.json` (tests excluded), while `typecheck` keeps `tsc -p tsconfig.json --noEmit` over all source including tests. The two can fail independently: a type error inside a `*.test.ts` breaks `typecheck` and leaves `build` green.
+`build` compiles with each package's `tsconfig.build.json` (tests excluded), while `typecheck` keeps `tsc -p tsconfig.json --noEmit` over all source including tests. The two can fail independently: a type error inside a `*.test.ts` breaks `typecheck` and leaves `build` green. `rootDir: "src"` and the `src`-only `include` belong to `tsconfig.build.json`; the main `tsconfig.json` spans `src/**` and `tests/**`.
 
 The gate is executed by hand through the platform-independent script:
 
@@ -135,7 +137,7 @@ It runs `corepack pnpm install --frozen-lockfile` → `corepack pnpm generate:co
 
 Measured 2026-11-05 on an idle machine (Node 22.22.2 via corepack, pnpm 11.25.0): install 0s (lockfile already satisfied) → `generate:contracts` 1s → `build` 14s → `typecheck` 19s → `test:all` 117s; total 2m32s, exit 0. `generate:contracts` is idempotent — rerunning it leaves `packages/core/src/disc-ir.generated.ts` byte-identical.
 
-`apps/cli`, `media-export`, and `runtime-web` set `testTimeout: 15000`; their cases take 5–6s on a busy machine, over the vitest default of 5s. The navigation corpus cases keep their explicit per-test `120_000` budgets, which take precedence. `hdmv` sets no timeout because it has no measured slow case.
+`apps/cli`, `media-export`, and `runtime-web` set `testTimeout: 15000`; their cases take 5–6s on a busy machine, over the vitest default of 5s. Per-test budgets override it: `120_000` for the navigation corpus and Tamako headless cases in `runtime-web`, the two `igs` reference comparisons, and `60_000` for the `cli` libbluray navigation baseline. `hdmv` and `igs` set no global timeout.
 
 **CI:** GitHub Actions runs this gate on pushes to `master`, pull requests, and manual dispatch. The workflow uses the repository-pinned Node version and runs `bash scripts/ci.sh`; check the Actions result for the commit under review.
 

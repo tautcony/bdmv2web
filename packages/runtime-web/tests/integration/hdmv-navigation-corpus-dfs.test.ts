@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, HdmvVm, type NavigationAction, type StaticNavigationLoop, type TraceEntry } from "@bdmv2web/hdmv";
 
-const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const libblurayGoldenPath = resolve(repo, "test-data/baselines/libbluray-1.5.0-navigation-baseline.json");
 const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
 const MAX_SCENARIOS_PER_CASE = 128;

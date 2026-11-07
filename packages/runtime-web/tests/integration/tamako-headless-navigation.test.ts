@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { HdmvVm, buildNavigationGraph, type NavigationAction } from "@bdmv2web/hdmv";
 import { resolveExternalPlayTarget, createExternalMediaTargets, computeMediaClosure } from "@bdmv2web/media-export";
-import { loadRawIgsFixture } from "./headless-navigation-fixture.js";
-import { adaptIgsScene, MenuController, type MenuPage, type MenuScene } from "./index.js";
+import { loadRawIgsFixture } from "../helpers/headless-navigation-fixture.js";
+import { adaptIgsScene, MenuController, type MenuPage, type MenuScene } from "../../src/index.js";
 
 describe("Tamako current-source headless navigation", () => {
   it("executes First Play, user-visible menu routes, VM context, and feature playback with recovery", async () => {

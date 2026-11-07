@@ -10,10 +10,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { extractIgsFromChunks } from "../src/extract.js";
-import { chunks } from "./fixtures.js";
+import { extractIgsFromChunks } from "../../src/extract.js";
+import { chunks } from "../helpers/fixtures.js";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const goldenPath = resolve(repositoryRoot, "test-data/baselines/igs-reference-element-summary.json");
 const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 
@@ -62,14 +62,14 @@ function decodeRgbaPng(input: Uint8Array): { width: number; height: number; rgba
     const filter = raw[offset++];
     const line = new Uint8Array(raw.subarray(offset, offset + stride));
     offset += stride;
-    if (filter === 1) for (let i = 4; i < stride; i++) line[i] = (line[i] + line[i - 4]!) & 255;
-    else if (filter === 2) for (let i = 0; i < stride; i++) line[i] = (line[i] + previous[i]!) & 255;
-    else if (filter === 3) for (let i = 0; i < stride; i++) line[i] = (line[i] + (((i >= 4 ? line[i - 4]! : 0) + previous[i]!) >> 1)) & 255;
+    if (filter === 1) for (let i = 4; i < stride; i++) line[i] = (line[i]! + line[i - 4]!) & 255;
+    else if (filter === 2) for (let i = 0; i < stride; i++) line[i] = (line[i]! + previous[i]!) & 255;
+    else if (filter === 3) for (let i = 0; i < stride; i++) line[i] = (line[i]! + (((i >= 4 ? line[i - 4]! : 0) + previous[i]!) >> 1)) & 255;
     else if (filter === 4) {
       for (let i = 0; i < stride; i++) {
         const a = i >= 4 ? line[i - 4]! : 0, b = previous[i]!, c = i >= 4 ? previous[i - 4]! : 0;
         const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-        line[i] = (line[i] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+        line[i] = (line[i]! + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
       }
     } else if (filter !== 0) throw new Error(`unsupported PNG filter ${filter}`);
     rgba.set(line, y * stride);

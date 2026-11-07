@@ -14,10 +14,10 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { extractIgsFromChunks, type IgsObject, type IgsPage, type IgsPalette, type IgsScene } from "../src/index.js";
-import { chunks } from "./fixtures.js";
+import { extractIgsFromChunks, type IgsObject, type IgsPage, type IgsPalette, type IgsScene } from "../../src/index.js";
+import { chunks } from "../helpers/fixtures.js";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const goldenPath = resolve(repositoryRoot, "test-data/baselines/libbluray-1.5.0-igs-baseline.json");
 const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 

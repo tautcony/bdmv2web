@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LIMITS } from "@bdmv2web/core";
-import { decodeRle } from "../src/igs.js";
-import { M2tsPacketReader, PesAssembler, PsiAssembler, decodeTimestamp, encodeTimestampForFixture } from "../src/transport.js";
-import { IG_PID, m2tsPacket, patPacket, pesPacket, syntheticClip } from "./fixtures.js";
+import { decodeRle } from "./igs.js";
+import { M2tsPacketReader, PesAssembler, PsiAssembler, decodeTimestamp, encodeTimestampForFixture } from "./transport.js";
+import type { IgsDiagnostic } from "./types.js";
+import { IG_PID, m2tsPacket, patPacket, pesPacket, syntheticClip } from "../tests/helpers/fixtures.js";
 
 describe("M2TS packet and PES reconstruction", () => {
   it("produces identical 192-byte packet records for every input chunk split", () => {
@@ -23,7 +24,7 @@ describe("M2TS packet and PES reconstruction", () => {
   it("discards a partial PSI section on continuity damage instead of splicing later bytes", () => {
     const reader = new M2tsPacketReader("clip");
     const section = reader.feed(patPacket())[0]!.payload.subarray(1, 17);
-    const diagnostics = [];
+    const diagnostics: IgsDiagnostic[] = [];
     const psi = new PsiAssembler(diagnostics, "clip");
     expect(psi.push(psiPacket(0, true, concat(Uint8Array.of(0), section.subarray(0, 6)))).length).toBe(0);
     expect(psi.push(psiPacket(0, false, section.subarray(6), true)).length).toBe(0);

@@ -1,4 +1,4 @@
-import { encodeTimestampForFixture } from "../src/transport.js";
+import { encodeTimestampForFixture } from "../../src/transport.js";
 
 export const IG_PID = 0x120;
 export const PMT_PID = 0x100;
@@ -93,7 +93,7 @@ function packBits(fields: Array<[bigint, number]>): Uint8Array {
   const bitLength = fields.reduce((sum, [, width]) => sum + width, 0);
   const result = new Uint8Array(Math.ceil(bitLength / 8)); let bit = 0;
   for (const [value, width] of fields) for (let shift = width - 1; shift >= 0; shift--, bit++) {
-    if ((value >> BigInt(shift)) & 1n) result[bit >> 3] |= 1 << (7 - (bit & 7));
+    if ((value >> BigInt(shift)) & 1n) { const at = bit >> 3; result[at] = result[at]! | (1 << (7 - (bit & 7))); }
   }
   return result;
 }

@@ -6,11 +6,11 @@ import { inflateSync } from "node:zlib";
 import { buildInputFileTable } from "@bdmv2web/bdmv-io";
 import { DEFAULT_LIMITS } from "@bdmv2web/core";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
-import { extractIgsFromChunks, extractIgsScenes } from "../src/extract.js";
-import { consumeSegment, createIgsState, parseSegments } from "../src/igs.js";
-import { renderIgsAssets, renderSceneAssets } from "../src/png.js";
-import type { IgsSegment } from "../src/igs.js";
-import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "./fixtures.js";
+import { extractIgsFromChunks, extractIgsScenes } from "../../src/extract.js";
+import { consumeSegment, createIgsState, parseSegments } from "../../src/igs.js";
+import { renderIgsAssets, renderSceneAssets } from "../../src/png.js";
+import type { IgsSegment } from "../../src/igs.js";
+import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "../helpers/fixtures.js";
 
 describe("synthetic IGS extraction", () => {
   it("reassembles a complete menu scene with page, BOG, button, object, palette and PNG source mapping", async () => {
@@ -106,7 +106,7 @@ describe("synthetic IGS extraction", () => {
   });
 
   it("is invariant to read block boundaries across packet, PES and segment bytes", async () => {
-    const bytes = syntheticClip(); const summaries = [];
+    const bytes = syntheticClip(); const summaries: Array<{ scenes: number; objects: number | undefined; assets: number; errors: string[] }> = [];
     for (const size of [1, 191, 192, 193, 4096]) {
       const result = await extractIgsFromChunks("00001", chunks(bytes, size), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
       summaries.push({ scenes: result.scenes.length, objects: result.scenes[0]?.objects.length, assets: result.assets.length, errors: result.diagnostics.filter((d) => d.severity === "error").map((d) => d.code) });

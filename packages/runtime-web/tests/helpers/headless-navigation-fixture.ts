@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { extractIgsFromChunks } from "@bdmv2web/igs";
 
-const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 
 export async function loadRawIgsFixture(caseId: string, clipId: string, pid: number, options: { renderAssets?: boolean } = {}) {
   const root = resolve(repo, `test-data/fixtures/hdmv-navigation/disc-data/${caseId}/BDMV`);

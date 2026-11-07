@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parseIgsMnu } from "../src/mnu.js";
-import { parseSegments } from "../src/igs.js";
-import { IG_PID, syntheticMenuSegments } from "./fixtures.js";
+import { parseIgsMnu } from "./mnu.js";
+import { parseSegments } from "./igs.js";
+import { IG_PID, syntheticMenuSegments } from "../tests/helpers/fixtures.js";
 
 describe("MNU parsing", () => {
   it("parses one header per segment and renders the menu element", () => {

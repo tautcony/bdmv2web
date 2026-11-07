@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction, HdmvVm, m3Fixtures } from "@bdmv2web/hdmv";
-import { extractIgsScenes } from "../src/extract.js";
-import { syntheticClip, syntheticMenuSegments } from "./fixtures.js";
+import { extractIgsScenes } from "../../src/extract.js";
+import { syntheticClip, syntheticMenuSegments } from "../helpers/fixtures.js";
 
 describe("M1 to M2/M3 consumer handoff", () => {
   it("keeps entry, track and raw command identities and source locations across consumers", async () => {

@@ -2,10 +2,10 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { extractIgsFromChunks } from "../src/extract.js";
-import { chunks } from "./fixtures.js";
+import { extractIgsFromChunks } from "../../src/extract.js";
+import { chunks } from "../helpers/fixtures.js";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 const fixtures = [
   { caseId: "tamako", clipId: "00005", pages: 7, objects: 168, palettes: 7, assets: 168, renderAssets: true },

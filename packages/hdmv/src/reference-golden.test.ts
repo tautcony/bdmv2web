@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HdmvVm } from "./vm.js";
 
-const golden = JSON.parse(readFileSync(new URL("./fixtures/libbluray-1.5.0-source-derived-reference-golden.json", import.meta.url), "utf8")) as {
+const golden = JSON.parse(readFileSync(new URL("../tests/fixtures/libbluray-1.5.0-source-derived-reference-golden.json", import.meta.url), "utf8")) as {
   reference: { project: string; version: string; commit: string; license: string; execution: string };
   scenarios: Array<{
     id: string;

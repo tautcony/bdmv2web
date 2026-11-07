@@ -117,4 +117,4 @@ BDMV-menu/
 
 ## 相关测试
 
-`package-builder/src/index.test.ts`、`runtime-web/src/browser.test.ts`、`runtime-web/src/index.test.ts`、`runtime-web/src/headless-menu-synthetic.test.ts`。
+`package-builder/src/index.test.ts`、`runtime-web/src/browser.test.ts`、`runtime-web/src/index.test.ts`、`runtime-web/tests/integration/headless-menu-synthetic.test.ts`。

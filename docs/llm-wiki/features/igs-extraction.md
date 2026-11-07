@@ -72,11 +72,11 @@ PES 载荷按 3 字节段头（类型 + 16 位长度）切分；不完整的段�
 
 | 目的 | 做法 |
 | --- | --- |
-| 段/场景正确性 | `packages/igs/test/extraction.test.ts` 的合成段 |
+| 段/场景正确性 | `packages/igs/tests/integration/extraction.test.ts` 的合成段 |
 | 传输正确性 | `transport.test.ts` 的回绕、连续性、跨块 |
 | 像素正确性 | 八个包级夹具逐元素对照 igstools（配置 BT.709），参考摘要入库在 `test-data/baselines/` |
 | 真实结构 | `test-data/fixtures/igs-parser/` 的外部 ICS 样本（1920×1080、四页） |
-| 本地真实样本 | `tamako-real-smoke.test.ts`，数据缺失时跳过 |
+| 本地真实样本 | `packages/igs/tests/integration/tamako-external-navigation.test.ts`，数据缺失时跳过 |
 
 ## 常见问题
 

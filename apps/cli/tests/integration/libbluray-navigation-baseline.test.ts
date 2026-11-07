@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction } from "@bdmv2web/hdmv";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const goldenPath = resolve(repositoryRoot, "test-data/baselines/libbluray-1.5.0-navigation-baseline.json");
 const corpusRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 

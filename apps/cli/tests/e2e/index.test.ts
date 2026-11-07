@@ -8,7 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
 import { encodeTimestampForFixture } from "@bdmv2web/igs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /**
  * A failed conversion must expose the same report fields as a successful one, so a
@@ -387,17 +387,17 @@ describe("M1 structural CLI", () => {
   }
   it("writes independently parseable structural JSON to stdout with no progress text", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv inspect ")); const root = await makeDisc(parent, buildM1Index({ hdmvTitle: 3, bdjTitle: "00042", titleAccess: 2 }));
-    try { const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "inspect", root, "--format", "json"]); expect(result.status).toBe(0); expect(result.stderr.toString()).toBe(""); const parsed = JSON.parse(result.stdout.toString()); expect(parsed.analysisStage).toBe("structural"); expect(parsed.supportPrediction.status).toBe("partial"); expect(parsed.declarations.entries).toBe(4); expect(parsed.entries.map((entry: any) => entry.target.objectType)).toEqual(["HDMV", "HDMV", "HDMV", "BDJ"]); expect(parsed.entries[2].target.target).toBe(3); expect(parsed.entries[3].target).toMatchObject({ objectType: "BDJ", target: "00042", accessType: 2 }); }
+    try { const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "inspect", root, "--format", "json"]); expect(result.status).toBe(0); expect(result.stderr.toString()).toBe(""); const parsed = JSON.parse(result.stdout.toString()); expect(parsed.analysisStage).toBe("structural"); expect(parsed.supportPrediction.status).toBe("partial"); expect(parsed.declarations.entries).toBe(4); expect(parsed.entries.map((entry: any) => entry.target.objectType)).toEqual(["HDMV", "HDMV", "HDMV", "BDJ"]); expect(parsed.entries[2].target.target).toBe(3); expect(parsed.entries[3].target).toMatchObject({ objectType: "BDJ", target: "00042", accessType: 2 }); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("extracts only structural artifacts through the output transaction and preserves source bytes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv extract ")); const root = await makeDisc(parent); const target = join(parent, "out");
-    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", root, "--type", "hdmv", "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).stageStatus).toBe("complete"); const disc = JSON.parse(await readFile(join(target, "hdmv/parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); const commands = JSON.parse(await readFile(join(target, "hdmv/commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.stageStatus).toBe("complete"); expect(manifest.selectedTypes).toEqual(["hdmv"]); expect(manifest.files.find((file: { path: string }) => file.path === "hdmv/commands.json")).toMatchObject({ kind: "hdmv-command-table" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
+    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "extract", root, "--type", "hdmv", "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).stageStatus).toBe("complete"); const disc = JSON.parse(await readFile(join(target, "hdmv/parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); const commands = JSON.parse(await readFile(join(target, "hdmv/commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.stageStatus).toBe("complete"); expect(manifest.selectedTypes).toEqual(["hdmv"]); expect(manifest.files.find((file: { path: string }) => file.path === "hdmv/commands.json")).toMatchObject({ kind: "hdmv-command-table" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("does not overwrite an existing inspect output target", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv inspect existing ")); const root = await makeDisc(parent); const target = join(parent, "inspection.json"); await writeFile(target, "keep me\n");
-    try { const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "inspect", root, "--format", "json", "--out", target]); expect(result.status).toBe(1); expect(await readFile(target, "utf8")).toBe("keep me\n"); }
+    try { const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "inspect", root, "--format", "json", "--out", target]); expect(result.status).toBe(1); expect(await readFile(target, "utf8")).toBe("keep me\n"); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 });
@@ -432,7 +432,7 @@ describe("IGS extract CLI", () => {
     const target = join(parent, "out");
     try {
       const before = await sourceSnapshot(rootPath);
-      const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", rootPath, "--type", "igs", "--out", target]);
+      const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "extract", rootPath, "--type", "igs", "--out", target]);
       expect(result.status).toBe(0);
       const scenesDoc = JSON.parse(await readFile(join(target, "igs/scenes.json"), "utf8"));
       expect(scenesDoc.scenes).toHaveLength(1);
@@ -457,7 +457,7 @@ describe("IGS extract CLI", () => {
     const target = join(parent, "out");
     try {
       const before = await sourceSnapshot(rootPath);
-      const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../dist/index.js"), "extract", rootPath, "--type", "igs", "--out", target]);
+      const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "extract", rootPath, "--type", "igs", "--out", target]);
       expect(result.status).toBe(0);
       const scenesDoc = JSON.parse(await readFile(join(target, "igs/scenes.json"), "utf8"));
       expect(scenesDoc.scenes).toHaveLength(1);
