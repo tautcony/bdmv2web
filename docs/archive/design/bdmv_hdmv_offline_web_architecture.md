@@ -1,4 +1,4 @@
-> **文档定位：历史架构方案，不是当前实现规格。** 下文包含原定目标、未实现设计和早期包结构；不能据此判断功能已交付。当前能力以 [开发指南](../guides/development.md)、[协议支持矩阵](../support/protocol-support.md)、[HDMV 支持](../support/hdmv-support.md)、[IGS 支持](../support/igs-support.md)、[浏览器验收记录](../guides/browser-matrix.md) 和 [OpenSpec 实施基线](../../openspec/changes/IMPLEMENTATION_BASELINE.md) 为准。当前影片播放通过配置的外部播放器打开 M2TS；离线菜单包采用统一交付模式。
+> **文档定位：历史架构方案，不是当前实现规格。** 下文包含原定目标、未实现设计和早期包结构；不能据此判断功能已交付。当前能力以 [开发指南](../../guides/development.md)、[协议支持矩阵](../../support/protocol-support.md)、[HDMV 支持](../../support/hdmv-support.md)、[IGS 支持](../../support/igs-support.md) 和 [OpenSpec 实施基线](../../../openspec/changes/IMPLEMENTATION_BASELINE.md) 为准。当前影片播放通过配置的外部播放器打开 M2TS；离线菜单包采用统一交付模式。
 
 # BDMV HDMV 菜单提取与离线 HTML 复现工具——详细技术设计方案
 

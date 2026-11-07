@@ -1,6 +1,6 @@
 # 评审遗留问题登记
 
-来源：[`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md)。这里只登记**已确认存在、但当前两个批次（`restore-build-gate-and-delivery-status`、`converge-contracts-and-distribution`）不承接**的问题。
+来源：[`docs/archive/reviews/review-2026-11-04/index.md`](../../../docs/archive/reviews/review-2026-11-04/index.md)。这里只登记**已确认存在、但当前两个批次（`restore-build-gate-and-delivery-status`、`converge-contracts-and-distribution`）不承接**的问题。
 
 每条都写**触发条件**——什么情况下它从"理论问题"变成"必须在下一个 change 处理"。这些条目不属于 D1–D13 任何一项，因此不进决策表；需要提升优先级时，先补一条决策再开工。
 

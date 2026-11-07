@@ -35,6 +35,14 @@ This file records cross-cutting requirements repeated in Codex conversations for
 - Move test files with `git mv` and change only import specifiers and repository-root path depth. Test logic, assertions, and timeout budgets stay identical.
 - The root scripts run each package's Vitest, so a root-level `tests/` directory is not collected. Add root tests only together with a Vitest projects configuration.
 
+## Docs layout and updates
+
+- Place docs by type. Current-state docs live in `docs/guides/` (development guides), `docs/support/` (capability and support matrices), `docs/references/` (reference index, stage evidence, machine-readable sources), and `docs/llm-wiki/` (LLM knowledge layer). Superseded design proposals go in `docs/archive/design/`. Review and audit records go in `docs/archive/reviews/`, one `review-<date>-<topic>/` directory per review cycle with an `index.md` entry point; single-file reviews keep a `<date>-<topic>.md` name.
+- Register every new or moved doc in `docs/README.md` under its category, and every archived doc as a date/scope/status row in `docs/archive/README.md`. `docs/README.md` carries one current-state block and one history block; do not add parallel history sections.
+- Update current-state docs in the same change that changes the behavior they describe, and keep their scope labels accurate (for example, `protocol-support.md` states it covers M1 structure parsing only).
+- Archived docs are frozen records: keep their first-line positioning statement and their findings; repair only navigation links. When creating, moving, or deleting docs, recompute relative link depths in the same change so every relative markdown link in `docs/` resolves. When a doc is deleted, turn surviving markdown links to it into inline code paths and remove it from "current capability" authority lists.
+- Do not move or rename `docs/references/cache-manifest.json` or `docs/references/sources.json` without updating `scripts/fetch-reference-cache.py`, which reads the manifest from those paths.
+
 ## Documentation and collaboration
 
 - Write user-facing documentation directly: state supported capabilities and how to use them. Remove rhetorical questions, self-answering sections, and explanations that do not help a user complete a task. Keep necessary limitations beside the affected command or workflow.

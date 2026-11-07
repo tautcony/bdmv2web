@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | M0 | [核心契约](stages/M0-core-contracts.md) | Schema、工具链、精确时间、安全 IO、golden 构建与许可登记 |
 | M1 | [BDMV 结构解析](stages/M1-bdmv-structure.md) | index/MOBJ/MPLS/CLPI/sound、引用图、BACKUP |
-| M2 | [传输流与 IGS](stages/M2-igs-scenes.md) | M2TS/TS/PES、PID、IGS Display Set、场景和像素 |
+| M2 | [传输流与 IGS](stages/M2-igs-scenes.md)、[IGS 字段登记](stages/M2-igs-field-register.md) | M2TS/TS/PES、PID、IGS Display Set、场景和像素 |
 | M3 | [HDMV 导航 VM](stages/M3-hdmv-navigation.md) | 12-byte 命令、PSR/GPR、控制流、trace |
 | M4 | [离线菜单运行时](stages/M4-offline-menu.md) | `file://` 资源、安全打包、音效、输入与 autoplay |
 | M5 | [媒体导出与播放](stages/M5-media-playback.md) | FFmpeg/ffprobe、时间线、轨道、PGS 和媒体事件 |

@@ -63,7 +63,7 @@
 
 ## 门禁口径
 
-GitHub Actions 已通过 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 接入 `scripts/ci.sh`，触发条件为 master push、pull request 和手动运行；首次远端运行结果待回填。
+GitHub Actions 已通过 [`.github/workflows/ci.yml`](../../../../.github/workflows/ci.yml) 接入 `scripts/ci.sh`，触发条件为 master push、pull request 和手动运行；首次远端运行结果待回填。
 
 ```text
 corepack pnpm -r build                     → exit 0（11 包全部 Done）
@@ -95,4 +95,4 @@ bash scripts/ci.sh                         → 文档记录 exit 0，2m32s（ins
 - 未做 I/O 故障注入，未验证并发 `convert` 竞态。
 - MPLS 0x24 属性字节数只能依据参考实现与样本推断，本地白皮书无位级语法。
 - 参考实现缓存不完整：缺 `extdata_parse.c`（`bdmv_parse_extension_data` 的实现）。INDX 扩展布局与"上游忽略 handler 返回值"只能依据样本字节与调用点推断，凡涉及该函数的结论都不算逐行核对。
-- 本轮只审 `614b4fe..9b86daa` 的差异，上一轮已登记但本轮未触碰的问题仍见 [`openspec/changes/REVIEW_BACKLOG.md`](../../openspec/changes/REVIEW_BACKLOG.md)。
+- 本轮只审 `614b4fe..9b86daa` 的差异，上一轮已登记但本轮未触碰的问题仍见 [`openspec/changes/REVIEW_BACKLOG.md`](../../../../openspec/changes/REVIEW_BACKLOG.md)。

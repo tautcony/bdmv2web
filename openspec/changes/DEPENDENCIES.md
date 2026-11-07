@@ -1,6 +1,6 @@
 # HDMV 离线 Web：change 依赖与实施顺序
 
-本图依据`docs/archive/bdmv_hdmv_offline_web_architecture.md`（初版架构方案） 划分首期范围。箭头表示下游完成集成和验收前，必须取得上游已完成的契约及对应验收结果；接口稳定后可提前并行开发。这里记录 change 间的实施依赖，与 OpenSpec 每个 change 内 proposal → specs/design → tasks 的工件依赖不同；OpenSpec CLI 的工件状态不会自动强制执行本图。
+本图依据`docs/archive/design/bdmv_hdmv_offline_web_architecture.md`（初版架构方案） 划分首期范围。箭头表示下游完成集成和验收前，必须取得上游已完成的契约及对应验收结果；接口稳定后可提前并行开发。这里记录 change 间的实施依赖，与 OpenSpec 每个 change 内 proposal → specs/design → tasks 的工件依赖不同；OpenSpec CLI 的工件状态不会自动强制执行本图。
 
 各阶段规范、官方资料、固定 revision 的参考源码及获取条件见 [开发参考索引](../../docs/references/README.md)。
 

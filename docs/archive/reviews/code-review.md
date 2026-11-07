@@ -470,7 +470,7 @@ D9 的历史方案已由 `converge-contracts-and-distribution` 收敛；当前�
 
 > "第 3 批"已取消：D8 的 `test` 脚本统一提前到第 1 批（它决定后续所有计数基线），D7 与 D5 剩余项并入第 2 批。
 >
-> 不属于 D1–D13、但评审中确认存在的问题（CLPI HEVC 属性长度、`sound.bdmv` 损坏中止 `inspect`、`EventScheduler` 零延迟自旋、`summarizeCheckResult` 误分类、`validateLimits` 未知键静默失效）登记在 [`openspec/changes/REVIEW_BACKLOG.md`](../../openspec/changes/REVIEW_BACKLOG.md)，每条附触发条件，本轮不展开。
+> 不属于 D1–D13、但评审中确认存在的问题（CLPI HEVC 属性长度、`sound.bdmv` 损坏中止 `inspect`、`EventScheduler` 零延迟自旋、`summarizeCheckResult` 误分类、`validateLimits` 未知键静默失效）登记在 [`openspec/changes/REVIEW_BACKLOG.md`](../../../openspec/changes/REVIEW_BACKLOG.md)，每条附触发条件，本轮不展开。
 
 > 其它需要纳入本轮的问题、约束或优先级调整：
 >

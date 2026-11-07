@@ -60,7 +60,7 @@
 
 ## Related
 
-决策来源：[`docs/review-2026-11-04/index.md`](../../../docs/review-2026-11-04/index.md) 第 2 批（D3、D5、D6、D7、D9、D11、D12、D13）。第 1 批见 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/proposal.md)。
+决策来源：[`docs/archive/reviews/review-2026-11-04/index.md`](../../../docs/archive/reviews/review-2026-11-04/index.md) 第 2 批（D3、D5、D6、D7、D9、D11、D12、D13）。第 1 批见 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/proposal.md)。
 
 批次说明：评审文档的"第 3 批"已取消——D8 的 `test` 脚本统一提前到第 1 批（它决定后续所有计数基线），D7 与 D5 的剩余项并入本批（都需要第 1 批的产物布局作前提）。D4 的 `--limits` 真正接线条目（A.6）也在本批。
 

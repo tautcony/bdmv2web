@@ -4,7 +4,7 @@
 > 范围: `614b4fe..9b86daa`（6 个提交，48 个代码文件，+1142 / -184）
 > Phase 数: 5（baseline + 解析层 + CLI 状态链 + 运行时与产出 + 验证门禁）
 > 审查方式: 并行 sub agent（解析层 / CLI 状态链 / 运行时与产出），主 agent 负责范围、证据核验、去重与严重度
-> 上一轮: [`docs/archive/code-review.md`](../archive/code-review.md)（D1–D13 决策表）
+> 上一轮: [`docs/archive/code-review.md`](../code-review.md)（D1–D13 决策表）
 > **修复轮（2026-11-05）**: 本文件是审查当时的结论快照，保留不动；已修/未修状态见 [`fix-checklist.md`](./fix-checklist.md)，批次执行结果见 [`fixes-plan.md`](./fixes-plan.md)。25 条中 17 条已修完、1 条部分完成、1 条挂起、6 条 INFO 观察项不动。
 
 ## 统计

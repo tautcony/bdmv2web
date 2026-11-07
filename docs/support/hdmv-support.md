@@ -2,7 +2,7 @@
 
 This matrix records what the current implementation decodes and executes against pinned VideoLAN libbluray 1.5.0, commit `d75c88e54c893e5cbf4c61d356477655eb435769` (LGPL-2.1), at the source files listed below. The State / fixture column lists the tests that cover each row; those tests assert this implementation against that reference. `faults` marks rows where the decoder recognizes the field combination and the VM records a diagnostic instead of guessing.
 
-The 2026-11-06 audit in [`docs/review-2026-11-06-hdmv-vm-conformance/index.md`](../review-2026-11-06-hdmv-vm-conformance/index.md) found and fixed the P0/P1 differences: `JUMP_TITLE` now stops after the title event, user input and IG button programs remain available during a playlist wait, `TOP_MENU` is a title-search request instead of a VM wait, `RESUME`/`BREAK`/invalid targets are non-fatal, IG `CALL_OBJECT` parks and restores playback, and PSR5–8 update from playback. The rows below describe the fixed implementation; the audit document keeps the pre-fix evidence and the per-item record.
+The 2026-11-06 audit in [`docs/archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md`](../archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md) found and fixed the P0/P1 differences: `JUMP_TITLE` now stops after the title event, user input and IG button programs remain available during a playlist wait, `TOP_MENU` is a title-search request instead of a VM wait, `RESUME`/`BREAK`/invalid targets are non-fatal, IG `CALL_OBJECT` parks and restores playback, and PSR5–8 update from playback. The rows below describe the fixed implementation; the audit document keeps the pre-fix evidence and the per-item record.
 
 ## Evidence and encoding
 
