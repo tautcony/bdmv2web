@@ -1,0 +1,50 @@
+docs/README.md
+  h_3705811fa4502c 8
+docs/guides/development.md
+  h_3705811fa4502c 77,84-85,87,91
+docs/llm-wiki/README.md
+  h_3705811fa4502c 6
+docs/llm-wiki/architecture.md
+  h_3705811fa4502c 7,38
+docs/llm-wiki/contracts.md
+  h_3705811fa4502c 43,56,100
+docs/llm-wiki/diagnostics.md
+  h_3705811fa4502c 26-27,106-107,109,122,125,166,217
+docs/llm-wiki/features/cli-commands.md
+  h_3705811fa4502c 83-84,96-99,120
+docs/llm-wiki/features/igs-extraction.md
+  h_3705811fa4502c 46-47,59
+docs/llm-wiki/features/media.md
+  h_3705811fa4502c 40,92
+docs/llm-wiki/features/offline-menu.md
+  h_3705811fa4502c 28,56
+docs/llm-wiki/index.json
+  h_3705811fa4502c 6-7
+docs/llm-wiki/packages/cli.md
+  h_3705811fa4502c 83,111
+docs/llm-wiki/packages/foundation.md
+  h_3705811fa4502c 52-53
+docs/llm-wiki/packages/igs.md
+  h_3705811fa4502c 32
+docs/llm-wiki/packages/package-builder.md
+  h_3705811fa4502c 11,20
+docs/llm-wiki/packages/test-fixtures.md
+  h_3705811fa4502c 25
+docs/llm-wiki/packages/test-runner.md
+  h_3705811fa4502c 14
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 15,17,24-25,27,31
+docs/llm-wiki/troubleshooting.md
+  h_3705811fa4502c 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "800d10e19aadb5fbad789e6340b92d040e9770e4",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
