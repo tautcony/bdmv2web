@@ -101,5 +101,18 @@ jobs:
             exit 1
           fi
 
+      - name: Check registry for the version
+        id: registry
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          if npm view "bdmv2web@$version" version >/dev/null 2>&1; then
+            echo "bdmv2web@$version is already published; the upload is skipped."
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
+        if: steps.registry.outputs.published == 'false'
         run: npm publish artifacts/npm/*.tgz --access public
