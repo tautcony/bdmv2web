@@ -530,11 +530,38 @@ describe("offline browser boot", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(info).toHaveBeenCalledOnce();
     const summary = String(info.mock.calls[0]?.[0]);
-    expect(summary).toContain("[VM] 3 steps");
+    // The line names the scene and the control that ran it, so it can be read
+    // without the rest of the session.
+    expect(summary).toContain("[VM] clip ? pid ? · button 1 (page 0) | 3 steps |");
     expect(summary).toContain("MOVE");
     expect(summary).toContain("NOP");
     expect(summary).toContain("status=running");
     expect(summary).not.toContain("[object Object]");
+  });
+
+  it("reports the packaged scene and background a LinkPI jump reached", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const mainScene = packageData().scene as Record<string, unknown>;
+    const menuScene = (clipId: string) => ({ ...mainScene, clipId, pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+      id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+      states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+      commands: [{ bytes: m3Fixtures.linkPlayItem3.bytes }],
+    }] }] });
+    const host = await launch(packageData({
+      scene: menuScene("00012"),
+      vmPrograms: [{ id: 7, instructions: ["228000000000000900000000"] }],
+      menuPlaylistIds: [9],
+      media: { playlist: 9, playItem: 0, background: { path: "assets/media/playlist-00009-pi0/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [] },
+      menuScenes: [{ playlistId: 9, playItem: 0, scene: menuScene("00012") }, { playlistId: 9, playItem: 3, scene: menuScene("00013") }],
+      menuMedia: [{ playlist: 9, playItem: 3, background: { path: "assets/media/playlist-00009-pi3/background.mp4", durationSeconds: 1, loop: true }, audioTracks: [] }],
+    }), { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const lines = info.mock.calls.map(([message]) => String(message));
+    expect(lines).toContain("[menu] button 1 (page 0) LINK_PI 3 → playlist 9 PlayItem 3 → clip 00013 pid 0x1200 · background playlist-00009-pi3");
+    info.mockRestore();
   });
 
   it("retries blocked menu media from the gesture without rerunning the initial VM action", async () => {

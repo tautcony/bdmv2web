@@ -17,6 +17,10 @@ export function optionValue(name: string): string | undefined {
   const value = activeOptions[optionKey(name)];
   return typeof value === "string" ? value : undefined;
 }
+export function optionNumber(name: string): number | undefined {
+  const value = activeOptions[optionKey(name)];
+  return typeof value === "number" ? value : undefined;
+}
 export function flagEnabled(name: string): boolean {
   return activeOptions[optionKey(name)] === true;
 }

@@ -8,7 +8,9 @@
 buildMenuPackage(input: MenuPackageInput): Promise<void>
 ```
 
-`MenuPackageInput` 关键字段：`outputDirectory`、`title`、`ir`、`scene`、`popupScenes`、`menuScenes`、`menuPlaylistIds`、`preMenuPlaylistIds`、`status`、`entryCounts`、`playerProfile`、`vmLimits`、`vmPrograms`、`vmEntries`、`externalTargets`、`bdmvPath`、`vmInitialProgramId`、`vmFirstPlayProgramId`、`graphics`、`pngLimits`、`soundEntries`、`soundBytes`、`menuLoopMedia`、`additionalMenuMedia`、`pgsTracks`、`pgsLimits`、`diagnostics`、`reuseMediaFromDirectory`、`onMediaProgress`、`runtimeVersion`。`pngLimits`、`pgsLimits`、`runtimeVersion` 为有默认值的可选项。
+`MenuPackageInput` 关键字段：`outputDirectory`、`title`、`ir`、`scene`、`popupScenes`、`menuScenes`、`menuPlaylistIds`、`preMenuPlaylistIds`、`status`、`entryCounts`、`playerProfile`、`vmLimits`、`vmPrograms`、`vmEntries`、`externalTargets`、`bdmvPath`、`vmInitialProgramId`、`vmFirstPlayProgramId`、`graphics`、`pngLimits`、`soundEntries`、`soundBytes`、`menuLoopMedia`、`mediaEncoding`、`additionalMenuMedia`、`pgsTracks`、`pgsLimits`、`diagnostics`、`reuseMediaFromDirectory`、`onMediaProgress`、`runtimeVersion`。`pngLimits`、`pgsLimits`、`runtimeVersion` 为有默认值的可选项。
+
+`mediaEncoding`（`MenuMediaEncoding`）是唯一暴露编码参数的入口：`codec`（`h264`/`hevc`）、`hdrMode`（`tonemap`/`preserve`）、`crf`、`preset`。Builder 只做透传，不解释语义——缺省值、crf 与编码器的对应关系都由 `media-export` 决定。
 
 `status` 由调用方决定（CLI 用 `decideDelivery`）；库调用默认 `partial`。Builder 不根据自身产物提升状态。
 
@@ -75,6 +77,8 @@ buildMenuPackage(input: MenuPackageInput): Promise<void>
 - `menuLoopMedia` → `exportMenuLoopMedia`，输出 `assets/media/background.mp4` 与音轨，写 `media-plan.json`。
 - `additionalMenuMedia` → 每个播放列表一个目录 `assets/media/playlist-<id>/`，计划写 `media-plans/playlist-<id>.json`。
 - `reuseMediaFromDirectory` 只在旧计划与本次输入完全匹配时复用，否则重编码（由 `media-export` 判定）。
+- 编码参数由 `mediaEncoding` 透传给两次导出调用，Builder 不写死 `preset`/`crf`。
+- 每个导出结果里的 `warnings`（HDR 色调映射缺失、H.264 + HDR 等）转成 `diagnostics` 条目，`severity: "warning"`，按 `code` 去重后写进 `manifest.json`。警告不改变 `status`，出包视为完成。
 
 ## 运行时打包
 

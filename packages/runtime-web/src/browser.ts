@@ -110,7 +110,10 @@ function visibleError(error: unknown): void {
   if (detail) { detail.hidden = false; detail.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error); }
 }
 
-function vmConsoleLogger(): (entry: TraceEntry) => void {
+/** Console trace for the HDMV VM: one line per decoded batch. `context` returns
+ * the menu scene and the button that triggered the batch, so a line reads on its
+ * own without the session that produced it. */
+function vmConsoleLogger(context?: () => string | null): (entry: TraceEntry) => void {
   let pending: TraceEntry[] = [];
   let scheduled = false;
   return (entry) => {
@@ -129,11 +132,18 @@ function vmConsoleLogger(): (entry: TraceEntry) => void {
         return type ? [type] : [];
       }));
       const diagnostics = summarizeLabels(batch.flatMap((item) => item.diagnostic ? [item.diagnostic.code] : []));
+      const faulted = batch.some((item) => item.status === "faulted");
+      // TIME_UPDATED arrives continuously for the whole menu loop and changes
+      // nothing; printing those batches buries the batches a click produces.
+      const heartbeatOnly = !actions && !diagnostics && !faulted && !!events && events.split(",").every((label) => label.startsWith("TIME_UPDATED"));
+      if (heartbeatOnly) return;
       if (!commands.length && !actions && !events && !diagnostics) return;
-      const shownCommands = commands.length <= 4
+      const shownCommands = commands.length <= 6
         ? commands.join(" → ")
-        : `${commands.slice(0, 2).join(" → ")} → … +${commands.length - 3} → ${commands.at(-1)}`;
-      const fields = [`${commands.length} step${commands.length === 1 ? "" : "s"}`];
+        : `${commands.slice(0, 2).join(" → ")} → … ${commands.length - 4} more → ${commands.slice(-2).join(" → ")}`;
+      const where = context?.();
+      const fields = where ? [where] : [];
+      fields.push(`${commands.length} step${commands.length === 1 ? "" : "s"}`);
       if (shownCommands) fields.push(shownCommands);
       if (actions) fields.push(`actions=${actions}`);
       if (events) fields.push(`events=${events}`);
@@ -143,6 +153,26 @@ function vmConsoleLogger(): (entry: TraceEntry) => void {
       console.info(`[VM] ${fields.join(" | ")}`);
     });
   };
+}
+
+/** Console trace for what the runtime did with a VM action: which packaged scene
+ * and background a jump reached, or why it did not move. */
+function menuLog(message: string): void {
+  console.info(`[menu] ${message}`);
+}
+
+/** Scene identity as it appears in the manifest, e.g. `clip 00014 pid 0x1400`. */
+function sceneLabel(scene: SerializedScene): string {
+  const clip = scene.clipId ?? scene.id ?? "?";
+  const pid = typeof scene.pid === "number" ? `0x${scene.pid.toString(16)}` : "?";
+  return `clip ${clip} pid ${pid}`;
+}
+
+/** Asset directory of a packaged background, e.g. `playlist-00016-pi2`. */
+function backgroundLabel(path: string | undefined): string {
+  if (!path) return "none";
+  const parts = path.split("/");
+  return parts.length >= 2 ? parts[parts.length - 2]! : path;
 }
 
 function summarizeLabels(values: string[]): string {
@@ -208,7 +238,14 @@ async function boot(): Promise<void> {
     const audio = document.getElementById("menu-audio") as HTMLAudioElement | null;
     if (!status || !start || !muteToggle || !canvas) throw new Error("The menu page is missing required runtime elements.");
     let viewport = new CanvasViewport(scene.width, scene.height);
-    const vm = createMenuVm(data, vmConsoleLogger());
+    // Context for the console trace. The button is recorded by the controllers
+    // and consumed by the next batch, so a line names the control that ran it.
+    const logState = { scene: sceneLabel(data.scene), button: "" };
+    const vm = createMenuVm(data, vmConsoleLogger(() => {
+      const button = logState.button;
+      logState.button = "";
+      return button ? `${logState.scene} · ${button}` : logState.scene;
+    }));
     if (data.vmInitialProgramId !== undefined) {
       if (!Number.isSafeInteger(data.vmInitialProgramId) || !(data.vmPrograms ?? []).some((program) => program.id === data.vmInitialProgramId)) throw new Error(`Invalid initial MovieObject ${String(data.vmInitialProgramId)}.`);
       vm.reset(data.vmInitialProgramId);
@@ -220,6 +257,12 @@ async function boot(): Promise<void> {
     // (playlist, PlayItem), not by playlist alone.
     const menuMedia = (data.menuMedia ?? []).filter((item) => item.playlist !== data.media?.playlist || (item.playItem ?? 0) !== (data.media?.playItem ?? 0));
     const playlistHasMedia = (playlist: number): boolean => data.media?.playlist === playlist || menuMedia.some((item) => item.playlist === playlist);
+    /** The packaged background a `(playlist, PlayItem)` request addresses. Kept
+     * for the console trace; the bridge owns the media it actually plays. */
+    const packagedMenuMedia = (playlist: number, playItem: number): PackageMenuMedia | undefined => {
+      const candidates = [data.media, ...menuMedia].filter((item): item is PackageMenuMedia => !!item && item.playlist === playlist);
+      return candidates.find((item) => (item.playItem ?? 0) === playItem) ?? (candidates.length === 1 ? candidates[0] : undefined);
+    };
     const requestedPlayItem = (playlist: number, action: { type: string; payload: { playItem?: number; playMark?: number } }): number => {
       if ((action.type === "PLAY_PLAYLIST_ITEM" || action.type === "LINK_PLAY_ITEM") && typeof action.payload.playItem === "number") return action.payload.playItem;
       if ((action.type === "PLAY_PLAYLIST_MARK" || action.type === "LINK_PLAY_MARK") && typeof action.payload.playMark === "number") {
@@ -279,8 +322,9 @@ async function boot(): Promise<void> {
       removePointer?.();
       scene = normalizeScene(target.scene, assetMap);
       activeMenuSceneKey = targetSceneKey;
+      logState.scene = sceneLabel(target.scene);
       viewport = new CanvasViewport(scene.width, scene.height);
-      controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
+      controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; }, activateButton: (pageId, button) => { logState.button = `button ${button.id} (page ${pageId})`; } }, data.inputConfig);
       const rect = canvas.getBoundingClientRect(); viewport.resize(canvas, rect.width, rect.height, window.devicePixelRatio || 1);
       controller.start();
       if (inputStarted) {
@@ -294,12 +338,23 @@ async function boot(): Promise<void> {
       if (!controller) return { menuPlaylistRequested: false, completion: Promise.resolve() };
       const mediaActions: Promise<void>[] = [];
       let menuPlaylistRequested = false;
+      // The controller records the activation before running its commands, so the
+      // action lines can name the control even though they run before the batch
+      // the trace prints. A popup menu consumes the activation while it is open.
+      const source = popupController?.activatedButtonId != null ? popupController : controller;
+      const pressed = source?.activatedButtonId != null ? `button ${source.activatedButtonId} (page ${source.page.id}) ` : "";
+      const report = (message: string): void => menuLog(`${pressed}${message}`);
       while (pendingActions.length) {
         const action = pendingActions.shift()!;
         const inputController = popupController ?? controller;
         if (action.type === "SET_BUTTON_PAGE") {
           const packed = action.payload.packed;
-          if (typeof packed === "number") inputController?.applySetButtonPage(packed);
+          if (typeof packed === "number") {
+            const before = inputController ? `${inputController.page.id}:${inputController.selectedButtonId ?? "none"}` : "";
+            inputController?.applySetButtonPage(packed);
+            const after = inputController ? `${inputController.page.id}:${inputController.selectedButtonId ?? "none"}` : "";
+            if (before !== after && inputController) report(`SET_BUTTON_PAGE #${packed.toString(16)} → page ${inputController.page.id} button ${inputController.selectedButtonId ?? "none"}`);
+          }
           else showStatus("VM emitted SET_BUTTON_PAGE without its packed operand.");
         } else if ((action.type === "ENABLE_BUTTON" || action.type === "DISABLE_BUTTON") && typeof action.payload.button === "number") {
           inputController?.setButtonEnabled(action.payload.button, action.type === "ENABLE_BUTTON");
@@ -322,7 +377,7 @@ async function boot(): Promise<void> {
               if (context) drawMenu(context, popupScene, popupController, popupViewport, rect.width, rect.height, window.devicePixelRatio || 1);
               ensureAnimationLoop();
             };
-            popupController = new MenuController(popupScene, vm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate() }, data.inputConfig);
+            popupController = new MenuController(popupScene, vm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate(), activateButton: (pageId, button) => { logState.button = `popup button ${button.id} (page ${pageId})`; } }, data.inputConfig);
             const rect = popupCanvas.getBoundingClientRect(); popupViewport.resize(popupCanvas, rect.width, rect.height, window.devicePixelRatio || 1);
             removePopupPointer = installCanvasPointerInput(popupCanvas, popupViewport, popupController, () => { const size = popupCanvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
             popupController.start();
@@ -343,12 +398,14 @@ async function boot(): Promise<void> {
           const menuScenesForPlaylist = data.menuScenes?.filter((item) => item.playlistId === playlist) ?? [];
           const target = menuScenesForPlaylist.find((item) => (item.playItem ?? 0) === playItem) ?? menuScenesForPlaylist[0];
           if (!target) {
+            report(`${action.type} playlist ${playlist} has no packaged IGS composition; released the VM wait`);
             showStatus(`Menu playlist ${playlist} has no packaged IGS composition.`);
             vm.releaseExternalPlayback(action);
             continue;
           }
           activeMenuPlaylist = playlist;
           activateMenuScene(target);
+          report(`${action.type} playlist ${playlist}${playItem ? ` PlayItem ${playItem}` : ""} → ${sceneLabel(target.scene)} · background ${backgroundLabel(packagedMenuMedia(playlist, playItem)?.background.path)}`);
           if (playlistHasMedia(playlist)) mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
           else {
             vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id });
@@ -362,37 +419,43 @@ async function boot(): Promise<void> {
           // background replaces the loop when that PlayItem has local media.
           const playlist = activeMenuPlaylist;
           const playItem = requestedPlayItem(playlist, action);
+          const jump = `${action.type === "LINK_PLAY_MARK" ? `LINK_MK ${action.payload.playMark}` : `LINK_PI ${playItem}`} → playlist ${playlist} PlayItem ${playItem}`;
           const entry = (data.menuScenes ?? []).find((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem);
           if (!entry) {
+            report(`${jump} is not packaged; stayed on ${logState.scene}`);
             showStatus(`Menu playlist ${playlist} PlayItem ${playItem} is not packaged; the menu stayed on the current page.`, { persist: true });
             continue;
           }
           activateMenuScene(entry);
           const shown = playbackBridge.showMenuItem?.(playlist, playItem);
           if (!shown) {
+            report(`${jump} → ${sceneLabel(entry.scene)} · no packaged background, the current one keeps playing`);
             if (!missingMenuMedia.has(`${playlist}:${playItem}`)) {
               missingMenuMedia.add(`${playlist}:${playItem}`);
               showStatus(`Menu PlayItem ${playItem} has no packaged background; the current one keeps playing.`);
             }
             continue;
           }
+          report(`${jump} → ${sceneLabel(entry.scene)} · background ${backgroundLabel(packagedMenuMedia(playlist, playItem)?.background.path)}`);
           mediaActions.push(shown.then((ok) => { if (!ok) showStatus(`Menu PlayItem ${playItem} background could not start.`); }));
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.preMenuPlaylistIds?.includes(action.payload.playlist)) {
           // Top Menu can start with a logo or warning playlist. Complete that intro
           // in the VM without handing it to the external player, then follow the
           // title/search actions that lead to the actual menu playlist.
+          report(`${action.type} playlist ${action.payload.playlist} → intro completed in the VM`);
           vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
           pendingActions.push(...vm.drainActions());
           continue;
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistHasMedia(action.payload.playlist))) {
           closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
-          if (result.status === "unavailable") { showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }
+          if (result.status === "unavailable") { report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} has no external target: ${result.message}`); showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }
           const bdmvPath = globalThis.__BDMV_BDMV_PATH__;
           if (!bdmvPath) { showStatus("The package is missing runtime/bdmv-config.js; set the BDMV path and reload.", { persist: true, error: true }); vm.releaseExternalPlayback(action); continue; }
           try {
             const protocolUrl = openExternalVideo(bdmvPath, result.item.streamPath, result.seekTime90k);
             setMenuMuted(true);
+            report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} → external player ${result.item.streamPath}${typeof result.seekTime90k === "number" ? ` at ${format90kSeconds(String(result.seekTime90k))}s` : ""}`);
             showStatus(`Requested ${result.item.streamPath} in the external player.`);
             location.href = protocolUrl;
           } catch (error) {
@@ -401,6 +464,7 @@ async function boot(): Promise<void> {
           vm.releaseExternalPlayback(action);
         } else {
           if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "TOP_MENU", "MENU_RETURN"].includes(action.type)) closePopup();
+          if (["LINK_PLAY_ITEM", "LINK_PLAY_MARK"].includes(action.type)) report(`${action.type} ${action.payload.playItem ?? action.payload.playMark ?? "?"} → no packaged menu playlist is active; handed to the fallback bridge`);
           if (action.type === "PLAY_PLAYLIST" && action.payload.playlist === data.media?.playlist) menuPlaylistRequested = true;
           mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
         }
@@ -481,7 +545,7 @@ async function boot(): Promise<void> {
       if (context) drawMenu(context, scene, controller, viewport, rect.width, rect.height, window.devicePixelRatio || 1);
       ensureAnimationLoop();
     };
-    controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
+    controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; }, activateButton: (pageId, button) => { logState.button = `button ${button.id} (page ${pageId})`; } }, data.inputConfig);
     start.hidden = false; start.disabled = false; showStatus("Images decoded. Select Start menu preview to enable input.");
     let removePointer: (() => void) | undefined;
     // The test host awaits fired listeners, so the handler returns its completion promise.

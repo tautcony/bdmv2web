@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import type { SourceLocation } from "@bdmv2web/bdmv-parser";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetRates } from "./budget.js";
 import type { MediaPlan as SourceMediaPlan, MediaPlanRequirement, PlannedTrack } from "./media-plan.js";
+import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color.js";
 
 export interface LinearProcessResult { stdout: string; stderr: string; }
 export type LinearProcessRunner = (executable: string, args: string[], timeoutMs: number, signal?: AbortSignal) => Promise<LinearProcessResult>;
@@ -16,6 +17,8 @@ export interface LinearMediaExportOptions {
   timeoutMs?: number;
   crf?: number;
   preset?: "medium" | "fast" | "veryfast" | "ultrafast";
+  codec?: VideoCodec;
+  hdrMode?: HdrMode;
   maxAssetBytes?: number | null;
   maxOutputBytes?: number | null;
   estimatedVideoBitsPerSecond?: number;
@@ -42,7 +45,7 @@ export interface LinearAssetPlan {
   playlistId: string;
   routes: MediaPlanRequirement["routes"];
   audioLanguage: string;
-  codec: "h264+aac";
+  codec: "h264+aac" | "hevc+aac";
   repeat: false;
   aspectRatio: string;
   width: number;
@@ -55,7 +58,10 @@ export interface LinearMediaPlan {
   schemaVersion: "1.0";
   status: "partial";
   strategy: { branches: "one-linear-asset-per-playlist-and-audio-language"; menuBackground: "separate-looping-asset"; menuBackgroundPath: "assets/media/background.mp4"; sourceStreamsPackaged: false };
-  encoding: { videoCodec: "h264"; audioCodec: "aac"; preset: string; crf: number; pixelFormat: "yuv420p"; frameRate: "passthrough"; faststart: true; aspectRatio: "preserve-per-playlist" };
+  encoding: {
+    videoCodec: VideoCodec; audioCodec: "aac"; preset: string; crf: number; pixelFormat: string; frameRate: "passthrough"; faststart: true; aspectRatio: "preserve-per-playlist";
+    color: { policy: HdrMode; source: SourceColor; output: OutputColor; filterChain: VideoColorPlan["filterChain"] };
+  };
   budget: { rates: MenuLoopBudgetRates; estimateBasis: "configured-target-bitrate-assumption"; existingOutputBytes: string; estimatedOutputBytes: string; maxAssetBytes: number | null; maxOutputBytes: number | null };
   assets: LinearAssetPlan[];
   diagnostics: LinearDiagnostic[];
@@ -64,10 +70,10 @@ export interface LinearMediaPlan {
 export interface LinearExportedAsset extends LinearAssetPlan { absolutePath: string; byteLength: number; durationSeconds: number; }
 export interface LinearMediaExportResult { plan: LinearMediaPlan; assets: LinearExportedAsset[]; tools: { ffmpeg: string; ffprobe: string; invocations: Array<{ executable: string; args: string[] }> }; }
 
-interface ProbeStream { index?: number; id?: string; codec_type?: string; codec_name?: string; width?: number; height?: number; display_aspect_ratio?: string; sample_rate?: string; channels?: number; duration?: string; }
+interface ProbeStream extends ColorProbeFields { index?: number; id?: string; codec_type?: string; codec_name?: string; width?: number; height?: number; display_aspect_ratio?: string; sample_rate?: string; channels?: number; duration?: string; }
 interface Probe { streams?: ProbeStream[]; format?: { start_time?: string; duration?: string }; }
 interface ResolvedPlayItem { item: MediaPlanRequirement["playItems"][number]; sourcePath: string; probe: Probe; video: ProbeStream; audios: Map<string, ProbeStream | null>; startOffsetSeconds: number; aspectRatio: string; }
-interface PendingAsset { plan: LinearAssetPlan; args: string[]; width: number; height: number; durationSeconds: number; }
+interface PendingAsset { plan: LinearAssetPlan; args: string[]; width: number; height: number; durationSeconds: number; codec: VideoCodec; color: VideoColorPlan; }
 
 export class LinearMediaExportError extends Error {
   constructor(readonly diagnostic: { code: "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID" | "MEDIA_ASSET_BUDGET_EXCEEDED" | "MEDIA_OUTPUT_BUDGET_EXCEEDED"; message: string; executable?: string; args?: string[]; limitBytes?: string; actualBytes?: string }, options?: ErrorOptions) {
@@ -84,8 +90,8 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
   const ffmpeg = options.ffmpegPath ?? "ffmpeg";
   const ffprobe = options.ffprobePath ?? "ffprobe";
   const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000;
-  const crf = options.crf ?? 18;
-  const preset = options.preset ?? "medium";
+  const crf = options.crf ?? ((options.codec ?? "hevc") === "hevc" ? 24 : 18);
+  const preset = options.preset ?? "veryfast";
   const rates: MenuLoopBudgetRates = {
     estimatedVideoBitsPerSecond: options.estimatedVideoBitsPerSecond ?? mediaPlan.budget.estimatedVideoBitsPerSecond,
     estimatedAudioBitsPerSecond: options.estimatedAudioBitsPerSecond ?? mediaPlan.budget.estimatedAudioBitsPerSecond,
@@ -130,11 +136,19 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
 
   const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"])).stdout);
   const ffprobeVersion = firstLine((await invoke(ffprobe, ["-version"])).stdout);
+  const codec = options.codec ?? "hevc";
+  if (codec !== "h264" && codec !== "hevc") throw new RangeError(`codec must be 'h264' or 'hevc', received '${String(codec)}'`);
+  const hdrMode: HdrMode = options.hdrMode ?? "tonemap";
+  if (hdrMode !== "tonemap" && hdrMode !== "preserve") throw new RangeError(`hdrMode must be 'tonemap' or 'preserve', received '${String(hdrMode)}'`);
   const encoderArgs = ["-hide_banner", "-encoders"];
   const encoders = await invoke(ffmpeg, encoderArgs);
   const encoderText = `${encoders.stdout}\n${encoders.stderr}`;
-  const missingEncoders = ["libx264", "aac"].filter((name) => !hasEncoder(encoderText, name));
+  const missingEncoders = [videoEncoderName(codec), "aac"].filter((name) => !hasEncoder(encoderText, name));
   if (missingEncoders.length) throw new LinearMediaExportError({ code: "MEDIA_PROCESS_FAILED", executable: ffmpeg, args: encoderArgs, message: `Required encoder${missingEncoders.length > 1 ? "s" : ""} unavailable: ${missingEncoders.join(", ")}.` });
+  const filterArgs = ["-hide_banner", "-filters"];
+  const filterList = await invoke(ffmpeg, filterArgs);
+  const filterText = `${filterList.stdout}\n${filterList.stderr}`;
+  const colorOptions = { policy: hdrMode, codec, hasZscale: hasFilter(filterText, "zscale"), hasLibplacebo: hasFilter(filterText, "libplacebo") };
 
   const requirements = mediaPlan.requirements;
   const sourceProbes = new Map<string, Probe>();
@@ -160,24 +174,26 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
         diagnostics.push({ code: "MEDIA_LINEAR_FORMAT_MISMATCH", message: `Playlist '${requirement.playlistId}' PlayItem ${incompatible.item.index} has video or audio parameters incompatible with the linear concat profile; no asset was emitted.`, source: incompatible.item.source });
         continue;
       }
-      const pending = makeLinearAsset(requirement, resolved, lanes as ProbeStream[], language, output, crf, preset, rates);
+      const pending = makeLinearAsset(requirement, resolved, lanes as ProbeStream[], language, output, { codec, crf, preset, colorOptions }, rates);
       pendingAssets.push(pending);
     }
   }
 
   const existingOutputBytes = await directoryBytes(output, new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path)))));
+  const planColor = pendingAssets[0]?.color ?? planVideoColor(readSourceColor({}), colorOptions);
+  const linearEncoding = { codec, crf, preset, color: planColor };
   for (const asset of pendingAssets) assertEstimateWithinLimit({ scope: "asset", estimateBytes: BigInt(asset.plan.estimatedBytes), limitBytes: options.maxAssetBytes, message: `Estimated linear asset '${asset.plan.path}' exceeds maxAssetBytes.` });
   const estimatedAssetBytes = pendingAssets.reduce((sum, asset) => sum + BigInt(asset.plan.estimatedBytes), 0n);
   let estimatedOutputBytes = existingOutputBytes + estimatedAssetBytes;
   let provisional: LinearMediaPlan;
   for (let pass = 0; pass < 4; pass++) {
-    provisional = makeLinearPlan(mediaPlan, pendingAssets.map((item) => item.plan), diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, preset, crf);
+    provisional = makeLinearPlan(mediaPlan, pendingAssets.map((item) => item.plan), diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, linearEncoding);
     const planBytes = BigInt(Buffer.byteLength(`${JSON.stringify(provisional, null, 2)}\n`));
     const next = existingOutputBytes + estimatedAssetBytes + planBytes;
     if (next === estimatedOutputBytes) break;
     estimatedOutputBytes = next;
   }
-  provisional = makeLinearPlan(mediaPlan, pendingAssets.map((item) => item.plan), diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, preset, crf);
+  provisional = makeLinearPlan(mediaPlan, pendingAssets.map((item) => item.plan), diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, linearEncoding);
   estimatedOutputBytes = existingOutputBytes + estimatedAssetBytes + BigInt(Buffer.byteLength(`${JSON.stringify(provisional, null, 2)}\n`));
   assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedOutputBytes, limitBytes: options.maxOutputBytes, message: "Estimated linear media package exceeds maxOutputBytes before encoding." });
   await mkdir(resolve(output, "assets/media"), { recursive: true });
@@ -195,7 +211,7 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
       const bytes = (await stat(absolutePath)).size;
       exported.push({ ...asset.plan, absolutePath, byteLength: bytes, ...measured });
     }
-    const plan = makeLinearPlan(mediaPlan, exported, diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, preset, crf);
+    const plan = makeLinearPlan(mediaPlan, exported, diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, linearEncoding);
     const manifest = `${JSON.stringify(plan, null, 2)}\n`;
     const finalBytes = await directoryBytes(output, new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path)))));
     assertActualWithinLimit({ scope: "package", actualBytes: finalBytes + BigInt(Buffer.byteLength(manifest)), limitBytes: options.maxOutputBytes, message: "Completed linear package would exceed maxOutputBytes before plan publication." });
@@ -287,7 +303,9 @@ function variantKey(track: PlannedTrack, audioCount: number): string | null {
   return audioCount === 1 ? "und" : null;
 }
 
-function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayItem[], audio: ProbeStream[], language: string, output: string, crf: number, preset: string, rates: MenuLoopBudgetRates): PendingAsset {
+function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayItem[], audio: ProbeStream[], language: string, output: string, encoding: { codec: VideoCodec; crf: number; preset: string; colorOptions: { policy: HdrMode; codec: VideoCodec; hasZscale: boolean; hasLibplacebo: boolean } }, rates: MenuLoopBudgetRates): PendingAsset {
+  const color = planVideoColor(readSourceColor(items[0]!.video), encoding.colorOptions);
+  const inputPixelFormat = color.output.bitDepth === 10 ? "yuv420p10le" : "yuv420p";
   const total45k = items.reduce((sum, entry) => sum + BigInt(entry.item.sourceOut45k - entry.item.sourceIn45k), 0n);
   const estimate = estimateMenuLoopBudget(Number(total45k), 1, rates);
   const playlistPart = pathPart(requirement.playlistId);
@@ -305,7 +323,7 @@ function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayI
     const duration = seconds(Number(duration45k) / 45_000);
     const videoIndex = entry.video.index;
     const audioIndex = audio[index]!.index;
-    filterParts.push(`[${index}:${videoIndex}]trim=duration=${duration},setpts=PTS-STARTPTS,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p[v${index}]`);
+    filterParts.push(`[${index}:${videoIndex}]trim=duration=${duration},setpts=PTS-STARTPTS,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=${inputPixelFormat}[v${index}]`);
     filterParts.push(`[${index}:${audioIndex}]atrim=duration=${duration},asetpts=PTS-STARTPTS[a${index}]`);
     concatInputs.push(`[v${index}][a${index}]`);
     const primaryAudioStreamNumber = primaryAudioStreamNumberForLanguage(entry.item.tracks, language);
@@ -314,16 +332,21 @@ function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayI
     timelineStart += duration45k;
   }
   filterParts.push(`${concatInputs.join("")}concat=n=${items.length}:v=1:a=1[outv][outa]`);
-  args.push("-filter_complex", filterParts.join(";"), "-map", "[outv]", "-map", "[outa]", "-c:v", "libx264", "-preset", preset, "-crf", String(crf), "-pix_fmt", "yuv420p", "-aspect", items[0]!.aspectRatio, "-fps_mode", "passthrough", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "mp4", resolve(output, path));
-  const plan: LinearAssetPlan = { assetId, path, playlistId: requirement.playlistId, routes: requirement.routes, audioLanguage: language, codec: "h264+aac", repeat: false, aspectRatio: items[0]!.aspectRatio, width: items[0]!.video.width!, height: items[0]!.video.height!, mappings, duration45k: timelineStart.toString(), estimatedBytes: estimate.totalMediaBytes };
-  return { plan, args, width: items[0]!.video.width!, height: items[0]!.video.height!, durationSeconds: Number(timelineStart) / 45_000 };
+  filterParts.push(`[outv]${color.videoFilter}[vout]`);
+  args.push("-filter_complex", filterParts.join(";"), "-map", "[vout]", "-map", "[outa]", ...videoEncoderArgs(color, encoding.codec, encoding.crf, encoding.preset), "-aspect", items[0]!.aspectRatio, "-fps_mode", "passthrough", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "mp4", resolve(output, path));
+  const plan: LinearAssetPlan = { assetId, path, playlistId: requirement.playlistId, routes: requirement.routes, audioLanguage: language, codec: `${encoding.codec}+aac`, repeat: false, aspectRatio: items[0]!.aspectRatio, width: items[0]!.video.width!, height: items[0]!.video.height!, mappings, duration45k: timelineStart.toString(), estimatedBytes: estimate.totalMediaBytes };
+  return { plan, args, width: items[0]!.video.width!, height: items[0]!.video.height!, durationSeconds: Number(timelineStart) / 45_000, codec: encoding.codec, color };
 }
 
-function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPlan[], diagnostics: LinearDiagnostic[], rates: MenuLoopBudgetRates, existingOutputBytes: bigint, estimatedOutputBytes: bigint, options: LinearMediaExportOptions, preset: string, crf: number): LinearMediaPlan {
+function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPlan[], diagnostics: LinearDiagnostic[], rates: MenuLoopBudgetRates, existingOutputBytes: bigint, estimatedOutputBytes: bigint, options: LinearMediaExportOptions, encoding: { codec: VideoCodec; crf: number; preset: string; color: VideoColorPlan }): LinearMediaPlan {
   const plan: LinearMediaPlan = {
     schemaVersion: "1.0", status: "partial",
     strategy: { branches: "one-linear-asset-per-playlist-and-audio-language", menuBackground: "separate-looping-asset", menuBackgroundPath: "assets/media/background.mp4", sourceStreamsPackaged: false },
-    encoding: { videoCodec: "h264", audioCodec: "aac", preset, crf, pixelFormat: "yuv420p", frameRate: "passthrough", faststart: true, aspectRatio: "preserve-per-playlist" },
+    encoding: {
+      videoCodec: encoding.codec, audioCodec: "aac", preset: encoding.preset, crf: encoding.crf,
+      pixelFormat: `yuv420p${encoding.color.output.bitDepth === 10 ? "10le" : ""}`, frameRate: "passthrough", faststart: true, aspectRatio: "preserve-per-playlist",
+      color: { policy: encoding.color.policy, source: encoding.color.source, output: encoding.color.output, filterChain: encoding.color.filterChain },
+    },
     budget: { rates, estimateBasis: "configured-target-bitrate-assumption", existingOutputBytes: existingOutputBytes.toString(), estimatedOutputBytes: estimatedOutputBytes.toString(), maxAssetBytes: options.maxAssetBytes ?? null, maxOutputBytes: options.maxOutputBytes ?? null },
     assets: assets.map(({ assetId, path, playlistId, routes, audioLanguage, codec, repeat, aspectRatio, width, height, mappings, duration45k, estimatedBytes }) => ({ assetId, path, playlistId, routes, audioLanguage, codec, repeat, aspectRatio, width, height, mappings, duration45k, estimatedBytes })), diagnostics: [...diagnostics],
     limitations: [
@@ -380,7 +403,8 @@ function validateOutput(probe: Probe, asset: PendingAsset): { width: number; hei
     const audios = probe.streams?.filter((stream) => stream.codec_type === "audio") ?? [];
     if (videos.length !== 1 || audios.length !== 1) throw new Error(`expected one video and one audio stream; found ${videos.length} and ${audios.length}`);
     const video = videos[0]!;
-    if (video.codec_name !== "h264" || !validDimension(video.width) || !validDimension(video.height) || video.width % 2 !== 0 || video.height % 2 !== 0) throw new Error("video codec or even dimensions failed verification");
+    assertEncodedColor(video, asset.color, asset.codec, asset.plan.path);
+    if (!validDimension(video.width) || !validDimension(video.height) || video.width % 2 !== 0 || video.height % 2 !== 0) throw new Error("even dimensions failed verification");
     if (audios[0]!.codec_name !== "aac") throw new Error("audio codec is not AAC");
     const duration = Number(video.duration ?? probe.format?.duration);
     if (!Number.isFinite(duration) || Math.abs(duration - asset.durationSeconds) > 0.25) throw new Error(`encoded duration ${duration} differs from planned ${asset.durationSeconds}`);
@@ -395,7 +419,7 @@ function parseProbe(text: string, subject: string): Probe {
   try { const value = JSON.parse(text) as Probe; if (!Array.isArray(value.streams)) throw new Error("no streams array"); return value; }
   catch (error) { throw new Error(`invalid ffprobe JSON for '${subject}': ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
 }
-function probeArgs(path: string): string[] { return ["-v", "error", "-show_entries", "stream=index,id,codec_type,codec_name,width,height,display_aspect_ratio,sample_rate,channels,duration:format=start_time,duration", "-of", "json", path]; }
+function probeArgs(path: string): string[] { return ["-v", "error", "-show_entries", "stream=index,id,codec_type,codec_name,width,height,display_aspect_ratio,sample_rate,channels,duration,pix_fmt,color_range,color_space,color_transfer,color_primaries,bits_per_raw_sample:stream_side_data=side_data_type:format=start_time,duration", "-of", "json", path]; }
 function streamPid(id: string | undefined): number | null { if (!id) return null; return /^0x[0-9a-f]+$/i.test(id) ? Number.parseInt(id.slice(2), 16) : /^\d+$/.test(id) ? Number(id) : null; }
 function aspectRatio(stream: ProbeStream): string { if (stream.display_aspect_ratio && /^\d+:\d+$/.test(stream.display_aspect_ratio)) return stream.display_aspect_ratio; if (!validDimension(stream.width) || !validDimension(stream.height)) throw new Error("source aspect ratio is unknown"); const divisor = gcd(stream.width, stream.height); return `${stream.width / divisor}:${stream.height / divisor}`; }
 function sameAspectRatio(left: string, right: string): boolean { const [lw, lh] = left.split(":").map(Number); const [rw, rh] = right.split(":").map(Number); return lw! * rh! === rw! * lh!; }
@@ -403,6 +427,7 @@ function gcd(a: number, b: number): number { return b === 0 ? a : gcd(b, a % b);
 function validDimension(value: number | undefined): value is number { return Number.isSafeInteger(value) && value! > 0; }
 function positiveInteger(value: number): boolean { return Number.isSafeInteger(value) && value > 0; }
 function hasEncoder(text: string, name: string): boolean { return text.split(/\r?\n/).some((line) => /^\s*[VAS.D]{6}\s+/.test(line) && line.trim().split(/\s+/, 2)[1] === name); }
+function hasFilter(text: string, name: string): boolean { return text.split(/\r?\n/).some((line) => /^\s*[TSC.]{2,3}\s+/.test(line) && line.trim().split(/\s+/, 2)[1] === name); }
 function firstLine(text: string): string { return text.split(/\r?\n/, 1)[0] || "unknown"; }
 function seconds(value: number): string { return value.toFixed(9).replace(/0+$/, "").replace(/\.$/, ""); }
 function pathPart(value: string): string { return basename(value).replace(/[^a-zA-Z0-9._-]/g, "-") || "unknown"; }

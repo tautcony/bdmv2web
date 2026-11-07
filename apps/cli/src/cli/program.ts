@@ -26,6 +26,22 @@ function nonEmpty(value: string): string {
   return value;
 }
 
+/** Restrict an option to a documented set of values. */
+function oneOf(name: string, allowed: readonly string[]): (value: string) => string {
+  return (value: string) => {
+    if (!allowed.includes(value)) throw new InvalidArgumentError(`${name} must be one of: ${allowed.join(", ")}`);
+    return value;
+  };
+}
+
+/** Parse a CRF value in the encoder's 0–51 range. */
+function crfValue(value: string): number {
+  if (!/^\d+$/.test(value)) throw new InvalidArgumentError("crf must be an integer from 0 through 51");
+  const parsed = Number(value);
+  if (parsed > 51) throw new InvalidArgumentError("crf must be an integer from 0 through 51");
+  return parsed;
+}
+
 function withStrict(command: Command): Command {
   return command
     .option("--strict", "treat error diagnostics as a stage failure")
@@ -64,6 +80,10 @@ export function buildProgram(): Command {
     .option("--player-profile <file>", "player profile JSON", nonEmpty)
     .option("--limits <file>", "VM limits JSON", nonEmpty)
     .option("--overwrite", "replace an existing output directory")
+    .option("--crf <value>", "encoder quality 0-51 (HEVC default 24, H.264 default 18)", crfValue)
+    .option("--preset <preset>", "encoder preset: ultrafast, veryfast, fast, medium", oneOf("preset", ["ultrafast", "veryfast", "fast", "medium"]))
+    .option("--codec <codec>", "menu video codec: hevc (default) or h264", oneOf("codec", ["h264", "hevc"]))
+    .option("--hdr <mode>", "HDR handling: tonemap (default) or preserve", oneOf("hdr", ["tonemap", "preserve"]))
     .option("--progress", "print step progress on stderr")
     .option("--no-progress", "keep stderr silent");
   withStrict(buildCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("build", input, options));

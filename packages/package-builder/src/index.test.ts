@@ -104,7 +104,7 @@ describe("menu package primitives", () => {
         { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 } }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 0 }, activated: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 1 } }, commands: [] },
         { id: 2, bog: 0, enabled: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 }, soundId: 2 } }, commands: [] },
       ] }] };
-      await buildMenuPackage({
+      const packaged = await buildMenuPackage({
         outputDirectory, title: "Sound preview", ir, scene: soundScene, graphics: [], soundBytes, inputConfig: { escapeMapping: "topMenu" },
         soundEntries: [
           { index: 0, channelCode: 1, sampleRateCode: 1, bitsPerSampleCode: 1, channels: 1, sampleRate: 48000, bitsPerSample: 16, sampleOffset: 80, sampleByteLength: 4 },
@@ -127,6 +127,9 @@ describe("menu package primitives", () => {
         { code: "SOUND_FORMAT_UNSUPPORTED", message: "Sound 1 referenced by page 0, button 1 has unsupported M1 PCM attributes (channel=2, rate=1, bits=1)." },
         { code: "SOUND_REFERENCE_MISSING", message: "Sound 2 is referenced by page 0, button 2 but has no M1 sound entry." },
       ]);
+      // Diagnostics that are only known once assets exist (media colour warnings)
+      // have to come back to the caller, which alone can put them in the report.
+      expect(packaged.diagnostics).toEqual(manifest.diagnostics);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("embeds the player profile in runtime data so the packaged VM matches conversion", async () => {

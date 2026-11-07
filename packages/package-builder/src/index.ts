@@ -5,7 +5,7 @@ import { deflateSync } from "node:zlib";
 import { build } from "esbuild";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type MenuLoopMediaInput, type PgsDisplaySet } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MenuLoopMediaInput, type PgsDisplaySet, type VideoCodec } from "@bdmv2web/media-export";
 
 /** A rendered PNG image asset ready for offline embedding. */
 export interface PngPayload { id: string; bytes: Uint8Array }
@@ -77,6 +77,14 @@ export function createCompatibility(metadata: MenuPackageMetadata, externalPlayb
   };
 }
 
+/** Menu media encoder settings forwarded to every menu media export. */
+export interface MenuMediaEncoding {
+  crf?: number;
+  preset?: "medium" | "fast" | "veryfast" | "ultrafast";
+  codec?: VideoCodec;
+  hdrMode?: HdrMode;
+}
+
 export interface MenuPackageInput {
   outputDirectory: string;
   title: string;
@@ -114,9 +122,11 @@ export interface MenuPackageInput {
   diagnostics?: MenuPackageMetadata["diagnostics"];
   /** Top Menu background/audio export. */
   menuLoopMedia?: MenuLoopMediaInput;
+  /** Menu media encoder settings: codec, quality, and HDR policy. Defaults to HEVC / CRF 24 / veryfast / tonemap. */
+  mediaEncoding?: MenuMediaEncoding;
   /** Local media for always-on menu playlists other than Top Menu. */
   additionalMenuMedia?: MenuLoopMediaInput[];
-  onMediaProgress?: (progress: { assetPath: string; outTimeSeconds: number; durationSeconds: number; state: "continue" | "end" }) => void;
+  onMediaProgress?: (progress: MediaAssetProgress) => void;
   /** Announces each assembly phase so a caller can report progress: media export, file writes, runtime bundle, manifest. */
   onPhase?: (phase: "media" | "assets" | "bundle" | "manifest") => void;
   /** Previous package directory used as the source for media-plan-matched assets on overwrite. */
@@ -124,8 +134,11 @@ export interface MenuPackageInput {
   pngLimits?: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number };
 }
 
+/** What the caller can act on after the package is written: the diagnostics recorded in its manifest. */
+export interface MenuPackageResult { diagnostics: MenuPackageDiagnostic[] }
+
 /** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
-export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
+export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
   const ir = parseDiscIR(input.ir);
   const sceneSize = getSceneSize(input.scene);
   const batches = makePngBatches(input.graphics, input.pngLimits);
@@ -140,7 +153,8 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
   input.onPhase?.("media");
-  const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, preset: "veryfast", ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
+  const mediaEncoding = input.mediaEncoding ?? {};
+  const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
   const additionalMedia: Array<{ result: Awaited<ReturnType<typeof exportMenuLoopMedia>>; sanitizedId: string }> = [];
   for (const media of input.additionalMenuMedia ?? []) {
     // A menu playlist can own several PlayItems (sub-menus reached with LinkPI),
@@ -150,12 +164,17 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     const sanitizedId = `${media.playlistId}-pi${media.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
     additionalMedia.push({ sanitizedId, result: await exportMenuLoopMedia(media, {
       outputDirectory: output,
-      preset: "veryfast",
+      ...mediaEncoding,
       assetDirectory: `assets/media/playlist-${sanitizedId}`,
       planPath: `media-plans/playlist-${sanitizedId}.json`,
       ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}),
       ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}),
     }) });
+  }
+  // Colour-pipeline warnings describe a complete export; record them once in the
+  // manifest so the report shows why HDR media keeps non-SDR signalling.
+  for (const warning of [exportedMedia?.warnings ?? [], ...additionalMedia.map(({ result }) => result.warnings)].flat()) {
+    if (!diagnostics.some((entry) => entry.code === warning.code)) diagnostics.push({ code: warning.code, message: warning.message, severity: "warning" });
   }
   const runtimeMenuMedia = additionalMedia.map(({ result }) => ({
     playlist: Number(result.plan.playlistId),
@@ -208,6 +227,9 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
   const manifest = { schemaVersion: "1.0", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  // Media warnings are only known after encoding, so the caller gets them back
+  // instead of the status, which stays decided by pre-packaging facts.
+  return { diagnostics: metadata.diagnostics };
 }
 
 /** Convert only M1-declared 48 kHz, signed 16-bit mono/stereo PCM sample ranges. BCLK words are big-endian. */

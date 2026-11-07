@@ -1,4 +1,4 @@
-import { flagEnabled, inputPath, optionState, optionValue, strictDefault } from "../cli/context.js";
+import { flagEnabled, inputPath, optionNumber, optionState, optionValue, strictDefault } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { loadLimits, loadPlayerProfile } from "../cli/profile.js";
 import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/stages.js";
@@ -12,7 +12,7 @@ import { parseDiscIR } from "@bdmv2web/core";
 import { HdmvVm } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { createExternalMediaTargets, resolveMenuLoopStart45k } from "@bdmv2web/media-export";
-import { buildMenuPackage } from "@bdmv2web/package-builder";
+import { buildMenuPackage, type MenuMediaEncoding } from "@bdmv2web/package-builder";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 import { classifyDiagnostics, decideDelivery } from "@bdmv2web/test-runner";
 import { readFile, realpath, writeFile } from "node:fs/promises";
@@ -20,6 +20,20 @@ import { basename, dirname, relative, resolve } from "node:path";
 import type { ProgressMode } from "../progress.js";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 import type { DiscIR, Limits, PlayerProfile } from "@bdmv2web/core";
+
+/** Menu media encoder settings from `--crf`, `--preset`, `--codec` and `--hdr`. */
+export function menuMediaEncoding(): MenuMediaEncoding | undefined {
+  const crf = optionNumber("--crf");
+  const preset = optionValue("--preset");
+  const codec = optionValue("--codec");
+  const hdrMode = optionValue("--hdr");
+  const encoding: MenuMediaEncoding = {};
+  if (crf !== undefined) encoding.crf = crf;
+  if (preset !== undefined) encoding.preset = preset as NonNullable<MenuMediaEncoding["preset"]>;
+  if (codec !== undefined) encoding.codec = codec as NonNullable<MenuMediaEncoding["codec"]>;
+  if (hdrMode !== undefined) encoding.hdrMode = hdrMode as NonNullable<MenuMediaEncoding["hdrMode"]>;
+  return Object.keys(encoding).length ? encoding : undefined;
+}
 
 export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], playItemIndex?: number): Array<{ clipId: string; pid: number }> {
   const targets: Array<{ clipId: string; pid: number }> = [];
@@ -464,8 +478,10 @@ export async function build(): Promise<void> {
       additionalMenuMedia.length ? countOf(additionalMenuMedia.length, "extra playlist", "extra playlists") : null,
     ].filter((item): item is string => item !== null);
     progress.done(CONVERT_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
-    await buildMenuPackage({
+    const mediaEncoding = menuMediaEncoding();
+    const packaged = await buildMenuPackage({
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
+      ...(mediaEncoding ? { mediaEncoding } : {}),
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
       scene, popupScenes, menuScenes, menuPlaylistIds, vmPrograms, vmEntries: disc.entries,
       ...(menuPlaylistMarks.length ? { menuPlaylistMarks } : {}),
@@ -478,10 +494,12 @@ export async function build(): Promise<void> {
       ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
-      onMediaProgress: ({ assetPath, outTimeSeconds, durationSeconds, state }) => {
+      onMediaProgress: ({ outTimeSeconds, durationSeconds, state, source }) => {
         const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
         const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;
-        progress.progress(ratio, `${basename(assetPath)} ${seconds}`);
+        const language = source.language !== undefined && source.language !== "" && source.language !== "und" ? source.language : `0x${source.pid.toString(16)}`;
+        const stream = source.kind === "background" ? "background" : `audio ${language}`;
+        progress.progress(ratio, `clip ${source.clipId} · ${stream} ${seconds}`);
       },
       onPhase: (phase) => {
         if (phase === "media") {
@@ -500,6 +518,12 @@ export async function build(): Promise<void> {
       },
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
+    // Media colour-pipeline warnings are known only after encoding. They never
+    // change the delivery status, so they join the report without re-deciding it.
+    for (const { code, message, severity } of packaged.diagnostics) {
+      if (severity !== "warning" || decisionFacts.some((fact) => fact.code === code)) continue;
+      decisionFacts.push({ severity, code, message: safeDiagnosticMessage(message, roots.input) });
+    }
     const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
     await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();

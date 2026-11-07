@@ -9,7 +9,9 @@ const input: MenuLoopMediaInput = {
   playItemIndex: 0, clipId: "00004", inTime45k: 524_280, outTime45k: 5_439_815, stillMode: 0, repeatCount: 999,
   videoPid: 4113, audioTracks: [{ streamNumber: 0, pid: 4352, language: "eng" }, { streamNumber: 1, pid: 4353, language: "jpn" }],
 };
-const availableEncoders = " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n A....D aac AAC (Advanced Audio Coding)\n";
+const availableEncoders = " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n V....D libx265 H.265 / HEVC\n A....D aac AAC (Advanced Audio Coding)\n";
+const availableFilters = " TS zscale            V->V       Apply resizing, colorspace and dithering.\n .. tonemap           V->V       Conversion to/from different dynamic ranges.\n";
+const encodedVideo = (codec = "hevc", duration = "109.190") => ({ index: 0, id: "0x0", codec_type: "video", codec_name: codec, width: 1920, height: 1080, duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" });
 
 describe("menu-loop media export", () => {
   it("maps the first PlayItem range to seconds and selects streams by declared MPEG-TS PID", () => {
@@ -39,6 +41,7 @@ describe("menu-loop media export", () => {
       calls.push({ executable, args });
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       const path = args.at(-1)!;
       if (args[0] === "-v") {
         if (path.endsWith("00004.m2ts")) return { stdout: JSON.stringify({ streams: [
@@ -49,7 +52,7 @@ describe("menu-loop media export", () => {
         const audio = path.endsWith(".m4a");
         return { stdout: JSON.stringify({ streams: [audio
           ? { index: 0, id: "0x0", codec_type: "audio", codec_name: "aac", duration: String(encodedDuration) }
-          : { index: 0, id: "0x0", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: String(encodedDuration) },
+          : encodedVideo("hevc", String(encodedDuration)),
         ], format: { duration: String(encodedDuration) } }), stderr: "" };
       }
       await writeFile(path, Buffer.from("encoded media"));
@@ -60,11 +63,14 @@ describe("menu-loop media export", () => {
       const result = await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, crf: 22, preset: "fast" });
       expect(result.plan).toMatchObject({ status: "partial", playlistId: "00003", playItemIndex: 0, clipId: "00004", repeatCount: 999, backgroundMode: "loop-one-clip" });
       expect(result.plan.limitations).toContain("Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.");
-      expect(result.plan.encoding).toEqual({
-        video: { codec: "h264", pixelFormat: "yuv420p", preset: "fast", crf: 22, aspectRatioPolicy: "preserve-source-display-aspect", frameRatePolicy: "passthrough", evenDimensions: true },
+      expect(result.plan.encoding).toMatchObject({
+        video: {
+          codec: "hevc", pixelFormat: "yuv420p", preset: "fast", crf: 22, aspectRatioPolicy: "preserve-source-display-aspect", frameRatePolicy: "passthrough", evenDimensions: true,
+          color: { policy: "tonemap", filterChain: "passthrough", output: { primaries: "bt709", transfer: "bt709", matrix: "bt709", range: "tv", bitDepth: 8 } },
+        },
         audio: { codec: "aac", bitrate: "192k" }, container: { video: "mp4", audio: "m4a", faststart: true },
       });
-      expect(result.background).toMatchObject({ path: "assets/media/background.mp4", codec: "h264", pid: 4113, width: 1920, height: 1080, loop: true });
+      expect(result.background).toMatchObject({ path: "assets/media/background.mp4", codec: "hevc", pid: 4113, width: 1920, height: 1080, loop: true });
       expect(result.audioTracks.map(({ streamNumber, pid, language, codec }) => ({ streamNumber, pid, language, codec }))).toEqual([
         { streamNumber: 0, pid: 4352, language: "eng", codec: "aac" }, { streamNumber: 1, pid: 4353, language: "jpn", codec: "aac" },
       ]);
@@ -83,13 +89,18 @@ describe("menu-loop media export", () => {
         expect(still.audioTracks).toHaveLength(2);
       } finally { await rm(stillRoot, { recursive: true, force: true }); }
       const videoEncode = calls.find((call) => call.executable === "ffmpeg" && call.args.includes("-map") && call.args.includes("0:i:0x1011"))!.args;
-      expect(videoEncode).toEqual(expect.arrayContaining(["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p", "-aspect", "16:9", "-fps_mode", "passthrough", "-movflags", "+faststart", "-f", "mp4"]));
+      expect(videoEncode).toEqual(expect.arrayContaining(["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx265", "-x265-params", "log-level=error:colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p", "-tag:v", "hvc1", "-aspect", "16:9", "-fps_mode", "passthrough", "-movflags", "+faststart", "-f", "mp4"]));
       const audioEncode = calls.find((call) => call.executable === "ffmpeg" && call.args.includes("0:i:0x1100"))!.args;
       expect(audioEncode).toEqual(expect.arrayContaining(["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "ipod"]));
       expect(calls.find((call) => call.args.at(-1)?.endsWith("background.mp4"))?.args).toContain("0:i:0x1011");
       expect(calls.find((call) => call.args.at(-1)?.endsWith("audio-1100-eng.m4a"))?.args).toContain("0:i:0x1100");
       expect(calls.filter((call) => call.executable === "ffmpeg" && call.args.includes("-map")).every((call) => call.args.includes("-ss") && call.args.includes("0"))).toBe(true);
-      expect(JSON.parse(await readFile(join(root, "media-plan.json"), "utf8"))).toMatchObject({ repeatCount: 999, sourceFile: "BDMV/STREAM/00004.m2ts" });
+      // The plan on disk is what a later --overwrite run compares against, so the
+      // explicit encoder settings must survive the write, not only the return value.
+      expect(JSON.parse(await readFile(join(root, "media-plan.json"), "utf8"))).toMatchObject({
+        repeatCount: 999, sourceFile: "BDMV/STREAM/00004.m2ts",
+        encoding: { video: { codec: "hevc", preset: "fast", crf: 22, color: { policy: "tonemap" } } },
+      });
       const scopedRoot = await mkdtemp(join(tmpdir(), "bdmv-media-scoped-"));
       try {
         const scoped = await exportMenuLoopMedia(input, { outputDirectory: scopedRoot, runProcess: run, assetDirectory: "assets/media/playlist-00018", planPath: "media-plans/playlist-00018.json" });
@@ -169,7 +180,7 @@ describe("menu-loop media export", () => {
       catch (error) { caught = error; }
       expect(caught).toBeInstanceOf(MediaToolError);
       expect((caught as MediaToolError).diagnostic).toMatchObject({ code: "MEDIA_ENCODER_UNAVAILABLE", executable: "ffmpeg", args: ["-hide_banner", "-encoders"] });
-      expect((caught as MediaToolError).message).toMatch(/libx264/);
+      expect((caught as MediaToolError).message).toMatch(/libx265/);
       expect(calls.some(({ args }) => args[0] === "-v")).toBe(false);
       await expect(readFile(join(root, "assets/media/background.mp4"))).rejects.toMatchObject({ code: "ENOENT" });
     } finally { await rm(root, { recursive: true, force: true }); }
@@ -182,6 +193,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       const path = args.at(-1)!;
       if (args[0] === "-v") {
         if (path === sourcePath) return { stdout: JSON.stringify({ streams: [
@@ -190,7 +202,7 @@ describe("menu-loop media export", () => {
           { id: "0x1101", codec_type: "audio", codec_name: "dts" },
         ], format: { start_time: "11.650667" } }), stderr: "" };
         const audio = path.endsWith(".m4a");
-        return { stdout: JSON.stringify({ streams: [audio ? { codec_type: "audio", codec_name: "aac", duration: "109.19" } : { codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: "109.19" }], format: { duration: "109.19" } }), stderr: "" };
+        return { stdout: JSON.stringify({ streams: [audio ? { codec_type: "audio", codec_name: "aac", duration: "109.19" } : encodedVideo("hevc", "109.19")], format: { duration: "109.19" } }), stderr: "" };
       }
       await writeFile(path, Buffer.from("encoded"));
       return { stdout: "", stderr: "" };
@@ -210,6 +222,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       if (args[0] === "-v") return { stdout: JSON.stringify({ streams: [
         { id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9" },
         { id: "0x1100", codec_type: "audio", codec_name: "dts" },
@@ -236,6 +249,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args, _timeoutMs, signal) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       if (args[0] === "-v") return { stdout: JSON.stringify({ streams: [
         { id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9" },
         { id: "0x1100", codec_type: "audio", codec_name: "dts" },
@@ -261,6 +275,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args, _timeoutMs, signal) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       if (args[0] === "-v") return { stdout: JSON.stringify({ streams: [
         { id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9" },
         { id: "0x1100", codec_type: "audio", codec_name: "dts" },
@@ -284,6 +299,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       if (args[0] === "-v") {
         if (args.at(-1) === input.sourcePath) return { stdout: JSON.stringify({ streams: [
           { id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9" },
@@ -345,6 +361,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args, _timeoutMs, signal) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       const path = args.at(-1)!;
       if (args[0] === "-v") return { stdout: JSON.stringify({ streams: [
         { index: 0, id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: "109.234" },
@@ -374,6 +391,60 @@ describe("menu-loop media export", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  it("tone maps HDR menu sources to BT.709 and keeps HDR signalling when no tone mapping filter exists", async () => {
+    const runWith = (filters: string, tonemapped: boolean): { run: MediaProcessRunner; calls: string[][] } => {
+      const calls: string[][] = [];
+      const run: MediaProcessRunner = async (executable, args) => {
+        calls.push(args);
+        if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
+        if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+        if (args.includes("-filters")) return { stdout: filters, stderr: "" };
+        const path = args.at(-1)!;
+        if (args[0] === "-v") {
+          if (path.endsWith("00004.m2ts")) return { stdout: JSON.stringify({ streams: [
+            { index: 0, id: "0x1011", codec_type: "video", codec_name: "hevc", width: 3840, height: 2160, pix_fmt: "yuv420p10le", color_primaries: "bt2020", color_transfer: "smpte2084", color_space: "bt2020nc", color_range: "tv" },
+            { index: 1, id: "0x1100", codec_type: "audio", codec_name: "dts" },
+            { index: 2, id: "0x1101", codec_type: "audio", codec_name: "dts" },
+          ], format: { start_time: "11.650667" } }), stderr: "" };
+          if (path.endsWith(".m4a")) return { stdout: JSON.stringify({ streams: [{ codec_type: "audio", codec_name: "aac", duration: "109.19" }], format: { duration: "109.19" } }), stderr: "" };
+          return { stdout: JSON.stringify({ streams: [tonemapped
+            ? encodedVideo("hevc", "109.19")
+            : { ...encodedVideo("hevc", "109.19"), pix_fmt: "yuv420p10le", color_primaries: "bt2020", color_transfer: "smpte2084", color_space: "bt2020nc" }], format: { duration: "109.19" } }), stderr: "" };
+        }
+        await writeFile(path, Buffer.from("encoded"));
+        return { stdout: "", stderr: "" };
+      };
+      return { run, calls };
+    };
+
+    const tonemapRoot = await mkdtemp(join(tmpdir(), "bdmv-media-hdr-tonemap-"));
+    const fallbackRoot = await mkdtemp(join(tmpdir(), "bdmv-media-hdr-fallback-"));
+    try {
+      const tonemapped = runWith(availableFilters, true);
+      const mapped = await exportMenuLoopMedia(input, { outputDirectory: tonemapRoot, runProcess: tonemapped.run });
+      expect(mapped.plan.encoding.video.color).toMatchObject({ policy: "tonemap", filterChain: "zscale-tonemap", output: { primaries: "bt709", transfer: "bt709", matrix: "bt709", bitDepth: 8 } });
+      expect(mapped.plan.encoding.video.pixelFormat).toBe("yuv420p");
+      expect(mapped.warnings).toEqual([]);
+      const mappedEncode = tonemapped.calls.find((args) => args.includes("0:i:0x1011"))!;
+      const filter = mappedEncode[mappedEncode.indexOf("-vf") + 1]!;
+      expect(filter).toContain("zscale=t=linear:npl=100");
+      expect(filter).toContain("tonemap=tonemap=hable:desat=0");
+      expect(mappedEncode).toEqual(expect.arrayContaining(["-pix_fmt", "yuv420p", "-x265-params", "log-level=error:colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv"]));
+
+      const fallback = runWith(" .. tonemap           V->V       Conversion only; no resampling filter here\n", false);
+      const kept = await exportMenuLoopMedia(input, { outputDirectory: fallbackRoot, runProcess: fallback.run });
+      expect(kept.plan.encoding.video.color).toMatchObject({ policy: "tonemap", filterChain: "hdr-passthrough-fallback", output: { primaries: "bt2020", transfer: "smpte2084", matrix: "bt2020nc", bitDepth: 10 } });
+      expect(kept.plan.encoding.video.pixelFormat).toBe("yuv420p10le");
+      expect(kept.warnings.map((warning) => warning.code)).toEqual(["MEDIA_HDR_TONEMAP_UNAVAILABLE"]);
+      expect(kept.plan.limitations.some((limitation) => /no tone mapping filter/.test(limitation))).toBe(true);
+      const keptEncode = fallback.calls.find((args) => args.includes("0:i:0x1011"))!;
+      expect(keptEncode).toEqual(expect.arrayContaining(["-pix_fmt", "yuv420p10le", "-x265-params", "log-level=error:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=tv"]));
+    } finally {
+      await rm(tonemapRoot, { recursive: true, force: true });
+      await rm(fallbackRoot, { recursive: true, force: true });
+    }
+  });
+
   it("enforces maxOutputBytes across existing package files plus assets, independently of maxAssetBytes", async () => {
     const root = await mkdtemp(join(tmpdir(), "bdmv-media-package-budget-write-"));
     const preserved = join(root, "keep.txt");
@@ -381,6 +452,7 @@ describe("menu-loop media export", () => {
     const run: MediaProcessRunner = async (executable, args, _timeoutMs, signal) => {
       if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
       const path = args.at(-1)!;
       if (args[0] === "-v") return { stdout: JSON.stringify({ streams: [
         { index: 0, id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: "109.234" },

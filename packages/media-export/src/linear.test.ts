@@ -56,7 +56,8 @@ function fakeRunner(options: { failOutputPath?: string } = {}): { run: LinearPro
   const run: LinearProcessRunner = async (executable, args) => {
     calls.push({ executable, args: [...args] });
     if (args[0] === "-version") return { stdout: `${executable} version synthetic\n`, stderr: "" };
-    if (args.includes("-encoders")) return { stdout: " V....D libx264 H.264 encoder\n A....D aac AAC encoder\n", stderr: "" };
+    if (args.includes("-encoders")) return { stdout: " V....D libx264 H.264 encoder\n V....D libx265 H.265 encoder\n A....D aac AAC encoder\n", stderr: "" };
+    if (args.includes("-filters")) return { stdout: " TS zscale            V->V       Apply resizing, colorspace and dithering.\n", stderr: "" };
     if (args[0] === "-v") {
       const path = args.at(-1)!;
       if (path.endsWith(".m2ts")) return { stdout: JSON.stringify({ streams: [
@@ -66,7 +67,7 @@ function fakeRunner(options: { failOutputPath?: string } = {}): { run: LinearPro
       ], format: { start_time: "0" } }), stderr: "" };
       const duration = durationByOutput.get(path) ?? "1.000";
       return { stdout: JSON.stringify({ streams: [
-        { index: 0, codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration },
+        { index: 0, codec_type: "video", codec_name: "hevc", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" },
         { index: 1, codec_type: "audio", codec_name: "aac", sample_rate: "48000", channels: 2, duration },
       ], format: { duration } }), stderr: "" };
     }
@@ -118,7 +119,7 @@ describe("linear playlist media export", () => {
       expect(branchTwo[branchTwo.indexOf("-filter_complex") + 1]).toContain("concat=n=1:v=1:a=1");
       expect(branchTwo).toContain(join(sourceRoot, "BDMV/STREAM/00003.m2ts"));
       expect(branchTwo).not.toContain(join(sourceRoot, "BDMV/STREAM/00001.m2ts"));
-      expect(branchOne).toEqual(expect.arrayContaining(["-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", "-aspect", "16:9", "-fps_mode", "passthrough", "-preset", "fast", "-crf", "21"]));
+      expect(branchOne).toEqual(expect.arrayContaining(["-c:v", "libx265", "-x265-params", "log-level=error:colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv", "-tag:v", "hvc1", "-c:a", "aac", "-movflags", "+faststart", "-aspect", "16:9", "-fps_mode", "passthrough", "-preset", "fast", "-crf", "21"]));
       const saved = await readFile(join(output, "linear-media-plan.json"), "utf8");
       expect(saved).not.toContain("STREAM/00001.m2ts");
       expect(saved).not.toContain("STREAM/00002.m2ts");
