@@ -1,0 +1,18 @@
+docs/README.md
+  h_3705811fa4502c 21
+docs/references/stages/M2-igs-scenes.md
+  h_3705811fa4502c 71,92
+test-data/baselines/igs-reference-element-summary.json
+  h_3705811fa4502c 8,17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f2e33a7e9945cd34d03bdcc34750198265a37822",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
