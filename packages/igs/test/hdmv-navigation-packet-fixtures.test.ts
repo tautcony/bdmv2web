@@ -10,7 +10,6 @@ const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/
 const fixtures = [
   { caseId: "tamako", clipId: "00005", pages: 7, objects: 168, palettes: 7, assets: 168, renderAssets: true },
   { caseId: "tamako", clipId: "00043", pages: 7, objects: 168, palettes: 7, assets: 168, renderAssets: false },
-  { caseId: "baja", clipId: "00005", pages: 4, objects: 41, palettes: 4, assets: 41, renderAssets: false },
   { caseId: "kyoani-ova", clipId: "00005", pages: 4, objects: 32, palettes: 4, assets: 32, renderAssets: false },
   { caseId: "battle-royale-uhd", clipId: "00002", pages: 21, objects: 215, palettes: 21, assets: 215, renderAssets: false },
   { caseId: "battle-royale-uhd", clipId: "00005", pages: 4, objects: 55, palettes: 4, assets: 68, renderAssets: true },

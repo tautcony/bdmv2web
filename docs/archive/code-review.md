@@ -115,7 +115,7 @@ corepack pnpm -r typecheck  → failed（test-runner + runtime-web；-r 在第�
 ### `@bdmv2web/runtime-web` — 浏览器运行时
 
 - ✅ `MenuController` 对 UO mask 位序（`63 - fieldIndex`）、BOG 变体选择、`autoAction` 递归深度上限、指针与键盘路径分离（hover 不触发 autoAction）都处理得比一般实现细；`MenuSoundPlayer` / `MenuLoopPlaybackBridge` 对 `NotAllowedError` 的"可关联重试"很实用。
-- ⚠️ **审计盲区（安全相关）**：`src/browser.ts:130` 用 `image.src = \`http://127.0.0.1:${port}/open?token=...\`` 以 `<img>` 发 GET 触发本地桥——GET-with-side-effect 且 token 落在 URL 里。更关键的是 `package-audit.ts:214` 的 URL 正则只匹配 `= "字面量"`，**模板字面量完全不被采集**，离线审计无法把这条 loopback 调用归因，只能靠 `BUNDLE_DYNAMIC_ACCESS` 笼统标 `not-verified`。实测 `validate test-data/output/baja-studio-menu --offline` 输出中没有任何一条指向 `127.0.0.1` 的检查项。
+- ⚠️ **审计盲区（安全相关）**：`src/browser.ts:130` 用 `image.src = \`http://127.0.0.1:${port}/open?token=...\`` 以 `<img>` 发 GET 触发本地桥——GET-with-side-effect 且 token 落在 URL 里。更关键的是 `package-audit.ts:214` 的 URL 正则只匹配 `= "字面量"`，**模板字面量完全不被采集**，离线审计无法把这条 loopback 调用归因，只能靠 `BUNDLE_DYNAMIC_ACCESS` 笼统标 `not-verified`。实测 `validate test-data/output/tamako-love-story-menu --offline` 输出中没有任何一条指向 `127.0.0.1` 的检查项。
 - ⚠️ `MenuController` 构造第 4 参为 `MenuScheduler | Partial<MenuInputConfig>`，靠 `isMenuScheduler()` 运行时判别（`src/index.ts:151-157`）。传错类型不报错，只会静默降级。建议改重载或合并为 `options`。
 - ⚠️ `EventScheduler.advance()` 对 `due <= now` 的回调立即执行（第 84-87 行），若回调以 0 延迟重新调度自身会**死循环且无迭代上限**。`runAutomaticAction` 有 32 层保护，scheduler 层没有。
 - ⚠️ `dispatchActions()` 已集中处理 action，但 `TITLE_SEARCH` 在 `PreviewPlaybackBridge` 里另有分支，语义重叠。
@@ -500,7 +500,7 @@ corepack pnpm --filter @bdmv2web/igs test             # 54 用例
 corepack pnpm --filter @bdmv2web/runtime-web test     # 91 用例
 
 # 端到端：离线校验示例包
-node apps/cli/dist/index.js validate test-data/output/baja-studio-menu --offline
+node apps/cli/dist/index.js validate test-data/output/tamako-love-story-menu --offline
 
 # 第二轮补充复现：空 BDMV 当前仍 exit 0 并生成 partial 包
 mkdir -p /tmp/bdmv-empty/BDMV

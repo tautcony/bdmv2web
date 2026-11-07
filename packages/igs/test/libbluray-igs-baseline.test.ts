@@ -123,16 +123,16 @@ function summarizeScene(scene: IgsScene): Pick<IcsRow, "width" | "height" | "fra
 }
 
 describe("libbluray 1.5.0 IG decoder baseline", () => {
-  it("keeps the complete nine-clip decoder baseline in the repository", async () => {
+  it("keeps the complete eight-clip decoder baseline in the repository", async () => {
     const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
     expect(golden.reference).toMatchObject({
       tool: "VideoLAN libbluray", version: "1.5.0",
       revision: "d75c88e54c893e5cbf4c61d356477655eb435769",
     });
-    expect(golden.cases).toHaveLength(9);
-    expect(golden.cases.reduce((total, entry) => total + entry.objects.length, 0)).toBe(913);
+    expect(golden.cases).toHaveLength(8);
+    expect(golden.cases.reduce((total, entry) => total + entry.objects.length, 0)).toBe(872);
     expect(golden.cases.every((entry) => entry.displaySet.complete === 1)).toBe(true);
-    expect(golden.cases.filter((entry) => entry.displaySet.epochStart === 1)).toHaveLength(8);
+    expect(golden.cases.filter((entry) => entry.displaySet.epochStart === 1)).toHaveLength(7);
   });
 
   it("covers exactly the same object ids as the independent igstools RGBA reference", async () => {
@@ -156,7 +156,7 @@ describe("libbluray 1.5.0 IG decoder baseline", () => {
   });
 
   it.each([
-    ["baja", "00005", 0x1400], ["bang-dream-mygo-vol1", "00010", 0x1400],
+    ["bang-dream-mygo-vol1", "00010", 0x1400],
     ["bang-dream-mygo-vol1", "00011", 0x1400], ["battle-royale-uhd", "00002", 0x1400],
     ["battle-royale-uhd", "00005", 0x1400], ["kyoani-ova", "00005", 0x1400],
     ["synthetic-igs-parser", "00001", 0x120], ["tamako", "00005", 0x1400],

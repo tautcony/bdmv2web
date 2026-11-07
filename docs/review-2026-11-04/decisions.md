@@ -89,16 +89,16 @@
 9. 包内 README（`:229`）的 `always **partial**` 改为按 status 动态措辞。
 10. validate 不回写 `manifest.status`；不一致时输出 `manifestStatus` 与实际 `status`，诊断码 `MANIFEST_STATUS_UNVERIFIED`（不是 `STALE`——不是过期，是证据不足）。
 
-### 预期效果（以 baja 为验收标准）
+### 预期效果（以真实碟为验收标准）
 
-样本：`test-data/bdmv/[BDMV][アニメ][1710XX] バジャのスタジオ`（6 playlist / 7 clip / 6 entry，STREAM 齐全，解析诊断 7 info、0 error）。
+样本：工作区完整 BDMV（6 playlist / 7 clip / 6 entry，STREAM 齐全，解析诊断 7 info、0 error）。
 
 **改动前实测基线**：
 
 | 命令 | status | 证据 |
 | --- | --- | --- |
-| `convert ... --out /tmp/baja-menu` | `partial` | exit 0；诊断 7 info + 6 warning，**0 error**；reasons 3 条全是缺证据 |
-| `validate /tmp/baja-menu --offline --format json` | `partial` | exit 0；checks 5 pass / 3 not-verified / **0 fail**；reasons 7 条全是缺证据或 limitation |
+| `convert ... --out /tmp/menu` | `partial` | exit 0；诊断 7 info + 6 warning，**0 error**；reasons 3 条全是缺证据 |
+| `validate /tmp/menu --offline --format json` | `partial` | exit 0；checks 5 pass / 3 not-verified / **0 fail**；reasons 7 条全是缺证据或 limitation |
 
 **改动后期望**：两者都 `complete`。`validate` 的 `notVerified` 仍列出 3 条（browser evidence、reference evidence、coverage），但不影响状态。
 
@@ -167,7 +167,7 @@
 
 ### 前提已核实
 
-`test-data/bdmv/` 目前有两张碟（baja、tamako），都是 16:9、1080p，菜单视频与 IGS scene 比例一致，**无法复现** `P3-P2-2` 的错位。
+`test-data/bdmv/` 的 tamako 真实碟是 16:9、1080p，菜单视频与 IGS scene 比例一致，**无法复现** `P3-P2-2` 的错位。
 
 ### 处理方式
 
@@ -199,7 +199,7 @@
 
 只给出现过假失败的包设 `testTimeout: 15000`：`apps/cli`、`media-export`、`runtime-web`，其余包不动，不启用 `slow` 标注。
 
-**2026-11-05 更正**：上一版写"实测最慢单条 47s 的导航回归在 `hdmv`，需要单独看"，这是错的。47s 用例在 `runtime-web`（`src/tamako-headless-navigation.test.ts:214`），且已显式 `}, 120_000)`；`baja-studio-headless-navigation.test.ts:229`、`hdmv-navigation-corpus-dfs.test.ts:34` 同样带 `120_000`。per-test 超时优先于全局配置，所以给 `runtime-web` 设 15000 不会缩短这三条；`hdmv` 没有实测慢例。设置全局值的目的是兜住 CLI 那种 5–6s 的用例，不是覆盖语料回归。
+**2026-11-05 更正**：上一版写"实测最慢单条 47s 的导航回归在 `hdmv`，需要单独看"，这是错的。47s 用例在 `runtime-web`（`src/tamako-headless-navigation.test.ts:214`），且已显式 `}, 120_000)`；`hdmv-navigation-corpus-dfs.test.ts:34` 同样带 `120_000`。per-test 超时优先于全局配置，所以给 `runtime-web` 设 15000 不会缩短这三条；`hdmv` 没有实测慢例。设置全局值的目的是兜住 CLI 那种 5–6s 的用例，不是覆盖语料回归。
 
 ### D-7 0x24 剩余属性位
 

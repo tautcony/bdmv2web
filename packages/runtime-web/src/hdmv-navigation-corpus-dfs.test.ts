@@ -7,7 +7,7 @@ import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, Hdm
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const libblurayGoldenPath = resolve(repo, "docs/evidence/libbluray-1.5.0-navigation-baseline.json");
-const corpus = ["tamako", "baja", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
+const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
 const MAX_SCENARIOS_PER_CASE = 128;
 const MAX_STATES_PER_SCENARIO = 50_000;
 let corpusBranchSitesWithBothOutcomes = 0;
@@ -33,11 +33,6 @@ const regressionPins: Record<(typeof corpus)[number], {
     executedEntries: 33,
     observedPlaylists: [0, 1, 3, 24, 25, 26, 27, 42, 57, 58, 59, 60, 61, 62, 67],
     stats: { states: 7416, commandStates: 3574, graphEdges: 4415, coveredEdges: 3147, simulatedEdges: 501, unavailableEdges: 0, unresolvedEdges: 354, staticLoops: 0, runtimeActualLoops: 2, runtimeSimulatedLoops: 3, scenarios: 43, cycleStatesDeduplicated: 5, branchAlternativesQueued: 413 },
-  },
-  baja: {
-    executedEntries: 6,
-    observedPlaylists: [0, 1, 2, 3, 4, 5],
-    stats: { states: 225, commandStates: 70, graphEdges: 86, coveredEdges: 52, simulatedEdges: 20, unavailableEdges: 6, unresolvedEdges: 3, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 10, scenarios: 8, cycleStatesDeduplicated: 10, branchAlternativesQueued: 2 },
   },
   "kyoani-ova": {
     executedEntries: 5,

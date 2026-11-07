@@ -74,23 +74,25 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 
 ## Test baseline
 
-The baseline was re-measured 2026-11-07 with `bash scripts/ci.sh` in a Linux `node:24-bookworm` container (Node `24.22.2` / pnpm `11.25.0`). It collects 43 test files and reports 538 passed, 0 skipped. A copy containing only checked-in fixtures reports 537 passed and 1 skipped (`packages/igs/test/tamako-real-smoke.test.ts` needs the workspace-local `test-data/bdmv/`). Ten of those cases are the igstools element-level RGBA comparison, 11 are the libbluray 1.5.0 IG decoder comparison, and 6 are the libbluray 1.5.0 navigation and control-flow graph comparison. `docs/evidence/libbluray-1.5.0-igs-baseline.json` and `docs/evidence/libbluray-1.5.0-navigation-baseline.json` hold the committed libbluray output; the tests read those files and the checked-in fixtures, and CI needs no local libbluray.
+The baseline was re-measured 2026-11-07 with `bash scripts/ci.sh` on Node `24.18.0` / pnpm `11.25.0`. A copy containing only checked-in fixtures collects 42 test files and reports 528 passed, 1 skipped (`packages/igs/test/tamako-real-smoke.test.ts` needs the workspace-local `test-data/bdmv/`); with that sample present the same run reports 529 passed, 0 skipped. Nine of those cases are the igstools element-level RGBA comparison, 10 are the libbluray 1.5.0 IG decoder comparison, and 5 are the libbluray 1.5.0 navigation and control-flow graph comparison. `docs/evidence/libbluray-1.5.0-igs-baseline.json` and `docs/evidence/libbluray-1.5.0-navigation-baseline.json` hold the committed libbluray output; the tests read those files and the checked-in fixtures, and CI needs no local libbluray.
 
 | Package | Command | Tests |
 | --- | --- | ---: |
 | `@bdmv2web/core` | `corepack pnpm --filter @bdmv2web/core test` | 14 |
 | `@bdmv2web/bdmv-io` | `corepack pnpm --filter @bdmv2web/bdmv-io test` | 6 |
-| `@bdmv2web/bdmv-parser` | `corepack pnpm --filter @bdmv2web/bdmv-parser test` | 69 |
-| `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` | 80 |
+| `@bdmv2web/bdmv-parser` | `corepack pnpm --filter @bdmv2web/bdmv-parser test` | 66 |
+| `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` | 77 |
 | `@bdmv2web/hdmv` | `corepack pnpm --filter @bdmv2web/hdmv test` | 90 |
 | `@bdmv2web/media-export` | `corepack pnpm --filter @bdmv2web/media-export test` | 53 |
-| `@bdmv2web/runtime-web` | `corepack pnpm --filter @bdmv2web/runtime-web test` | 114 |
+| `@bdmv2web/runtime-web` | `corepack pnpm --filter @bdmv2web/runtime-web test` | 112 |
 | `@bdmv2web/package-builder` | `corepack pnpm --filter @bdmv2web/package-builder test` | 10 |
 | `@bdmv2web/test-fixtures` | `corepack pnpm --filter @bdmv2web/test-fixtures test` | 5 |
 | `@bdmv2web/test-runner` | `corepack pnpm --filter @bdmv2web/test-runner test` | 48 |
-| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 49 |
+| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 48 |
 
 Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded (they are no longer emitted at all, see below). A package whose configuration matches no test file fails instead of reporting success.
+
+The 2026-11-07 revision removed one real-disc fixture from the corpus: test files 43 → 42, `bdmv-parser` 69 → 66, `igs` 80 → 77, `runtime-web` 114 → 112, `cli` 49 → 48.
 
 Any change to these counts must update this table in the same change, with the reason recorded.
 

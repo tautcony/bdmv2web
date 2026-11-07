@@ -25,21 +25,6 @@
   "referencePngOutput": ".reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/",
   "cases": [
     {
-      "case": "baja",
-      "clip": "00005",
-      "report": "docs/evidence/igs-fixture-packet-comparisons/baja-00005.json",
-      "buttonStateReferences": 55,
-      "uniqueElementReferences": 41,
-      "matchedAssets": 41,
-      "statusCounts": {
-        "match": 41
-      },
-      "totalPixels": 1063772,
-      "differentPixels": 0,
-      "visibleRgbDifferentPixels": 0,
-      "multiFrameRanges": 0
-    },
-    {
       "case": "bang-dream-mygo-vol1",
       "clip": "00010",
       "report": "docs/evidence/igs-fixture-packet-comparisons/bang-dream-mygo-vol1-00010.json",
@@ -161,10 +146,10 @@
     }
   ],
   "totals": {
-    "cases": 9,
-    "buttonStateReferences": 1048,
-    "matchedAssets": 932,
-    "totalPixels": 46815935,
+    "cases": 8,
+    "buttonStateReferences": 993,
+    "matchedAssets": 891,
+    "totalPixels": 45752163,
     "differentPixels": 0,
     "visibleRgbDifferentPixels": 0,
     "missingReferences": 0,

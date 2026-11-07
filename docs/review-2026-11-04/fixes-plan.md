@@ -73,7 +73,7 @@ C2 本轮只做文档动作（`docs/guides/browser-matrix.md` 已知限制），
 | D2 | `P1-INFO-3` 真实 UHD 的 0x24 断言 | — | `parser.test.ts` |
 | D3 | `P1-INFO-1` 0x24 未读位 | **D-7**：只修注释，不扩展模型 | `parser.ts:198-201,309-313` |
 
-D1 需注意：最慢单条（~47s 语料回归）在 `runtime-web` 的 `tamako-headless-navigation.test.ts:214`，该用例已显式 `120_000`，另有两条同类用例（`baja-studio-headless-navigation.test.ts:229`、`hdmv-navigation-corpus-dfs.test.ts:34`）。per-test 值优先，设全局 15000 不会缩短它们；`hdmv` 无实测慢例，不要顺手加配置。上一版写的"47s 在 hdmv"是事实错误，已更正。
+D1 需注意：最慢单条（~47s 语料回归）在 `runtime-web` 的 `tamako-headless-navigation.test.ts:214`，该用例已显式 `120_000`，另有同类用例（`hdmv-navigation-corpus-dfs.test.ts:34`）。per-test 值优先，设全局 15000 不会缩短它们；`hdmv` 无实测慢例，不要顺手加配置。上一版写的"47s 在 hdmv"是事实错误，已更正。
 
 ### 不在本批（观察项 6 条 + 挂起 1 条）
 

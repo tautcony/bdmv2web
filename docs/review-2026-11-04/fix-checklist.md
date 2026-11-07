@@ -82,7 +82,7 @@
 - [x] 实施修复：`tsTypeLength` 不自洽 → warning 且跳过 TS type id（不再整条丢 CLPI）；`seqLen` 不自洽 → warning，计数上界改用 `data.length`（`sequenceLimit`）
 - [x] 保留越界保护：`atcCount` 超过文件长度仍然 `throw`（`still rejects a CLPI whose ATC count exceeds the file`）
 - [x] 回归测试：三条用例分别覆盖 TS type 长度越界、ATC 序列长度少报、ATC 计数超文件
-- [x] 相邻路径/兼容性验证：两张真实碟（baja / tamako）解析出的 clip 未减少，导航用例结果不变
+- [x] 相邻路径/兼容性验证：tamako 真实碟解析出的 clip 未减少，导航用例结果不变
 - [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/bdmv-parser test` → 69 passed
 - [x] 发布/监控/文档：`bdmv-disc-inspection` spec 同步
 - 最后更新: 2026-11-05
@@ -97,7 +97,7 @@
 - [x] 复现/确认触发条件：`validate PKG --offline --format` → exit 1 且三份报告 mtime 变化
 - [x] 实施修复：在任何写操作前解析 `--format`（只接受 `json`，否则 `CLI_INVALID_FORMAT`）；`--strict` 统一走 `strictDefault()`
 - [x] 回归测试：新增 `does not write any report when validate arguments are invalid`（断言三份报告与原字节一致）
-- [x] 相邻路径验证：正常 `validate` 与 `--strict` 输出不变（baja `complete` exit 0、tamako `partial` exit 2）
+- [x] 相邻路径验证：正常 `validate` 与 `--strict` 输出不变（tamako `partial` exit 2）
 - [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
 - [x] 发布/监控/文档：README 的 validate 用法补 `--format` 取值说明
 - 最后更新: 2026-11-05
@@ -126,7 +126,7 @@
 ### Checklist
 - [x] 决策 1：允许 `complete` —— **生成出菜单就不算 partial，算 complete**（2026-11-05 09:35）
 - [x] 决策 2：**`not fully verified` / `not-verified` 不算阻碍项**，只有失败证据才阻断（2026-11-05 09:40）
-- [x] 决策 3：**完整 BDMV 生成后必须能通过校验**，以 baja（バジャのスタジオ）真实碟为验收标准
+- [x] 决策 3：**完整 BDMV 生成后必须能通过校验**，以真实碟为验收标准
 - [x] 复现/确认触发条件：`convert` → `partial`；`validate --offline --format json` → `partial`，7 条理由中 4 条是缺证据
 - [x] 实施修复 1：从 `partialConditions` 移出缺证据类条件 → 只保留 `hasUnresolvedReachability === true`、`hasUnsupportedReachableCapability === true`、`errorDiagnostic && !failedDiagnostic`、未知 severity
 - [x] 实施修复 2：保留 `=== true` 的失败条件（unresolved reachability / unsupported capability / missing asset）
@@ -139,7 +139,7 @@
 - [x] 实施修复 9：`report.json` 增加 `auditScope: "convert"`（仅标注来源，不影响判定）
 - [x] 必须改：`createReadme` 的 `always **partial**` 改为按 status 动态措辞（`Its delivery status is **${status}**. \`complete\` means no known failure was found…`）
 - [x] 回归测试：重写 convert 用例；新增"只有 not-verified、无 fail → complete"；`test-runner/src/index.test.ts` 的 `checks: []` 改为 `complete` + `notVerified`
-- [x] 验收（正例）：`convert "…バジャのスタジオ" --strict` → `{"status":"complete"}` exit 0；`validate --offline --format json --strict` → `release.status=complete`、`exitCode=0`、`notVerified` 12 项不阻断
+- [x] 验收（正例）：对工作区完整 BDMV 样本 `convert <样本> --strict` → `{"status":"complete"}` exit 0；`validate --offline --format json --strict` → `release.status=complete`、`exitCode=0`、`notVerified` 12 项不阻断
 - [x] 验收（反例）：`convert tamako-love-story-bd` → `partial`（37 条 error 诊断仍是 error，不进 notVerified）；`validate --strict` → exit 2
 - [x] 相邻路径验证：`validate` 不回写 `manifest.status`；不一致时 stdout 给 `manifestStatus` 并追加 `MANIFEST_STATUS_UNVERIFIED`（`not-verified`）
 - [x] 不要改：`cli-delivery-status/spec.md` 的「无缺口时退出 0」「状态可为 complete」保持原文
@@ -190,7 +190,7 @@
 - [x] 实施修复：先算 `releaseSummary`，再与 `compatibility.json`、`reports/release-summary.json` 一起写，只写 `releaseSummary.dependencyAudit`
 - [x] 回归测试：`writes the same dependency audit to disk as to stdout for a package without static payload`（断言磁盘 `checks` 与 stdout 相等，且 `modeSource === "report"`）
 - [x] 相邻路径验证：有 `index.html` 的包结果不变；三份产物与 stdout 同源
-- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed；baja 真实包三份产物与 stdout 一致
+- [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed；真实包三份产物与 stdout 一致
 - [x] 发布/监控/文档：`cli-delivery-status/spec.md` 新增 Requirement「落盘报告与命令输出同源」
 - 最后更新: 2026-11-05
 
@@ -205,7 +205,7 @@
 - [x] 决策（已采纳）：mode 解析改为 `manifest.mode` → `report.json.mode`（只取形态，不信任 `status`）→ 未知；未知时报 `PACKAGE_MODE_ASSUMED`（`not-verified`）
 - [x] 实施修复：读取 `report.json` 作为回退；summary 增加 `modeSource`（`manifest` / `report` / `assumed`），禁止静默默认
 - [x] 回归测试：失败包用例断言 `mode === "menu-only"` 且 `modeSource === "report"`；两者都缺时断言 `PACKAGE_MODE_ASSUMED`
-- [x] 相邻路径验证：成功包 `modeSource === "manifest"`（baja 实测）；`validate` 不因 report 的 `status: failed` 影响自己的 decision
+- [x] 相邻路径验证：成功包 `modeSource === "manifest"`（真实包实测）；`validate` 不因 report 的 `status: failed` 影响自己的 decision
 - [x] 验证命令与证据：`corepack pnpm --filter @bdmv2web/cli test` → 33 passed
 - [x] 发布/监控/文档：`cli-delivery-status/spec.md` 新增 Requirement「交付形态来源可追溯」
 - 最后更新: 2026-11-05
@@ -234,7 +234,7 @@
 
 ### Checklist
 - [x] 决策：**无案例不处理**（2026-11-05，D-4）
-- [x] 前提核实：`test-data/bdmv/` 的两张碟（baja、tamako）均为 16:9，视频与 scene 比例一致，无法复现
+- [x] 前提核实：`test-data/bdmv/` 的 tamako 真实碟为 16:9，视频与 scene 比例一致，无法复现
 - [x] 文档动作（本轮已做）：`docs/guides/browser-matrix.md` 的「Known limitations」记录"素材比例 ≠ scene 比例时 background 与 canvas 各自 letterbox 可能错位，尚未验证"
 - [ ] **触发条件**：新增 4:3 或非等比例菜单素材，或拿到"视频分辨率 ≠ scene 尺寸"的真实包
 - [ ] 触发后：由 JS 用同一份 letterbox rect 同时设置 video 与 canvas，而非各自交给 CSS `contain`
@@ -247,7 +247,7 @@
 - 来源: [`phases/phase-4-verification.md`](./phases/phase-4-verification.md)
 - 位置: `apps/cli`/`media-export`/`runtime-web` 的 `vitest.config.ts` · 批次: Batch D1 · 决策: [D-6](./decisions.md) · 总体状态: [~]
 - 影响摘要: 高负载下 2 条 CLI 用例（5821/5876ms）撞 5000ms 默认超时；空载重跑全绿（451 passed / 1 skipped）
-- 事实更正（2026-11-05）: 47s 语料回归在 `runtime-web`，不在 `hdmv`；且该用例已显式 `120_000`（`tamako-headless-navigation.test.ts:214`），同类还有 `baja-studio-headless-navigation.test.ts:229`、`hdmv-navigation-corpus-dfs.test.ts:34`。per-test 优先，设全局 15000 不影响它们。
+- 事实更正（2026-11-05）: 47s 语料回归在 `runtime-web`，不在 `hdmv`；且该用例已显式 `120_000`（`tamako-headless-navigation.test.ts:214`），同类还有 `hdmv-navigation-corpus-dfs.test.ts:34`。per-test 优先，设全局 15000 不影响它们。
 
 ### Checklist
 - [x] 复现/确认触发条件：并联其它重活跑 `corepack pnpm -r --no-bail test`，观察到 `records the requested player profile…` 撞 5000ms

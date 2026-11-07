@@ -24,7 +24,7 @@
 - 挂起（条件触发）: **1**（`P3-P2-2`，无比例不等的样本；D-4 要求有样本后再处理）
 - 未开始: **1**（`P2-INFO-1`：目前没有 fatal 级 IGS 诊断生产者，暂时没有可触发案例）
 - 决策已实现: 4 组（`P1-P2-1`、`P1-P2-2`、`P2-P2-3`、`P2-INFO-2`）+ 2 条默认假设（D-12 `P2-P2-6`、D-13 `P2-P2-7`）全部落地
-- D-2R 验收结果: baja `convert` → `complete`（exit 0），`validate --strict` → `complete`（exit 0，12 项 `notVerified` 不阻断）；tamako `convert` → `partial`（37 条 error），`validate --strict` → exit 2
+- D-2R 验收结果: tamako `convert` → `partial`（37 条 error），`validate --strict` → exit 2
 
 ## 优先处理
 
@@ -38,7 +38,7 @@
 | [P2-P2-6](./phases/phase-2-cli-status.md) | P2 | [x] | `dependency-audit.json` 落盘与 stdout 不一致 | 先算 summary 再写，三份产物同源 |
 | [P2-P2-7](./phases/phase-2-cli-status.md) | P2 | [x] | 失败包 mode 静默回落 `standalone-full` | manifest → report → `PACKAGE_MODE_ASSUMED` |
 
-> D-2R 验收标准：对 `test-data/bdmv/[BDMV][アニメ][1710XX] バジャのスタジオ`（完整 BDMV，STREAM 齐全），`convert` 与随后的 `validate --offline` 都应输出 `complete`。反例：`tamako-love-story-bd` 缺 37 个 STREAM，必须仍是 `partial`。
+> D-2R 验收标准：对工作区完整 BDMV 样本（STREAM 齐全），`convert` 与随后的 `validate --offline` 都应输出 `complete`。反例：`tamako-love-story-bd` 缺 37 个 STREAM，必须仍是 `partial`。
 
 其余 P2：[`P2-P2-4`](./phases/phase-2-cli-status.md)（profile 错误码，D-11）、[`P2-P2-5`](./phases/phase-2-cli-status.md)（失败 report schema）、[`P1-P2-1`](./phases/phase-1-format-parsing.md) / [`P1-P2-2`](./phases/phase-1-format-parsing.md)（比参考实现更严格，D-3 已定放宽）、[`P3-P2-2`](./phases/phase-3-runtime-packaging.md)（letterbox 错位，**挂起** D-4）、[`P4-P2-1`](./phases/phase-4-verification.md)（5s 超时假失败，D-6）。
 
@@ -81,7 +81,7 @@ bash scripts/ci.sh                         → 文档记录 exit 0，2m32s（ins
 | 项 | 原表述 | 更正 |
 | --- | --- | --- |
 | 参考实现缓存 | Phase 1 把 `extdata_parse.c` 列为已审查文件，并称它"同样忽略 handler 返回值" | 缓存内**没有**该文件，也没有 `bdmv_parse_extension_data` 的定义，只有三处调用点（`index_parse.c:285` 等）。已改为"上游实现，本地缓存未包含"并写入限制。`index_parse.c:284-289` 的主证据仍成立，P1 结论不变 |
-| `P4-P2-1` | "47s 导航回归在 `hdmv`"、"各包无显式 `testTimeout`" | 47s 在 `runtime-web` 的 `tamako-headless-navigation.test.ts:214`，且该用例已显式 `120_000`；另两条语料用例同样带 `120_000`（`baja-studio-headless-navigation.test.ts:229`、`hdmv-navigation-corpus-dfs.test.ts:34`）。D-6 与 D1 的"不碰 hdmv"理由作废，已重写 |
+| `P4-P2-1` | "47s 导航回归在 `hdmv`"、"各包无显式 `testTimeout`" | 47s 在 `runtime-web` 的 `tamako-headless-navigation.test.ts:214`，且该用例已显式 `120_000`；另有语料用例同样带 `120_000`（`hdmv-navigation-corpus-dfs.test.ts:34`）。D-6 与 D1 的"不碰 hdmv"理由作废，已重写 |
 | `P3-P2-1` | `browser.ts:145` = 外部播放不可用 | `:145` 是 `SET_BUTTON_PAGE` 缺 packed 操作数的警告；`unavailable` 分支在 `:157` |
 | 统计 | 未开始 15 + 观察项 8 + 挂起 1 = 24（与 23 条 finding 不符） | 当时 checklist 实为 **16 条批次 + 7 条观察项 = 23**；增补 A8/A9 后为 **17 条批次 + 1 条挂起 + 7 条观察项 = 25**。旧口径把挂起项同时算进"未开始"和"挂起"，观察项也多算 1 |
 | 候选数 | 一处写 28，一处写 32 | **34**：31 条来自 3 个独立 agent + 1 条主 agent 门禁实测 + 2 条用户复扫（AF-33/34） |

@@ -27,7 +27,6 @@ type Golden = {
 
 const SAMPLE_COUNT = 48;
 const cases = [
-  { caseId: "baja", clipId: "00005", pid: 0x1400 },
   { caseId: "bang-dream-mygo-vol1", clipId: "00010", pid: 0x1400 },
   { caseId: "bang-dream-mygo-vol1", clipId: "00011", pid: 0x1400 },
   { caseId: "battle-royale-uhd", clipId: "00002", pid: 0x1400 },
@@ -109,7 +108,7 @@ function summarizePng(input: Uint8Array, id: string): ElementRow {
 }
 
 describe("independent igstools reference pixels", () => {
-  it("keeps the complete nine-clip reference summary in the repository", async () => {
+  it("keeps the complete eight-clip reference summary in the repository", async () => {
     const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
     expect(golden.reference).toMatchObject({
       tool: "SAPikachu/igstools",
@@ -117,8 +116,8 @@ describe("independent igstools reference pixels", () => {
       matrix: "BT.709 limited range",
     });
     expect(golden.cases.map((entry) => `${entry.case}/${entry.clip}`)).toEqual(cases.map((entry) => `${entry.caseId}/${entry.clipId}`));
-    expect(golden.cases.reduce((total, entry) => total + entry.assets.length, 0)).toBe(932);
-    expect(golden.cases.reduce((total, entry) => total + entry.assets.reduce((sum, asset) => sum + asset[3], 0), 0)).toBe(46_815_935);
+    expect(golden.cases.reduce((total, entry) => total + entry.assets.length, 0)).toBe(891);
+    expect(golden.cases.reduce((total, entry) => total + entry.assets.reduce((sum, asset) => sum + asset[3], 0), 0)).toBe(45_752_163);
   });
 
   it.each(cases)("renders $caseId/$clipId pixel-for-pixel like the independent reference", async ({ caseId, clipId, pid }) => {

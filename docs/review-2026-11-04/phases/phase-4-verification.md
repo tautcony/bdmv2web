@@ -47,7 +47,7 @@ pnpm -r --no-bail test（高负载）→ 1 fails / 10 passes（cli 2 条超时 +
 ### P4-P2-1: [P2] 默认 5s 超时让 CLI 重用例在负载下假失败，门禁具备"红灯噪声"
 
 - 位置: `apps/cli/src/index.test.ts:130`（默认输出目录转换）、`:290`（结构提取）。所有包的 `vitest.config.ts` 都**没有全局 `testTimeout`**，这两条因此落到 vitest 默认 5000ms。
-- 已排除（2026-11-05 更正）: 最慢单条 ~47s 的语料回归在 **`runtime-web`**，不是 `hdmv`；该用例 `packages/runtime-web/src/tamako-headless-navigation.test.ts:214` 已显式写 `}, 120_000)`，同类还有 `baja-studio-headless-navigation.test.ts:229` 与 `hdmv-navigation-corpus-dfs.test.ts:34`。它们不受 5s 默认值影响，也不是本次假失败的对象。
+- 已排除（2026-11-05 更正）: 最慢单条 ~47s 的语料回归在 **`runtime-web`**，不是 `hdmv`；该用例 `packages/runtime-web/src/tamako-headless-navigation.test.ts:214` 已显式写 `}, 120_000)`，同类还有 `hdmv-navigation-corpus-dfs.test.ts:34`。它们不受 5s 默认值影响，也不是本次假失败的对象。
 - 触发条件: 与其它重活并行时（本次为 3 个审查 agent + 另一个 `-r test` 同时跑）
 - 实测: CLI 两条用例分别 5821ms / 5876ms 撞上 5000ms 超时；`media-export` 另有 1 条失败（日志被截断，未保留首行，**是否超时未确认**）。**空载重跑同一命令 exit 0、451 passed**，两个包单独重跑也全绿（28/28、51 passed+1 skipped）。
 - 影响: 门禁在共享 runner / 并行任务下会产生假红灯。刚修好的"门禁可信"很容易被这类抖动重新破坏——而这正是 D1 想解决的问题。

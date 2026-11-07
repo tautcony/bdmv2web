@@ -25,7 +25,7 @@
 
 - [x] 4.1 Extract each reachable PGS PID from M2TS and retain stream language/source/time mapping.
 - [x] 4.2 Package validated PGS display sets with bounded serialization and manifest byte lengths.
-- [x] 4.3 Encode PGS display-set compositions as PNG Base64, preserve display/source metadata, and compare baja runtime payload size before/after.
+- [x] 4.3 Encode PGS display-set compositions as PNG Base64, preserve display/source metadata, and compare real-disc runtime payload size before/after.
 - [x] 4.4 Extract PGS from M2TS with in-repository transport/PES handling; preserve reference SUP PTS/DTS normalization, keep FFmpeg out of PGS production extraction, and document its video-transcoding role.
 
 ## 5. Preserve motion menu loop point

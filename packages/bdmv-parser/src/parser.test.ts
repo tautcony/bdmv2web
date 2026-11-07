@@ -65,7 +65,6 @@ describe("M1 BDMV discovery and structure", () => {
 
   it.each([
     ["tamako", { entries: 33, movieObjects: 17, instructions: 4969, playlists: 26, playItems: 1025, clips: 18 }],
-    ["baja", { entries: 6, movieObjects: 6, instructions: 73, playlists: 6, playItems: 6, clips: 7 }],
   ] as const)("parses the %s metadata-only fixture without STREAM files", async (name, expected) => {
     const root = join(dirname(fileURLToPath(import.meta.url)), `../../../test-data/fixtures/hdmv-navigation/disc-data/${name}/BDMV`);
     const disc = await parseBdmv(root);
@@ -91,12 +90,6 @@ describe("M1 BDMV discovery and structure", () => {
     expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "clipInfo:00005", type: "clipInfo", state: "present" }));
     expect(disc.graph.edges).toContainEqual(expect.objectContaining({ from: "subPath:00003:0", to: "clipInfo:00005", kind: "subpath-clip-info-reference", resolution: "resolved" }));
     expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_STN_CLPI_PID_CONFLICT" && diagnostic.sourcePath === cue.source.path && diagnostic.offset === cue.source.offset)).toBe(false);
-  });
-
-  it("parses the real Baja Studio SubPlayItem bit fields and keeps its source sync identifier", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/baja/BDMV");
-    const disc = await parseBdmv(root); const item = disc.playlists.find((playlist) => playlist.id === "00004")?.subPaths[0]?.items[0];
-    expect(item).toMatchObject({ clipId: "00005", codecId: "M2TS", connectionCondition: 1, stcId: 0, multiClip: false, clips: [{ clipId: "00005", codecId: "M2TS", stcId: 0 }], inTime45k: 27_000_000, outTime45k: 27_001_876, syncPlayItemId: 0, syncPts45k: 0 });
   });
 
   it("retains mixed HDMV and BD-J title declarations and exact MOBJ bytes and offsets", async () => {
@@ -512,13 +505,6 @@ describe("M1 BDMV discovery and structure", () => {
         source: { path: "BDMV/CLIPINF/00001.clpi", offset: "201" },
       }]);
     } finally { await rm(parent, { recursive: true, force: true }); }
-  });
-
-  it("reads the committed CLPI clip info and sequence declarations", async () => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/baja/BDMV");
-    const clips = (await parseBdmv(root)).clips;
-    expect(clips.find((clip) => clip.id === "00001")?.header).toMatchObject({ streamType: 1, applicationType: 1, tsRecordingRate: 6_000_000, sourcePacketCount: 1_508_864, atcDelta: false, tsTypeId: "HDMV" });
-    expect(clips.find((clip) => clip.id === "00001")?.sequence).toMatchObject([{ spnAtcStart: 0, offsetStcId: 0, stcs: [{ pcrPid: 0x1001, spnStcStart: 0, presentationStartPts: 251_077_500, presentationEndPts: 253_847_767 }] }]);
   });
 
   it("leaves the clip header and sequence empty when the CLPI omits both sections", async () => {

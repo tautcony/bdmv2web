@@ -34,9 +34,8 @@ IGS_DUMP_SRC = ROOT / "scripts" / "libbluray-igs-dump.c"
 CORPUS_ROOT = ROOT / "test-data" / "fixtures" / "hdmv-navigation" / "disc-data"
 EVIDENCE = ROOT / "docs" / "evidence"
 
-NAVIGATION_CASES = ["tamako", "baja", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"]
+NAVIGATION_CASES = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"]
 IG_CASES = [
-    ("baja", "00005", 0x1400),
     ("bang-dream-mygo-vol1", "00010", 0x1400),
     ("bang-dream-mygo-vol1", "00011", 0x1400),
     ("battle-royale-uhd", "00002", 0x1400),
