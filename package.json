@@ -10,7 +10,8 @@
     "typecheck": "corepack pnpm build && corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test",
     "test:all": "corepack pnpm -r --no-bail test",
-    "generate:contracts": "corepack pnpm --filter @bdmv2web/core generate"
+    "generate:contracts": "corepack pnpm --filter @bdmv2web/core generate",
+    "generate:synthetic-all-features": "node scripts/generate-synthetic-all-features.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
