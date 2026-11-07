@@ -3,8 +3,8 @@
   "project": "bdmv2web",
   "description": "面向 LLM/agent 的工程知识索引：功能、代码位置、诊断与排查路径。",
   "baseline": {
-    "commit": "19d323b",
-    "date": "2026-11-06",
+    "commit": "21c580a",
+    "date": "2026-11-07",
     "authoritativeSources": [
       "openspec/specs/",
       "openspec/changes/",

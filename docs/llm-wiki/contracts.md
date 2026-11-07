@@ -40,7 +40,7 @@ type NavigationDescriptor =
 | --- | --- | --- |
 | `path` | string | 相对 BDMV 根的 POSIX 路径，备份文件保留真实 `BACKUP/` 路径 |
 | `origin` | `"primary" \| "backup"` | 整文件来源，不混用主备字段 |
-| `byteOffset` | Time90K | 从文件起点 0 计的文件字节偏移 |
+| `byteOffset` | Time90k | 从文件起点 0 计的文件字节偏移 |
 | `entityId` / `packetOffset` / `pid` / `instructionIndex` | 可选 | 可定位到对象、TS 包、PID、指令记录 |
 
 偏移语义：CLPI/MPLS 的 45 kHz 时间不写入 `byteOffset`；`byteOffset` 只表示文件位置，时间字段一律保留原始单位并单独归一化。
@@ -53,7 +53,7 @@ type NavigationDescriptor =
 | 计算 | `bigint`，不经 `number` |
 | 45 kHz → 90 kHz | `from45k(value)` = `BigInt(value) * 2n` |
 | 溢出/非法 | `INVALID_TIME90K`；负数、小数、指数、前导零都拒绝 |
-| 90 kHz → 秒 | 只在展示层做，保留至少 6 位小数截断（`format90kSeconds`） |
+| 90 kHz → 秒 | 只在展示层做，按微秒精度取最多 6 位小数、截断后去尾零（`format90kSeconds`） |
 
 时间差可以是有符号整数，但它不是合法绝对 Time90k；需要差值时用 `bigint` 在局部计算。
 
@@ -97,7 +97,7 @@ interface PlayerProfile {
 
 `validateLimits(value)` 拒绝未知键（`INVALID_LIMIT`）；`maxCallDepth`/`maxQueueDepth` 允许 0，其余必须为正安全整数。分配前用 `allocateBoundedBytes` / `checkedObjectPixels` / `assertWithinLimit`；超限报 `LIMIT_EXCEEDED`，非法长度报 `INVALID_LENGTH`。
 
-`convert --limits FILE` 只把 VM 相关三项传入转换期与包内 VM；其它字段会被校验并保留在配置里，但不传给解析、IGS 提取与媒体导出。
+`convert --limits FILE` 把整个 `Limits` 对象传给转换期 VM 并嵌入包内 `disc-data.js` 的 `limits` 字段；包内 VM 只消费其中的 VM 相关三项。其它字段会被校验并保留在配置里，但不传给解析、IGS 提取与媒体导出。
 
 ## 诊断对象
 

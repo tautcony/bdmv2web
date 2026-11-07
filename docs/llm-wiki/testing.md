@@ -12,23 +12,23 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 每个包的 `vitest.config.ts` 用 `include` 锁定测试文件，编译产物 `dist/**/*.test.js` 不会被加载（现在也不再产出）。某包匹配不到测试文件时任务失败，不报“通过”。
 
-## 逐包基线（2026-11-06 实测）
+## 逐包基线（2026-11-07 实测）
 
-在 Node `24.18.0` / pnpm `11.25.0` 上跑 `corepack pnpm test:all` 得到下表。44 个测试文件，合计 **500 passed、0 skipped**。
+在 Node `24.18.0` / pnpm `11.25.0` 上跑 `corepack pnpm test:all` 得到下表。44 个测试文件，合计 **515 passed、0 skipped**。
 
 | 包 | 用例 | 备注 |
 | --- | ---: | --- |
 | `@bdmv2web/core` | 14 | 契约、游标、时间 |
 | `@bdmv2web/bdmv-io` | 6 | 目录发现、事务 |
 | `@bdmv2web/bdmv-parser` | 70 | 五种格式 + 主备 + 损坏分支 |
-| `@bdmv2web/igs` | 57 | 传输、场景、真实样本（数据缺失时跳过） |
-| `@bdmv2web/hdmv` | 88 | 解码、寄存器、VM、图、循环、golden |
+| `@bdmv2web/igs` | 60 | 传输、场景、真实样本（数据缺失时跳过） |
+| `@bdmv2web/hdmv` | 91 | 解码、寄存器、VM、图、循环、golden |
 | `@bdmv2web/media-export` | 55 | 注入 `runProcess`，不依赖本机 ffmpeg |
-| `@bdmv2web/runtime-web` | 110 | 控制器、boot、无头导航 |
+| `@bdmv2web/runtime-web` | 115 | 控制器、boot、无头导航 |
 | `@bdmv2web/package-builder` | 11 | 打包、转义、音效 |
 | `@bdmv2web/test-fixtures` | 5 | 夹具自检 |
 | `@bdmv2web/test-runner` | 48 | 审计、判定、报告 |
-| `@bdmv2web/cli` | 36 | 参数契约、事务、stage/delivery |
+| `@bdmv2web/cli` | 40 | 参数契约、事务、stage/delivery |
 
 `docs/guides/development.md` 的 Test baseline 表在同一次测量中已同步为相同数值。计数变化要同时更新两处。
 

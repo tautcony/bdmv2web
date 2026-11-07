@@ -37,7 +37,7 @@
 | 复用 | `overwrite` 且旧计划完全匹配 → 复用 | — |
 | 工具 | `ffmpeg -version`、`ffprobe -version`、`ffmpeg -encoders` | `MEDIA_TOOL_UNAVAILABLE` / `MEDIA_ENCODER_UNAVAILABLE` |
 | 探测 | `ffprobe` 源时间线、视频/音频 PID | `MEDIA_VIDEO_PID_UNRESOLVED` / `MEDIA_PID_UNRESOLVED` |
-| 编码 | H.264 + AAC，`crf` 默认 18，`preset` `veryfast`（`convert` 传入） | `MEDIA_PROCESS_FAILED` / `MEDIA_JOB_TIMEOUT` / `MEDIA_JOB_CANCELLED` |
+| 编码 | H.264 + AAC，`crf` 默认 18，`preset` `veryfast`（`package-builder` 固定传入） | `MEDIA_PROCESS_FAILED` / `MEDIA_JOB_TIMEOUT` / `MEDIA_JOB_CANCELLED` |
 | 校验 | 产物可被 `ffprobe` 识别 | `MEDIA_OUTPUT_INVALID` |
 
 视频编码只接受 H.264 / HEVC 源；其它编码不猜，直接报错。循环起点由 `resolveMenuLoopStart45k` 从 entry mark 取，缺省为 in 点。
@@ -89,7 +89,7 @@ media-plan.json
 | 能力 | 状态 |
 | --- | --- |
 | 菜单背景循环 | 支持（单 clip 循环或单 PlayItem 保持末帧） |
-| 菜单音轨切换 | 支持主音频 PRS1 对应轨道 |
+| 菜单音轨切换 | 支持主音频 PSR1 对应轨道 |
 | 多角度 | 不支持（计划标 `unsupported`） |
 | 无缝分支 | 不支持（`MediaCapabilityImpact`） |
 | PiP / 次级视频 | 不支持 |

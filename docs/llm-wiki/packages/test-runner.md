@@ -11,6 +11,7 @@
 | `src/coverage.ts` | `summarizeCoverage`、`summarizeDeliveryCoverage`、`isCoverageReportComplete` |
 | `src/browser-evidence.ts` | 证据绑定/评估（`evaluateBrowserEvidence`、`evaluateBrowserEvidenceMatrix`） |
 | `src/release-summary.ts` | `createReleaseSummary`：合并审计/依赖/覆盖/证据，产出 `gaps` |
+| `src/types.ts` | `CheckResult`、`DeliveryStatus`、`OfflinePackageAudit` 等公共类型 |
 | `src/compare.ts` | `compareVmTraces`、`compareIgRgbaFrames`、`videoQualityNote` |
 | `src/report.ts` | `createCompatibilityReport`、`createDependencyAuditReport`、`createCompareReport` |
 

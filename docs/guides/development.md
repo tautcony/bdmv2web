@@ -74,21 +74,21 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 
 ## Test baseline
 
-The baseline was re-measured 2026-11-06 at commit `19d323b` with Node `24.18.0` / pnpm `11.25.0` using `corepack pnpm test:all`. It collects 44 test files and reports 500 passed, 0 skipped.
+The baseline was re-measured 2026-11-07 on the working tree at commit `21c580a` with Node `24.18.0` / pnpm `11.25.0` using `corepack pnpm test:all`. It collects 44 test files and reports 515 passed, 0 skipped.
 
 | Package | Command | Tests |
 | --- | --- | ---: |
 | `@bdmv2web/core` | `corepack pnpm --filter @bdmv2web/core test` | 14 |
 | `@bdmv2web/bdmv-io` | `corepack pnpm --filter @bdmv2web/bdmv-io test` | 6 |
 | `@bdmv2web/bdmv-parser` | `corepack pnpm --filter @bdmv2web/bdmv-parser test` | 70 |
-| `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` | 57 |
-| `@bdmv2web/hdmv` | `corepack pnpm --filter @bdmv2web/hdmv test` | 88 |
+| `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` | 60 |
+| `@bdmv2web/hdmv` | `corepack pnpm --filter @bdmv2web/hdmv test` | 91 |
 | `@bdmv2web/media-export` | `corepack pnpm --filter @bdmv2web/media-export test` | 55 |
-| `@bdmv2web/runtime-web` | `corepack pnpm --filter @bdmv2web/runtime-web test` | 110 |
+| `@bdmv2web/runtime-web` | `corepack pnpm --filter @bdmv2web/runtime-web test` | 115 |
 | `@bdmv2web/package-builder` | `corepack pnpm --filter @bdmv2web/package-builder test` | 11 |
 | `@bdmv2web/test-fixtures` | `corepack pnpm --filter @bdmv2web/test-fixtures test` | 5 |
 | `@bdmv2web/test-runner` | `corepack pnpm --filter @bdmv2web/test-runner test` | 48 |
-| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 36 |
+| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 40 |
 
 Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded (they are no longer emitted at all, see below). A package whose configuration matches no test file fails instead of reporting success.
 

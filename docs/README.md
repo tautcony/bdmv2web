@@ -5,6 +5,7 @@
 ## 使用与开发
 
 - [开发指南](guides/development.md)：工具链、CLI、测试和构建流程。
+- [llm-wiki](llm-wiki/README.md)：面向 LLM/agent 的工程知识索引——任务路由、包/功能/诊断/排查文档与机器可读 `index.json`。
 - [浏览器验收环境](guides/browser-matrix.md)：浏览器支持范围与已记录的验收环境。
 
 ## 能力与支持范围

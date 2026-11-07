@@ -80,7 +80,7 @@ export-assets: flags: 无                                      values: --type --
 1. 必须 `--offline`（否则 `CLI_OFFLINE_REQUIRED`）；`--format` 只接受 `json`（否则 `CLI_INVALID_FORMAT`，且在读写之前失败）。
 2. `auditOutputPackage` → 读 `manifest.json` / 旧 `compatibility.json` → `createReleaseSummary`。
 3. `manifest.status` 与当前判定不一致时，追加 `MANIFEST_STATUS_UNVERIFIED`（`not-verified`），**不改写** manifest。
-4. 可写时依次写 `dependency-audit.json`、`compatibility.json`、`reports/release-summary.json`，三份都来自同一份 summary。
+4. 可写时依次写 `dependency-audit.json`、`compatibility.json`、`reports/release-summary.json`，三份都来自同一份 summary；任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。
 5. 退出码取 `releaseSummary.release.exitCode`。
 
 ## 错误出口
@@ -108,7 +108,7 @@ export-assets: flags: 无                                      values: --type --
 
 ## 测试
 
-`src/index.test.ts`（35 例）：参数契约、profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO。`src/bdmvkit-loop.test.ts`（1 例）覆盖 bdmvkit 夹具的循环导航。
+`src/index.test.ts`（39 例）：参数契约、profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度。`src/bdmvkit-loop.test.ts`（1 例）覆盖 bdmvkit 夹具的循环导航。
 
 ## 改动入口
 

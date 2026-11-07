@@ -80,7 +80,8 @@
 - `assets/igs/<clipId>-pid-<pid>.mnu`：igstools 兼容 IG 流。
 - `assets/subtitles/<clipId>-pid-<pid>.sup`：可达 PGS 轨道。
 - `assets/igs/*.png`、`assets/subtitles/*.png`：`--decode png` 时按元素/显示集导出。
-- `assets-manifest.json`：`{ type, format, path, byteLength, subtitle? }`。
+- `assets-manifest.json`：`{ type, format?, path, byteLength, language?, streamNumber?, displaySetCount? }`。
+- `.sup`/`.mnu` 文件名：多个 PlayItem 入口指向同一流时第二个入口起带 `-entryN` 后缀。
 
 ## `convert`
 
@@ -92,6 +93,10 @@
 | `--limits FILE` | `DEFAULT_LIMITS` | VM 指令/队列/调用预算 |
 | `--overwrite` | 关 | 允许覆盖已有目录；匹配的旧媒体可复用 |
 | `--strict` | 关 | partial 退出 2 |
+| `--progress` | 自动 | stderr 非终端时也逐行输出进度 |
+| `--no-progress` | 关 | 关闭进度输出 |
+
+进度输出（stderr）：开头是 `input`、`output`、`title`、`profile` 四行，随后是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，无媒体可导时该步标记为跳过。媒体编码期间显示 ffmpeg 百分比、文件与已编码时长。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 不是终端时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
 
 产物目录：
 
@@ -112,6 +117,7 @@ runtime/bdmv-config.js         # 有外部播放时
 assets/audio/sound-N.wav
 assets/media/background.mp4
 assets/media/audio-*.m4a
+report.json                    # convert 成功与失败路径都写
 reports/                       # validate 之后出现
 ```
 

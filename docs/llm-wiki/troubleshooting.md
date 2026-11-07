@@ -92,7 +92,7 @@ corepack pnpm test
 | 现象 | 检查 |
 | --- | --- |
 | 点击后无反应 | `external-targets.json` 是否有该播放列表/PlayItem/Mark |
-| macOS 打开但位置不对 | `mpv_start` 是否来自 `inTime90k`；章节位置缺失会直接报错 |
+| macOS 打开但位置不对 | `mpv_start` 是否来自 PlayItem `inTime45k × 2 − sourceOrigin` 的 `seekTime90k` 链路；章节位置缺失会直接报错 |
 | Windows 打开失败 | `potplayer://` 是否注册；路径是否含未编码字符 |
 | 路径错误 | `runtime/bdmv-config.js` 的 `__BDMV_BDMV_PATH__`；相对路径基于 `index.html` |
 | `EXTERNAL_STREAM_MISSING` | 源 `STREAM/*.m2ts` 被移动或重命名 |

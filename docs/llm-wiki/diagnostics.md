@@ -23,14 +23,14 @@ rg '"CODE_NAME"' packages apps
 | `TARGET_NOT_DIRECTORY` | error | 覆盖目标不是目录 | 清理同名文件 |
 | `TARGET_CHANGED` | error | 覆盖期间目标被替换 | 重跑，避免并发写同一目录 |
 | `TRANSACTION_CLOSED` | error | 事务重复 commit/abort | 调用方控制流 |
-| `LIMIT_EXCEEDED` / `INVALID_LIMIT` | error | 超过限流或限流值非法 | `--limits`、`DEFAULT_LIMITS` |
+| `LIMIT_EXCEEDED` / `INVALID_LIMIT` | error | 超过限流或限流值非法；IGS 层也以 `IgsError`/诊断记录 `LIMIT_EXCEEDED` | `--limits`、`DEFAULT_LIMITS` |
+| `INVALID_LIMITS` | error | `--limits` 顶层值不是 JSON 对象 | `--limits` 文件内容 |
 | `INVALID_LENGTH` / `INVALID_OFFSET` / `INVALID_WINDOW` / `INVALID_DIMENSIONS` / `INTEGER_OVERFLOW` | error | 长度/偏移/尺寸/乘积非法 | `BinaryCursor` 与调用方 |
 | `TRUNCATED_INPUT` | error | 读取超出窗口或文件 | 文件截断、错误偏移 |
 | `INVALID_TIME90K` | error | 时间不是规范十进制 | 序列化/反序列化点 |
 | `UNKNOWN_SCHEMA_VERSION` | error | `schemaVersion` 不在支持列表 | 运行包装载处 |
 | `SCHEMA_VALIDATION_FAILED` | error | DiscIR 不符合 schema | `parseDiscIR` 的 `path` |
 | `DUPLICATE_ID` / `DANGLING_REFERENCE` | error | 全局 ID 重复 / 引用不存在 | 构造 DiscIR 的代码 |
-| `INVALID_REGISTER_VALUE` | error | 写入值不是 uint32 | 寄存器写入点 |
 
 ## CLI
 
@@ -103,9 +103,10 @@ rg '"CODE_NAME"' packages apps
 | `HDMV_USER_EVENT_FAULT` | 用户事件处理抛出的非 `RegisterFault` 异常兜底 | 事件 `responseTo` 指向的动作 |
 | `HDMV_INVALID_INSTRUCTION` / `HDMV_INVALID_OPERAND_COUNT` / `HDMV_ILLEGAL_OPERAND_COUNT` | 指令结构非法 | 12 字节原始值 |
 | `HDMV_ILLEGAL_OPERAND` / `HDMV_ILLEGAL_DESTINATION` / `HDMV_INVALID_REGISTER_ENCODING` / `INVALID_REGISTER_ACCESS` | 操作数/寄存器非法 | 该指令的寄存器字段 |
-| `HDMV_RESERVED_BITS_NONZERO` | 保留位非零，继续执行 | info，通常可忽略 |
+| `INVALID_REGISTER_VALUE` | 写入值不是 uint32（`RegisterFault`） | 寄存器写入点 |
+| `HDMV_RESERVED_BITS_NONZERO` | 保留位非零，继续执行 | 通常可忽略 |
 | `HDMV_INVALID_TARGET` / `HDMV_INVALID_PC` | 对象/标题/PC 越界 | 目标对象是否存在 |
-| `HDMV_OPCODE_CONTEXT_SKIPPED` | 该上下文不允许此指令（info） | 上下文：MovieObject 还是 IG 按钮 |
+| `HDMV_OPCODE_CONTEXT_SKIPPED` | 该上下文不允许此指令，跳过继续执行 | 上下文：MovieObject 还是 IG 按钮 |
 | `HDMV_RESUME_WITHOUT_CALL` | 空栈 `RESUME`，继续执行 | 控制流是否符合预期 |
 | `HDMV_TITLE_RESPONSE_MISMATCH` | 标题选择回信不匹配 | `selectTitle` 的调用方 |
 | `HDMV_MEDIA_UNAVAILABLE` / `HDMV_MEDIA_ERROR` | 媒体不可用/出错，等待结束 | 播放桥 |
@@ -118,10 +119,10 @@ rg '"CODE_NAME"' packages apps
 | `VM_EXECUTION_LIMIT` | 单轮指令超预算 | `maxInstructionsPerTurn`；是否有同步死循环 |
 | `VM_QUEUE_LIMIT` | 队列超限 | `maxQueueDepth` |
 | `VM_CALL_DEPTH_LIMIT` | `maxCallDepth < 1` 时遇到 CALL | limits 配置 |
-| `VM_LIMITS_OVERRIDDEN` | 运行期 limits 被覆盖（info） | 配置来源 |
+| `VM_LIMITS_OVERRIDDEN` | 运行期 limits 被覆盖，继续执行 | 配置来源 |
 | `HDMV_RND_ZERO_RANGE` | `RND(0)`，返回 1 | 指令语义 |
 | `HDMV_3D_SUBTITLE_ALIGNMENT_UNIMPLEMENTED` | 3D 字幕对齐未实现 | 2D 路径不受影响 |
-| `MENU_ACTION_RECOVERED` | 菜单动作上下文已恢复 | info |
+| `MENU_ACTION_RECOVERED` | 菜单动作上下文已恢复；这是 trace 条目的 decoded 名，不是诊断码 | trace 记录 |
 
 ## 媒体与外部播放
 
@@ -162,6 +163,7 @@ rg '"CODE_NAME"' packages apps
 | `MEDIA_VIDEO_STREAM_UNVERIFIED` | `exportLinearMedia` | `ffprobe` 未识别出带索引的视频 PID |
 | `MEDIA_VIDEO_ASPECT_UNKNOWN` | `exportLinearMedia` | `ffprobe` 未给出可用的显示宽高比 |
 | `MEDIA_AUDIO_VARIANT_UNKNOWN` | `exportLinearMedia` | 多音轨缺语言标注，音轨通道身份不唯一 |
+| `MEDIA_CAPABILITY_SEAMLESS_UNSUPPORTED` / `MEDIA_CAPABILITY_SEAMLESS_UNKNOWN` 等 | `createMediaPlan` | 能力报告：码形如 `MEDIA_CAPABILITY_{CAPABILITY}_{STATUS}`，CAPABILITY ∈ seamless/angle/pip/hdr/forced-subtitle/textst，STATUS ∈ unsupported/unknown |
 
 ## 菜单、音效与打包
 
@@ -212,7 +214,7 @@ rg '"CODE_NAME"' packages apps
 | `EXTERNAL_CONFIG` / `EXTERNAL_CONFIG_INVALID` | not-verified / fail | 外部播放配置需现场验证/非法 |
 | `MANIFEST_STATUS_UNVERIFIED` | not-verified | manifest 记录状态与当前证据不一致 |
 | `PACKAGE_AUDIT_REQUIRED` / `DEPENDENCY_AUDIT_REQUIRED` | not-verified | 没有提供审计/依赖检查 |
-| `BROWSER_EVIDENCE_REQUIRED` / `BROWSER_EVIDENCE_BINDING` / `BROWSER_EVIDENCE` | not-verified/fail | 浏览器证据缺失或与包不匹配 |
+| `BROWSER_EVIDENCE_REQUIRED` / `BROWSER_EVIDENCE_BINDING` | not-verified/fail | 浏览器证据缺失或与包不匹配；裸 `BROWSER_EVIDENCE` 只由调用方作为检查 id 传入，本仓库源码不产生 |
 | `REFERENCE_EVIDENCE_REQUIRED` | not-verified | 未提供独立对照证据；提供时调用方以 `REFERENCE_COMPARISON` 作为检查 id 传入 |
 | `COVERAGE_INCOMPLETE` / `REQUIRED_EVIDENCE_INCOMPLETE` | not-verified | 覆盖率或所需证据不全 |
 | `NO_AUDIT_CHECKS` | not-verified | 没有提供任何审计检查项 |

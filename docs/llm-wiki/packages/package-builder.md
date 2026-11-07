@@ -8,7 +8,7 @@
 buildMenuPackage(input: MenuPackageInput): Promise<void>
 ```
 
-`MenuPackageInput` 关键字段：`outputDirectory`、`title`、`ir`、`scene`、`popupScenes`、`menuScenes`、`menuPlaylistIds`、`preMenuPlaylistIds`、`status`、`entryCounts`、`playerProfile`、`vmLimits`、`vmPrograms`、`vmEntries`、`externalTargets`、`bdmvPath`、`vmInitialProgramId`、`vmFirstPlayProgramId`、`graphics`、`soundEntries`、`soundBytes`、`menuLoopMedia`、`additionalMenuMedia`、`pgsTracks`、`diagnostics`、`reuseMediaFromDirectory`、`onMediaProgress`。
+`MenuPackageInput` 关键字段：`outputDirectory`、`title`、`ir`、`scene`、`popupScenes`、`menuScenes`、`menuPlaylistIds`、`preMenuPlaylistIds`、`status`、`entryCounts`、`playerProfile`、`vmLimits`、`vmPrograms`、`vmEntries`、`externalTargets`、`bdmvPath`、`vmInitialProgramId`、`vmFirstPlayProgramId`、`graphics`、`pngLimits`、`soundEntries`、`soundBytes`、`menuLoopMedia`、`additionalMenuMedia`、`pgsTracks`、`pgsLimits`、`diagnostics`、`reuseMediaFromDirectory`、`onMediaProgress`、`runtimeVersion`。`pngLimits`、`pgsLimits`、`runtimeVersion` 为有默认值的可选项。
 
 `status` 由调用方决定（CLI 用 `decideDelivery`）；库调用默认 `partial`。Builder 不根据自身产物提升状态。
 
@@ -17,7 +17,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<void>
 | 路径 | 必需 | 内容 |
 | --- | --- | --- |
 | `index.html` | 是 | 舞台 + `<video id="menu-background">` + `<audio id="menu-audio">` + 两个 Canvas + 启动/静音按钮 + 状态区 |
-| `runtime/disc-data.js` | 是 | `globalThis.__BDMV_MENU_DATA__ = { ir, title, scene, popupScenes, menuScenes, menuPlaylistIds, pgsTracks, vmPrograms, profile, limits, externalTargets, vmEntries, vmInitialProgramId, vmFirstPlayProgramId, inputConfig, sounds, media, menuMedia }` |
+| `runtime/disc-data.js` | 是 | `globalThis.__BDMV_MENU_DATA__ = { ir, title, scene, popupScenes, menuScenes, menuPlaylistIds, menuPlaylistMarks, preMenuPlaylistIds, pgsTracks, vmPrograms, profile, limits, externalTargets, vmEntries, vmInitialProgramId, vmFirstPlayProgramId, inputConfig, sounds, media, menuMedia }` |
 | `runtime/assets-data-NNN.js` | 是 | `globalThis.__BDMV_MENU_ASSETS__[i] = [{ id, dataUrl, byteLength }]`，PNG 以 data URL 嵌入 |
 | `runtime/app.bundle.js` | 是 | `runtime-web/src/browser.ts` 的 esbuild IIFE 产物 |
 | `runtime/style.css` | 是 | 全屏舞台、letterbox、状态提示、静音按钮样式 |

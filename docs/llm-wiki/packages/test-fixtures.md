@@ -22,6 +22,7 @@
 | `buildM1PlaylistWithAudioPid()` / `WithHevcVideo()` / `WithAppInfo()` | 特定声明组合 |
 | `buildM1PlaylistWithSubPlayItem()` / `WithMultiClipSubPlayItem()` | SubPath / SubPlayItem |
 | `buildM1ClipInfoProgramAndCpi()` / `WithHevcVideo()` / `WithSequence()` / `WithIgsCue()` | CLPI 的 ProgramInfo、CPI、SequenceInfo、IG 线索 |
+| `buildM1EmptyClipInfo()` | 空 CLPI |
 | `buildM1Sound()` / `buildM1SoundTwoRanges()` | `sound.bdmv` 采样表 |
 
 所有构造器按字面字段值拼字节，不导入被测试的解析器。期望值（如 `m1MovieObjectExpected`）也是手写字面量。

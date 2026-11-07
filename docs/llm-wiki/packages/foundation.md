@@ -49,7 +49,8 @@ class BinaryCursor
 
 | 能力 | 符号 | 关键行为 |
 | --- | --- | --- |
-| 目录发现 | `discoverBdmvInput(inputPath)` | 接受 BDMV 根或其直接父目录；父目录下大小写变体多于一个 → `BDMV_ROOT_AMBIGUOUS`；没有 → `BDMV_ROOT_NOT_FOUND`；符号链接 → `SYMLINK_REJECTED` |
+| 目录发现 | `discoverBdmvInput(inputPath)` | 接受 BDMV 根或其直接父目录；父目录下大小写变体多于一个 → `BDMV_ROOT_AMBIGUOUS`；没有 → `BDMV_ROOT_NOT_FOUND`；符号链接 → `SYMLINK_REJECTED`。内部先用 `locateBdmvRoot` 定位 |
+| 仅定位根 | `locateBdmvRoot(inputPath)` | 与 `discoverBdmvInput` 同一套规则与错误码，但不遍历文件树；用于在完整解析前得知根路径 |
 | 子目录选择 | `selectBdmvChild(entries, inputPath)` | 只按名字（大小写不敏感）比较，不按排序猜 |
 | 文件表 | `buildInputFileTable(root, relativePaths)` | 只接受规范相对 POSIX 路径；重复路径 → `DUPLICATE_FILE_PATH`；越界 → `PATH_ESCAPE` |
 | 按表读 | `readRegisteredFile(table, relativePath, maxBytes, prefixOnly?)` | 未登记 → `FILE_NOT_REGISTERED`；`prefixOnly` 只读前 `maxBytes`（`sound.bdmv` 用） |

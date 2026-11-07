@@ -4,7 +4,7 @@
 
 | 阶段 | 运行环境 | 允许 | 禁止 |
 | --- | --- | --- | --- |
-| 转换 | Node.js ≥ 24.18 | 读源盘、`ffmpeg`/`ffprobe`、写输出事务 | 把解密/DRM 当能力 |
+| 转换 | Node.js ≥ 24.18.0 且 < 25 | 读源盘、`ffmpeg`/`ffprobe`、写输出事务 | 把解密/DRM 当能力 |
 | 交付 | 浏览器 `file://` | 同目录静态文件、Canvas、`HTMLMediaElement`、键鼠/触摸 | 网络、后台、ES module、`fetch`、动态 `import` |
 | 校验 | Node.js | 只读包目录、重算报告 | 改写 `manifest.status`、读原盘 |
 
@@ -35,7 +35,7 @@
 | `ParsedDisc` | `bdmv-parser` | `hdmv`、`igs`、`media-export`、CLI | `entries`、`movieObjects`、`playlists`、`clips`、`sounds`、`graph`、`declarations`、`diagnostics` |
 | `IgsExtraction` | `igs` | CLI、`media-export`、`runtime-web` | `scenes`、`assets`、`diagnostics`、`status`、`streams` |
 | `DiscIR` | CLI（`createMenuDiscIR`） | `package-builder`、浏览器 | `schemaVersion`、`entries`、`programs`、`menus`、`playlists`、`mediaAssets`、`diagnostics` |
-| `MenuScene` / `SerializedScene` | `runtime-web`（`adaptIgsScene`） | `package-builder` → `runtime/disc-data.js` | `pages`、`buttons`、`objects`、`effects` |
+| `MenuScene` / `SerializedScene` | `runtime-web`（`adaptIgsScene`） | `package-builder` → `runtime/disc-data.js` | 顶层 `pages`；`buttons`/`objects`/`effects` 嵌在 page 内 |
 | `MediaClosure` / `MediaPlan` | `media-export` | CLI、`package-builder` | 可达 `playlistIds`/`clipIds`、未知项、预算估算 |
 | 菜单包 | `package-builder` | 浏览器、`test-runner` | `index.html`、`runtime/*`、`assets/*`、`manifest.json` |
 | 交付报告 | `test-runner` + CLI | 人、CI | `report.json`、`compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |

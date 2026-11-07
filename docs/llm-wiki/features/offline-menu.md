@@ -25,6 +25,7 @@ BDMV-menu/
 │   ├── audio/sound-1.wav
 │   ├── media/background.mp4
 │   └── media/audio-1100-eng.m4a
+├── report.json                    # convert 成功与失败路径都写
 └── reports/                       # validate 之后
 ```
 
@@ -52,6 +53,7 @@ BDMV-menu/
 | `popupScenes` | 所有 `uiModel === 1` 场景 | 弹出菜单 |
 | `menuScenes` | 其他常显菜单场景 + 所属播放列表 | 切换菜单 |
 | `menuPlaylistIds` / `preMenuPlaylistIds` | 选择结果 | 播放列表 → 媒体映射 |
+| `menuPlaylistMarks` | 菜单播放列表的 mark → PlayItem 映射 | `PLAY_PLAYLIST_MARK` 场景路由 |
 | `vmPrograms` | `disc.movieObjects` | VM 程序 |
 | `profile` / `limits` | CLI 参数 | PSR 初始化与预算 |
 | `vmEntries` | `disc.entries` | 标题校验 |

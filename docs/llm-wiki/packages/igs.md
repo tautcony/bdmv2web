@@ -29,7 +29,7 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | 字段 | 默认 | 作用 |
 | --- | --- | --- |
 | `limits` | `DEFAULT_LIMITS` | 读窗口、重组、像素上限 |
-| `chunkSize` | 1 MiB | 读文件块大小 |
+| `chunkSize` | `limits.maxReadWindowBytes`（默认 8 MiB） | 读文件块大小 |
 | `renderAssets` | `true` | 关闭后只解析场景，不生成 PNG（`extract --type hdmv` 用） |
 | `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export-assets` 用） |
 | `table` | 自动发现 | 复用已验证的输入文件表 |

@@ -43,7 +43,8 @@ PES 载荷按 3 字节段头（类型 + 16 位长度）切分；不完整的段�
 - `uiModel`：0 常显菜单，1 弹出菜单。
 - `compositionState` / `compositionTimeout90k` / `selectionTimeout90k`：组合生命周期。
 - `pages[].uoMask`：64 位用户操作掩码；运行时把非规范十进制视为无效并阻断该页输入（报诊断）。
-- `defaultSelectedButtonId` / `defaultActivatedButtonId`：`0xffff` 表示无选中，`0xfffe` 表示激活当前选中。
+- `defaultSelectedButtonId`：`0xffff` 表示运行时动态选择默认按钮；具体 ID 表示固定选中该按钮。
+- `defaultActivatedButtonId`：`0xfffe` 表示激活当前选中按钮，`0xffff` 表示不自动激活；具体 ID 表示自动激活该按钮。
 - `buttons[].commands[]`：12 字节原始命令 + `recordIndex` + `sourceOffset`，交给 `hdmv` 解码。
 
 ## 4. PNG 元素
@@ -55,7 +56,7 @@ PES 载荷按 3 字节段头（类型 + 16 位长度）切分；不完整的段�
 3. 编码 PNG，`IgsAsset` 记录 `objectId/objectVersion`、`paletteId/paletteVersion`、来源。
 4. 每个元素独立成文件，路径由场景与对象派生；不做整页合成。
 
-`validateIgsSceneAssets(scenes)` 检查引用资产是否存在，缺失报 `IGS_UNRESOLVED_VISUAL_ASSET` / `IGS_UNRESOLVED_EFFECT_ASSET`。
+`validateIgsSceneAssets(scenes)` 检查引用资产是否存在，缺失调色板报 `UNRESOLVED_PALETTE`，缺失对象报 `UNRESOLVED_OBJECT`。
 
 ## 5. 输出形态
 
