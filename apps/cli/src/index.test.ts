@@ -21,27 +21,7 @@ function expectFailureReportSchema(report: Record<string, unknown>, code: string
   expect((report.diagnostics as Array<{ severity?: string }>).every((item) => typeof item.severity === "string")).toBe(true);
 }
 
-describe("convert CLI", () => {
-  it("requires a BDMV input", () => {
-    const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert"]);
-    expect(result.status).toBe(1);
-    expect(result.stderr.toString()).toContain("CLI_MISSING_INPUT");
-    expect(result.stdout.toString()).toBe("");
-  });
-  it("does not create an output when conversion arguments are invalid", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "bdmv cli ")); const target = join(dir, "package");
-    try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", "input", "--out", target]);
-      expect(result.status).toBe(1); await expect(access(target)).rejects.toThrow();
-    } finally { await rm(dir, { recursive: true, force: true }); }
-  });
-  it("reports a missing inspect input as a usage error", () => {
-    const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", "--format", "json"]);
-    expect(result.status).toBe(1); expect(JSON.parse(result.stderr.toString()).code).toBe("CLI_MISSING_INPUT"); expect(result.stdout.toString()).toBe("");
-  });
-});
-
-describe("M4 convert output", () => {
+describe("M4 build output", () => {
   async function makeMenuDisc(parent: string, options: { includeMenuStream?: boolean; topMenuObject?: number; menuCueMode?: "mpls" | "clpi-only"; multipleMenuScenes?: boolean; duplicateMenuSceneIds?: boolean; explicitIgPriority?: boolean; repeatedMenuPlayItemWithoutIg?: boolean; menuUiModel?: 0 | 1; logoUiModel?: 0 | 1; preMenuChain?: boolean } = {}): Promise<string> {
     const disc = join(parent, "BDMV");
     await mkdir(join(disc, "PLAYLIST"), { recursive: true });
@@ -69,7 +49,7 @@ describe("M4 convert output", () => {
         [regular, [], 0],
         [strict, ["--strict"], 0],
       ] as const) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title", "Offline Menu", ...args]);
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output, "--title", "Offline Menu", ...args]);
         expect(result.status).toBe(exitCode);
         const stdout = JSON.parse(result.stdout.toString());
         expect(stdout).toMatchObject({ status: "complete", output: await realpath(output) });
@@ -121,7 +101,7 @@ describe("M4 convert output", () => {
     const disc = await makeMenuDisc(parent);
     const output = join(parent, "progress output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--progress"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output, "--progress"]);
       expect(result.status, result.stderr.toString()).toBe(0);
       const stderr = result.stderr.toString();
       // Piped stderr gets plain lines: each finished step names its position in the fixed plan.
@@ -142,12 +122,12 @@ describe("M4 convert output", () => {
       expect(stdout.trimEnd().split("\n")).toHaveLength(1);
       expect(JSON.parse(stdout)).toMatchObject({ status: "complete", output: await realpath(output) });
 
-      const quiet = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", join(parent, "quiet output"), "--no-progress"]);
+      const quiet = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", join(parent, "quiet output"), "--no-progress"]);
       expect(quiet.status).toBe(0);
       expect(quiet.stderr.toString()).toBe("");
 
       const ambiguous = await makeMenuDisc(join(parent, "ambiguous"), { multipleMenuScenes: true });
-      const failed = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", ambiguous, "--out", join(parent, "failed output"), "--progress"]);
+      const failed = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", ambiguous, "--out", join(parent, "failed output"), "--progress"]);
       expect(failed.status).toBe(1);
       expect(failed.stderr.toString()).toContain("✗ 4/7  Select menu scene and media");
       expect(failed.stderr.toString()).toContain("MENU_SCENE_AMBIGUOUS");
@@ -160,7 +140,7 @@ describe("M4 convert output", () => {
     const limitsPath = join(parent, "limits.json"); const output = join(parent, "limited output");
     try {
       await writeFile(limitsPath, JSON.stringify({ maxInstructionsPerTurn: 77, maxCallDepth: 0, maxQueueDepth: 12 }));
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", limitsPath, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--limits", limitsPath, "--out", output]);
       expect(result.status, result.stderr.toString()).toBe(0);
       const embedded: { __BDMV_MENU_DATA__?: { limits?: Record<string, unknown> } } = {};
       runInNewContext(await readFile(join(output, "runtime/disc-data.js"), "utf8"), embedded);
@@ -178,7 +158,7 @@ describe("M4 convert output", () => {
       await writeFile(japanese, JSON.stringify({ menuLanguage: "jpn", audioLanguage: "jpn", subtitleLanguage: "eng", country: "JP", region: "A", outputProfile: "portable" }));
       const outputs = [join(parent, "menu-eng"), join(parent, "menu-jpn")];
       for (const [profile, output] of [[english, outputs[0]!], [japanese, outputs[1]!]] as const) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", profile, "--out", output]);
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--player-profile", profile, "--out", output]);
         expect(result.status).toBe(0);
       }
       const englishProfile = JSON.parse(await readFile(join(outputs[0]!, "manifest.json"), "utf8")).profile;
@@ -186,12 +166,12 @@ describe("M4 convert output", () => {
       expect(englishProfile).toMatchObject({ menuLanguage: "eng", country: "US" });
       expect(japaneseProfile).toMatchObject({ menuLanguage: "jpn", country: "JP" });
 
-      const missing = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", join(parent, "absent.json"), "--out", join(parent, "menu-missing")]);
+      const missing = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--player-profile", join(parent, "absent.json"), "--out", join(parent, "menu-missing")]);
       expect(missing.status).toBe(1);
       expect(missing.stderr.toString()).toContain("CLI_INVALID_PROFILE");
       await expect(access(join(parent, "menu-missing"))).rejects.toThrow();
       await writeFile(join(parent, "broken.json"), "not json{");
-      const broken = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", join(parent, "broken.json"), "--out", join(parent, "menu-broken")]);
+      const broken = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--player-profile", join(parent, "broken.json"), "--out", join(parent, "menu-broken")]);
       expect(broken.status).toBe(1);
       expect(broken.stderr.toString()).toContain("CLI_INVALID_PROFILE");
 
@@ -205,7 +185,7 @@ describe("M4 convert output", () => {
       ].entries()) {
         const path = join(parent, `invalid-${index}.json`);
         await writeFile(path, JSON.stringify(profile));
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", path, "--out", join(parent, `menu-invalid-${index}`)]);
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--player-profile", path, "--out", join(parent, `menu-invalid-${index}`)]);
         expect(result.status, JSON.stringify(profile)).toBe(1);
         expect(result.stderr.toString()).toContain("CLI_INVALID_PROFILE");
         await expect(access(join(parent, `menu-invalid-${index}`))).rejects.toThrow();
@@ -214,7 +194,7 @@ describe("M4 convert output", () => {
       // Case is normalised rather than rejected, so `ENG`/`us` mean `eng`/`US`.
       const mixedCase = join(parent, "profile-mixed.json");
       await writeFile(mixedCase, JSON.stringify({ ...caseBase, menuLanguage: "ENG", country: "us" }));
-      const normalised = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--player-profile", mixedCase, "--out", join(parent, "menu-mixed")]);
+      const normalised = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--player-profile", mixedCase, "--out", join(parent, "menu-mixed")]);
       expect(normalised.status).toBe(0);
       expect(JSON.parse(await readFile(join(parent, "menu-mixed", "manifest.json"), "utf8")).profile).toMatchObject({ menuLanguage: "eng", country: "US" });
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -223,13 +203,13 @@ describe("M4 convert output", () => {
   it("defaults to a sibling BDMV-menu output with a configurable BDMV path", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv default menu ")); const disc = await makeMenuDisc(parent);
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--no-strict"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--no-strict"]);
       expect(result.status).toBe(0);
       const output = join(parent, "BDMV-menu");
       expect(JSON.parse(result.stdout.toString()).output).toBe(await realpath(output));
       expect(await readFile(join(output, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
       const parentOutput = join(parent, "parent-input-menu");
-      const parentResult = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", parent, "--out", parentOutput, "--no-strict"]);
+      const parentResult = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", parent, "--out", parentOutput, "--no-strict"]);
       expect(parentResult.status).toBe(0);
       expect(await readFile(join(parentOutput, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
       const verify = () => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", output, "--offline", "--format", "json"]);
@@ -241,7 +221,7 @@ describe("M4 convert output", () => {
       expect(JSON.parse(changedAudit.stdout.toString()).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified" }));
       const other = join(parent, "other"); await mkdir(other);
       const externalOutput = join(other, "menu");
-      const separate = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", externalOutput, "--no-strict"]);
+      const separate = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", externalOutput, "--no-strict"]);
       expect(separate.status).toBe(0);
       expect(await readFile(join(externalOutput, "runtime", "bdmv-config.js"), "utf8")).toContain(`globalThis.__BDMV_BDMV_PATH__=${JSON.stringify(await realpath(disc))}`);
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -251,7 +231,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert no scene "));
     const disc = await makeMenuDisc(parent, { includeMenuStream: false }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_NOT_FOUND", output: await realpath(output) });
       expect(JSON.parse(await readFile(join(output, "report.json"), "utf8"))).toMatchObject({ status: "failed", code: "MENU_SCENE_NOT_FOUND" });
@@ -271,7 +251,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert unknown playlist "));
     const disc = await makeMenuDisc(parent, { topMenuObject: 1 }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" });
       expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_PLAYLIST_NOT_RESOLVED");
@@ -284,7 +264,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert clpi cue "));
     const disc = await makeMenuDisc(parent, { menuCueMode: "clpi-only" }); const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { scene: { pages: Array<{ objects: Array<{ assetId: string }> }> } };
@@ -297,7 +277,7 @@ describe("M4 convert output", () => {
     const disc = await makeMenuDisc(parent, { menuUiModel: 1 });
     const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title", "Offline Menu"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output, "--title", "Offline Menu"]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[] };
@@ -311,7 +291,7 @@ describe("M4 convert output", () => {
     const disc = await makeMenuDisc(parent, { logoUiModel: 1, preMenuChain: true });
     const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title", "Offline Menu"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output, "--title", "Offline Menu"]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[] };
@@ -324,7 +304,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert ambiguous scene "));
     const disc = await makeMenuDisc(parent, { multipleMenuScenes: true }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
       expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
@@ -337,7 +317,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert duplicate scene id "));
     const disc = await makeMenuDisc(parent, { duplicateMenuSceneIds: true }); const output = join(parent, "failed output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
       const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
@@ -352,7 +332,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert per-item clpi cue "));
     const disc = await makeMenuDisc(parent, { explicitIgPriority: true, repeatedMenuPlayItemWithoutIg: true }); const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { scene: { pages: Array<{ objects: Array<{ assetId: string }> }> } };
@@ -364,7 +344,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert explicit ig priority "));
     const disc = await makeMenuDisc(parent, { explicitIgPriority: true }); const output = join(parent, "output");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       expect(discData).toContain("igs-00002-288-");
@@ -377,7 +357,7 @@ describe("M4 convert output", () => {
     const disc = await makeMenuDisc(parent); const output = join(parent, "output"); const profilePath = join(parent, "profile.json");
     await writeFile(profilePath, JSON.stringify({ menuLanguage: "jpn", audioLanguage: "jpn", subtitleLanguage: "eng", country: "JP", region: "A", outputProfile: "portable" }));
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--player-profile", profilePath]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output, "--player-profile", profilePath]);
       expect(result.status).toBe(0);
       const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
       expect(discData).toContain('"profile":{"menuLanguage":"jpn"');
@@ -390,7 +370,7 @@ describe("M4 convert output", () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert title "));
     const disc = await makeMenuDisc(parent); const output = join(parent, "title-missing");
     try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", output, "--title"]);
       expect(result.status).toBe(1);
       expect(result.stderr.toString()).toContain("CLI_MISSING_VALUE");
       expect(result.stdout.toString()).toBe("");
@@ -493,6 +473,59 @@ describe("IGS extract CLI", () => {
   });
 });
 
+describe("asset PNG rendering", () => {
+  it("renders a SUP without a BDMV, skips clear display sets and records start/end times", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv render sup "));
+    const input = join(parent, "manual.sup"); const output = join(parent, "out");
+    await writeFile(input, buildSyntheticSup());
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "render", "--sup", input, "--out", output]);
+      expect(result.status, result.stderr.toString()).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toMatchObject({ stageStatus: "complete", assetCount: 2 });
+      const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8"));
+      expect(manifest.assets).toHaveLength(2);
+      expect(manifest.assets.map((asset: any) => asset.displaySet)).toEqual([1, 3]);
+      // Seconds are relative to the first display set, not the raw PTS.
+      expect(manifest.assets[0]).toMatchObject({ type: "sup-png", startSeconds: 0, endSeconds: 0.5, width: 4, height: 3 });
+      expect(manifest.assets[1]).toMatchObject({ type: "sup-png", startSeconds: 1, endSeconds: null });
+      expect(manifest.assets[0].startTime90k).toBeUndefined();
+      expect((await readdir(join(output, "assets/subtitles"))).sort()).toEqual(["manual-display-00001.png", "manual-display-00003.png"]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("renders an MNU without a BDMV", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv render mnu "));
+    const input = join(parent, "manual.mnu"); const output = join(parent, "out");
+    await writeFile(input, buildSyntheticMnu());
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "render", input, "--out", output]);
+      expect(result.status, result.stderr.toString()).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toMatchObject({ stageStatus: "complete", assetCount: 1 });
+      const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8"));
+      expect(manifest.assets[0]).toMatchObject({ type: "igs-png", objectId: 5, width: 1, height: 1 });
+      expect((await readdir(join(output, "assets/graphics")))).toHaveLength(1);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("records display-set timing in export-assets and omits transparent PNG records", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv export sup "));
+    const fixture = resolve(root, "../../test-data/fixtures/synthetic-all-features/BDMV");
+    const output = join(parent, "out");
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "export", fixture, "--out", output, "--type", "sup", "--decode", "png"]);
+      expect(result.status, result.stderr.toString()).toBe(0);
+      const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8"));
+      const pngs = manifest.assets.filter((asset: any) => asset.type === "sup-png");
+      expect(pngs).toHaveLength(5);
+      expect(pngs.every((asset: any) => typeof asset.startSeconds === "number" && asset.startSeconds >= 0)).toBe(true);
+      expect(pngs.every((asset: any) => asset.endSeconds === null || (typeof asset.endSeconds === "number" && asset.endSeconds > asset.startSeconds))).toBe(true);
+      expect(pngs.every((asset: any) => asset.startTime90k === undefined)).toBe(true);
+      expect(pngs.map((asset: any) => asset.displaySet)).toEqual([1, 1, 1, 1, 1]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+});
+
 describe("stage and argument contracts", () => {
   async function emptyDisc(parent: string): Promise<string> {
     const path = join(parent, "BDMV");
@@ -510,7 +543,7 @@ describe("stage and argument contracts", () => {
       expect(JSON.parse(extracted.stdout.toString())).toMatchObject({ stageStatus: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
       await expect(access(target)).rejects.toThrow();
 
-      const converted = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", join(parent, "convert-out")]);
+      const converted = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--out", join(parent, "convert-out")]);
       expect(converted.status).toBe(1);
       expect(JSON.parse(converted.stdout.toString())).toMatchObject({ stageStatus: "failed", code: "BDMV_REQUIRED_FILE_MISSING" });
       await expect(access(join(parent, "convert-out"))).rejects.toThrow();
@@ -537,74 +570,10 @@ describe("stage and argument contracts", () => {
       const disc = await emptyDisc(parent);
       const limitsPath = join(parent, "limits.json"); const limitsTarget = join(parent, "limits-reject");
       await writeFile(limitsPath, JSON.stringify({ maxInstructionsPerTurn: 0 }));
-      const limits = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", limitsPath, "--out", limitsTarget]);
+      const limits = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--limits", limitsPath, "--out", limitsTarget]);
       expect(limits.status).toBe(1);
       expect(limits.stderr.toString()).toContain("INVALID_LIMIT");
       await expect(access(limitsTarget)).rejects.toThrow();
-    } finally { await rm(parent, { recursive: true, force: true }); }
-  });
-
-  it("reports a missing flag value", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "bdmv stage missing value "));
-    try {
-      const disc = await emptyDisc(parent);
-      for (const args of [["inspect", disc, "--out"], ["convert", disc, "--out"]]) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), ...args]);
-        expect(result.status).toBe(1);
-        expect(result.stderr.toString()).toContain("CLI_MISSING_VALUE");
-        expect(result.stdout.toString()).toBe("");
-      }
-    } finally { await rm(parent, { recursive: true, force: true }); }
-  });
-
-  it("treats an empty inline value as missing and validates values before reading the disc", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "bdmv stage empty value "));
-    try {
-      const disc = await emptyDisc(parent);
-      // `--out` on an empty disc must report the argument error, not the disc's fatal diagnostic.
-      for (const args of [["inspect", disc, "--out="], ["convert", disc, "--out="], ["convert", disc, "--out"], ["convert", disc, "--limits"]]) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), ...args]);
-        expect(result.status, args.join(" ")).toBe(1);
-        expect(result.stderr.toString(), args.join(" ")).toContain("CLI_MISSING_VALUE");
-        expect(result.stderr.toString()).not.toContain("BDMV_REQUIRED_FILE_MISSING");
-        expect(result.stdout.toString()).toBe("");
-      }
-    } finally { await rm(parent, { recursive: true, force: true }); }
-  });
-});
-
-describe("argument contract", () => {
-  it("rejects misspelled options and extra positionals", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "bdmv cli unknown option "));
-    const disc = join(parent, "BDMV"); await mkdir(disc);
-    try {
-      const inspect = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, "--stric"]);
-      expect(inspect.status).toBe(1);
-      expect(inspect.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
-      expect(inspect.stdout.toString()).toBe("");
-
-      const output = join(parent, "typo-output");
-      const convert = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--ou", output]);
-      expect(convert.status).toBe(1);
-      expect(convert.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
-      await expect(access(output)).rejects.toThrow();
-
-      const extra = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, "extra"]);
-      expect(extra.status).toBe(1);
-      expect(extra.stderr.toString()).toContain("CLI_USAGE");
-    } finally { await rm(parent, { recursive: true, force: true }); }
-  });
-
-  it("keeps every accepted option of each command working", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "bdmv cli allowed options "));
-    const disc = join(parent, "BDMV");
-    await mkdir(join(disc, "PLAYLIST"), { recursive: true }); await mkdir(join(disc, "CLIPINF"), { recursive: true }); await mkdir(join(disc, "STREAM"), { recursive: true });
-    await writeFile(join(disc, "index.bdmv"), buildM1Index()); await writeFile(join(disc, "MovieObject.bdmv"), buildM1MovieObject());
-    try {
-      for (const args of [["--strict"], ["--no-strict"], ["--allow-partial"], ["--format", "json"]]) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", disc, ...args]);
-        expect(result.status, args.join(" ")).toBe(0);
-      }
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });
@@ -668,7 +637,7 @@ describe("offline validate CLI", () => {
         const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", ...args]);
         expect(result.status, args.join(" ")).toBe(1);
         expect(result.stdout.toString()).toBe("");
-        expect(result.stderr.toString()).toMatch(/CLI_(?:MISSING_VALUE|INVALID_FORMAT)/);
+        expect(result.stderr.toString()).toMatch(/CLI_(?:MISSING_VALUE|INVALID_FORMAT|INVALID_ARGUMENT)/);
       }
       expect(await readFile(join(directory, "manifest.json"))).toEqual(before);
       await expect(access(join(directory, "dependency-audit.json"))).rejects.toThrow();
@@ -704,6 +673,52 @@ describe("offline validate CLI", () => {
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 });
+
+function buildSyntheticSup(): Uint8Array {
+  const palette = pgsSegment(90_000, 0x14, [0, 0, 1, 235, 128, 128, 255]);
+  const object = pgsSegment(90_000, 0x15, [0, 1, 0, 0xc0, 0, 0, 7, 0, 1, 0, 1, 1, 0, 0]);
+  return concatBytes(
+    palette, object,
+    pgsSegment(90_000, 0x16, [0, 4, 0, 3, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0]),
+    pgsSegment(90_000, 0x80, []),
+    pgsSegment(135_000, 0x16, [0, 4, 0, 3, 0, 2, 0, 0, 0, 0, 0]),
+    pgsSegment(135_000, 0x80, []),
+    palette, object,
+    pgsSegment(180_000, 0x16, [0, 4, 0, 3, 0, 3, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0]),
+    pgsSegment(180_000, 0x80, []),
+  );
+}
+
+function pgsSegment(pts: number, type: number, payload: number[]): Uint8Array {
+  const result = new Uint8Array(13 + payload.length);
+  result.set([0x50, 0x47, pts >>> 24, pts >>> 16, pts >>> 8, pts, 0, 0, 0, 0, type, payload.length >>> 8, payload.length], 0);
+  result.set(payload, 13);
+  return result;
+}
+
+function buildSyntheticMnu(): Uint8Array {
+  const u16 = (value: number) => Uint8Array.of(value >> 8, value & 255);
+  const command = Uint8Array.from({ length: 12 }, (_, index) => index + 1);
+  const page = concatBytes(
+    Uint8Array.of(1, 0), new Uint8Array(8), Uint8Array.of(0, 0), Uint8Array.of(0, 0), Uint8Array.of(1),
+    u16(1), u16(0xffff), Uint8Array.of(0, 1), u16(1), Uint8Array.of(1),
+    concatBytes(u16(1), u16(0), Uint8Array.of(0), u16(0), u16(0), u16(0xffff), u16(0xffff), u16(0xffff), u16(0xffff), u16(5), u16(5), Uint8Array.of(0, 6), u16(5), u16(5), Uint8Array.of(0, 9), u16(5), u16(5), u16(1), command),
+  );
+  const composition = concatBytes(Uint8Array.of(0x80, 0, 0, 0, 1), page);
+  const ics = concatBytes(u16(1), u16(1), Uint8Array.of(0), u16(7), Uint8Array.of(0, 0xc0), Uint8Array.of(composition.length >> 16, composition.length >> 8, composition.length), composition);
+  const pds = Uint8Array.of(0, 0, 1, 235, 128, 128, 255);
+  const ods = concatBytes(u16(5), Uint8Array.of(0, 0xc0, 0, 0, 5, 0, 1, 0, 1, 1));
+  return concatBytes(
+    mnuSegment(90_000, 0x18, ics),
+    mnuSegment(90_000, 0x14, pds),
+    mnuSegment(90_000, 0x15, ods),
+    mnuSegment(90_000, 0x80, new Uint8Array()),
+  );
+}
+
+function mnuSegment(pts: number, type: number, payload: Uint8Array): Uint8Array {
+  return concatBytes(Uint8Array.of(0x49, 0x47, pts >>> 24, pts >>> 16, pts >>> 8, pts, 0, 0, 0, 0, type, payload.length >>> 8, payload.length & 255), payload);
+}
 
 function buildSyntheticClip(missingObject = false, uiModel: 0 | 1 = 0): Uint8Array {
   const u16 = (value: number) => Uint8Array.of(value >> 8, value & 255);

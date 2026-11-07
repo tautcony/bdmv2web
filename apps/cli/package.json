@@ -2,7 +2,9 @@
   "name": "@bdmv2web/cli",
   "version": "0.1.0",
   "license": "GPL-3.0-only",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "bin": {
     "bdmv2web": "./dist/index.js"
@@ -21,7 +23,8 @@
     "@bdmv2web/media-export": "workspace:*",
     "@bdmv2web/package-builder": "workspace:*",
     "@bdmv2web/runtime-web": "workspace:*",
-    "@bdmv2web/test-runner": "workspace:*"
+    "@bdmv2web/test-runner": "workspace:*",
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@bdmv2web/test-fixtures": "workspace:*",
