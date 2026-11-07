@@ -110,14 +110,4 @@ export function checkedObjectPixels(width: number, height: number, limits: Limit
   return pixels;
 }
 
-export function validateStage<T>(value: T, stage: "parsed" | "normalized" | "runtime"): T {
-  if (stage === "runtime") {
-    const ir = parseDiscIR(value);
-    if (ir.entries.some((e) => e.navigation.type === "BDJ")) {
-      // BD-J is retained in the IR; backend capability is reported by the consumer.
-    }
-  }
-  return value;
-}
-
 export { BinaryCursor } from "./binary-cursor.js";

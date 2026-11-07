@@ -447,27 +447,13 @@ async function boot(): Promise<void> {
   } catch (error) { visibleError(error); }
 }
 
-function validateEmbeddedDiscIR(value: unknown): { programs: Array<{ title: string }> } {
+/** Check that the embedded DiscIR belongs to this runtime. The runtime never
+ * reads the IR; its schema, duplicate-ID and reference rules are enforced by
+ * `parseDiscIR` when the package is written. */
+function validateEmbeddedDiscIR(value: unknown): void {
   if (!isRecord(value)) throw new Error("Embedded DiscIR must be a JSON object.");
   if (value.schemaVersion !== "1.0") throw new Error(`Unsupported DiscIR schema version '${typeof value.schemaVersion === "string" ? value.schemaVersion : "missing"}'. Expected 1.0.`);
   for (const key of ["entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"]) if (!Array.isArray(value[key])) throw new Error(`Embedded DiscIR is invalid: '${key}' must be an array.`);
-  const ids = new Set<string>();
-  for (const key of ["entries", "programs", "menus", "playlists", "mediaAssets"] as const) {
-    for (const [index, item] of (value[key] as unknown[]).entries()) {
-      if (!isRecord(item) || typeof item.id !== "string" || item.id.length === 0) throw new Error(`Embedded DiscIR is invalid: '${key}/${index}/id' must be a non-empty string.`);
-      if (ids.has(item.id)) throw new Error(`Embedded DiscIR has duplicate ID '${item.id}'.`);
-      ids.add(item.id);
-    }
-  }
-  const programIds = new Set((value.programs as Array<Record<string, unknown>>).map((program) => program.id as string));
-  const menuIds = new Set((value.menus as Array<Record<string, unknown>>).map((menu) => menu.id as string));
-  for (const [index, playlist] of (value.playlists as unknown[]).entries()) {
-    if (!isRecord(playlist) || !Array.isArray(playlist.programIds) || !Array.isArray(playlist.menuIds)) throw new Error(`Embedded DiscIR is invalid: 'playlists/${index}' requires programIds and menuIds arrays.`);
-    if (playlist.programIds.some((id) => typeof id !== "string" || !programIds.has(id))) throw new Error(`Embedded DiscIR has an unresolved program reference in playlists/${index}.`);
-    if (playlist.menuIds.some((id) => typeof id !== "string" || !menuIds.has(id))) throw new Error(`Embedded DiscIR has an unresolved menu reference in playlists/${index}.`);
-  }
-  for (const [index, program] of (value.programs as unknown[]).entries()) if (!isRecord(program) || typeof program.title !== "string") throw new Error(`Embedded DiscIR is invalid: 'programs/${index}/title' must be a string.`);
-  return { programs: value.programs as Array<{ title: string }> };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

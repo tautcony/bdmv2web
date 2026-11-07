@@ -239,7 +239,8 @@ function auditScript(text: string, source: string, checks: AuditCheck[], refs: R
 
 function auditJsonUrls(text: string, source: string, checks: AuditCheck[], refs: RuntimeUrlRef[]): void {
   let value: unknown;
-  try { value = JSON.parse(text); } catch { return; }
+  try { value = JSON.parse(text); }
+  catch (error) { add(checks, "RUNTIME_JSON_UNPARSABLE", "not-verified", `Runtime JSON could not be parsed for the URL audit: ${error instanceof Error ? error.message : String(error)}`, source); return; }
   const walk = (item: unknown, path: string): void => {
     if (Array.isArray(item)) { item.forEach((child, i) => walk(child, `${path}/${i}`)); return; }
     if (!isRecord(item)) return;

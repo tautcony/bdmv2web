@@ -154,7 +154,10 @@ export async function beginOutputTransaction(targetPath: string, options: { over
           await rename(canonicalTarget, backupPath);
           try { await rename(stageBase, canonicalTarget); }
           catch (error) {
-            await rename(backupPath, canonicalTarget).catch(() => undefined);
+            try { await rename(backupPath, canonicalTarget); }
+            catch (restoreError) {
+              throw new ContractError("OUTPUT_RESTORE_FAILED", targetPath, `Staging commit failed (${error instanceof Error ? error.message : String(error)}) and the previous output stays at ${backupPath}: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`);
+            }
             throw error;
           }
           await rm(backupPath, { recursive: true, force: true }).catch(() => undefined);

@@ -6,9 +6,9 @@ import type { BrowserEvidenceContext } from "./browser-evidence.js";
 const context: BrowserEvidenceContext = {
   profile: { audioLanguage: "eng", outputProfile: "portable", region: "A" },
   generatedFiles: [
-    { path: "media/background.mp4", kind: "media", byteLength: "120" },
-    { path: "assets/sound.wav", kind: "audio", byteLength: "64" },
-    { path: "runtime/app.js", kind: "runtime", byteLength: "20" },
+    { path: "media/background.mp4", kind: "media" },
+    { path: "assets/sound.wav", kind: "audio" },
+    { path: "runtime/app.js", kind: "runtime" },
   ],
   matrix: [{ caseId: "J-file-chrome", expected: { launch: true, offline: true } }],
   environment: { browser: "Google Chrome", browserVersion: "156.0.8078.76" },
@@ -27,7 +27,13 @@ describe("browser evidence binding", () => {
   it("binds profile, matrix and browser environment", () => {
     const evidence = record();
     expect(evaluateBrowserEvidence(evidence, context)).toMatchObject({ checkId: "BROWSER_EVIDENCE_BINDING", result: "pass" });
-    expect(evidence.binding).toMatchObject({ profile: context.profile, matrix: context.matrix, environment: context.environment, generatedMedia: [context.generatedFiles[1], context.generatedFiles[0]] });
+    expect(evidence.binding).toMatchObject({
+      profile: context.profile, matrix: context.matrix, environment: context.environment,
+      generatedMedia: [
+        { path: "assets/sound.wav", kind: "audio" },
+        { path: "media/background.mp4", kind: "media" },
+      ],
+    });
     expect(evidence.artifacts[0]).toMatchObject({ path: "reports/evidence/J-file-chrome/screenshot.png", kind: "screenshot", byteLength: "3" });
   });
 

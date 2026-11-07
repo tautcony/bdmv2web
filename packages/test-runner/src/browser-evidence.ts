@@ -13,7 +13,7 @@ export interface BrowserEnvironment {
 export interface BrowserEvidenceContext {
   profile: unknown;
   /** Rows from this tool's output manifest only; never pass source-disc files. */
-  generatedFiles: readonly (ManifestFile & { byteLength: string })[];
+  generatedFiles: readonly ManifestFile[];
   matrix: readonly BrowserMatrixCase[];
   environment: BrowserEnvironment;
 }
@@ -34,7 +34,7 @@ export interface BrowserEvidence {
   environment: BrowserEnvironment;
   binding: {
     profile: unknown;
-    generatedMedia: Array<{ path: string; kind: string; byteLength: string }>;
+    generatedMedia: Array<{ path: string; kind: string }>;
     matrix: BrowserMatrixCase[];
     environment: BrowserEnvironment;
   };
@@ -59,7 +59,7 @@ export function createBrowserEvidenceBinding(context: BrowserEvidenceContext): B
   const environment = normalizedEnvironment(context.environment);
   const mediaRows = context.generatedFiles
     .filter((file) => ["media", "audio"].includes(file.kind.toLowerCase()))
-    .map(({ path, kind, byteLength }) => ({ path, kind: kind.toLowerCase(), byteLength }))
+    .map(({ path, kind }) => ({ path, kind: kind.toLowerCase() }))
     .sort((a, b) => a.path.localeCompare(b.path, "en"));
   if (mediaRows.some((file) => !isSafeRelativePath(file.path))) {
     throw new TypeError("Generated media manifest rows need safe paths");

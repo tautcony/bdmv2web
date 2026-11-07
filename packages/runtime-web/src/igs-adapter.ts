@@ -217,7 +217,7 @@ export function selectPopupScene(scenes: readonly SerializedScene[], clipId: str
       return pts !== null && pts !== undefined && (timeDomain === undefined || scene.source?.timeDomain === timeDomain) && BigInt(pts) <= BigInt(time90k);
     });
     if (!active.length) return { status: "not-found" };
-    const latestPts = active.reduce((latest, scene) => BigInt(scene.source!.pts90k!), 0n);
+    const latestPts = active.reduce((latest, scene) => { const pts = BigInt(scene.source!.pts90k!); return pts > latest ? pts : latest; }, 0n);
     const latest = active.filter((scene) => BigInt(scene.source!.pts90k!) === latestPts);
     return latest.length === 1 ? { status: "selected", scene: latest[0]! } : { status: "ambiguous", scenes: latest };
   }

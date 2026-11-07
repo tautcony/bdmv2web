@@ -285,7 +285,7 @@ export class MenuController {
       this.selectedButtonId = null; this.activatedButtonId = null; this.syncMenuContext(); this.hooks.invalidateSound?.(); this.hooks.render?.(); return;
     }
     const target = this.page.buttons.find((button) => button.id === buttonId);
-    if (!this.isPageMember(target)) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references unusable button ${buttonId} on page ${this.page.id}.`); return; }
+    if (!target) { this.hooks.diagnostic?.(`SET_BUTTON_PAGE references unusable button ${buttonId} on page ${this.page.id}.`); return; }
     this.activateBogButton(target);
   }
   private changePage(index: number, runAutoAction: boolean, playOutEffects = true): void {
@@ -353,7 +353,7 @@ export class MenuController {
   }
   setButtonEnabled(id: number, enabled: boolean): void {
     const target = this.page.buttons.find((button) => button.id === id);
-    if (!this.isPageMember(target)) return;
+    if (!target) return;
     if (!this.page.bogDefaults) {
       enabled ? this.disabled.delete(id) : this.disabled.add(id);
       if (!enabled && this.selectedButtonId === id) {
@@ -480,12 +480,9 @@ export class MenuController {
     if (this.isUsable(target)) this.selectButton(targetId);
   }
   private isUsable(button: MenuButton | null | undefined): button is MenuButton {
-    if (!button || !button.enabled || this.disabled.has(button.id) || !this.isPageMember(button) || !this.isBogEnabled(button)) return false;
+    if (!button || !button.enabled || this.disabled.has(button.id) || !this.isBogEnabled(button)) return false;
     // When the serialized page declares BOG defaults, they also describe which BOG IDs exist.
     return !this.page.bogDefaults || this.page.bogDefaults.some((entry) => entry.bog === button.bog);
-  }
-  private isPageMember(button: MenuButton | null | undefined): button is MenuButton {
-    return !!button && this.page.buttons.some((candidate) => candidate.id === button.id && candidate.bog === button.bog);
   }
   private isBogEnabled(button: MenuButton): boolean {
     return !this.page.bogDefaults || this.bogSelections.get(this.bogSelectionKey(this.page.id, button.bog)) === button.id;
@@ -991,7 +988,6 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     const duration = track.durationSeconds ?? this.activeMedia?.background.durationSeconds;
     if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) throw new Error("Menu package is missing a valid generated audio duration.");
     const targetTime = logicalTime % duration;
-    if (!Number.isFinite(targetTime) || targetTime < 0) throw new Error("Video logical time cannot be mapped to the audio variant.");
     if (Math.abs(this.audio.currentTime - targetTime) > 0.000001) {
       const seekWait = waitAudioEvent(this.audio, "seeked", this.hooks.trackSwitchTimeoutMs ?? 15_000);
       try { this.audio.currentTime = targetTime; }

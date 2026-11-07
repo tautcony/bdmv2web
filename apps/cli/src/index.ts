@@ -1039,7 +1039,12 @@ async function validate(): Promise<void> {
   const strict = strictDefault();
   const audit = await auditOutputPackage(resolve(input));
   const writable = !audit.checks.some((check) => check.checkId === "PACKAGE_ROOT_MISSING" || check.checkId === "PACKAGE_ROOT_INVALID");
-  const manifest = await readJsonObject(resolve(audit.packageRoot, audit.manifestPath));
+  const manifest = await readJsonObject(resolve(audit.packageRoot, audit.manifestPath), (message) => {
+    // The delivery decision reads manifest status and limitations back from the
+    // package. A re-read failure must stay visible, otherwise the status
+    // disagreement check below would silently report nothing.
+    audit.checks.push({ checkId: "MANIFEST_REREAD_FAILED", result: "not-verified", message: `manifest.json could not be read for the delivery decision: ${message}`, path: audit.manifestPath });
+  });
   const previousCompatibility = await readJsonObject(resolve(audit.packageRoot, "compatibility.json"));
   const limitations = Array.isArray(manifest.limitations) ? manifest.limitations.filter((item): item is string => typeof item === "string") : [];
   // A package records the diagnostics that decided its own conversion. Re-reading
@@ -1127,12 +1132,14 @@ async function validate(): Promise<void> {
   process.exitCode = decision.exitCode;
 }
 
-/** Read a JSON object, treating anything else as absent. */
-async function readJsonObject(path: string): Promise<Record<string, unknown>> {
+/** Read a JSON object, treating anything else as absent. A read failure is
+ * reported to `onError` so a caller that depends on the content can keep the
+ * failure visible instead of treating it as an empty document. */
+async function readJsonObject(path: string, onError?: (message: string) => void): Promise<Record<string, unknown>> {
   try {
     const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch { return {}; }
+  } catch (error) { onError?.(error instanceof Error ? error.message : String(error)); return {}; }
 }
 
 async function writeGeneratedReport(root: string, relativePath: string, content: string): Promise<void> {

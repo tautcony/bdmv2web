@@ -133,18 +133,11 @@ describe("offline browser boot", () => {
     expect(host.elements.get("popup-canvas")?.hidden).toBe(true);
   });
 
-  it("shows a visible error for an unsupported schema and dangling DiscIR references", async () => {
+  it("shows a visible error for an unsupported schema and a missing initial MovieObject", async () => {
     const unsupported = await launch(packageData({ ir: { ...validIr, schemaVersion: "2.0" } }));
     expect(unsupported.elements.get("runtime-status")?.role).toBe("alert");
     expect(unsupported.elements.get("runtime-diagnostics")?.textContent).toContain("Unsupported DiscIR schema version '2.0'");
     expect(unsupported.elements.get("start-menu")?.hidden).toBe(true);
-
-    const danglingIr = structuredClone(validIr) as Record<string, unknown>;
-    danglingIr.playlists = [{ id: "playlist-1", programIds: ["missing-program"], menuIds: [] }];
-    const dangling = await launch(packageData({ ir: danglingIr }));
-    expect(dangling.elements.get("runtime-status")?.role).toBe("alert");
-    expect(dangling.elements.get("runtime-diagnostics")?.textContent).toContain("unresolved program reference");
-    expect(dangling.elements.get("start-menu")?.hidden).toBe(true);
 
     const invalidEntry = await launch(packageData({ vmPrograms: [], vmInitialProgramId: 9 }), { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
     expect(invalidEntry.elements.get("runtime-status")?.role).toBe("alert");

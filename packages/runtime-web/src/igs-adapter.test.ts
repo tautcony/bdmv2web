@@ -73,6 +73,8 @@ describe("adaptIgsScene", () => {
     const atMark = selectPopupScene([first, later], "00001", 0x18, 18_000, 0);
     expect(before.status).toBe("selected"); if (before.status === "selected") expect(before.scene).toEqual(first);
     expect(atMark.status).toBe("selected"); if (atMark.status === "selected") expect(atMark.scene).toEqual(later);
+    const outOfOrder = selectPopupScene([later, first], "00001", 0x18, 18_000, 0);
+    expect(outOfOrder.status).toBe("selected"); if (outOfOrder.status === "selected") expect(outOfOrder.scene.id).toBe("later");
     expect(selectPopupScene([first, later], "00001", 0x18, 18_000, 1).status).toBe("not-found");
   });
 
