@@ -1,6 +1,6 @@
 {
   "name": "bdmv2web",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inspect a Blu-ray BDMV disc and build an offline web menu package.",
   "license": "GPL-3.0-only",
   "keywords": [
