@@ -20,10 +20,9 @@
 ## B. 证据链减承诺（D9=C）
 
 - [x] B.0 更新实施基线：包清单不声明文件内容完整性；必需资产缺失仍为 failed。
-- [x] B.1 移除产品侧内容摘要字段和计算。DiscIR 资产、包 manifest、审计报告及浏览器产物均不记录文件内容摘要；manifest 保留路径和长度。浏览器证据直接保存 profile、mode、生成媒体清单、矩阵和环境值。
+- [x] B.1 移除产品侧内容摘要字段和计算。DiscIR 资产、包 manifest 及审计报告均不记录文件内容摘要；manifest 保留路径和长度。
 - [x] B.2 检查仓库样本产物；当前 test-data 中没有需要重新生成的交付包。
 - [x] B.3 删除旧内容摘要逻辑对应的专属测试和夹具，保留常规资源审计与文件长度行为测试。
-- [x] B.4 浏览器证据按 profile/mode/生成媒体清单/矩阵/环境值判断是否过期；artifact 记录路径、类型和长度。
 - [ ] B.5 在发布验证文档中记录 compatibility 构建与审计仍缺的工具版本及诊断字段。
 - [x] B.6 实施基线与离线审计规范已更新；M6 中内容完整性相关任务未勾选。
 - [ ] B.7 对历史包格式的兼容性仍需独立验证。
@@ -52,7 +51,6 @@
 - [ ] E.2 回归已实现的菜单媒体 `ended`/`error`/`abort` 回执：按 action/responseTo 关联，非循环背景结束发 `MEDIA_ENDED`，错误解除等待并保留诊断。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.3 回归已实现的音轨 PSR1 写回：成功选择和失败回滚均经 `systemWrite(1, streamNumber)` 更新系统寄存器；验证按钮程序读取所选值。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.4 命中几何统一：`MenuController.hit()` 按可用性决定命中集（可用即 `selected ?? normal` 的 bounds）。验收：只有 `normal` 视觉的启用按钮可被点击命中；单测覆盖"仅 normal""selected 与 normal 不同几何"两种情况。
-- [ ] E.5 `docs/guides/browser-matrix.md` 记录 `loop=false` 结束语义为"回 `MEDIA_ENDED`，画面停留末帧由渲染决定"，并注明如需 `MEDIA_HELD` 属后续能力。验收：文档含该条，且未声称支持 `HELD`。
 - [ ] E.6 回归：`corepack pnpm --filter @bdmv2web/runtime-web test` 全绿；`tamako-headless-navigation.test.ts` 仍通过（该用例 50s，若因此变慢需在本 change 记录耗时）。
 
 ## F. 发布布局可构建（D7）
@@ -83,10 +81,12 @@
   验收：三条命令的输出与上述口径逐字一致；第 3 条若在代码内有命中，说明 B.1 漏删，不得以"仅剩迁移说明"放过。
 - [ ] H.2 行为回归：`corepack pnpm build && corepack pnpm typecheck && corepack pnpm test:all` 全绿。
 - [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `内容摘要字段` 字段移除与源位置字段变真实）。
-- [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；浏览器证据范围如实绑定 profile/mode/媒体清单/矩阵/环境，不记录制品哈希；M6 未验证项保持未勾选。
+- [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；M6 未验证项保持未勾选。
 - [ ] H.5 范围守界：不实现浏览器内正片播放；影片使用系统 URL Protocol 交接；不新增未经计划的 CI workflow。
 - [ ] H.6 归档前按当前 status 的 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 主规格已存在；`offline-menu-runtime` 与 `offline-delivery-assurance` 主规格尚缺失，且其上游 change 仍活动。确定并记录这些 delta 的同步归属和顺序，使 archive 不丢失需求、不向缺失主规格应用 MODIFIED-only delta。不得再执行旧版“先归档已完成上游 change”的指令。
 
 ## I. 已移出范围
 
 原 I.1 针对本地 GET bridge 和 URL token。当前浏览器正片路径使用操作系统 URL Protocol；`runtime-web/src/browser.ts` 不含该本地桥。旧任务已移出当前范围。外部目标约束与审计由 `export-playable-media` 和 `verify-offline-release` 跟踪。
+
+浏览器验收（Chrome 版本锁定、浏览器证据绑定、跨浏览器矩阵及 `docs/guides/browser-matrix.md`）已移出范围，`packages/test-runner` 的浏览器证据模块与 `BROWSER_EVIDENCE_*` 检查一并删除。原 B.4 与 E.5 随该项移出；`loop=false` 的结束语义由 `offline-menu-runtime` 的「非循环背景结束」场景定义。

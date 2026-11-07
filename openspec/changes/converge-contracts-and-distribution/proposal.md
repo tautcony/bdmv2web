@@ -5,7 +5,7 @@
 第 1 批让门禁与退出码回到事实，但 13 项评审里真正影响"产物可信度"的问题都在第 2 批：
 
 - **同一契约有两套数值**：`core` 的 `DEFAULT_LIMITS` 是 `maxCallDepth 128 / maxQueueDepth 1024`，`hdmv` 的私有 `DEFAULTS` 是 `64 / 256`；`DEFAULT_PLAYER_PROFILE` 也有两份。数值型仿真契约一旦分叉，各包测试会各自为政。
-- **证据链与实际能力不符**：旧报告记录的制品完整性信息并未由审计重新核对，浏览器证据也没有透明记录其适用的配置范围。
+- **证据链与实际能力不符**：旧报告记录的制品完整性信息并未由审计重新核对。
 - **静态图与 VM 语义不一致**：`graph.ts` 仍把 `JUMP_TITLE` / `LINK_*` / `TERMINATE_PL` 当终止流，VM 在 MovieObject 上下文却继续执行。当前 `CALL_TITLE` 暂停后通过 `TITLE_SEARCH → selectTitle()` 恢复；剩余工作是核实失败路径和诊断，不再按旧假设强制改成桥端 `responseTo` continuation。
 - **源位置在交付层丢失**：`createMenuDiscIR` 写入占位的 `source/structural` + offset 0，`vmPrograms` 改写为 `<MovieObject>`，IGS 结构诊断落到 `BDMV/STREAM/.m2ts`。这直接使"首分歧可定位""诊断可回到源文件"两条验收失效。
 - **运行时剩余缺口**：无菜单媒体包仍不执行初始 `runTurn`/First Play；只有 normal 图像的可用按钮仍可能无法命中。背景 `ended` 回执和主音轨选择后的 PSR1 写回已在当前实现中存在，需保留回归验收但不再列为待实现。
@@ -15,7 +15,7 @@
 ## What Changes
 
 - **契约常量收敛（D3）**：`core` 成为 `Limits` 与 `PlayerProfile` 的唯一来源；`hdmv` 的私有默认值改为派生；`VmOptions` 接收 `limits?: Limits`，让 `--limits` 有落地路径；明确 `maxCallDepth` 当前语义并在基线注明。
-- **证据链降级（D9=C）**：移除文件内容校验和关联字段，清单保留文件路径和长度。浏览器证据直接记录 profile / mode / generated media / matrix / environment 值；M6 对应的完整性任务取消勾选。
+- **证据链降级（D9=C）**：移除文件内容校验和关联字段，清单保留文件路径和长度；M6 对应的完整性任务取消勾选。
 - **图与 VM 语义（D11）**：`JUMP_TITLE` 补后继边；`LINK_*` / `TERMINATE_PL` 按上下文判定；`CALL_TITLE` 建立可关联的等待与回执；被上下文忽略的指令必须留诊断。
 - **源位置保真（D12）**：IR entry、trace 指令、IGS 结构诊断统一使用原始 `SourceRef`（相对 BDMV 根的 path + origin + 文件字节偏移），删除全部占位值。
 - **运行时生命周期（D13）**：初始 VM 与媒体解耦；媒体桥补齐 `ended` / `error` / `abort` 回执；音轨选择写回 PSR1；命中几何与按钮可用性判定统一。
@@ -40,7 +40,7 @@
 
 ## Impact
 
-`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`、`docs/guides/browser-matrix.md`。
+`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
 
 ## Acceptance Boundary
 

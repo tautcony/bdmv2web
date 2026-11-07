@@ -1062,13 +1062,12 @@ async function validate(): Promise<void> {
     entries: { reason: "Per-entry coverage evidence is not present in this package." },
     instructions: { reason: "Per-instruction coverage evidence is not present in this package." },
     media: { reason: "Per-media coverage evidence is not present in this package." },
-    tests: { reason: "V1 browser and test-matrix evidence is not present in this package." },
+    tests: { reason: "Test-matrix evidence is not present in this package." },
   });
   const releaseSummaryInput = {
     audit,
     dependencyAudit: createDependencyAuditReport(audit),
     coverage,
-    browserEvidence: [],
     referenceEvidence: [],
     decisionFacts: {
       limitations,
@@ -1096,7 +1095,6 @@ async function validate(): Promise<void> {
     compatibility: {
       ...releaseSummary.compatibility,
       ...(typeof previousCompatibility.profile === "string" ? { profile: previousCompatibility.profile } : {}),
-      browserEvidence: [],
       externalDependencies: Array.isArray(previousCompatibility.externalDependencies) ? previousCompatibility.externalDependencies : [],
       notVerified: [...new Set([...priorNotVerified, ...currentGaps])],
     },

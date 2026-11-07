@@ -214,7 +214,6 @@ rg '"CODE_NAME"' packages apps
 | `EXTERNAL_CONFIG` / `EXTERNAL_CONFIG_INVALID` | not-verified / fail | 外部播放配置需现场验证/非法 |
 | `MANIFEST_STATUS_UNVERIFIED` | not-verified | manifest 记录状态与当前证据不一致 |
 | `PACKAGE_AUDIT_REQUIRED` / `DEPENDENCY_AUDIT_REQUIRED` | not-verified | 没有提供审计/依赖检查 |
-| `BROWSER_EVIDENCE_REQUIRED` / `BROWSER_EVIDENCE_BINDING` | not-verified/fail | 浏览器证据缺失或与包不匹配；裸 `BROWSER_EVIDENCE` 只由调用方作为检查 id 传入，本仓库源码不产生 |
 | `REFERENCE_EVIDENCE_REQUIRED` | not-verified | 未提供独立对照证据；提供时调用方以 `REFERENCE_COMPARISON` 作为检查 id 传入 |
 | `COVERAGE_INCOMPLETE` / `REQUIRED_EVIDENCE_INCOMPLETE` | not-verified | 覆盖率或所需证据不全 |
 | `NO_AUDIT_CHECKS` | not-verified | 没有提供任何审计检查项 |

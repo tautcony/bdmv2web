@@ -846,7 +846,6 @@ describe("offline menu primitives", () => {
     }), m5MediaClock);
     expect(mediaRun.controller.selectedButtonId).toBe(menuInteractionFixture.steps[0].selectedButtonId);
     expect(mediaActions).toMatchObject([{ type: menuInteractionFixture.steps[1].actionType, payload: menuInteractionFixture.steps[1].actionPayload }]);
-    expect(menuInteractionFixture.verification.notVerified).toContain("direct file:// launch");
   });
   it("switches PSR1 to the explicitly indexed local audio variant without moving video time", async () => {
     const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);

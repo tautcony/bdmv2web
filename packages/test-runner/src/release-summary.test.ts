@@ -30,18 +30,18 @@ const completeDecisionFacts = {
 };
 
 describe("release summary aggregation", () => {
-  it("keeps status complete while listing missing browser, reference, dependency, and coverage evidence as gaps", () => {
+  it("keeps status complete while listing missing reference, dependency, and coverage evidence as gaps", () => {
     const summary = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit([], "pass"), coverage: null,
-      browserEvidence: [], referenceEvidence: [], decisionFacts: completeDecisionFacts,
+      referenceEvidence: [], decisionFacts: completeDecisionFacts,
     });
 
     // Missing evidence is reported, not treated as a failure (D-2R).
     expect(summary.release.status).toBe("complete");
-    expect(summary.release.notVerified).toEqual(expect.arrayContaining(["DEPENDENCY_AUDIT_REQUIRED", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]));
+    expect(summary.release.notVerified).toEqual(expect.arrayContaining(["DEPENDENCY_AUDIT_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]));
     expect(summary.release.gaps.map((gap) => gap.checkId)).toEqual(expect.arrayContaining([
       "DEPENDENCY_AUDIT_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS",
-      "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED",
+      "REFERENCE_EVIDENCE_REQUIRED",
     ]));
     expect(summary.release.gaps.every((gap) => gap.result === "not-verified" && gap.action.length > 0)).toBe(true);
     expect(summary.compatibility.status).toBe("complete");
@@ -50,7 +50,7 @@ describe("release summary aggregation", () => {
   it("uses current evidence to determine delivery status", () => {
     const summary = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
+      referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: completeDecisionFacts,
     });
 
@@ -58,7 +58,7 @@ describe("release summary aggregation", () => {
 
     const gapped = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      browserEvidence: [pass("BROWSER_EVIDENCE")], referenceEvidence: [pass("REFERENCE_COMPARISON")],
+      referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: { ...completeDecisionFacts, hasUnresolvedReachability: true },
     });
     expect(gapped.release.status).toBe("partial");
@@ -67,7 +67,7 @@ describe("release summary aggregation", () => {
   it("allows complete only from current passing tool facts and ignores persisted component statuses", () => {
     const summary = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
-      coverage: completeCoverage, browserEvidence: [pass("BROWSER_EVIDENCE")],
+      coverage: completeCoverage,
       referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
     });
 

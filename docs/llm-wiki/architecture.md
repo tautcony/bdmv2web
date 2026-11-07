@@ -22,7 +22,7 @@
 | `@bdmv2web/media-export` | bdmv-parser, hdmv, igs | 媒体闭包、媒体计划、ffmpeg 导出、PGS、外部目标 |
 | `@bdmv2web/package-builder` | core, hdmv, media-export（+ `esbuild`） | 菜单包文件、脚本嵌入、音效、manifest |
 | `@bdmv2web/runtime-web` | bdmv-parser, hdmv, igs, media-export | 浏览器菜单运行时；被 package-builder 打成 IIFE |
-| `@bdmv2web/test-runner` | — | 包审计、状态判定、覆盖率、浏览器证据、报告 |
+| `@bdmv2web/test-runner` | — | 包审计、状态判定、覆盖率、报告 |
 | `@bdmv2web/test-fixtures` | core | 合成 BDMV 字节构造器与运行时夹具 |
 | `@bdmv2web/cli` | 以上全部 | 命令编排与退出码 |
 

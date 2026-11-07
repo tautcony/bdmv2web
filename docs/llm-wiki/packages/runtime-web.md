@@ -124,7 +124,7 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 
 真实盘导航的独立基线在 `apps/cli/src/libbluray-navigation-baseline.test.ts`：逐命令对照 libbluray `mobj_dump -d` 反汇编、`bd_info` index、`bd_list_titles -a` 标题结构，并逐边对照由 libbluray 反汇编独立派生的完整 CFG。DFS 统计本身是本项目探索器的回归 pin。
 
-`browser.test.ts` 用最小 DOM 桩，不是真实浏览器；真实 `file://` 验收记录在 `docs/references/stages/M6-release-verification.md`。
+`browser.test.ts` 用最小 DOM 桩，不是真实浏览器；浏览器环境不在当前验收范围。
 
 ## 改动入口
 

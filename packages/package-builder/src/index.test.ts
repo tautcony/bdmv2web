@@ -68,10 +68,10 @@ describe("menu package primitives", () => {
     expect(() => makePngBatches([{ id: "raw-rgba", bytes: new Uint8Array(4) }])).toThrow(/encoded as PNG/);
     expect(() => makePngBatches([], { maxBatchBytes: 0 })).toThrow(/maxBatchBytes/);
   });
-  it("marks every generated preview partial with no browser evidence", () => {
+  it("marks every generated preview partial without media or timeline evidence", () => {
     const report = createCompatibility({ schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Preview", status: "partial", diagnostics: [] });
-    expect(report.status).toBe("partial"); expect(report.browserEvidence).toEqual([]); expect(report.coverage).toMatchObject({ browser: "Chrome only; direct file:// evidence not collected", igs: "unverified" });
-    expect(report.notVerified).toEqual(expect.arrayContaining(["direct file:// launch", "offline directory relocation", "browser support matrix", "media timeline and seek accuracy"]));
+    expect(report.status).toBe("partial"); expect(report).not.toHaveProperty("browserEvidence"); expect(report.coverage).toEqual({ igs: "unverified" });
+    expect(report.notVerified).toEqual(expect.arrayContaining(["offline directory relocation", "real-disc rendering", "media timeline and seek accuracy"]));
   });
   it("converts only M1-declared 48 kHz 16-bit PCM ranges into WAV and reports affected sound references", () => {
     const bytes = new Uint8Array(70); bytes.set([0x12, 0x34, 0xab, 0xcd], 64);

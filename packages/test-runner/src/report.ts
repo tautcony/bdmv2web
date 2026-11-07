@@ -11,7 +11,6 @@ export interface CompatibilityReport {
   coverage: CoverageReport;
   reasons: string[];
   validationEvidence: Array<{ checkId: string; result: AuditCheck["result"]; path?: string; evidence?: Record<string, unknown> }>;
-  browserEvidence?: unknown[];
   externalDependencies?: unknown[];
   notVerified?: string[];
 }

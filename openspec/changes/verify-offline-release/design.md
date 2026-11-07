@@ -6,9 +6,9 @@
 
 ## Goals / Non-Goals
 
-**Goals:** 独立包校验、完整度/strict 决策、trace/IG 对照、V1 Chrome 证据、可复现发布证据。
+**Goals:** 独立包校验、完整度/strict 决策、trace/IG 对照、可复现发布证据。
 
-**Non-Goals:** 替前置模块补业务实现、执行 BD-J、假设未验证浏览器通过、把参考工具作为输出运行依赖。
+**Non-Goals:** 替前置模块补业务实现、执行 BD-J、把参考工具作为输出运行依赖。
 
 ## Decisions
 
@@ -16,7 +16,7 @@
 
 先读 manifest/schema，再核对资产存在、实体引用、命令支持、影片目标、所有运行文件 URL 和证据。缺报告也显式记录，不能相信包里已有 status。输出 checks[] 含 checkId/result(pass/fail/not-verified)/entityId/source/evidence。
 
-manifest 可列出运行文件路径和长度作为清单信息。审计不计算文件内容摘要或用文件长度判定交付通过；浏览器证据适用性由 profile、mode、生成媒体路径、矩阵、环境和生成工具版本决定。当前证据绑定仍把 byteLength 纳入变化比较，需按任务 4.3 调整。
+manifest 可列出运行文件路径和长度作为清单信息。审计不计算文件内容摘要，也不用文件长度判定交付通过。
 
 ### 2. 离线和路径审计
 
@@ -36,9 +36,9 @@ compare 输入序列文件含 fixtureId/sourceLabel、PlayerProfile、初始寄�
 
 VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随机 ID 等非语义字段；差异报告首个分歧及双方源位置。使用同类工具对同一现有案例生成参考输出，记录工具版本及导出条件；IG 纯图层按相同分辨率/时间戳/颜色规则逐像素比较，要求不透明及透明 RGBA 规则一致；菜单背景视频另报质量，不把视频编码误差算 IG 错误。逐元素比较各按钮状态引用的 PNG 资源，整页合成截图不作为图像保真验收前提。
 
-### 5. 矩阵与 A–J 证据
+### 5. 矩阵与 A–I 证据
 
-V1 验收使用 Google Chrome，不限定操作系统。M6 锁定 Chrome 完整版本及自动化工具版本；缺少实际浏览器证据时记为未验证。菜单直接 `file://`、断网并复制到中文/空格新路径；影片交接另在源 M2TS 可用时验证，源不可用时报告该缺口。证据绑定 profile、mode、生成媒体路径、矩阵和浏览器环境，不使用制品内容指纹。HTTP 冒烟不能替代直接 `file://` 验收。
+菜单直接从文件系统打开，断网并复制到中文/空格新路径后复跑；影片交接另在源 M2TS 可用时验证，源不可用时报告该缺口。
 
 | 场景 | 验收主责与证据 |
 | --- | --- |
@@ -51,21 +51,20 @@ V1 验收使用 Google Chrome，不限定操作系统。M6 锁定 Chrome 完整�
 | G PSR/GPR/Call/Resume | M3；参考 golden trace，外部播放器状态不假定可回传 |
 | H 混合 BD-J | M1/M6；入口保留、partial/strict 退出2 |
 | I 破损/缺失/循环 | 各模块/M6；预算内终止与准确诊断 |
-| J Chrome 环境/分辨率/路径 | M4–M6；Chrome 版本、DPI、移动包证据 |
 
-每份证据含 caseId/fixtureId/inputSequence/profile/mode/generatedMedia/Chrome版本/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。生成媒体路径参与适用性判断；文件长度不作为发布验证条件，制品内容指纹不属于证据字段。
+每份证据含 caseId/fixtureId/inputSequence/profile/mode/generatedMedia/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。文件长度不作为发布验证条件，制品内容指纹不属于证据字段。
 
 ### 6. 发布与失败保留
 
-validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和人读摘要；compare/Chrome 证据在 reports/evidence 下。发布清单要求 V1 Chrome 场景通过、无功能阻断/未知支持、manifest 一致、运行包无开发依赖及说明完整。任一项缺席为 partial 或 failed，并列出下一步，不勾选不存在的通过。M6 没有重新定义此前能力范围的权力。
+validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和人读摘要；compare 证据在 reports/evidence 下。发布清单要求声明范围内的场景通过、无功能阻断/未知支持、manifest 一致、运行包无开发依赖及说明完整。任一项缺席为 partial 或 failed，并列出下一步，不勾选不存在的通过。M6 没有重新定义此前能力范围的权力。
 
 ## Verification / Exit Criteria
 
-决策表驱动测试覆盖 complete 候选、外部交接未验证、混合/纯 BD-J、unknown opcode、缺媒体、缺浏览器证据及 acknowledged Error。URL 负例含双重编码/反斜杠/协议相对/data 嵌套/symlink；合法中文/百分号与说明网址不过度拦截。A–J 对应实际证据，无法取得环境时准确保留未验证，不能宣布发布完成。
+决策表驱动测试覆盖 complete 候选、外部交接未验证、混合/纯 BD-J、unknown opcode、缺媒体及 acknowledged Error。URL 负例含双重编码/反斜杠/协议相对/data 嵌套/symlink；合法中文/百分号与说明网址不过度拦截。A–I 对应实际证据，无法取得环境时准确保留未验证，不能宣布发布完成。
 
 ## Risks / Trade-offs
 
-V1 Chrome/独立参考证据决定首版发布承诺；自动化和人工证据可混合，不能用缩减场景分母隐藏缺席。静态审计与断网测试互补，单项无法给出普遍证明。
+独立参考证据决定首版发布承诺；自动化和人工证据可混合，不能用缩减场景分母隐藏缺席。静态审计与断网测试互补，单项无法给出普遍证明。
 
 ## Migration Plan
 

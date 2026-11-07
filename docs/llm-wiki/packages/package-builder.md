@@ -25,7 +25,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<void>
 | `README.md` | 是 | 状态、背景循环说明、静音/外部播放/校验命令 |
 | `manifest.json` | 是 | 状态、入口计数、文件清单（路径/类型/是否必需/字节数）、诊断、profile、资产 |
 | `asset-manifest.json` | 是 | 音效、媒体、PGS 轨道细节（不入 `manifest.files`） |
-| `compatibility.json` | 是 | profile、覆盖范围、浏览器证据位、未验证项（不入 `manifest.files`） |
+| `compatibility.json` | 是 | profile、覆盖范围、未验证项（不入 `manifest.files`） |
 | `external-targets.json` | 有外部播放时 | 播放列表/PlayItem/Mark → 源 M2TS 目标 |
 | `media-plan.json` / `media-plans/playlist-*.json` | 有本地媒体时 | 每次 `exportMenuLoopMedia` 的计划 |
 | `assets/audio/sound-N.wav` | 被引用时 | 由 `sound.bdmv` 采样区间转 WAV |

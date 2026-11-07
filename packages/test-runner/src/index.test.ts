@@ -185,17 +185,17 @@ describe("delivery status and coverage", () => {
 
   it("allows complete delivery with unverified checks and records those evidence gaps", () => {
     const decision = decideDelivery({
-      checks: [passing, { checkId: "BROWSER_EVIDENCE", result: "not-verified", message: "not supplied" }],
+      checks: [passing, { checkId: "REFERENCE_COMPARISON", result: "not-verified", message: "not supplied" }],
       diagnostics: [],
       declaredEntryCount: 1,
       hdmvEntryCount: 1,
       hasMissingRequiredAsset: false,
       hasUnresolvedReachability: false,
       hasUnsupportedReachableCapability: false,
-      limitations: ["Direct file:// browser acceptance remains unverified"],
+      limitations: ["Media timeline and seek accuracy remain unverified"],
     }, true);
     expect(decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
-    expect(decision.notVerified).toEqual(expect.arrayContaining(["BROWSER_EVIDENCE", "REQUIRED_EVIDENCE_INCOMPLETE", "COVERAGE_INCOMPLETE"]));
+    expect(decision.notVerified).toEqual(expect.arrayContaining(["REFERENCE_COMPARISON", "REQUIRED_EVIDENCE_INCOMPLETE", "COVERAGE_INCOMPLETE"]));
     expect(decision.reasons.join(" ")).toContain("Limitation:");
   });
 

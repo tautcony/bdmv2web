@@ -4,12 +4,11 @@
 
 | 来源 | 任务 | 可用内容 | 使用边界 |
 | --- | --- | --- | --- |
-| `WHATWG-URL-FILE` / `MDN-FILE-CORS` | 1.2–1.3, 4.1–4.3 | M4 所列的 [file URL](https://url.spec.whatwg.org/#file-scheme)、[origin](https://html.spec.whatwg.org/multipage/origin.html#origin)、[file CORS 行为](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS/Errors/CORSRequestNotHttp)。 | 审计嵌套 HTML/CSS/JS/manifest URL、路径逃逸、symlink、原盘引用和外部请求；HTTP 冒烟测试不能替代双击本地包的证据。 |
+| `WHATWG-URL-FILE` / `MDN-FILE-CORS` | 1.2–1.3, 4.2 | M4 所列的 [file URL](https://url.spec.whatwg.org/#file-scheme)、[origin](https://html.spec.whatwg.org/multipage/origin.html#origin)、[file CORS 行为](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS/Errors/CORSRequestNotHttp)。 | 审计嵌套 HTML/CSS/JS/manifest URL、路径逃逸、symlink、原盘引用和外部请求；HTTP 冒烟测试不能替代双击本地包的证据。 |
 | `JSON-SCHEMA-2020-12` | 1.1, 1.4 | 校验 manifest/compatibility/audit JSON 结构。 | 检查资产闭包和 status；不能只信包内 status 或 schema 校验通过。 |
 | `FFMPEG-DOCS` | 1.1, 4.2 | 收集 ffprobe JSON（`-show_streams -show_format -of json`）及转换工具 build/version 证据。 | 离线审计不应依赖原碟或 FFmpeg；转换证据绑定工具版本、profile 和本工具生成的输出资产，不记录原盘哈希。 |
-| `PLAYWRIGHT-DOCS` | 3.1–3.3, 4.1–4.3 | [浏览器自动化](https://playwright.dev/docs/browsers), [截图](https://playwright.dev/docs/screenshots), 用于重复执行应用导航断言和采集证据。 | V1 门槛要求实际 Google Chrome 直接打开 `file://`；Playwright 内置 Chromium 不能代替品牌版 Chrome。记录 Chrome 完整版本、console 和声音。验收不限定操作系统，也不要求跨浏览器矩阵。 |
-| `WPT` | 3.4 | [web-platform-tests](https://github.com/web-platform-tests/wpt) 上游标准回归用例。 | 社区网页测试不是 Blu-ray 或本应用的符合性证明；引入用例时锁定 commit/许可，且不能替代目标浏览器矩阵。 |
-| `MDN-AUTOPLAY` / `MDN-MEDIA` | 4.1–4.2 | 浏览器播放策略、错误和 media Promise API。 | 必须在 V1 Google Chrome 环境实际运行；缺少浏览器或场景证据时标记 not-verified。 |
+| `WPT` | 3.4 | [web-platform-tests](https://github.com/web-platform-tests/wpt) 上游标准回归用例。 | 社区网页测试不是 Blu-ray 或本应用的符合性证明；引入用例时锁定 commit/许可，且不能替代本应用的运行证据。 |
+| `MDN-AUTOPLAY` / `MDN-MEDIA` | 4.2 | 浏览器播放策略、错误和 media Promise API。 | 播放策略与错误行为随平台而异，实现按 API 契约处理；缺少浏览器或场景证据时标记 not-verified。 |
 | `LIBBLURAY-1.5.0`, `IGSTOOLS-2019`, `LIBHDMV-2026-03` | 3.1–3.3 | M1/M2/M3 固定版本的实现源码可用于交叉比较。 | 不同语言或仓库不代表来源独立；应检查算法/代码沿袭，使用另外建立的 expected 数据，并记录来源版本和许可。 |
 | `BDA-BDMV-SPECS` / `BDA-PUBLIC-WHITEPAPERS` | 2.1–2.3 | 规范书访问状态和历史公开白皮书的背景来源，分别见 [`sources.json`](../sources.json)。 | 白皮书不作规范性依据；未取得授权书籍不是发布验证前置。按固定实现、独立 golden、真实环境验证及其具体缺口作结论。 |
 
@@ -23,16 +22,16 @@
 | 结构解析 | `pnpm --filter @bdmv2web/bdmv-parser test` | 三字节截断 magic；12 字节命令截断不补零；图循环只遍历一次；节点预算返回未访问 frontier；原盘 symlink 拒绝。 |
 | IGS 传输与尺寸预算 | `pnpm --filter @bdmv2web/igs test` | 缺失首片/EOF、active ODS 聚合预算、有界 RLE 行溢出和像素预算。 |
 | HDMV 执行预算 | `pnpm --filter @bdmv2web/hdmv test` | 同步跳转/按钮循环以 `VM_EXECUTION_LIMIT` 终止；预算耗尽的图保留 unknown frontier。 |
-| 离线审计、对照、证据与发布摘要 | `pnpm --filter @bdmv2web/test-runner test` | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、浏览器绑定失效、发布缺口汇总。 |
+| 离线审计、对照、证据与发布摘要 | `pnpm --filter @bdmv2web/test-runner test` | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、发布缺口汇总。 |
 
 这些结果来源于仓库合成 fixtures 及已提供的本地 IGS 样本。
 
 M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IMPLEMENTATION_BASELINE.md#4-状态统一判定)和 M6 tasks 为准，不由本索引降低。来源链接和属性在 [`sources.json`](../sources.json)。
 
 <a id="v1-chrome-file-evidence"></a>
-## V1 Chrome `file://` 实测证据 — 2026-11-03（唯一证据位置）
+## Chrome `file://` 历史实测记录 — 2026-11-03
 
-**结论：已完成 macOS Chrome `file://` 实测。** [`docs/guides/browser-matrix.md`](../../guides/browser-matrix.md) 与 [`docs/guides/development.md`](../../guides/development.md) 只引用本节，不另立说法。
+**结论：2026-11-03 在 macOS Chrome `file://` 下完成过一次手工运行。** 浏览器环境验收已移出当前交付门槛，本节只保留当时的观察记录，不构成发布条件，也不代表跨浏览器支持。
 
 | 项目 | 结果 |
 | --- | --- |

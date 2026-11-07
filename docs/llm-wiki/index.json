@@ -97,10 +97,10 @@
     {
       "path": "packages/test-runner.md",
       "kind": "package",
-      "summary": "包审计检查项、交付/阶段判定、覆盖率、浏览器证据、发布汇总与对照。",
-      "covers": ["package audit", "delivery decision", "stage outcome", "coverage", "browser evidence", "release summary"],
+      "summary": "包审计检查项、交付/阶段判定、覆盖率、发布汇总与对照。",
+      "covers": ["package audit", "delivery decision", "stage outcome", "coverage", "release summary"],
       "keywords": ["test-runner", "audit", "status", "notVerified", "gaps", "OFFLINE_URL"],
-      "keyFiles": ["packages/test-runner/src/package-audit.ts", "packages/test-runner/src/decisions.ts", "packages/test-runner/src/release-summary.ts", "packages/test-runner/src/coverage.ts", "packages/test-runner/src/browser-evidence.ts"]
+      "keyFiles": ["packages/test-runner/src/package-audit.ts", "packages/test-runner/src/decisions.ts", "packages/test-runner/src/release-summary.ts", "packages/test-runner/src/coverage.ts"]
     },
     {
       "path": "packages/test-fixtures.md",

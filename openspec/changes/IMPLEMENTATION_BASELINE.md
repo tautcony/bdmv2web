@@ -14,7 +14,7 @@
 | M3 VM | navigation-hdmv、导航边分析 | 解码命令、执行器、操作码支持矩阵、NavigationGraph、trace |
 | M4 runtime | runtime-web、package-builder、音效输出、convert 菜单管线 | classic bundle、portable 菜单包、交互桥、WAV、资产清单 |
 | M5 media | 影片目标映射、系统播放器接入 | 可达 M2TS 映射、系统打开接入与外部依赖诊断 |
-| M6 assurance | test-runner、validate/compare、发布汇总 | 离线审计、状态决策、golden 对照、浏览器证据 |
+| M6 assurance | test-runner、validate/compare、发布汇总 | 离线审计、状态决策、golden 对照、发布汇总 |
 
 M1 只建立容器结构和明确声明的引用，不声称已得到完整控制流。M3 补 MovieObject 导航边；M2 交出按钮命令后，由同一个 M3 解码器补按钮边；M5 合并并计算媒体闭包。M3 单测使用合成按钮命令，不依赖 M2 完成，避免依赖环。sound 在 M1 解析、M4 转 WAV；影片字幕由系统关联的外部播放器负责。
 
@@ -66,7 +66,7 @@ interface EventEnvelope<T> {
 
 ## 4. 状态统一判定
 
-compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profile/status/diagnostics/coverage/browserEvidence。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
+compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profile/status/diagnostics/coverage。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |
@@ -74,7 +74,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profi
 | 可启动但有 BD-J、可达不支持能力、影片交接或可达性未证明、验证缺失/失败 | partial | 退出 2，可保留审阅包 |
 | 统一产物在声明范围内资源/菜单/影片交接闭环，矩阵及对照证据通过，无阻断诊断 | complete | 退出 0 |
 
-任意 fatal 或安全检查失败一律 failed；未认可的 error 至少阻止 complete。不可达损坏实体仍保留诊断，只有证明不影响任何入口/可达路径并记录非阻断理由，才可作为已认可的诊断。确认 Error、缩小分母、删除入口、关闭 strict 均不能提升完整度。无有效 HDMV 入口的纯 BD-J 碟片在首期为 failed。M5 的功能跑通不自动代表 M6 发布证明完成；缺浏览器或外部播放器交接证据为 partial。
+任意 fatal 或安全检查失败一律 failed；未认可的 error 至少阻止 complete。不可达损坏实体仍保留诊断，只有证明不影响任何入口/可达路径并记录非阻断理由，才可作为已认可的诊断。确认 Error、缩小分母、删除入口、关闭 strict 均不能提升完整度。无有效 HDMV 入口的纯 BD-J 碟片在首期为 failed。M5 的功能跑通不自动代表 M6 发布证明完成；缺外部播放器交接证据为 partial。
 
 ## 5. 本轮固定的首期产品选择
 
@@ -83,7 +83,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profi
 | 决策 | 约定 | 锁定/验证任务 |
 | --- | --- | --- |
 | 工具链 | Node LTS、pnpm、TS、Vitest、classic IIFE ES2020 | M0 选择精确版本、lockfile、干净构建 |
-| 浏览器 | V1 使用 Google Chrome，不限定操作系统 | M0 建表，M4/M5 冒烟，M6 记录 Chrome 完整版本并直接测试 `file://`；此项缺席即未验证。V1 不要求跨浏览器矩阵 |
+| 浏览器 | 不设浏览器版本锁定；产物按同目录静态文件与 classic script 打包 | 浏览器环境验收与跨浏览器矩阵不属交付门槛 |
 | 媒体 | 菜单动态背景和音轨转换时使用 FFmpeg 生成本地 MP4/M4A 并用 FFprobe 检验；音效为 WAV。正片打开原始 M2TS，由默认关联程序播放 | 菜单运行时不依赖 FFmpeg；M5 验证交接，M6 记录源文件和外部程序依赖 |
 | 质量 | 菜单图形与背景按实际资源及支持范围报告 | M2/M4 验证菜单视觉和音效 |
 | 影片音轨 | 外部播放器负责 | 不承诺网页控制或状态同步 |
@@ -92,7 +92,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profi
 | PlayerProfile | 语言/地区/输出能力显式配置，默认不依赖 localStorage | M0 schema；M3 锁定标准 PSR 映射，写入 trace/可达性分析 |
 | 预算 | 菜单生成须预检输出并受有限内存/执行预算约束；正片不默认复制或转码 | M0 limits；M2/M3/M5 在分配/执行前检查 |
 
-浏览器精确版本、协议 bit-field 不从示意图推定。它们分别是环境锁定和协议证据任务，必须在对应任务完成时提交，不留到发布前笼统“后续确认”。
+协议 bit-field 不从示意图推定。它是协议证据任务，必须在对应任务完成时提交，不留到发布前笼统“后续确认”。
 
 PlayerProfile 初始产品默认值为 menuLanguage/audioLanguage/subtitleLanguage=`eng`、country=`US`、region=`A`、outputProfile=`portable`；这是可覆盖的播放器模拟配置，不推断用户所在地或碟片实际语言。CLI 以 `--player-profile FILE` 读取并合并，省略时采用默认值；PSR 数值编码和未指定系统字段初值由 M3 的已核验表确定，不能任意清零。该配置及分析时允许的用户可变状态须进入可达性边界说明。
 

@@ -28,4 +28,4 @@ CLI、package-builder、runtime 播放动作分发、源文件映射与发布验
 
 ## Acceptance Boundary
 
-Chrome 离线菜单通过 macOS/IINA 与 Windows/PotPlayer URL Protocol 打开已映射的 M2TS；真实交接按平台记录测试结果。播放控制与状态由外部播放器处理。
+离线菜单通过 macOS/IINA 与 Windows/PotPlayer URL Protocol 打开已映射的 M2TS；真实交接按平台记录测试结果。播放控制与状态由外部播放器处理。

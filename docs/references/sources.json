@@ -606,19 +606,6 @@
       "limits": "Not an IGS-specific YCbCr conversion rule; use only where source colorimetry selects it."
     },
     {
-      "id": "PLAYWRIGHT-DOCS",
-      "title": "Playwright browser automation documentation",
-      "url": "https://playwright.dev/docs/browsers",
-      "classification": "official test automation documentation",
-      "version": "rolling docs checked 2026-11-02",
-      "location": "browser channels, screenshots https://playwright.dev/docs/screenshots, browser installation and project configuration",
-      "license_or_access": "Playwright Apache-2.0; bundled browsers subject to vendor licenses",
-      "used_for": [
-        "M6"
-      ],
-      "limits": "V1 requires actual branded Google Chrome for direct file:// evidence; Playwright's bundled Chromium is supplementary and does not replace that run. Acceptance does not specify an operating system or require a cross-browser matrix."
-    },
-    {
       "id": "WPT",
       "title": "web-platform-tests (WPT)",
       "url": "https://github.com/web-platform-tests/wpt",
@@ -631,7 +618,7 @@
         "M5",
         "M6"
       ],
-      "limits": "Not a BDMV conformance suite and not a substitute for app-specific file:// packaging/browser evidence."
+      "limits": "Not a BDMV conformance suite and not a substitute for app-specific packaging evidence."
     },
     {
       "id": "BDMVKIT-0.7.0",

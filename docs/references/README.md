@@ -26,7 +26,7 @@
 | M3 | [HDMV 导航 VM](stages/M3-hdmv-navigation.md) | 12-byte 命令、PSR/GPR、控制流、trace |
 | M4 | [离线菜单运行时](stages/M4-offline-menu.md) | `file://` 资源、安全打包、音效、输入与 autoplay |
 | M5 | [媒体导出与播放](stages/M5-media-playback.md) | FFmpeg/ffprobe、时间线、轨道、PGS 和媒体事件 |
-| M6 | [离线发布验证](stages/M6-release-verification.md) | 包审计、浏览器证据、独立对照与完整度判定 |
+| M6 | [离线发布验证](stages/M6-release-verification.md) | 包审计、独立对照与完整度判定 |
 
 ## 标准获取、版权与边界
 
@@ -69,6 +69,6 @@ python3 scripts/fetch-reference-cache.py
 ## 当前证据边界
 
 - 行为依据按上文层级生效：固定实现（libbluray / libhdmv / igstools）是一阶来源，公开白皮书只补充其覆盖的架构与格式背景，项目测试与 golden 按各自记录的来源、范围和生成方法生效。
-- 商业碟解密与解析、像素与导航语义、V1 Chrome `file://` 场景的证据状态记录在各阶段页面和 [M6 证据记录](stages/M6-release-verification.md) 中。
-- V1 的 `file://` 与媒体播放策略使用 Google Chrome 实测，验收不限定操作系统，也不要求跨浏览器矩阵。WHATWG/MDN 文档不能代替运行证据。
+- 商业碟解密与解析、像素与导航语义及系统播放器交接的证据状态记录在各阶段页面和 [M6 证据记录](stages/M6-release-verification.md) 中。
+- WHATWG/MDN 文档不能代替运行证据。浏览器环境（含 `file://` 直接打开与播放策略）不在当前交付门槛内。
 - FFmpeg 文档是滚动文档。M5 选定可再分发构建并记录 `ffmpeg -version`、`ffprobe -version` 和 configure flags。

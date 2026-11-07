@@ -2,7 +2,7 @@
 
 当前 validate 已有包内 schema、引用、manifest、启动项及必需资产检查；external target 与系统播放器状态仍需按当前交接模型补齐验收。任务描述区分已存在实现和未验证证据。
 
-共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列行为案例及结果；未取得参考或环境证据不得勾选对应验收。M6 原语位于 `packages/test-runner/src`；`validate --offline` 生成当前 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`，缺失的浏览器、覆盖率或参考证据列为 actionable gap。浏览器、跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
+共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列行为案例及结果；未取得参考或环境证据不得勾选对应验收。M6 原语位于 `packages/test-runner/src`；`validate --offline` 生成当前 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`，缺失的覆盖率或参考证据列为 actionable gap。跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
 
 ## 1. 独立包检查
 
@@ -26,9 +26,7 @@
 - [x] 3.3 实现独立IG像素对照和视频质量分离；验收：调色板/alpha/时序偏差准确定位，视频编码噪声不混入IG判定。
 - [x] 3.4 汇总截断/超尺寸/路径/跳转环安全回归；验收：预算内终止，诊断准确且源/旧输出不变。
 
-## 4. 浏览器与发布
+## 4. 发布与系统播放器交接
 
-- [x] 4.1 锁定 V1 Google Chrome 完整版本并执行断网 `file://`；验收：无后台/原盘，记录 Chrome 版本、console/资源/有声结果，缺席不假通过。验收不限定操作系统，也不要求跨浏览器矩阵。实测记录见 [M6 验收证据](../../../docs/references/stages/M6-release-verification.md#v1-chrome-file-验收-2026-11-03)。
-- [ ] 4.2 按当前产品边界完成适用场景和系统默认播放器交接证据：菜单启动/导航/音效、直接 file://、移动目录、中文空格路径、DPI、源缺失、播放策略恢复与 URL Protocol 请求。外部播放器负责正片控制、章节和字幕；记录 expected/actual/result、Chrome 与播放器版本及操作系统。
-- [ ] 4.3 对齐浏览器 evidence binding 和采集记录：按 profile/mode/生成媒体路径/矩阵/Chrome 环境判断适用性。当前 binding 还将生成媒体 byteLength 纳入变化比较；按仓库交付规则移除长度作为发布证据门槛，再按新边界采集和验证证据。
+- [ ] 4.2 按当前产品边界完成适用场景和系统默认播放器交接证据：菜单启动/导航/音效、移动目录、中文空格路径、DPI、源缺失、播放策略恢复与 URL Protocol 请求。外部播放器负责正片控制、章节和字幕；记录 expected/actual/result、播放器版本及操作系统。
 - [x] 4.4 生成最终compatibility/audit/manifest/发布摘要和README；验收：只有全部门槛满足可complete，失败/未验证列具体缺口，完整包无开发/参考工具依赖。

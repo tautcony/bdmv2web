@@ -1,6 +1,6 @@
 # `@bdmv2web/test-runner`
 
-交付判定层：审计菜单包、把检查项与诊断折算成状态、汇总覆盖率/浏览器证据/对照证据，输出可复核的报告。不含业务包依赖，输入是文件与 JSON 事实。
+交付判定层：审计菜单包、把检查项与诊断折算成状态、汇总覆盖率/对照证据，输出可复核的报告。不含业务包依赖，输入是文件与 JSON 事实。
 
 ## 文件
 
@@ -9,7 +9,6 @@
 | `src/package-audit.ts` | `auditOutputPackage`、`inspectRuntimeUrl` |
 | `src/decisions.ts` | `decideDelivery`、`decideStageOutcome`、`classifyDiagnostics`、`acknowledgeDiagnostic` |
 | `src/coverage.ts` | `summarizeCoverage`、`summarizeDeliveryCoverage`、`isCoverageReportComplete` |
-| `src/browser-evidence.ts` | 证据绑定/评估（`evaluateBrowserEvidence`、`evaluateBrowserEvidenceMatrix`） |
 | `src/release-summary.ts` | `createReleaseSummary`：合并审计/依赖/覆盖/证据，产出 `gaps` |
 | `src/types.ts` | `CheckResult`、`DeliveryStatus`、`OfflinePackageAudit` 等公共类型 |
 | `src/compare.ts` | `compareVmTraces`、`compareIgRgbaFrames`、`videoQualityNote` |
@@ -87,7 +86,6 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 - 没有审计检查 → 补 `PACKAGE_AUDIT_REQUIRED`（`not-verified`）。
 - 没有依赖检查 → 补 `DEPENDENCY_AUDIT_REQUIRED`。
 - 没有覆盖率 → 四个维度都按缺证据处理。
-- 没有浏览器证据 → `BROWSER_EVIDENCE_REQUIRED`。
 - 没有对照证据 → `REFERENCE_EVIDENCE_REQUIRED`。
 
 `gaps` 只列 `fail` 与 `not-verified`，附 `action`（要做什么）与路径/实体。
@@ -95,12 +93,11 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 ## 覆盖与证据
 
 - `summarizeCoverage({ total, covered, ... })` → `{ covered, total, ratio, complete }`；`REQUIRED_COVERAGE = ["entries","instructions","media","tests"]`。
-- 浏览器证据：`createBrowserEvidence(observation, context)` 记录浏览器完整版本、场景、结果、制品绑定；`evaluateBrowserEvidence` 比对上下文（profile、包路径、用例）后给出 `pass`/`fail`/`not-verified`。证据缺失不算失败，但会进 `notVerified`。
 - 对照证据：`compareVmTraces(reference, actual)` 逐事件比较，首个差异返回索引与期望/实际；`compareIgRgbaFrames` 比较尺寸与像素，输出差异计数与最大通道差；`videoQualityNote` 明确视频编码质量不在 IG 像素比较范围内。
 
 ## 测试
 
-`src/index.test.ts`（审计主路径）、`browser-evidence.test.ts`、`coverage.test.ts`、`compare.test.ts`、`release-summary.test.ts`。
+`src/index.test.ts`（审计主路径）、`coverage.test.ts`、`compare.test.ts`、`release-summary.test.ts`。
 
 ## 改动入口
 
@@ -109,6 +106,5 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 新增审计项 | `package-audit.ts` 的 `add(...)` | 上面的检查项表、`openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md` |
 | 改状态规则 | `decisions.ts` | `openspec/specs/cli-delivery-status/spec.md` 的「结论只由失败证据决定」 |
 | 改报告字段 | `report.ts` / `release-summary.ts` | `packages/cli` 的 `validate` 写盘、`docs/guides/development.md` |
-| 改证据绑定 | `browser-evidence.ts` | `docs/references/stages/M6-release-verification.md` |
 
 不要引入 SHA-256、内容指纹或字节级校验来强化判定；本仓库明确不使用这类检查。

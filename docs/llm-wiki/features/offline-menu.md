@@ -109,7 +109,7 @@ BDMV-menu/
 
 | 项 | 现状 |
 | --- | --- |
-| 浏览器 | V1 只记录 Google Chrome `file://` 实测；不承诺跨浏览器矩阵 |
+| 浏览器 | 浏览器环境不在当前验收范围；产物按同目录静态文件、classic script 打包 |
 | 弹出菜单覆盖正片 | 正片由外部播放器播放，无法叠加；包内只覆盖菜单画面 |
 | 菜单素材与场景比例不一致 | 两者各自 `object-fit: contain`，比例不同时按钮与背景可能错位；见 [troubleshooting.md](../troubleshooting.md) |
 | 音视频保真 | 菜单背景转 H.264/AAC；正片不做转码 |
@@ -117,4 +117,4 @@ BDMV-menu/
 
 ## 相关测试
 
-`package-builder/src/index.test.ts`、`runtime-web/src/browser.test.ts`、`runtime-web/src/index.test.ts`、`runtime-web/src/headless-menu-synthetic.test.ts`。真实 `file://` 证据在 `docs/references/stages/M6-release-verification.md`。
+`package-builder/src/index.test.ts`、`runtime-web/src/browser.test.ts`、`runtime-web/src/index.test.ts`、`runtime-web/src/headless-menu-synthetic.test.ts`。

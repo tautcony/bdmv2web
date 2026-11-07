@@ -1,22 +1,20 @@
 # bdmv2web
 
-解析 Blu-ray 光盘目录，生成可在浏览器中交互的菜单，并通过系统播放器打开原始视频流。
+将 Blu-ray BDMV 目录转换为可离线打开的浏览器菜单，并支持通过系统播放器播放原始 M2TS 视频。
 
-## 能力
+## 功能
 
-- 解析 `index.bdmv`、`MovieObject.bdmv`、MPLS、CLPI 和 `sound.bdmv`，提取光盘结构与导航信息。
-- 解析 M2TS 中的 IGS 菜单，提取按钮、图形、调色板和指令。
-- 执行 HDMV 导航指令，支持寄存器、分支、比较、MovieObject 和播放列表调用。
-- 导出菜单背景视频、音轨和按钮音效，生成可离线打开的菜单包；当前浏览器实测记录见[浏览器验收文档](docs/guides/browser-matrix.md)。
-- 通过操作系统 URL Protocol 调用 IINA 或 PotPlayer，打开菜单关联的原始 M2TS 文件。
-- 导出结构数据、菜单图形与诊断信息，校验生成的菜单包。
+- 生成包含菜单导航、背景视频、音轨、按钮图形和音效的离线菜单包。
+- 检查 BDMV 结构，导出 HDMV、IGS、SUP 数据与菜单资源。
+- 通过播放器打开菜单关联的原始 M2TS 文件。
+- 校验菜单包的离线依赖并生成兼容性报告。
 
-## 环境配置
+## 环境要求
 
 | 依赖 | 版本或要求 | 用途 |
 | --- | --- | --- |
-| Node.js | `>=24.18.0` | 构建和运行命令 |
-| pnpm | `>=11.25.0` | 安装依赖和运行脚本 |
+| Node.js | `>=24.18.0 <25` | 构建和运行命令 |
+| pnpm | `11.25.0`，通过 `corepack pnpm` 调用 | 安装依赖和运行脚本 |
 | ffmpeg | 可从 `PATH` 调用 | 编码菜单背景视频与音轨 |
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
 
@@ -28,43 +26,46 @@ corepack pnpm generate:contracts
 corepack pnpm build
 ```
 
-包内脚本统一写 `corepack pnpm`：根脚本里的嵌套调用（如 `build` = `generate:contracts` + `-r build`）因此不依赖全局 `pnpm`，版本也由 `packageManager` 锁定。
+安装后的命令名为 `bdmv2web`。在仓库中开发时，使用 `corepack pnpm run cli:dev <命令> [参数]` 调用 CLI。
 
-包内 bin `bdmv2web` 指向 `apps/cli/dist/index.js`。仓库开发命令 `corepack pnpm run cli:dev <命令和参数>` 。
+## 快速开始
 
-## 使用
+将 BDMV 目录转换为离线菜单包：
 
-输入为 BDMV 目录或包含 `BDMV/` 的父目录。
-
-| 命令 | 主要选项 | 产物 |
-| --- | --- | --- |
-| `inspect <BDMV>` | `--format table\|json`、`--out FILE`、`--allow-partial`、`--strict` | stdout 默认显示结构摘要表；`--out` 始终写完整 JSON；`--format json` 将完整 JSON 写到 stdout |
-| `extract <BDMV> --out DIR` | 必须指定 `--type hdmv\|igs\|sup` 或 `--all`；`--strict` | 按类型写协议分析 JSON 及 `manifest.json`。HDMV 命令和结构、IGS 场景/来源映射、SUP 轨道索引分目录保存；不输出 PNG 或 SUP 文件 |
-| `list-assets <BDMV>` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--format table\|json`、`--out FILE` | stdout 默认显示资源汇总和明细，包括 M2TS clip、PID、IGS 图像对象属性及 SUP 轨道；`--out` 写完整 JSON |
-| `export-assets <BDMV> --out DIR` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` | 导出所选 PID 的 igstools 兼容 `.mnu` 和/或已验证的 `.sup`；指定 `--decode png` 时另外输出图像 PNG；附 `assets-manifest.json` |
-| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--limits FILE`、`--overwrite`、`--strict`、`--progress`、`--no-progress` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
-| `validate <菜单包目录> --offline` | `--format json`、`--strict` | 更新 `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
-| `compare <输入>` | `--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
-
-`partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 生成统一离线菜单包；输出目录已存在时需加 `--overwrite`。
-
-`convert` 在 stderr 输出 7 步进度：解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交（参数解析在打印计划前完成，不占步骤）。开头给出 `input`、`output`、`title`、`profile`，随后每步一行，含 `i/7`、标题、状态、耗时和关键数量（条目数、场景数、播放列表号、媒体类型）；媒体编码期间显示 ffmpeg 百分比与已编码时长。结束时 `Done in …` 汇总输出目录、包文件数与大小、诊断数，失败时以 `Failed in … · <code>` 结束。stderr 接到终端时用单行动态刷新；重定向到文件或管道时默认不输出进度，`--progress` 改为逐行输出，`--no-progress` 关闭。stdout 始终只有一行 JSON。
-
-`convert --limits FILE` 接受 JSON 限制对象；省略的字段使用[默认 Limits](packages/core/src/limits.ts)。配置应用于转换时的 HDMV VM 和生成菜单包里的 HDMV VM。VM 使用 `maxInstructionsPerTurn`、`maxQueueDepth` 和 `maxCallDepth`；当前 `maxCallDepth` 是 CALL 开关（0 禁用），不是多层调用深度上限。其它字段会校验并随配置保留，但 `convert` 尚未把它们传入 BDMV 解析、IGS 提取和媒体导出阶段。
-
-```json
-{
-  "maxInstructionsPerTurn": 20000,
-  "maxQueueDepth": 1024,
-  "maxCallDepth": 128
-}
+```sh
+corepack pnpm run cli:dev convert /path/to/BDMV --out ./BDMV-menu
 ```
 
-`extract` 面向协议分析，保留场景、命令、轨道及来源信息；`export-assets` 按 M2TS clip 和 PID 导出 IGS `.mnu` 与 SUP 文件，`--decode png` 可额外生成 PNG。`--m2ts` 和 `--pid` 使用 `list-assets` 表格或 JSON 中的 clip 与 PID 值。
+用浏览器打开 `BDMV-menu/index.html`。复制或移动菜单时，请保留整个输出目录。
+
+校验生成的菜单包：
+
+```sh
+corepack pnpm run cli:dev validate ./BDMV-menu --offline
+```
+
+## 常用命令
+
+`<BDMV>` 可指向 BDMV 目录，也可指向包含 `BDMV/` 的父目录。
+
+| 命令 | 用途 | 常用选项 |
+| --- | --- | --- |
+| `inspect <BDMV>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE`、`--strict` |
+| `extract <BDMV> --out DIR` | 导出 HDMV、IGS、SUP 分析数据 | `--type hdmv\|igs\|sup` 或 `--all` |
+| `list-assets <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
+| `export-assets <BDMV> --out DIR` | 导出 `.mnu`、`.sup` 和可选的 PNG | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` |
+| `convert <BDMV>` | 生成离线菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--overwrite`、`--strict` |
+| `validate <菜单包目录> --offline` | 校验菜单包并更新审计报告 | `--format json`、`--strict` |
+
+`convert` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 允许覆盖。影片 PGS 字幕通过 `export-assets --type sup` 单独导出。
+
+`--m2ts` 和 `--pid` 的值可通过 `list-assets` 查询。`export-assets --decode png` 会在导出原始资源的同时生成 PNG。
+
+命令成功时退出码为 0，失败时为 1；使用 `--strict` 时，部分完成的结果退出码为 2。完整选项、输出文件和错误码见[开发指南](docs/guides/development.md)。
 
 ## 播放器档案
 
-使用 `convert --player-profile FILE` 指定菜单语言、音轨语言、字幕语言、地区和播放配置。例如：
+通过 `convert --player-profile FILE` 设置菜单语言、音轨语言、字幕语言、地区和播放配置：
 
 ```json
 {
@@ -90,19 +91,18 @@ corepack pnpm build
 | `videoProfiles` | 否 | 字符串数组 | `[]` |
 | `audioProfiles` | 否 | 字符串数组 | `[]` |
 
-省略档案时使用默认值。长度不符或含非 ASCII 字符会以 `CLI_INVALID_PROFILE` 退出 1。相关信息记录于 `manifest.json` 与 `runtime/disc-data.js`。
 
 ## 开发
 
 ```sh
-corepack pnpm build         # 编译运行时代码
+corepack pnpm build                              # 编译运行时代码
 corepack pnpm run cli:dev inspect /path/to/BDMV  # 直接运行 CLI
-corepack pnpm lint          # 运行 ESLint（需先 build）
-corepack pnpm lint:fix      # 运行 ESLint 并应用自动修复
-corepack pnpm typecheck     # 类型检查，包括测试文件
-corepack pnpm test          # 运行各包测试
-corepack pnpm test:all      # 运行各包测试，不加 --bail
-bash scripts/ci.sh          # 安装、生成契约、构建、lint、类型检查和测试
+corepack pnpm lint                               # ESLint 检查
+corepack pnpm lint:fix                           # 应用 ESLint 自动修复
+corepack pnpm typecheck                          # 类型检查
+corepack pnpm test                               # 运行测试
+corepack pnpm test:all                           # 运行全部测试并收集失败结果
+bash scripts/ci.sh                               # 运行完整 CI 检查
 ```
 
 运行单个包的测试：
@@ -135,19 +135,9 @@ python3 scripts/fetch-reference-cache.py
 | `test-data/` | 测试夹具、光盘数据和输出目录 |
 
 ## 文档
+工具链、CLI 详情和构建流程见[开发指南](docs/guides/development.md)。
 
-项目文档按开发指南、支持范围、架构、参考资料和历史记录分类，入口见[文档索引](docs/README.md)。
-
-| 文档 | 内容 |
-| --- | --- |
-| [开发指南](docs/guides/development.md) | 工具链、契约、CLI 和测试 |
-| [协议支持矩阵](docs/support/protocol-support.md) | BDMV 格式解析状态和证据 |
-| [HDMV 支持](docs/support/hdmv-support.md) | 指令与虚拟机支持范围 |
-| [IGS 支持](docs/support/igs-support.md) | 场景提取与图像处理 |
-| [浏览器验收](docs/guides/browser-matrix.md) | 浏览器验收环境 |
-| [历史架构方案](docs/archive/bdmv_hdmv_offline_web_architecture.md) | 2026-11-02 初版设计记录（归档） |
-| [开发参考](docs/references/README.md) | 参考实现、许可与阶段资料 |
-| [OpenSpec](openspec/specs/) | 项目规格 |
+更多资料见[文档索引](docs/README.md)。
 
 ## 许可
 

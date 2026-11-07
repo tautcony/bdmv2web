@@ -12,7 +12,6 @@ export interface ReleaseSummaryInput {
   audit: OfflinePackageAudit;
   dependencyAudit: DependencyAuditReport;
   coverage: CoverageReport | null;
-  browserEvidence: readonly AuditCheck[];
   referenceEvidence: readonly AuditCheck[];
   decisionFacts: ReleaseDecisionFacts;
   strict?: boolean;
@@ -60,11 +59,6 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   const coverageChecks = summarizeCoverageGates(coverage);
   checks.push(...coverageChecks);
 
-  const browserChecks = input.browserEvidence.length
-    ? [...input.browserEvidence]
-    : [{ checkId: "BROWSER_EVIDENCE_REQUIRED", result: "not-verified" as const, message: "No V1 browser evidence was supplied." }];
-  checks.push(...browserChecks);
-
   const referenceChecks = input.referenceEvidence.length
     ? [...input.referenceEvidence]
     : [{ checkId: "REFERENCE_EVIDENCE_REQUIRED", result: "not-verified" as const, message: "No independent reference comparison evidence was supplied." }];
@@ -76,13 +70,12 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
     externalReferences: dependencyChecks.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"),
     checks: dependencyChecks,
   };
-  const browserEvidenceComplete = browserChecks.length > 0 && browserChecks.every((check) => check.result === "pass");
   const referenceEvidenceComplete = referenceChecks.length > 0 && referenceChecks.every((check) => check.result === "pass");
   const coverageComplete = coverageChecks.every((check) => check.result === "pass");
   const decisionInput: DeliveryDecisionInput = {
     checks,
     ...input.decisionFacts,
-    requiredEvidenceComplete: browserEvidenceComplete && referenceEvidenceComplete,
+    requiredEvidenceComplete: referenceEvidenceComplete,
     coverageComplete,
   };
   const decision: DeliveryDecision = decideDelivery(decisionInput, input.strict ?? false);

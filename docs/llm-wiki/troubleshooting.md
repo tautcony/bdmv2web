@@ -62,7 +62,7 @@ corepack pnpm test
 | --- | --- | --- |
 | 方向键不动 | 当前按钮 `neighbors` 是否指向自身；页是否只有一个 BOG | `MenuController.handle` |
 | `Enter` 无反应 | 按钮是否 `enabled`；当前页 UO mask 是否禁止；按钮命令是否为空 | `handle` → `activate`；`HDMV_UO_BLOCKED` |
-| 点击位置偏移 | 场景比例与视频比例是否相同；两者各自 `object-fit: contain` | `CanvasViewport.toSource`；`docs/guides/browser-matrix.md` 的已知限制 |
+| 点击位置偏移 | 场景比例与视频比例是否相同；两者各自 `object-fit: contain` | `CanvasViewport.toSource` |
 | 黑边点击也命中 | 同上；`toSource` 应返回 `null` | `CanvasViewport` |
 | 切页后焦点悬空 | 新页是否有默认按钮/BOG 默认 | `selectPageDefault`、`IGS_INVALID_BOG_DEFAULT` |
 | 动画不结束 | `duration90k` 是否为 0 或极大；调度器是否被暂停 | `advanceWhileRunning`、`beginPageEffects` |

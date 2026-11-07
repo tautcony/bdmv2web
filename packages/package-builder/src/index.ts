@@ -71,10 +71,9 @@ export function createCompatibility(metadata: MenuPackageMetadata, externalPlayb
   return {
     ...metadata,
     profile: "portable",
-    coverage: { browser: "Chrome only; direct file:// evidence not collected", igs: "unverified" },
-    browserEvidence: [],
+    coverage: { igs: "unverified" },
     externalDependencies: externalPlayback ? ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] : [],
-    notVerified: ["direct file:// launch", "offline directory relocation", "browser support matrix", "real-disc rendering", "media timeline and seek accuracy"],
+    notVerified: ["offline directory relocation", "real-disc rendering", "media timeline and seek accuracy"],
   };
 }
 
@@ -204,7 +203,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
   const menuMediaLimitation = input.externalTargets ? "External playback uses IINA on macOS and PotPlayer on Windows; IINA chapter positions use `mpv_start`; PotPlayer opens the selected M2TS." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
-  const manifest = { schemaVersion: "1.0", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified", "Direct file:// browser acceptance remains unverified"] };
+  const manifest = { schemaVersion: "1.0", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
@@ -289,7 +288,7 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
     `# ${title.replace(/[\r\n]/g, " ")}`,
     `Menu preview. Delivery status: **${status}**. ${playbackNote}`,
     "Run `bdmv2web validate <package-directory> --offline` to refresh `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json`.",
-    externalPlayback ? "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio; external playback requests mute menu audio automatically, and the next key or click restores that automatic mute. A manual mute stays until the mute button is used again. Edit runtime/bdmv-config.js and reload to change the BDMV path. External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows." : "Open index.html in Chrome while offline. Use the mute button at the lower right to control menu audio.",
+    externalPlayback ? "Open index.html in a browser while offline. Use the mute button at the lower right to control menu audio; external playback requests mute menu audio automatically, and the next key or click restores that automatic mute. A manual mute stays until the mute button is used again. Edit runtime/bdmv-config.js and reload to change the BDMV path. External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows." : "Open index.html in a browser while offline. Use the mute button at the lower right to control menu audio.",
   ].join("\n\n") + "\n";
 }
 

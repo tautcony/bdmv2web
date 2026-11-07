@@ -5,7 +5,7 @@ This file records cross-cutting requirements repeated in Codex conversations for
 ## Product and delivery constraints
 
 - Keep the generated menu usable offline from a local package, including `file://` use where supported by the feature. Do not make a local web server or network access a hidden runtime requirement.
-- Do not restrict browser acceptance or launch behavior to macOS. Use portable launch mechanisms and describe browser requirements without assuming a particular operating system.
+- Do not restrict launch behavior to macOS. Use portable launch mechanisms and describe runtime requirements without assuming a particular operating system.
 - Keep stages and assets separable. IGS scene and command extraction must be usable without rendering PNGs; asset rendering can be invoked independently. Skipping rendering must not discard scene data needed by later stages.
 - Preserve complete checkpoint semantics. A checkpoint must capture and restore the full state required to resume the workflow; do not turn it into a reduced or lossy snapshot for convenience.
 - Preserve the menu behavior represented by the disc. Do not add extra translation or language behavior beyond what the menu provides, and do not report a menu transition as a successful audio or video track change without confirming the playback state.

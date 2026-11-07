@@ -100,10 +100,9 @@ complete← 以上都没有
 | 包审计 | `auditOutputPackage` | `PACKAGE_AUDIT_REQUIRED`（not-verified） |
 | 依赖审计 | `createDependencyAuditReport` | `DEPENDENCY_AUDIT_REQUIRED` |
 | 覆盖率 | `summarizeDeliveryCoverage` | 四维计数缺失，`COVERAGE_INCOMPLETE` |
-| 浏览器证据 | `createBrowserEvidence` + `evaluateBrowserEvidence` | `BROWSER_EVIDENCE_REQUIRED` |
 | 对照证据 | `compareVmTraces` / `compareIgRgbaFrames` | `REFERENCE_EVIDENCE_REQUIRED` |
 
-当前 `validate` 不读取历史浏览器/对照证据，固定传空数组，因此这两类总是 `not-verified`。这不会把 `complete` 降级。
+当前 `validate` 不读取历史对照证据，固定传空数组，因此对照证据总是 `not-verified`。这不会把 `complete` 降级。
 
 ## 常见判断
 
@@ -119,5 +118,3 @@ complete← 以上都没有
 ## 证据边界
 
 - 不校验内容哈希/指纹；报告只记录路径、类型、字节数。
-- 浏览器证据绑定到具体包与 profile；一个包的历史记录不会自动套用到另一个包。
-- 真实 `file://` 验收只有一条历史记录（Chrome），不构成跨浏览器矩阵。

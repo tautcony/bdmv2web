@@ -54,9 +54,9 @@ const DEFAULTS = {
 
 不实现文件内容完整性检查。DiscIR 资产不包含内容摘要，包清单只记录相对路径、类型和长度，离线审计检查 schema、引用、路径边界和依赖。
 
-浏览器证据直接保存 profile、mode、生成媒体清单、矩阵与浏览器环境，按这些值判断记录是否适用于当前场景。证据文件记录路径、类型和长度。
+证据文件记录路径、类型和长度。
 
-M6 对文件完整性与制品替换的验证任务保持未完成。文档只描述实际执行的结构检查和浏览器场景，不作字节替换检测结论。
+M6 对文件完整性与制品替换的验证任务保持未完成。文档只描述实际执行的结构检查，不作字节替换检测结论。
 
 ### 3. 导航图按"上下文"而不是"opcode 黑名单"判定（D11）
 
@@ -90,8 +90,8 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 三处缺口分开修：
 
 - **初始 VM 与媒体解耦**：`browser.ts:164-173` 把 `runTurn()` / First Play 放在 `data.media && video && audio` 条件内，无媒体包因此不执行 MovieObject。改为无条件执行初始 `runTurn`，媒体播放作为其产生的 action 处理。这条是菜单正确性的前提——没有媒体的包也必须跑初始化。
-- **背景媒体生命周期**：`MenuLoopPlaybackBridge` 当前已有 `ended` 监听和按动作回执的实现。该能力列为回归验收，不再描述为缺失代码；浏览器真实播放与错误路径的证据按 M6 任务记录。
-- **`loop=false` 结束语义**：当前代码回 `MEDIA_ENDED`，不引入 `MEDIA_HELD`。运行时已有 `ended` 监听；真实浏览器结束行为仍属于待验证证据。
+- **背景媒体生命周期**：`MenuLoopPlaybackBridge` 当前已有 `ended` 监听和按动作回执的实现。该能力列为回归验收，不再描述为缺失代码；真实播放与错误路径由运行时回归覆盖。
+- **`loop=false` 结束语义**：当前代码回 `MEDIA_ENDED`，不引入 `MEDIA_HELD`。运行时已有 `ended` 监听；结束语义按 `offline-menu-runtime` 的「非循环背景结束」场景验收。
 - **PSR1 写回**：当前主音轨切换成功及回滚路径均调用 `systemWrite(1, streamNumber)`。保留既有测试并在回归中验证，不再视为待实现功能。
 - **命中几何统一**：当前 `MenuController.hit()` 仍只用 `states.selected` 的 bounds，而 adapter 允许只有 `normal` 图形的按钮可用，造成可聚焦但不可点。实现与验收仍待完成。
 
@@ -136,5 +136,5 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 1. **一致性**：`grep -rn "maxCallDepth: 64\|maxQueueDepth: 256" packages apps` 无命中；`grep -rn "source/structural\|<MovieObject>" packages apps` 无命中；产品代码、测试、缓存清单和生成脚本不记录文件内容校验值。参考缓存清单只记录上游仓库地址和固定 revision，fetch 脚本按该 revision clone/check out。
 2. **行为**：见 `tasks.md` 每条的正反例，尤其 `JUMP_TITLE` 后继可达、`CALL_TITLE` 不可用能解除等待、无媒体包执行初始 VM、非循环背景 `ended` 后恢复、PSR1 随选轨更新。
-3. **诚实**：`verify-offline-release` 的包审计和浏览器证据任务只有在当前验收完成后才勾选；`offline-delivery-assurance` 不承诺字节级内容校验；README 描述系统播放器交接边界与当前未验证项。
+3. **诚实**：`verify-offline-release` 的包审计任务只有在当前验收完成后才勾选；`offline-delivery-assurance` 不承诺字节级内容校验；README 描述系统播放器交接边界与当前未验证项。
 4. **基准**：`benchmark.md` 记录每项 case 的机器/版本/样本/前后数据；修复项均有对应数据。

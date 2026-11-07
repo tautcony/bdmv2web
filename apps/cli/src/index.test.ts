@@ -627,7 +627,7 @@ describe("offline validate CLI", () => {
     const directory = await mkdtemp(join(tmpdir(), "bdmv validate 离线 "));
     try {
       await makePackage(directory, { "index.html": "<main>ready</main>" });
-      await writeFile(join(directory, "compatibility.json"), JSON.stringify({ profile: "portable", status: "complete", notVerified: ["direct file:// launch"] }));
+      await writeFile(join(directory, "compatibility.json"), JSON.stringify({ profile: "portable", status: "complete", notVerified: ["media timeline and seek accuracy"] }));
       const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
       expect(result.status).toBe(0);
       expect(result.stderr.toString()).toBe("");
@@ -637,12 +637,13 @@ describe("offline validate CLI", () => {
       expect(audit.dependencyAudit.checks.some((check: any) => check.checkId === "OFFLINE_STATIC_AUDIT" && check.result === "pass")).toBe(true);
       // Only not-verified evidence was missing, so the delivery is complete (D-2R).
       expect(audit.decision).toMatchObject({ status: "complete", strict: false, exitCode: 0 });
-      expect(audit.releaseSummary.release.gaps.map((gap: any) => gap.checkId)).toEqual(expect.arrayContaining(["BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS"]));
+      expect(audit.releaseSummary.release.gaps.map((gap: any) => gap.checkId)).toEqual(expect.arrayContaining(["REFERENCE_EVIDENCE_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS"]));
       const report = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(report).toEqual(audit.dependencyAudit);
       const compatibility = JSON.parse(await readFile(join(directory, "compatibility.json"), "utf8"));
-      expect(compatibility).toMatchObject({ status: "complete", profile: "portable", notVerified: expect.arrayContaining(["direct file:// launch", "BROWSER_EVIDENCE_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]) });
+      expect(compatibility).toMatchObject({ status: "complete", profile: "portable", notVerified: expect.arrayContaining(["media timeline and seek accuracy", "REFERENCE_EVIDENCE_REQUIRED"]) });
       expect(compatibility).not.toHaveProperty("mode");
+      expect(compatibility).not.toHaveProperty("browserEvidence");
       const release = JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8"));
       expect(release.release).toEqual(audit.releaseSummary.release);
       const second = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);

@@ -9,7 +9,6 @@
 | `src/index.ts` | `minimalHdmvGolden`、`mixedBdjGolden`、`damagedUnknownVersion`、`damagedDanglingReference`、`loadGolden`、`buildCursorSample`、`simulatedBridge` |
 | `src/bdmv.ts` | M1 字节构造器：`buildM1Index`、`buildM1MovieObject`、`buildM1Playlist*`、`buildM1ClipInfo*`、`buildM1Sound*`、`m1MovieObjectExpected` |
 | `src/menu-runtime.ts` | `menuInteractionFixture`：两按钮场景 + 方向键/确认的期望动作 |
-| `golden-manifest.json` | golden 与夹具的来源/用途登记 |
 
 ## 构造器用途
 
@@ -40,6 +39,6 @@
 | --- | --- |
 | 新增格式字段样本 | `src/bdmv.ts` 对应构造器，保持“字面值拼字节” |
 | 新增交互向量 | `src/menu-runtime.ts` |
-| 新增 golden | `src/index.ts` + `golden-manifest.json` 登记来源 |
+| 新增 golden | `src/index.ts` 或 `src/bdmv.ts` 的构造器，期望值为手写字面量 |
 
 同步：新增构造器后更新对应包的测试说明（[testing.md](../testing.md)）与 `docs/support/protocol-support.md` 的 fixture 列。
