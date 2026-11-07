@@ -1,0 +1,105 @@
+name: Publish to npm
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, for example v0.1.0
+        required: true
+        type: string
+
+concurrency:
+  group: npm-publish-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: npm
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm trusted publishing client
+        run: npm install --global --ignore-scripts npm@11.5.1
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Pack release tarball
+        run: pnpm --filter bdmv2web pack --pack-destination artifacts/npm
+
+      - name: Verify tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          archives=(artifacts/npm/*.tgz)
+          if (( ${#archives[@]} != 1 )); then
+            echo "Expected exactly one npm tarball, found ${#archives[@]}" >&2
+            exit 1
+          fi
+
+          package_version="$(node -p "require('./apps/cli/package.json').version")"
+          tag_version="${RELEASE_TAG#v}"
+          if [[ "$tag_version" != "$package_version" ]]; then
+            echo "Tag $RELEASE_TAG does not match package version $package_version" >&2
+            exit 1
+          fi
+
+          archive_name="$(basename "${archives[0]}" .tgz)"
+          if [[ "$archive_name" != "bdmv2web-$package_version" ]]; then
+            echo "Unexpected tarball name: $archive_name" >&2
+            exit 1
+          fi
+
+          work="$(mktemp -d)"
+          tar -xzf "${archives[0]}" -C "$work"
+          for file in package/package.json package/dist/index.js package/dist/runtime/app.bundle.js package/LICENSE; do
+            if [[ ! -f "$work/$file" ]]; then
+              echo "Missing $file in the tarball" >&2
+              exit 1
+            fi
+          done
+
+          reported="$(node "$work/package/dist/index.js" --version)"
+          if [[ "$reported" != "$package_version" ]]; then
+            echo "Packaged CLI reports $reported, expected $package_version" >&2
+            exit 1
+          fi
+
+      - name: Publish to npm
+        run: npm publish artifacts/npm/*.tgz --access public

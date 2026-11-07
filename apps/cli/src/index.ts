@@ -1,9 +1,13 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { CommanderError } from "commander";
 import { ContractError } from "@bdmv2web/core";
 import { fail } from "./cli/errors.js";
 import { buildProgram, COMMANDER_CODES } from "./cli/program.js";
 import { failActiveProgress } from "./progress.js";
+
+/** `package.json` sits beside `src/` and beside the built `dist/index.js`. */
+const { version: cliVersion } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 /**
  * Entry point only: Commander parses and dispatches (see `cli/program.ts`),
@@ -11,7 +15,7 @@ import { failActiveProgress } from "./progress.js";
  * single handler at the bottom of this file.
  */
 async function main(): Promise<void> {
-  const program = buildProgram();
+  const program = buildProgram(cliVersion);
   if (process.argv.length <= 2) {
     program.outputHelp();
     process.exitCode = 1;

@@ -5,8 +5,10 @@
 ## 入口
 
 ```ts
-buildMenuPackage(input: MenuPackageInput): Promise<void>
+buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 ```
+
+`MenuPackageResult` 只含 `diagnostics`（即写进 `manifest.json` 的那一份）。交付状态不进返回值：`status` 由调用方在打包前决定，而媒体编码警告只有打包后才知道，所以用返回值把它们交出去，由调用方并入 `report.json`。
 
 `MenuPackageInput` 关键字段：`outputDirectory`、`title`、`ir`、`scene`、`popupScenes`、`menuScenes`、`menuPlaylistIds`、`preMenuPlaylistIds`、`status`、`entryCounts`、`playerProfile`、`vmLimits`、`vmPrograms`、`vmEntries`、`externalTargets`、`bdmvPath`、`vmInitialProgramId`、`vmFirstPlayProgramId`、`graphics`、`pngLimits`、`soundEntries`、`soundBytes`、`menuLoopMedia`、`mediaEncoding`、`additionalMenuMedia`、`pgsTracks`、`pgsLimits`、`diagnostics`、`reuseMediaFromDirectory`、`onMediaProgress`、`runtimeVersion`。`pngLimits`、`pgsLimits`、`runtimeVersion` 为有默认值的可选项。
 

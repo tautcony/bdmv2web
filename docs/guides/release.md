@@ -1,0 +1,68 @@
+# Release
+
+## Package
+
+`bdmv2web` is published from `apps/cli` as one self-contained ESM entry plus the menu runtime it copies into each generated package.
+
+```sh
+npm install -g bdmv2web
+bdmv2web --version
+```
+
+Runtime requirements: Node.js `>=22`, and `ffmpeg`/`ffprobe` on `PATH` for media export.
+
+## Version and tag
+
+- The version is the `version` field of `apps/cli/package.json`.
+- Release tags use `v<major>.<minor>.<patch>` and may carry a prerelease suffix, for example `v0.2.0-rc.1`.
+- The tag version and the package version must be identical. The publish workflow fails when they differ.
+
+## Local pre-publish check
+
+```sh
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+corepack pnpm --filter bdmv2web pack --pack-destination /tmp/bdmv2web-pack
+
+mkdir -p /tmp/bdmv2web-prefix
+npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
+/tmp/bdmv2web-prefix/bin/bdmv2web --version
+```
+
+`pnpm pack` runs the `prepack` script, which bundles `apps/cli/src/index.ts` with esbuild and copies the menu runtime. `packages/*/dist` must already exist, so run `corepack pnpm build` first.
+
+## Package contents
+
+| Path | Content |
+| --- | --- |
+| `dist/index.js` | Bundled CLI entry with the `bdmv2web` bin mapping |
+| `dist/runtime/app.bundle.js` | Menu runtime read while packaging a disc |
+| `package.json`, `LICENSE` | Package metadata and licence |
+
+`pnpm pack` rewrites the `workspace:*` entries of `devDependencies` to fixed versions. Those entries stay out of the published dependency graph because the build inlines every workspace package into `dist/index.js`.
+
+## Publish workflow
+
+`.github/workflows/npm-publish.yml` runs on a push of a `v*` tag and on manual dispatch with a `tag` input. Steps:
+
+1. Validate the tag against `^v\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$`.
+2. Check out `refs/tags/<tag>`.
+3. Install Node.js from `.node-version` and npm `11.5.1`.
+4. `corepack enable`, `pnpm install --frozen-lockfile`, `pnpm build`.
+5. `pnpm --filter bdmv2web pack --pack-destination artifacts/npm`.
+6. Verify the tarball: exactly one archive, name `bdmv2web-<version>.tgz`, version equal to the tag, required files present, and `node <archive>/dist/index.js --version` equal to the version.
+7. `npm publish artifacts/npm/*.tgz --access public`.
+
+Authentication uses npm Trusted Publishing over OIDC: the job requests `id-token: write` and runs in the `npm` environment. No npm token secret is read.
+
+## One-time setup
+
+1. Create a GitHub environment named `npm` in `tautcony/bdmv2web`.
+2. On npmjs.com, add a Trusted Publisher for `bdmv2web` with repository `tautcony/bdmv2web`, workflow filename `npm-publish.yml`, and environment `npm`.
+3. Push a `v*` tag whose version matches `apps/cli/package.json`.
+
+Prerelease versions publish to the `latest` dist-tag because the workflow passes no `--tag`.
+
+## Menu runtime bundle
+
+`corepack pnpm build` emits `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`. Packaging a disc copies that file to `dist/runtime/app.bundle.js` and then to `runtime/app.bundle.js` inside the generated package. `scripts/bundle-cli.mjs` performs the same copy for the published CLI.

@@ -73,10 +73,10 @@
     {
       "path": "packages/media-export.md",
       "kind": "package",
-      "summary": "媒体闭包、媒体计划、循环导出、线性变体、PGS、时间线、外部目标、预算。",
-      "covers": ["media closure", "media plan", "ffmpeg export", "linear export", "PGS", "timeline", "external targets"],
-      "keywords": ["media-export", "ffmpeg", "ffprobe", "closure", "PGS", "SUP", "external playback"],
-      "keyFiles": ["packages/media-export/src/closure.ts", "packages/media-export/src/index.ts", "packages/media-export/src/media-plan.ts", "packages/media-export/src/linear.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
+      "summary": "媒体闭包、媒体计划、循环导出、线性变体、HDR 色彩管线、PGS、时间线、外部目标、预算。",
+      "covers": ["media closure", "media plan", "ffmpeg export", "linear export", "HDR colour pipeline", "PGS", "timeline", "external targets"],
+      "keywords": ["media-export", "ffmpeg", "ffprobe", "closure", "HDR", "tonemap", "HEVC", "crf", "PGS", "SUP", "external playback"],
+      "keyFiles": ["packages/media-export/src/closure.ts", "packages/media-export/src/index.ts", "packages/media-export/src/color.ts", "packages/media-export/src/media-plan.ts", "packages/media-export/src/linear.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
     },
     {
       "path": "packages/runtime-web.md",
@@ -153,10 +153,10 @@
     {
       "path": "features/media.md",
       "kind": "feature",
-      "summary": "媒体闭包→计划→循环导出→线性变体→PGS→外部交接；能力边界与排查顺序。",
-      "covers": ["closure", "media plan", "loop export", "linear variants", "PGS", "external handoff", "capabilities"],
-      "keywords": ["媒体", "ffmpeg", "循环", "PGS", "外部播放器"],
-      "keyFiles": ["packages/media-export/src/index.ts", "packages/media-export/src/closure.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
+      "summary": "媒体闭包→计划→循环导出→线性变体→PGS→外部交接；编码参数、HDR 策略、能力边界与排查顺序。",
+      "covers": ["closure", "media plan", "loop export", "linear variants", "encoding options", "HDR policy", "PGS", "external handoff", "capabilities"],
+      "keywords": ["媒体", "ffmpeg", "循环", "HDR", "HEVC", "crf", "preset", "PGS", "外部播放器"],
+      "keyFiles": ["packages/media-export/src/index.ts", "packages/media-export/src/color.ts", "packages/media-export/src/closure.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
     },
     {
       "path": "features/verification.md",

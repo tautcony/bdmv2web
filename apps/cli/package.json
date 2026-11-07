@@ -1,7 +1,21 @@
 {
-  "name": "@bdmv2web/cli",
+  "name": "bdmv2web",
   "version": "0.1.0",
+  "description": "Inspect a Blu-ray BDMV disc and build an offline web menu package.",
   "license": "GPL-3.0-only",
+  "keywords": [
+    "bluray",
+    "bdmv",
+    "hdmv",
+    "igs",
+    "menu",
+    "offline"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tautcony/bdmv2web.git",
+    "directory": "apps/cli"
+  },
   "files": [
     "dist"
   ],
@@ -9,12 +23,20 @@
   "bin": {
     "bdmv2web": "./dist/index.js"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "bundle": "node ../../scripts/bundle-cli.mjs",
+    "prepack": "node ../../scripts/bundle-cli.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
+  "devDependencies": {
     "@bdmv2web/bdmv-io": "workspace:*",
     "@bdmv2web/bdmv-parser": "workspace:*",
     "@bdmv2web/core": "workspace:*",
@@ -23,11 +45,9 @@
     "@bdmv2web/media-export": "workspace:*",
     "@bdmv2web/package-builder": "workspace:*",
     "@bdmv2web/runtime-web": "workspace:*",
-    "@bdmv2web/test-runner": "workspace:*",
-    "commander": "^15.0.0"
-  },
-  "devDependencies": {
     "@bdmv2web/test-fixtures": "workspace:*",
-    "@types/node": "24.10.0"
+    "@bdmv2web/test-runner": "workspace:*",
+    "@types/node": "24.10.0",
+    "commander": "^15.0.0"
   }
 }

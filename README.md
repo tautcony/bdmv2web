@@ -13,7 +13,8 @@
 
 | 依赖 | 版本或要求 | 用途 |
 | --- | --- | --- |
-| Node.js | `>=24.18.0 <25` | 构建和运行命令 |
+| Node.js | `>=22` | 运行命令 |
+| Node.js | `24.18.0`（`.node-version`） | 从源码构建 |
 | pnpm | `11.25.0`，通过 `corepack pnpm` 调用 | 安装依赖和运行脚本 |
 | ffmpeg | 可从 `PATH` 调用，需含 `libx265`、`libx264`、`aac` | 编码菜单背景视频与音轨 |
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
@@ -22,13 +23,23 @@
 
 ## 安装
 
+从 npm 全局安装，安装后命令名为 `bdmv2web`：
+
+```sh
+npm install -g bdmv2web
+bdmv2web --version
+```
+
+从源码构建：
+
 ```sh
 corepack pnpm install --frozen-lockfile
 corepack pnpm generate:contracts
 corepack pnpm build
+corepack pnpm bundle:cli
 ```
 
-安装后的命令名为 `bdmv2web`。在仓库中开发时，使用 `corepack pnpm run cli:dev <命令> [参数]` 调用 CLI。
+从源码构建后，`apps/cli/dist/index.js` 为可直接执行的命令入口。在仓库中开发时，使用 `corepack pnpm run cli:dev <命令> [参数]` 调用 CLI。
 
 ## 快速开始
 

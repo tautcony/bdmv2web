@@ -1,5 +1,5 @@
 {
-  "name": "bdmv2web",
+  "name": "bdmv2web-workspace",
   "private": true,
   "license": "GPL-3.0-only",
   "packageManager": "pnpm@11.25.0",
@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "corepack pnpm generate:contracts && corepack pnpm -r build",
+    "bundle:cli": "node scripts/bundle-cli.mjs",
     "cli:dev": "tsx --tsconfig apps/cli/tsconfig.dev.json apps/cli/src/index.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

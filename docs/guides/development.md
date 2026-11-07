@@ -20,7 +20,7 @@ corepack pnpm typecheck
 corepack pnpm test
 ```
 
-`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
+`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file instead of the TypeScript sources. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
 
 ## Linting
 
@@ -75,7 +75,7 @@ A field length or value that cannot be confirmed against the reference implement
 
 ## CLI status
 
-`inspect`, `extract`, `build`, `validate`, `list`, `export`, and `render` are implemented; `compare` returns `E_NOT_IMPLEMENTED` on stderr with exit code 1. `convert` remains an alias of `build`. Commands, options, and dispatch are handled by `commander`; run `bdmv2web --help` for the current surface.
+`inspect`, `extract`, `build`, `validate`, `list`, `export`, and `render` are implemented; `compare` returns `E_NOT_IMPLEMENTED` on stderr with exit code 1. `convert` remains an alias of `build`. Commands, options, and dispatch are handled by `commander`; run `bdmv2web --help` for the current surface and `bdmv2web --version` for the package version.
 
 | Command | Behavior | Exit codes |
 | --- | --- | --- |
@@ -113,7 +113,7 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 | `@bdmv2web/package-builder` | `corepack pnpm --filter @bdmv2web/package-builder test` |
 | `@bdmv2web/test-fixtures` | `corepack pnpm --filter @bdmv2web/test-fixtures test` |
 | `@bdmv2web/test-runner` | `corepack pnpm --filter @bdmv2web/test-runner test` |
-| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` |
+| `bdmv2web` | `corepack pnpm --filter bdmv2web test` |
 
 Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded. A package whose configuration matches no test file fails instead of reporting success.
 

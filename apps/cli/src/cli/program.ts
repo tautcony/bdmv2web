@@ -48,11 +48,13 @@ function withStrict(command: Command): Command {
     .option("--no-strict", "accept error diagnostics (default)");
 }
 
-export function buildProgram(): Command {
+/** `version` is optional so tests can build the command tree without package metadata. */
+export function buildProgram(version?: string): Command {
   const program = new Command("bdmv2web")
     .description("Inspect a Blu-ray BDMV disc and build an offline web menu package.")
     .exitOverride()
     .configureOutput({ outputError: () => {} });
+  if (version !== undefined) program.version(version);
 
   const inspectCommand = program.command("inspect")
     .description("Inspect the disc structure and report a stage status")

@@ -24,7 +24,7 @@
 | `@bdmv2web/runtime-web` | bdmv-parser, hdmv, igs, media-export | 浏览器菜单运行时；被 package-builder 打成 IIFE |
 | `@bdmv2web/test-runner` | — | 包审计、状态判定、覆盖率、报告 |
 | `@bdmv2web/test-fixtures` | core | 合成 BDMV 字节构造器与运行时夹具 |
-| `@bdmv2web/cli` | 以上全部 | 命令编排与退出码 |
+| `bdmv2web` | 以上全部 | 命令编排与退出码 |
 
 依赖方向单向：`core ← io ← parser ← {hdmv, igs} ← media-export ← {package-builder, runtime-web} ← cli`。`test-runner` 不依赖业务包，只消费 JSON/文件事实。
 

@@ -28,7 +28,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | `@bdmv2web/package-builder` | `corepack pnpm --filter @bdmv2web/package-builder test` | 打包、转义、音效 |
 | `@bdmv2web/test-fixtures` | `corepack pnpm --filter @bdmv2web/test-fixtures test` | 夹具自检 |
 | `@bdmv2web/test-runner` | `corepack pnpm --filter @bdmv2web/test-runner test` | 审计、判定、报告 |
-| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 参数契约、事务、stage/delivery、libbluray 导航基线 |
+| `bdmv2web` | `corepack pnpm --filter bdmv2web test` | 参数契约、事务、stage/delivery、libbluray 导航基线 |
 
 ## 测试布局
 
