@@ -1,0 +1,14 @@
+packages/runtime-web/src/index.test.ts
+  h_3705811fa4502c 159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1eff6d9cd5ad070df55444b8c7ac662953292ab",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
