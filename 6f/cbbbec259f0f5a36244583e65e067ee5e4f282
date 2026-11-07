@@ -1,0 +1,52 @@
+README.md
+  h_3705811fa4502c 36,55-58,61,63,64,65,66,67,73
+docs/guides/development.md
+  h_3705811fa4502c 63,78,85-89,92,94,98
+docs/llm-wiki/README.md
+  h_3705811fa4502c 41,57,72,74
+docs/llm-wiki/architecture.md
+  h_3705811fa4502c 45,47
+docs/llm-wiki/contracts.md
+  h_3705811fa4502c 100
+docs/llm-wiki/diagnostics.md
+  h_3705811fa4502c 40,46-49,53,148,176
+docs/llm-wiki/features/cli-commands.md
+  h_3705811fa4502c 3,11-14,18-20,60,72,87,88-110,112,146,191,193,199-202,210-214,218
+docs/llm-wiki/features/igs-extraction.md
+  h_3705811fa4502c 65,67,85
+docs/llm-wiki/features/media.md
+  h_3705811fa4502c 28,61,69,71,102
+docs/llm-wiki/features/navigation.md
+  h_3705811fa4502c 57
+docs/llm-wiki/features/offline-menu.md
+  h_3705811fa4502c 3
+docs/llm-wiki/features/verification.md
+  h_3705811fa4502c 10,12,44,46,113
+docs/llm-wiki/glossary.md
+  h_3705811fa4502c 72,75
+docs/llm-wiki/index.json
+  h_3705811fa4502c 12,28,31,116,118-119,124-125,127,135,150,164,167,183
+docs/llm-wiki/packages/cli.md
+  h_3705811fa4502c 5-24,26,28-32,34,36,39-46,49-51,55,58-59,83,85,91,94,95,96-101,103,140,146-147
+docs/llm-wiki/packages/igs.md
+  h_3705811fa4502c 24,35,38-39
+docs/llm-wiki/packages/media-export.md
+  h_3705811fa4502c 9-10,12,43,63,77,78,117
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 89
+docs/llm-wiki/troubleshooting.md
+  h_3705811fa4502c 27-30,32,37,45,105,111
+docs/support/hdmv-support.md
+  h_3705811fa4502c 120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6fcbbbec259f0f5a36244583e65e067ee5e4f282",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
