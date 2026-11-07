@@ -1,0 +1,14 @@
+apps/cli/package.json
+  h_3705811fa4502c 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be4e4e2d1503779daa1d851e5a8b3bbd607f7817",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
