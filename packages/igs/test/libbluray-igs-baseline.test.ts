@@ -1,7 +1,7 @@
 /**
  * Element-level comparison against VideoLAN libbluray 1.5.0's own IG decoder.
  *
- * docs/evidence/libbluray-1.5.0-igs-baseline.json was produced by feeding the
+ * test-data/baselines/libbluray-1.5.0-igs-baseline.json was produced by feeding the
  * checked-in IG packet fixtures to libbluray's graphics_processor_decode_ts
  * (see scripts/generate-libbluray-baselines.py). Every page, BOG, button,
  * palette entry and object above comes from that run. The tests read only the
@@ -18,7 +18,7 @@ import { extractIgsFromChunks, type IgsObject, type IgsPage, type IgsPalette, ty
 import { chunks } from "./fixtures.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const goldenPath = resolve(repositoryRoot, "docs/evidence/libbluray-1.5.0-igs-baseline.json");
+const goldenPath = resolve(repositoryRoot, "test-data/baselines/libbluray-1.5.0-igs-baseline.json");
 const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 
 type EffectRow = [number, number, number, Array<[number, number, number, number, number, number, number, number, number, number]>];
@@ -138,7 +138,7 @@ describe("libbluray 1.5.0 IG decoder baseline", () => {
   it("covers exactly the same object ids as the independent igstools RGBA reference", async () => {
     const libbluray = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
     const igstools = JSON.parse(await readFile(
-      resolve(repositoryRoot, "docs/evidence/igs-reference-element-summary.json"), "utf8")) as {
+      resolve(repositoryRoot, "test-data/baselines/igs-reference-element-summary.json"), "utf8")) as {
       cases: Array<{ case: string; clip: string; assets: Array<[string]> }>;
     };
     const pixelAssets = new Map(igstools.cases.map((entry) => [`${entry.case}/${entry.clip}`, entry.assets]));

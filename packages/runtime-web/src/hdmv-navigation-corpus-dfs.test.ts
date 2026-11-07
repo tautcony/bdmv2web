@@ -6,7 +6,7 @@ import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, HdmvVm, type NavigationAction, type StaticNavigationLoop, type TraceEntry } from "@bdmv2web/hdmv";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const libblurayGoldenPath = resolve(repo, "docs/evidence/libbluray-1.5.0-navigation-baseline.json");
+const libblurayGoldenPath = resolve(repo, "test-data/baselines/libbluray-1.5.0-navigation-baseline.json");
 const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
 const MAX_SCENARIOS_PER_CASE = 128;
 const MAX_STATES_PER_SCENARIO = 50_000;
@@ -15,7 +15,7 @@ let corpusBranchSitesWithBothOutcomes = 0;
 /**
  * DFS exploration counters. These measure this project's own explorer and are
  * regression pins, not independent baselines. The independent baseline lives in
- * docs/evidence/libbluray-1.5.0-navigation-baseline.json and is asserted by
+ * test-data/baselines/libbluray-1.5.0-navigation-baseline.json and is asserted by
  * apps/cli/src/libbluray-navigation-baseline.test.ts: libbluray's index,
  * per-command disassembly, title list, VM events and the derived control-flow
  * graph. Index entry counts below are checked against that baseline at runtime.

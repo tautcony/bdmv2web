@@ -101,8 +101,8 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `packages/igs/test/transport.test.ts` | 192B 包、PSI/PES、PTS 回绕、连续性错误 |
 | `packages/igs/test/extraction.test.ts` | 段拼装、版本缓存、RLE、场景完整性 |
 | `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
-| `packages/igs/test/igs-reference-element-summary.test.ts` | 重算 8 个 clip、891 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `docs/evidence/igs-reference-element-summary.json` |
-| `packages/igs/test/libbluray-igs-baseline.test.ts` | 对 8 个 clip 的 display set、ICS 页面/BOG/按钮/进入退出效果、256 项调色板与 872 个对象 RLE 与 libbluray 1.5.0 `graphics_processor_decode_ts()` 输出逐项比对；golden 在 `docs/evidence/libbluray-1.5.0-igs-baseline.json` |
+| `packages/igs/test/igs-reference-element-summary.test.ts` | 重算 8 个 clip、891 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `test-data/baselines/igs-reference-element-summary.json` |
+| `packages/igs/test/libbluray-igs-baseline.test.ts` | 对 8 个 clip 的 display set、ICS 页面/BOG/按钮/进入退出效果、256 项调色板与 872 个对象 RLE 与 libbluray 1.5.0 `graphics_processor_decode_ts()` 输出逐项比对；golden 在 `test-data/baselines/libbluray-1.5.0-igs-baseline.json` |
 | `packages/igs/test/m1-m2-m3.integration.test.ts` | 解析 → 场景 → 命令的来源交接 |
 | `packages/igs/test/real-igs.test.ts`、`tamako-*.test.ts` | 工作区本地样本；数据缺失时跳过 |
 

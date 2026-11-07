@@ -66,9 +66,10 @@
 | --- | --- |
 | `test-data/bdmv/` | 工作区本地真实样本（不入库保密内容，路径含真实目录名） |
 | `test-data/fixtures/` | 合成/打包夹具：`synthetic-all-features/`、`hdmv-navigation/`、`igs-parser/` |
+| `test-data/baselines/` | 测试读取的参考基线：libbluray IGS/导航、pinned igstools 逐元素 RGBA 摘要 |
 | `test-data/output/` | 手工验收产出的菜单包与资产，不参与自动测试 |
 | `.reference-cache/` | 固定 revision 的上游参考源码（libbluray / libhdmv / igstools / bdmvkit），被 `.gitignore` 排除 |
-| `docs/evidence/` | IGS 逐元素对照记录 |
+| `docs/evidence/` | 历史 IGS 逐元素对照记录（无测试读取） |
 | `docs/references/stages/` | M0–M6 阶段索引与证据 |
 
 ## 谁拥有什么状态

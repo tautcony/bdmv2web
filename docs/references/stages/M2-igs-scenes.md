@@ -104,7 +104,7 @@ Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.
 
 - **参考实现：** VideoLAN libbluray 1.5.0，固定 revision `d75c88e54c893e5cbf4c61d356477655eb435769`，解码入口 `src/libbluray/decoders/graphics_processor.c` 的 `graphics_processor_decode_ts()`。`scripts/libbluray-igs-dump.c` 链接本机 libbluray 静态库并由 `scripts/generate-libbluray-baselines.py` 调用。
 - **输入：** 已入库的 8 个 IG packet fixture（`test-data/fixtures/hdmv-navigation/disc-data/` 与 `test-data/fixtures/igs-parser/`）。192 字节 TS 包按 6144 字节 read unit 重新分组，不足处补 null packet；`stc=-1` 让 libbluray 立即解码完整 display set。
-- **入库证据：** [libbluray-1.5.0-igs-baseline.json](../../evidence/libbluray-1.5.0-igs-baseline.json)。8 个 clip、51 组 256 项调色板、872 个对象。逐 case 记录 display set 的 complete/epochStart/validPts、ICS 的页面/BOG/按钮/进入退出效果/超时、按钮的 20 个字段、调色板 256 项 YCrCbT，以及对象 RLE 的宽高、run/EOL 计数、48 个等距索引采样和 16 个索引分箱。
+- **入库证据：** [libbluray-1.5.0-igs-baseline.json](../../../test-data/baselines/libbluray-1.5.0-igs-baseline.json)。8 个 clip、51 组 256 项调色板、872 个对象。逐 case 记录 display set 的 complete/epochStart/validPts、ICS 的页面/BOG/按钮/进入退出效果/超时、按钮的 20 个字段、调色板 256 项 YCrCbT，以及对象 RLE 的宽高、run/EOL 计数、48 个等距索引采样和 16 个索引分箱。
 - **自动化对照：** `packages/igs/test/libbluray-igs-baseline.test.ts`（10 例）。逐 case 把 `extractIgsFromChunks()` 的结果与上述字段全部比对，并逐 case/clip 核对 libbluray 解出的 object id/version 集合与 igstools RGBA 参考摘要的 891 个资产名解析出的 872 个 object id/version 集合一致。测试只读入库 JSON 和夹具，运行时不需要本机 libbluray。
 - **结果：** 8 个 clip 的 display set、ICS、调色板与对象 RLE 摘要全部一致；object id/version 集合与 igstools 参考逐 clip 相等，无缺失或额外项。
 - **适用范围：** libbluray 解码给出 YCrCbT 调色板条目与 RLE 索引；逐像素 RGBA 保真由 pinned igstools 的 `picture_to_png` 参考覆盖（见 2026-11-04 节）。按本页已记录的来源关系，igstools 解码器源自 libav patches，与 libbluray 来源可能重合，两份证据分别覆盖元素结构/RLE 与 RGBA 转换路径，按一个参考族计。本次比对未涉及动画帧、多帧对象范围或各盘原始色彩矩阵判定。

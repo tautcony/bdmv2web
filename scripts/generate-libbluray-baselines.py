@@ -10,9 +10,12 @@ It requires:
   * the pinned bdmvkit ctypes harness under .reference-cache/repositories/,
   * clang, and the link dependencies of the static archive.
 
-It writes two JSON files under docs/evidence/. Both contain case/clip ids,
+It writes two JSON files under test-data/baselines/. Both contain case/clip ids,
 numeric fields and libbluray's own output. The committed tests read only those
 JSON files and the checked-in fixtures; CI runs neither this script nor libbluray.
+
+Each baseline keeps the two outer levels expanded and every deeper value compact,
+so one `cases` entry occupies exactly one line.
 
 Usage:  python3 scripts/generate-libbluray-baselines.py
 """
@@ -32,7 +35,7 @@ CACHE = ROOT / ".reference-cache" / "repositories"
 LIBBLURAY_SRC = CACHE / "libbluray-1.5.0" / "src"
 IGS_DUMP_SRC = ROOT / "scripts" / "libbluray-igs-dump.c"
 CORPUS_ROOT = ROOT / "test-data" / "fixtures" / "hdmv-navigation" / "disc-data"
-EVIDENCE = ROOT / "docs" / "evidence"
+BASELINES = ROOT / "test-data" / "baselines"
 
 NAVIGATION_CASES = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"]
 IG_CASES = [
@@ -433,6 +436,29 @@ def generate_navigation(mobj_dump: Path) -> dict:
     }
 
 
+def compact(value: object) -> str:
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
+def dumps_baseline(value: object, level: int = 0) -> str:
+    """Expand the two outer levels, keep every deeper value compact.
+
+    A `cases` entry occupies exactly one line, so regenerating a baseline changes
+    only the cases that changed.
+    """
+    pad = "  " * level
+    if isinstance(value, dict) and value and level < 2:
+        body = ",\n".join(
+            f'{"  " * (level + 1)}{json.dumps(key, ensure_ascii=False)}: {dumps_baseline(item, level + 1)}'
+            for key, item in value.items()
+        )
+        return "{\n" + body + "\n" + pad + "}"
+    if isinstance(value, list) and value and level < 2:
+        body = ",\n".join(f'{"  " * (level + 1)}{compact(item)}' for item in value)
+        return "[\n" + body + "\n" + pad + "]"
+    return compact(value)
+
+
 def main() -> None:
     if not LIBBLURAY_SRC.exists():
         raise RuntimeError("run scripts/fetch-reference-cache.py first")
@@ -444,11 +470,11 @@ def main() -> None:
         igs = generate_igs(igs_dump, work)
         print("Reading navigation structures and running the libbluray HDMV VM...")
         navigation = generate_navigation(mobj_dump)
-    EVIDENCE.mkdir(parents=True, exist_ok=True)
+    BASELINES.mkdir(parents=True, exist_ok=True)
     for name, payload in (("libbluray-1.5.0-igs-baseline.json", igs),
                           ("libbluray-1.5.0-navigation-baseline.json", navigation)):
-        path = EVIDENCE / name
-        path.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
+        path = BASELINES / name
+        path.write_text(dumps_baseline(payload) + "\n")
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size} bytes)")
 
 

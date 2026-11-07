@@ -46,7 +46,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 独立参考 | `apps/cli/src/libbluray-navigation-baseline.test.ts` | 对 4 个真实盘的 index、逐命令反汇编、标题结构、完整 CFG 及 VM playlist 事件与 libbluray 基线比对 |
 | 浏览器 | `runtime-web/src/browser.test.ts` | 最小 DOM 桩，不是真实浏览器 |
 
-## 夹具来源
+## 夹具与基线来源
 
 | 来源 | 位置 | 性质 |
 | --- | --- | --- |
@@ -55,9 +55,9 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 全特性自写合成盘 | `test-data/fixtures/synthetic-all-features/` | `scripts/generate-synthetic-all-features.mjs` 按字段生成；libbluray 1.5.0 读回验证 |
 | IG 包夹具 | `test-data/fixtures/hdmv-navigation/` | 由 `scripts/export-igs-packet-fixtures.mjs` 生成 |
 | 外部 ICS 样本 | `test-data/fixtures/igs-parser/` | 带来源与 MIT 许可说明 |
-| igstools 参考摘要 | `docs/evidence/igs-reference-element-summary.json` | pinned igstools 参考 PNG 的元素级 RGBA 值；测试不读取 `.reference-cache` |
-| libbluray IGS 基线 | `docs/evidence/libbluray-1.5.0-igs-baseline.json` | 固定 revision `d75c88e` 的 `graphics_processor_decode_ts()` 输出，8 clip / 872 对象 |
-| libbluray 导航基线 | `docs/evidence/libbluray-1.5.0-navigation-baseline.json` | 固定 revision `d75c88e` 的 `bd_info`、`bd_list_titles -a`、`mobj_dump -d` 与 `bd_play()` 事件，4 盘 / 5225 命令 / 6224 CFG 边 |
+| igstools 参考摘要 | `test-data/baselines/igs-reference-element-summary.json` | pinned igstools 参考 PNG 的元素级 RGBA 值；测试不读取 `.reference-cache` |
+| libbluray IGS 基线 | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | 固定 revision `d75c88e` 的 `graphics_processor_decode_ts()` 输出，8 clip / 872 对象 |
+| libbluray 导航基线 | `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` | 固定 revision `d75c88e` 的 `bd_info`、`bd_list_titles -a`、`mobj_dump -d` 与 `bd_play()` 事件，4 盘 / 5225 命令 / 6224 CFG 边 |
 | 工作区本地样本 | `test-data/bdmv/` | 仅本机存在，测试按需跳过 |
 
 规则：新夹具 > 1 MiB 必须用脚本从 manifest 生成，不直接提交二进制；不在夹具/测试名/日志写真实标题、机器路径、`file://` URL。
@@ -66,11 +66,14 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 | 基线 | 产出工具 | 入库文件 | 消费测试 |
 | --- | --- | --- | --- |
-| 逐元素 RGBA | `SAPikachu/igstools` @ `34a13315` 的 `picture_to_png` | `docs/evidence/igs-reference-element-summary.json` | `packages/igs/test/igs-reference-element-summary.test.ts` |
-| IGS display set 与元素 | libbluray 1.5.0 `graphics_processor_decode_ts()` | `docs/evidence/libbluray-1.5.0-igs-baseline.json` | `packages/igs/test/libbluray-igs-baseline.test.ts` |
-| index / 反汇编 / 标题 / CFG / VM 事件 | libbluray 1.5.0 `bd_info`、`bd_list_titles -a`、`mobj_dump -d`、`bd_play()` | `docs/evidence/libbluray-1.5.0-navigation-baseline.json` | `apps/cli/src/libbluray-navigation-baseline.test.ts` |
+| 逐元素 RGBA | `SAPikachu/igstools` @ `34a13315` 的 `picture_to_png` | `test-data/baselines/igs-reference-element-summary.json` | `packages/igs/test/igs-reference-element-summary.test.ts` |
+| IGS display set 与元素 | libbluray 1.5.0 `graphics_processor_decode_ts()` | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | `packages/igs/test/libbluray-igs-baseline.test.ts` |
+| index / 反汇编 / 标题 / CFG / VM 事件 | libbluray 1.5.0 `bd_info`、`bd_list_titles -a`、`mobj_dump -d`、`bd_play()` | `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` | `apps/cli/src/libbluray-navigation-baseline.test.ts` |
 
 三份基线由固定 revision 的外部实现产出，测试只读入库 JSON 与夹具，运行时不需要本机 libbluray 或 igstools。libbluray IGS 基线与 igstools RGBA 基线的 object id 集合逐 clip 交叉核对。
+
+基线 JSON 采用受限深度格式：外层两级展开，`cases` 的每一项占一行，更深的值保持单行紧凑。`scripts/generate-libbluray-baselines.py` 按同一格式写出，重新生成时只改动发生变化的 case 行。
+
 `scripts/generate-libbluray-baselines.py` 与 `scripts/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 的 `regressionPins` 记录本项目 DFS 自身的统计，其中索引条目数与静态 playlist 目标由 libbluray 导航基线驱动。
 
 ## 新增测试

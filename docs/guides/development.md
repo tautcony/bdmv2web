@@ -74,7 +74,7 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 
 ## Test baseline
 
-The baseline was re-measured 2026-11-07 with `bash scripts/ci.sh` on Node `24.18.0` / pnpm `11.25.0`. A copy containing only checked-in fixtures collects 42 test files and reports 528 passed, 1 skipped (`packages/igs/test/tamako-real-smoke.test.ts` needs the workspace-local `test-data/bdmv/`); with that sample present the same run reports 529 passed, 0 skipped. Nine of those cases are the igstools element-level RGBA comparison, 10 are the libbluray 1.5.0 IG decoder comparison, and 5 are the libbluray 1.5.0 navigation and control-flow graph comparison. `docs/evidence/libbluray-1.5.0-igs-baseline.json` and `docs/evidence/libbluray-1.5.0-navigation-baseline.json` hold the committed libbluray output; the tests read those files and the checked-in fixtures, and CI needs no local libbluray.
+The baseline was re-measured 2026-11-07 with `bash scripts/ci.sh` on Node `24.18.0` / pnpm `11.25.0`. A copy containing only checked-in fixtures collects 42 test files and reports 528 passed, 1 skipped (`packages/igs/test/tamako-real-smoke.test.ts` needs the workspace-local `test-data/bdmv/`); with that sample present the same run reports 529 passed, 0 skipped. Nine of those cases are the igstools element-level RGBA comparison, 10 are the libbluray 1.5.0 IG decoder comparison, and 5 are the libbluray 1.5.0 navigation and control-flow graph comparison. `test-data/baselines/libbluray-1.5.0-igs-baseline.json` and `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` hold the committed libbluray output; the tests read those files and the checked-in fixtures, and CI needs no local libbluray.
 
 | Package | Command | Tests |
 | --- | --- | ---: |

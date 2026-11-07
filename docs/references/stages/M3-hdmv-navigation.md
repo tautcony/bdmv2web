@@ -25,7 +25,7 @@
 
 - **原始命令字还原：** `mobj_print.c` 的 `_cmd_to_u32()` 输出 `HDMV_INSN` 位域重新序列化的值。生成脚本的 `raw_command_word()` 按位域布局还原盘上原始 word0，4 个盘 5225 条命令与 `parseBdmv()` 的 12 字节逐字节一致，opcode 一致。
 - **index 布局：** `_fill_disc_info()` 把 `titles[0]` 留给 Top Menu、`titles[num_titles+1]` 留给 First Play，index titles 从 `titles[1]` 起。生成脚本按此读取，4 个盘派生的 CFG 与 `buildNavigationGraph()` 逐边一致。
-- **入库证据：** [libbluray-1.5.0-navigation-baseline.json](../../evidence/libbluray-1.5.0-navigation-baseline.json)。4 盘、50 个 MovieObject、5225 条命令、6224 条 CFG 边。边 `[from,to,kind,resolution]` 由 libbluray 自身反汇编的助记符和它解析出的 index id_refs 独立派生。
+- **入库证据：** [libbluray-1.5.0-navigation-baseline.json](../../../test-data/baselines/libbluray-1.5.0-navigation-baseline.json)。4 盘、50 个 MovieObject、5225 条命令、6224 条 CFG 边。边 `[from,to,kind,resolution]` 由 libbluray 自身反汇编的助记符和它解析出的 index id_refs 独立派生。
 
   | Case | MovieObject | 命令 | CFG 边 | title | VM playlist 事件 |
   | --- | ---: | ---: | ---: | ---: | --- |

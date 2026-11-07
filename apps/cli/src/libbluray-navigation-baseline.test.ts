@@ -1,7 +1,7 @@
 /**
  * Cross-package comparison against VideoLAN libbluray 1.5.0.
  *
- * docs/evidence/libbluray-1.5.0-navigation-baseline.json was produced from
+ * test-data/baselines/libbluray-1.5.0-navigation-baseline.json was produced from
  * bd_info, bd_list_titles -a, the pinned-source mobj_dump disassembly and
  * libbluray's own HDMV VM (see scripts/generate-libbluray-baselines.py). The
  * graph rows are derived from libbluray's per-command semantics, so the whole
@@ -16,7 +16,7 @@ import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction } from "@bdmv2web/hdmv";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const goldenPath = resolve(repositoryRoot, "docs/evidence/libbluray-1.5.0-navigation-baseline.json");
+const goldenPath = resolve(repositoryRoot, "test-data/baselines/libbluray-1.5.0-navigation-baseline.json");
 const corpusRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 
 type CommandRow = { pc: number; bytes: string; opcode: string | null; disasm: string };

@@ -1,6 +1,6 @@
 /**
  * Compare re-rendered IGS assets with the pinned SAPikachu/igstools reference
- * PNGs recorded in docs/evidence/igs-reference-element-summary.json. The golden
+ * PNGs recorded in test-data/baselines/igs-reference-element-summary.json. The golden
  * holds exact RGBA pixel samples and per-channel distributions from that
  * independent renderer. Test runs read only the golden and the checked-in
  * packet fixtures under test-data/fixtures/.
@@ -14,7 +14,7 @@ import { extractIgsFromChunks } from "../src/extract.js";
 import { chunks } from "./fixtures.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const goldenPath = resolve(repositoryRoot, "docs/evidence/igs-reference-element-summary.json");
+const goldenPath = resolve(repositoryRoot, "test-data/baselines/igs-reference-element-summary.json");
 const fixtureRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
 
 type PixelAnchor = [number, number, string] | null;
