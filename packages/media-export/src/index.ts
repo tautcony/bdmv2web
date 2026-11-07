@@ -286,7 +286,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     code: "MEDIA_ENCODER_UNAVAILABLE", executable: ffmpeg, args: encoderArgs,
     message: `FFmpeg does not advertise required encoder${missingEncoders.length > 1 ? "s" : ""} ${missingEncoders.join(", ")}.`,
   });
-  const sourceProbe = parseProbe((await invoke(ffprobe, probeArgs(input.sourcePath), timeoutMs)).stdout, input.sourcePath);
+  const sourceProbe = parseProbe((await invoke(ffprobe, probeArgs(input.sourcePath, true), timeoutMs)).stdout, input.sourcePath);
   const sourceStart = Number(sourceProbe.format?.start_time);
   if (!Number.isFinite(sourceStart)) throw new Error(`ffprobe did not report the source timeline start for '${input.sourcePath}'.`);
   const rawSeekSeconds = (input.loopStart45k ?? input.inTime45k) / 45_000 - sourceStart;
@@ -377,10 +377,12 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     priorManifest = JSON.parse(await readFile(resolve(sourceDirectory, "asset-manifest.json"), "utf8")) as Record<string, unknown>;
   } catch { return null; }
   if (!matchesReusablePlan(priorPlan, input, preset, crf)) return null;
-  type PriorPackagedMedia = { plan?: { playlistId?: string }; background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> };
+  type PriorPackagedMedia = { plan?: { playlistId?: string; playItemIndex?: number }; background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> };
   const priorMenuMedia = Array.isArray(priorManifest.menuMedia) ? priorManifest.menuMedia as PriorPackagedMedia[] : [];
+  // One menu playlist can carry several packaged PlayItems; the plan must match
+  // the PlayItem as well as the playlist or a sub-menu reuses the Top Menu media.
   const media = [priorManifest.media as PriorPackagedMedia | undefined, ...priorMenuMedia]
-    .find((candidate) => candidate?.plan?.playlistId === input.playlistId);
+    .find((candidate) => candidate?.plan?.playlistId === input.playlistId && (candidate.plan.playItemIndex ?? 0) === input.playItemIndex);
   const priorBackground = media?.background;
   const priorAudioTracks = media?.audioTracks;
   const backgroundPath = `${assetDirectory}/background.mp4`;
@@ -503,7 +505,13 @@ function hasEncoder(output: string, encoder: string): boolean {
   return output.split(/\r?\n/).some((line) => /^\s*[VAS.D]{6}\s+/.test(line) && line.trim().split(/\s+/, 2)[1] === encoder);
 }
 function firstLine(value: string): string { return value.split(/\r?\n/, 1)[0] ?? "unknown"; }
-function probeArgs(path: string): string[] { return ["-v", "error", "-show_entries", "stream=index,id,codec_type,codec_name,width,height,display_aspect_ratio,duration:format=start_time,duration", "-of", "json", path]; }
+function probeArgs(path: string, deep = false): string[] {
+  // A Blu-ray still menu can open with frames that carry no parameter sets, so
+  // the default probe window reports the video stream without dimensions. The
+  // source probe reads deeper; encoded outputs keep the cheap default.
+  const depth = deep ? ["-probesize", "100M", "-analyzeduration", "100M"] : [];
+  return ["-v", "error", ...depth, "-show_entries", "stream=index,id,codec_type,codec_name,width,height,display_aspect_ratio,duration:format=start_time,duration", "-of", "json", path];
+}
 function parseProbe(text: string, subject: string): ProbeResult {
   try {
     const value = JSON.parse(text) as ProbeResult;

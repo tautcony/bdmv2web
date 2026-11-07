@@ -63,7 +63,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
       pause() {}, load() {},
     };
   };
-  for (const id of ["runtime-status", "runtime-diagnostics", "start-menu", "audio-mute-toggle", "menu-canvas", "popup-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
+  for (const id of ["runtime-status", "runtime-status-copy", "runtime-diagnostics", "start-menu", "audio-mute-toggle", "menu-canvas", "popup-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
   const document = { getElementById: (id: string) => elements.get(id) ?? null } as unknown as Document;
   const fakeWindow = {
     devicePixelRatio: 1,
@@ -198,6 +198,27 @@ describe("offline browser boot", () => {
     expect(host.elements.get("runtime-status")?.textContent).toBe("Playback unavailable in menu preview (LINK_PLAY_ITEM).");
   });
 
+  it("copies the status message from the toast copy button", async () => {
+    const copied: string[] = [];
+    vi.stubGlobal("navigator", { userAgent: "test", clipboard: { writeText: (text: string) => { copied.push(text); return Promise.resolve(); } } });
+    const data = packageData({
+      scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        commands: [{ bytes: m3Fixtures.linkPlayItem3.bytes }],
+      }] }] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    const message = host.elements.get("runtime-status")!.textContent;
+    expect(message).toContain("LINK_PLAY_ITEM");
+    await host.elements.get("runtime-status-copy")!.fire("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(copied).toEqual([message]);
+    expect(host.elements.get("runtime-status-copy")?.attributes.get("data-copied")).toBe("true");
+  });
+
   it("routes a dynamic title to an external playlist and releases the VM wait", async () => {
     const location = { hash: "", href: "file:///menu/index.html" };
     vi.stubGlobal("location", location);
@@ -239,6 +260,39 @@ describe("offline browser boot", () => {
     // input listeners; the final installation must replace, not stack.
     expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
     expect(host.elements.get("menu-canvas")?.listenerCount("pointerdown")).toBe(1);
+  });
+
+  it("switches to a packaged sub-menu PlayItem when a button emits LinkPI", async () => {
+    const mainScene = packageData().scene as Record<string, unknown>;
+    const menuScene = (clipId: string) => ({
+      ...mainScene, clipId, pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        commands: [{ bytes: m3Fixtures.linkPlayItem3.bytes }],
+      }] }],
+    });
+    const data = packageData({
+      scene: menuScene("00012"),
+      vmPrograms: [{ id: 7, instructions: ["228000000000000900000000"] }],
+      menuPlaylistIds: [9],
+      media: { playlist: 9, playItem: 0, background: { path: "assets/media/playlist-00009-pi0/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [] },
+      menuScenes: [
+        { playlistId: 9, playItem: 0, scene: menuScene("00012") },
+        { playlistId: 9, playItem: 3, scene: menuScene("00013") },
+      ],
+      menuMedia: [{ playlist: 9, playItem: 3, background: { path: "assets/media/playlist-00009-pi3/background.mp4", durationSeconds: 1, loop: true }, audioTracks: [] }],
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    expect(host.elements.get("menu-background")?.src).toBe("assets/media/playlist-00009-pi0/background.mp4");
+
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // LinkPI 3 stays inside playlist 9: the sub-menu scene replaces the
+    // composition and its own PlayItem background replaces the loop.
+    expect(host.elements.get("menu-background")?.src).toBe("assets/media/playlist-00009-pi3/background.mp4");
+    expect(host.elements.get("runtime-status")?.textContent).not.toContain("not available");
   });
 
   it("selects the marked PlayItem scene for a PLAY_PLAYLIST_MARK request", async () => {

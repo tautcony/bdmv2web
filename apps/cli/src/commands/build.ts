@@ -361,14 +361,22 @@ export async function build(): Promise<void> {
     // Top Menu background with an overlay-only scene. The resolved Top Menu
     // playlist is the exception: its selected composition is the packaged menu
     // surface even when the disc models its menu as a popup composition.
+    // A menu playlist is not limited to the PlayItem the Top Menu command enters:
+    // LinkPI switches between sub-menus inside the same playlist, so every
+    // PlayItem that owns an IGS composition is packaged under its own
+    // (playlist, PlayItem) key.
+    const menuPlaylistNumber = Number(menuPlaylist.id);
     const playlistSceneResults = disc.playlists.flatMap((playlist) => {
-      const playItem = playlist.id === menuPlaylist.id ? menuTarget?.playItem : undefined;
-      const result = findMenuScene(disc, playlist, extraction.scenes, playItem);
-      return result.status === "found"
-        ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
-        : [];
+      const isMenuPlaylist = Number(playlist.id) === menuPlaylistNumber;
+      const playItemIndexes = isMenuPlaylist ? playlist.playItems.map((item) => item.index) : [undefined];
+      return playItemIndexes.flatMap((playItem) => {
+        const result = findMenuScene(disc, playlist, extraction.scenes, playItem);
+        return result.status === "found"
+          ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
+          : [];
+      });
     });
-    const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0 || item.playlistId === Number(menuPlaylist.id));
+    const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0 || item.playlistId === menuPlaylistNumber);
     const menuPlaylistIds = [...new Set(menuSceneResults.map((item) => item.playlistId))];
     // PLAY_PLAYLIST_MARK names a play mark; the runtime needs the mark-to-
     // PlayItem mapping to select the packaged scene for the marked PlayItem.
@@ -379,15 +387,22 @@ export async function build(): Promise<void> {
     const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
     const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
     const popupContentPlaylists: number[] = [];
+    const missingPlayItemMedia: number[] = [];
+    // The Top Menu PlayItem is the primary menu loop; the others are the
+    // sub-menus a LinkPI jump reaches, and each needs its own background.
+    const primaryPlayItem = menuMedia ? menuTarget?.playItem ?? 0 : -1;
     for (const item of playlistSceneResults) {
-      if (!reachablePlaylistIds.has(item.playlistId) || item.playlistId === Number(menuPlaylist.id)) continue;
-      if (item.scene.uiModel === 1) {
+      const isMenuPlaylist = item.playlistId === menuPlaylistNumber;
+      if (isMenuPlaylist && item.playItem === primaryPlayItem) continue;
+      if (!isMenuPlaylist && !reachablePlaylistIds.has(item.playlistId)) continue;
+      if (!isMenuPlaylist && item.scene.uiModel === 1) {
         popupContentPlaylists.push(item.playlistId);
         continue;
       }
       const playlist = disc.playlists.find((candidate) => Number(candidate.id) === item.playlistId);
       const media = await menuLoopMediaInput(disc, playlist, { playItemIndex: item.playItem });
       if (media) additionalMenuMedia.push(media);
+      else if (isMenuPlaylist) missingPlayItemMedia.push(item.playItem);
     }
     const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
     const popupScenes = popupAdaptations.map((result) => result.scene);
@@ -409,6 +424,12 @@ export async function build(): Promise<void> {
       ...adapted.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
       ...popupAdaptations.flatMap((result) => result.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity }))),
     ];
+    const packagedMenuPlayItems = new Set(menuSceneResults.filter((item) => item.playlistId === menuPlaylistNumber).map((item) => item.playItem));
+    for (const playItem of menuPlaylist.playItems) {
+      if (packagedMenuPlayItems.has(playItem.index) || !menuIgsSceneTargets(disc, menuPlaylist, playItem.index).length) continue;
+      diagnostics.push({ code: "M4_MENU_PLAY_ITEM_NOT_PACKAGED", message: `Top Menu playlist ${menuPlaylist.id} PlayItem ${playItem.index} declares an IGS stream but no extracted composition matched it; a LinkPI jump to that PlayItem keeps the current menu page.`, severity: "warning" });
+    }
+    if (missingPlayItemMedia.length) diagnostics.push({ code: "M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE", message: `Menu playlist ${menuPlaylist.id} PlayItem${missingPlayItemMedia.length === 1 ? "" : "s"} ${missingPlayItemMedia.join(", ")} could not be exported as background media; the previous menu background keeps playing on those pages.`, severity: "warning" });
     if (popupScenes.length) diagnostics.push({ code: "M4_POPUP_RENDER_PARTIAL", message: "Popup IGS compositions are overlaid when POPUP_MENU has an unambiguous match for the active packaged menu clip/PID. Title playback delegated to the external player cannot be overlaid.", severity: "warning" });
     if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "The HDMV Top Menu command selected a playlist, but its background timeline could not be represented as one continuous source-clip span or a repeated tail with supported video and primary audio streams.", severity: "warning" });
     for (const playlistId of popupContentPlaylists) diagnostics.push({ code: "M5_POPUP_CONTENT_MEDIA_EXTERNAL", message: `Playlist ${String(playlistId).padStart(5, "0")} is title playback with a popup IGS composition; its video is handed to the external player and the popup composition is not available there.`, severity: "warning" });

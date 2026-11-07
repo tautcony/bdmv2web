@@ -56,7 +56,7 @@ export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSiz
   const bdmvConfig = externalPlayback ? `<script defer src="runtime/bdmv-config.js"></script>` : "";
   const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${safeTitle}</title><link rel="stylesheet" href="runtime/style.css">${bdmvConfig}<script defer src="runtime/disc-data.js"></script>${assets}<script defer src="runtime/app.bundle.js"></script>`;
   const stage = `<div id="menu-stage"${aspectRatio}><video id="menu-background" aria-hidden="true" playsinline></video><audio id="menu-audio"></audio><canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas><canvas id="popup-canvas" aria-label="Blu-ray popup menu" hidden></canvas></div>`;
-  return `<!doctype html>\n<html lang="en"><head>${head}</head><body><main>${stage}<button id="start-menu" type="button" hidden>Start menu preview</button><button id="audio-mute-toggle" class="audio-mute-toggle" type="button" aria-label="Mute menu audio" aria-pressed="false" title="Mute menu audio"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="sound-on" d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6"/><path class="sound-off" d="M11 5 6 9H3v6h3l5 4V5Zm4 4 5 6m0-6-5 6"/></svg></button><p id="runtime-status" role="status" aria-live="polite" class="is-visible">Loading menu preview…</p><pre id="runtime-diagnostics" hidden></pre></main></body></html>\n`;
+  return `<!doctype html>\n<html lang="en"><head>${head}</head><body><main>${stage}<button id="start-menu" type="button" hidden>Start menu preview</button><button id="audio-mute-toggle" class="audio-mute-toggle" type="button" aria-label="Mute menu audio" aria-pressed="false" title="Mute menu audio"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="sound-on" d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6"/><path class="sound-off" d="M11 5 6 9H3v6h3l5 4V5Zm4 4 5 6m0-6-5 6"/></svg></button><p id="runtime-status" role="status" aria-live="polite" class="is-visible"><span id="runtime-status-message">Loading menu preview…</span><button id="runtime-status-copy" type="button" aria-label="Copy status message" title="Copy status message" data-copied="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="copy-outline" d="M9 9h10v12H9z"/><path class="copy-outline" d="M13 9V4H4v13h1"/><path class="copied-mark" d="m5 12 4 4 10-10"/></svg></button></p><pre id="runtime-diagnostics" hidden></pre></main></body></html>\n`;
 }
 
 export function createDataScript(ir: unknown): string {
@@ -143,9 +143,11 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, preset: "veryfast", ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
   const additionalMedia: Array<{ result: Awaited<ReturnType<typeof exportMenuLoopMedia>>; sanitizedId: string }> = [];
   for (const media of input.additionalMenuMedia ?? []) {
-    // Paths use the sanitized id; the manifest must reference the same
-    // sanitized paths that were written.
-    const sanitizedId = media.playlistId.replace(/[^0-9A-Za-z._-]/g, "_");
+    // A menu playlist can own several PlayItems (sub-menus reached with LinkPI),
+    // so the asset directory and plan must carry the PlayItem or they overwrite
+    // each other. Paths use the sanitized id; the manifest must reference the
+    // same sanitized paths that were written.
+    const sanitizedId = `${media.playlistId}-pi${media.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
     additionalMedia.push({ sanitizedId, result: await exportMenuLoopMedia(media, {
       outputDirectory: output,
       preset: "veryfast",
@@ -157,6 +159,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   }
   const runtimeMenuMedia = additionalMedia.map(({ result }) => ({
     playlist: Number(result.plan.playlistId),
+    playItem: result.plan.playItemIndex,
     background: { path: result.background.path, durationSeconds: result.background.durationSeconds, loop: result.background.loop },
     audioTracks: result.audioTracks.map(runtimeAudioTrackMetadata),
   }));
@@ -180,7 +183,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   input.onPhase?.("assets");
   await Promise.all([
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize, !!input.externalTargets)),
-    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(input.menuScenes?.length ? { menuScenes: input.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
+    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(input.menuScenes?.length ? { menuScenes: input.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), playItem: exportedMedia.plan.playItemIndex, background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
     ...(input.externalTargets ? [writeFile(resolve(runtimeDirectory, "bdmv-config.js"), `globalThis.__BDMV_BDMV_PATH__=${serializeSafeScriptData(input.bdmvPath ?? "../BDMV")};\n`)] : []),
     writeFile(resolve(runtimeDirectory, "style.css"), MENU_STYLE),
     writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status) + (input.externalTargets ? "\nThe menu runs First Play initialization and then enters Top Menu. IINA 1.4.4 or later receives the selected chapter position through `mpv_start`; Windows opens the selected M2TS in PotPlayer.\n" : "")),
@@ -262,10 +265,19 @@ main{position:fixed;inset:0}
 #menu-canvas{z-index:1;background:transparent;touch-action:manipulation}
 #popup-canvas{z-index:2;background:transparent;touch-action:manipulation}
 #popup-canvas[hidden]{display:none}
-#runtime-status{position:fixed;top:max(1rem,env(safe-area-inset-top));right:max(1rem,env(safe-area-inset-right));z-index:30;box-sizing:border-box;max-width:min(30rem,calc(100vw - 2rem));margin:0;padding:.55rem .85rem;border-radius:.6rem;background:rgba(18,18,22,.55);color:#f4f4f6;font-size:.85rem;line-height:1.35;text-align:left;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transform:translateY(-.4rem);transition:opacity .4s ease,transform .4s ease;pointer-events:none}
+#runtime-status{position:fixed;top:max(1rem,env(safe-area-inset-top));right:max(1rem,env(safe-area-inset-right));z-index:30;box-sizing:border-box;display:flex;gap:.6rem;align-items:flex-start;max-width:min(30rem,calc(100vw - 2rem));margin:0;padding:.55rem .85rem;border-radius:.6rem;background:rgba(18,18,22,.55);color:#f4f4f6;font-size:.85rem;line-height:1.35;text-align:left;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;transform:translateY(-.4rem);transition:opacity .4s ease,transform .4s ease;pointer-events:none}
 #runtime-status.is-visible{opacity:1;transform:translateY(0)}
 #runtime-status.is-error{background:rgba(96,20,26,.7);color:#ffe2df;border:1px solid rgba(255,140,130,.35)}
 #runtime-status.is-persistent{pointer-events:auto;cursor:text;-webkit-user-select:text;user-select:text}
+#runtime-status-message{flex:1 1 auto;min-width:0}
+#runtime-status-copy{display:none;flex:0 0 auto;box-sizing:border-box;width:1.45rem;height:1.45rem;padding:.2rem;border:1px solid rgba(255,255,255,.24);border-radius:.35rem;background:rgba(255,255,255,.08);color:inherit;cursor:pointer;pointer-events:auto}
+#runtime-status.is-visible #runtime-status-copy{display:grid;place-items:center}
+#runtime-status-copy:hover{background:rgba(255,255,255,.2)}
+#runtime-status-copy:focus-visible{outline:2px solid #7cc4ff;outline-offset:1px}
+#runtime-status-copy svg{width:.95rem;height:.95rem;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#runtime-status-copy .copied-mark{display:none}
+#runtime-status-copy[data-copied="true"] .copied-mark{display:block}
+#runtime-status-copy[data-copied="true"] .copy-outline{display:none}
 #start-menu{position:fixed;left:50%;bottom:max(2rem,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;box-sizing:border-box;padding:.65rem 1.15rem;font:inherit;font-size:.95rem;color:#f4f4f6;background:rgba(18,18,22,.55);border:1px solid rgba(255,255,255,.22);border-radius:.6rem;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer}
 #start-menu:hover{background:rgba(32,32,38,.72)}
 #start-menu:focus-visible{outline:2px solid #7cc4ff;outline-offset:2px}

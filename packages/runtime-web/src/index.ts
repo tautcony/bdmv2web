@@ -49,6 +49,10 @@ export interface PlaybackBridge {
   dispatch(action: PlaybackAction): void | Promise<void>;
   isCurrent(generation: number): boolean;
   startMenuBackground?(): Promise<boolean>;
+  /** Switch the background to a packaged PlayItem without a VM playback wait.
+   * `LinkPI` moves inside the current playlist and never emits a media response,
+   * so the scene switch must not be correlated with a VM event. */
+  showMenuItem?(playlist: number, playItem: number): Promise<boolean>;
 }
 
 /** Source-space viewport shared by Canvas sizing and pointer hit testing. */
@@ -665,6 +669,9 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
 
 export interface MenuLoopMediaPackage {
   playlist: number;
+  /** Source PlayItem inside that playlist. A menu playlist can hold several
+   * sub-menu PlayItems that `LinkPI` switches between without changing playlist. */
+  playItem?: number;
   background: { path: string; durationSeconds?: number; loop: boolean };
   /** Each entry is one source audio lane. Same-language lanes remain distinct. */
   audioTracks: Array<{ streamNumber: number; psrStreamNumber?: number; path: string; language: string; durationSeconds?: number; pid?: number; variantId?: string }>;
@@ -676,6 +683,9 @@ export interface MenuLoopPlaybackHooks {
   /** Called only after a local audio variant has loaded, sought, and resumed successfully. */
   audioTrackChanged?: (track: MenuLoopMediaPackage["audioTracks"][number]) => void;
   trackSwitchTimeoutMs?: number;
+  /** Resolves the PlayItem a playlist request addresses. Play marks and `LinkPI`
+   * both need package metadata the bridge does not carry. */
+  resolvePlayItem?: (playlist: number, action: PlaybackAction) => number;
 }
 
 /** Plays the exported menu loop for its matching HDMV playlist and applies primary-audio selections. */
@@ -739,7 +749,8 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       return;
     }
     if (["LINK_PLAY_ITEM", "LINK_PLAY_MARK", "STILL_ON", "STILL_OFF", "MENU_RETURN"].includes(action.type)) {
-      this.report(`${action.type} is not available in the packaged menu loop.`);
+      const target = action.type === "LINK_PLAY_ITEM" ? action.payload?.playItem : action.type === "LINK_PLAY_MARK" ? action.payload?.playMark : undefined;
+      this.report(`${action.type}${typeof target === "number" ? ` ${target}` : ""} is not available in the packaged menu loop.`);
       return;
     }
     if (action.type !== "PLAY_PLAYLIST" && action.type !== "PLAY_PLAYLIST_ITEM" && action.type !== "PLAY_PLAYLIST_MARK") return;
@@ -749,7 +760,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
       return;
     }
-    const target = this.findMedia(playlist);
+    const target = this.findMedia(playlist, this.playItemFor(playlist, action));
     if (!target) {
       this.report(`Playback unavailable in menu preview (PLAY_PLAYLIST ${String(playlist)}).`);
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
@@ -893,9 +904,51 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     if (!started && this.activePlaylistResponse === response) this.activePlaylistResponse = null;
   }
 
-  private findMedia(playlist: number): MenuLoopMediaPackage | undefined {
-    if (this.media && playlist === this.media.playlist) return this.media;
-    return this.playlistMedia.find((candidate) => candidate.playlist === playlist);
+  private findMedia(playlist: number, playItem = 0): MenuLoopMediaPackage | undefined {
+    const candidates = [this.media, ...this.playlistMedia]
+      .filter((candidate): candidate is MenuLoopMediaPackage => !!candidate && candidate.playlist === playlist);
+    const exact = candidates.find((candidate) => (candidate.playItem ?? 0) === playItem);
+    if (exact) return exact;
+    // A package without PlayItem keys carries one playlist-level entry; keep
+    // serving it instead of losing the background on a playlist re-entry.
+    const playlistLevel = candidates.find((candidate) => candidate.playItem === undefined);
+    if (playlistLevel) return playlistLevel;
+    // A playlist whose single packaged PlayItem is not the one requested (the
+    // Top Menu entry PlayItem, for example) still owns exactly one background.
+    return candidates.length === 1 ? candidates[0] : undefined;
+  }
+
+  /** The PlayItem a playlist request addresses; `LinkPI` and play marks are
+   * resolved by the caller, which owns the package's mark table. */
+  private playItemFor(playlist: number, action: PlaybackAction): number {
+    const resolved = this.hooks.resolvePlayItem?.(playlist, action);
+    if (typeof resolved === "number" && Number.isSafeInteger(resolved) && resolved >= 0) return resolved;
+    const payload = action.payload as { playItem?: unknown } | undefined;
+    return typeof payload?.playItem === "number" ? payload.playItem : 0;
+  }
+
+  /** Switch the background for a `LinkPI`/`LinkMK` jump. No VM response is
+   * expected: those actions move inside the playlist the VM is already playing,
+   * so the menu keeps its current playback wait. */
+  async showMenuItem(playlist: number, playItem: number): Promise<boolean> {
+    const target = this.findMedia(playlist, playItem);
+    if (!target?.background.path) return false;
+    if (target === this.activeMedia) return this.startMedia();
+    this.switchSequence++;
+    this.mediaSequence++;
+    this.activeMedia = target;
+    this.selectedAudioStream = this.pickAudioStream(target);
+    this.started = false;
+    this.startPromise = null;
+    this.activePlaylistResponse = null;
+    this.lastTimeUpdateSecond = -1;
+    this.video.pause();
+    this.audio.pause();
+    try {
+      this.video.currentTime = 0;
+      this.audio.currentTime = 0;
+    } catch { /* A media element without metadata rejects seeking; the load below starts at zero. */ }
+    return this.startMedia();
   }
 
   private pickAudioStream(media: MenuLoopMediaPackage): number {

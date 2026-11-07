@@ -23,14 +23,17 @@ export interface StatusToastOptions {
   error?: boolean;
 }
 type StatusToastHost = { textContent: string | null; classList?: { add(name: string): void; remove(name: string): void; toggle(name: string, force?: boolean): unknown } };
+type StatusCopyButton = { addEventListener?: (type: string, listener: () => void) => void; setAttribute?: (name: string, value: string) => void };
 
 /** Render status updates as a translucent toast in the top-right corner. Ordinary
  * updates fade out again; persistent ones stay until the next update and accept
- * text selection, because instructions the user has to copy must not vanish. */
-export function createStatusToast(host: StatusToastHost, timeoutMs = 4500): (message: string, options?: StatusToastOptions) => void {
+ * text selection, because instructions the user has to copy must not vanish.
+ * `messageHost` is the element that holds the text when the toast also carries a
+ * control such as its copy button. */
+export function createStatusToast(host: StatusToastHost, timeoutMs = 4500, messageHost: StatusToastHost = host): (message: string, options?: StatusToastOptions) => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return (message, options = {}) => {
-    host.textContent = message;
+    messageHost.textContent = message;
     host.classList?.add("is-visible");
     host.classList?.toggle("is-error", options.error === true);
     host.classList?.toggle("is-persistent", options.persist === true);
@@ -42,12 +45,62 @@ export function createStatusToast(host: StatusToastHost, timeoutMs = 4500): (mes
 }
 
 let statusToast: ReturnType<typeof createStatusToast> | undefined;
+let statusCopyButton: StatusCopyButton | undefined;
+let statusMessage = "";
 
 function showStatus(message: string, options?: StatusToastOptions): void {
   const element = document.getElementById("runtime-status");
   if (!element) return;
-  statusToast ??= createStatusToast(element);
+  statusMessage = message;
+  statusCopyButton?.setAttribute?.("data-copied", "false");
+  const messageElement = document.getElementById("runtime-status-message") as StatusToastHost | null;
+  statusToast ??= createStatusToast(element, undefined, messageElement ?? element);
   statusToast(message, options);
+  if (!statusCopyButton) {
+    const button = document.getElementById("runtime-status-copy") as StatusCopyButton | null;
+    if (button) {
+      statusCopyButton = button;
+      attachStatusCopy(button, () => statusMessage, () => { if (statusMessage) showStatus(statusMessage); });
+    }
+  }
+}
+
+/** Copy affordance for the status toast. The message is put back on screen after a
+ * successful copy so the text the user acted on does not disappear mid-read. */
+export function attachStatusCopy(button: StatusCopyButton, message: () => string, afterCopy?: () => void): void {
+  let reset: ReturnType<typeof setTimeout> | undefined;
+  button.addEventListener?.("click", () => {
+    const text = message();
+    if (!text) return;
+    void copyText(text).then((copied) => {
+      if (!copied) return;
+      afterCopy?.();
+      button.setAttribute?.("data-copied", "true");
+      if (reset !== undefined) clearTimeout(reset);
+      reset = setTimeout(() => { reset = undefined; button.setAttribute?.("data-copied", "false"); }, 1600);
+    });
+  });
+}
+
+/** Copy text from a `file://` page: the asynchronous Clipboard API is not available
+ * in every browser and context, so the selection copy stays as the fallback. */
+export async function copyText(text: string): Promise<boolean> {
+  const clipboard = globalThis.navigator?.clipboard;
+  if (clipboard && typeof clipboard.writeText === "function") {
+    try { await clipboard.writeText(text); return true; } catch { /* use the selection copy */ }
+  }
+  if (typeof document.createElement !== "function" || typeof document.body?.appendChild !== "function") return false;
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.top = "-1000px";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  try { return document.execCommand("copy") === true; }
+  catch { return false; }
+  finally { if (typeof document.body.removeChild === "function") document.body.removeChild(area); }
 }
 
 function visibleError(error: unknown): void {
@@ -162,12 +215,23 @@ async function boot(): Promise<void> {
     }
     let retrySound: (() => void) | null = null;
     let retryMedia: (() => void) | null = null;
-    const menuMedia = (data.menuMedia ?? []).filter((item) => item.playlist !== data.media?.playlist);
-    const playlistMedia = (playlist: number): PackageMenuMedia | undefined => playlist === data.media?.playlist ? data.media : menuMedia.find((item) => item.playlist === playlist);
+    // The primary menu media is one PlayItem of one playlist. Sub-menu PlayItems
+    // of the same playlist stay in menuMedia because the runtime keys media by
+    // (playlist, PlayItem), not by playlist alone.
+    const menuMedia = (data.menuMedia ?? []).filter((item) => item.playlist !== data.media?.playlist || (item.playItem ?? 0) !== (data.media?.playItem ?? 0));
+    const playlistHasMedia = (playlist: number): boolean => data.media?.playlist === playlist || menuMedia.some((item) => item.playlist === playlist);
+    const requestedPlayItem = (playlist: number, action: { type: string; payload: { playItem?: number; playMark?: number } }): number => {
+      if ((action.type === "PLAY_PLAYLIST_ITEM" || action.type === "LINK_PLAY_ITEM") && typeof action.payload.playItem === "number") return action.payload.playItem;
+      if ((action.type === "PLAY_PLAYLIST_MARK" || action.type === "LINK_PLAY_MARK") && typeof action.payload.playMark === "number") {
+        return data.menuPlaylistMarks?.find((item) => item.playlistId === playlist)?.marks.find((mark) => mark.index === action.payload.playMark)?.playItemRef ?? 0;
+      }
+      return 0;
+    };
     const playbackBridge: PlaybackBridge = (data.media || data.menuMedia?.length) && video && audio
       ? new MenuLoopPlaybackBridge(vm, video, audio, data.media, (message) => { showStatus(message); }, {
         offerRetry: (retry) => { retryMedia = retry; start.textContent = "Retry menu media"; start.hidden = false; start.disabled = false; },
         clearRetry: () => { retryMedia = null; if (!retrySound) start.hidden = true; },
+        resolvePlayItem: (playlist, action) => requestedPlayItem(playlist, action),
       }, menuMedia)
       : new PreviewPlaybackBridge(vm, (message) => { showStatus(message); });
     let controller: MenuController | null = null;
@@ -202,6 +266,29 @@ async function boot(): Promise<void> {
       if (controller) { controller.syncVmContext(); redraw(); }
     };
     const pendingActions: Array<ReturnType<HdmvVm["drainActions"]>[number]> = [];
+    // The playlist the VM is currently playing. `LinkPI`/`LinkMK` address a
+    // PlayItem inside it and carry no playlist operand of their own.
+    let activeMenuPlaylist: number | null = data.media?.playlist ?? data.menuPlaylistIds?.[0] ?? null;
+    const missingMenuMedia = new Set<string>();
+    const activateMenuScene = (target: { scene: SerializedScene }): void => {
+      // Always-on menu compositions replace the menu scene. Menu backgrounds are
+      // switched through the playback bridge when that playlist has local media.
+      const targetSceneKey = menuSceneKey(target.scene);
+      if (activeMenuSceneKey === targetSceneKey) return;
+      closePopup();
+      removePointer?.();
+      scene = normalizeScene(target.scene, assetMap);
+      activeMenuSceneKey = targetSceneKey;
+      viewport = new CanvasViewport(scene.width, scene.height);
+      controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
+      const rect = canvas.getBoundingClientRect(); viewport.resize(canvas, rect.width, rect.height, window.devicePixelRatio || 1);
+      controller.start();
+      if (inputStarted) {
+        removeKeyboard?.(); removePointer = installCanvasPointerInput(canvas, viewport, controller, () => { const size = canvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
+        removeKeyboard = installKeyboardInput(window, controller);
+      }
+      redraw();
+    };
     const dispatchActions = () => {
       pendingActions.push(...vm.drainActions());
       if (!controller) return { menuPlaylistRequested: false, completion: Promise.resolve() };
@@ -252,44 +339,44 @@ async function boot(): Promise<void> {
           pendingActions.push(...vm.drainActions());
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
           const playlist = action.payload.playlist;
-          const localMedia = playlistMedia(playlist);
-          const requestedPlayItem = action.type === "PLAY_PLAYLIST_ITEM" && typeof action.payload.playItem === "number"
-            ? action.payload.playItem
-            : action.type === "PLAY_PLAYLIST_MARK" && typeof action.payload.playMark === "number"
-              ? data.menuPlaylistMarks?.find((item) => item.playlistId === playlist)?.marks.find((mark) => mark.index === action.payload.playMark)?.playItemRef ?? 0
-              : 0;
+          const playItem = requestedPlayItem(playlist, action);
           const menuScenesForPlaylist = data.menuScenes?.filter((item) => item.playlistId === playlist) ?? [];
-          const target = menuScenesForPlaylist.find((item) => (item.playItem ?? 0) === requestedPlayItem) ?? menuScenesForPlaylist[0];
+          const target = menuScenesForPlaylist.find((item) => (item.playItem ?? 0) === playItem) ?? menuScenesForPlaylist[0];
           if (!target) {
             showStatus(`Menu playlist ${playlist} has no packaged IGS composition.`);
             vm.releaseExternalPlayback(action);
             continue;
           }
-          // Always-on menu compositions replace the menu scene. Menu backgrounds are
-          // switched through the playback bridge when that playlist has local media.
-          const targetSceneKey = menuSceneKey(target.scene);
-          const sameScene = activeMenuSceneKey === targetSceneKey;
-          if (!sameScene) {
-            closePopup();
-            removePointer?.();
-            scene = normalizeScene(target.scene, assetMap);
-            activeMenuSceneKey = targetSceneKey;
-            viewport = new CanvasViewport(scene.width, scene.height);
-            controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
-            const rect = canvas.getBoundingClientRect(); viewport.resize(canvas, rect.width, rect.height, window.devicePixelRatio || 1);
-            controller.start();
-            if (inputStarted) {
-              removeKeyboard?.(); removePointer = installCanvasPointerInput(canvas, viewport, controller, () => { const size = canvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
-              removeKeyboard = installKeyboardInput(window, controller);
-            }
-            redraw();
-          }
-          if (localMedia) mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
+          activeMenuPlaylist = playlist;
+          activateMenuScene(target);
+          if (playlistHasMedia(playlist)) mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
           else {
             vm.handleEvent({ type: "MEDIA_STARTED", generation: action.generation, responseTo: action.id });
             mediaActions.push(Promise.resolve(playbackBridge.startMenuBackground?.() ?? false).then(() => undefined));
           }
           menuPlaylistRequested = true;
+        } else if (["LINK_PLAY_ITEM", "LINK_PLAY_MARK"].includes(action.type) && activeMenuPlaylist !== null) {
+          // LinkPI/LinkMK move inside the playlist the VM is already playing, so
+          // the jump carries no playlist operand and releases no media wait. A
+          // packaged sub-menu PlayItem replaces the composition, and its exported
+          // background replaces the loop when that PlayItem has local media.
+          const playlist = activeMenuPlaylist;
+          const playItem = requestedPlayItem(playlist, action);
+          const entry = (data.menuScenes ?? []).find((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem);
+          if (!entry) {
+            showStatus(`Menu playlist ${playlist} PlayItem ${playItem} is not packaged; the menu stayed on the current page.`, { persist: true });
+            continue;
+          }
+          activateMenuScene(entry);
+          const shown = playbackBridge.showMenuItem?.(playlist, playItem);
+          if (!shown) {
+            if (!missingMenuMedia.has(`${playlist}:${playItem}`)) {
+              missingMenuMedia.add(`${playlist}:${playItem}`);
+              showStatus(`Menu PlayItem ${playItem} has no packaged background; the current one keeps playing.`);
+            }
+            continue;
+          }
+          mediaActions.push(shown.then((ok) => { if (!ok) showStatus(`Menu PlayItem ${playItem} background could not start.`); }));
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.preMenuPlaylistIds?.includes(action.payload.playlist)) {
           // Top Menu can start with a logo or warning playlist. Complete that intro
           // in the VM without handing it to the external player, then follow the
@@ -297,7 +384,7 @@ async function boot(): Promise<void> {
           vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
           pendingActions.push(...vm.drainActions());
           continue;
-        } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistMedia(action.payload.playlist))) {
+        } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistHasMedia(action.payload.playlist))) {
           closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
           if (result.status === "unavailable") { showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }

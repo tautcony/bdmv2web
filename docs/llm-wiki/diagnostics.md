@@ -179,7 +179,9 @@ rg '"CODE_NAME"' packages apps
 | `M4_ENTRY_NOT_PROJECTED` | 入口没有受支持的导航目标，已从包内菜单省略（warning） | 该入口的 `objectType` 与目标对象 |
 | `M4_MEDIA_METADATA_NOT_PROJECTED` | 未导出菜单媒体，源视频流与播放元数据不在包内（warning） | 是否触发 `--export-media` |
 | `M4_POPUP_RENDER_PARTIAL` | 弹出菜单只在包内菜单画面上叠加 | 正片由外部播放器播放 |
+| `M4_MENU_PLAY_ITEM_NOT_PACKAGED` | Top Menu 播放列表的某个 PlayItem 声明了 IGS 流但没有匹配的场景，`LINK_PI` 跳过去仍停当前页（warning） | `list --type igs` 中该 PlayItem 的 clip/PID |
 | `M5_MENU_LOOP_UNAVAILABLE` | 背景时间线无法表示为连续区间 | 播放列表 PlayItem 结构 |
+| `M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE` | 菜单 PlayItem 的背景媒体没有导出，该页沿用上一个背景（warning） | `menuLoopMediaInput` 的过滤条件与 ffmpeg 日志 |
 | `M5_POPUP_CONTENT_MEDIA_EXTERNAL` | 弹出菜单所属正片交给外部播放器 | 预期 |
 | `M5_PLAYLIST_MEDIA_EXPORTED` | 额外菜单播放列表已导出本地媒体（info） | 包大小 |
 | `SOUND_REFERENCE_MISSING` / `SOUND_FORMAT_UNSUPPORTED` / `SOUND_RANGE_INVALID` / `SOUND_SOURCE_MISSING` | 音效缺失/格式不支持/区间非法/源缺失 | `sound.bdmv` 与按钮引用 |

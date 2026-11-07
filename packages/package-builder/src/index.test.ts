@@ -207,6 +207,8 @@ describe("menu package primitives", () => {
       // shrinking to it. The page renders no in-page heading at all (D-8).
       expect(html).not.toContain("<h1");
       expect(html).toContain('<p id="runtime-status" role="status" aria-live="polite"');
+      expect(html).toContain('<span id="runtime-status-message">');
+      expect(html).toContain('id="runtime-status-copy" type="button"');
       expect(style).toMatch(/#menu-stage\{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;/);
       expect(style).toContain("object-fit:contain");
       expect(style).toMatch(/#runtime-status\{[^}]*position:fixed[^}]*opacity:0/);
@@ -214,6 +216,10 @@ describe("menu package primitives", () => {
       // A persistent notice is the only text a user may need to copy (a file path or
       // a manual command), so it must accept the pointer again (P3-P2-1).
       expect(style).toMatch(/#runtime-status\.is-persistent\{[^}]*pointer-events:auto[^}]*user-select:text/);
+      // The copy button takes the pointer while the toast is visible; the rest of the
+      // toast keeps passing clicks through to the menu beneath it.
+      expect(style).toMatch(/#runtime-status\.is-visible #runtime-status-copy\{display:grid/);
+      expect(style).toMatch(/#runtime-status-copy\{[^}]*pointer-events:auto/);
     } finally { if (!preserveOutput) await rm(parent, { recursive: true, force: true }); }
   });
 });
