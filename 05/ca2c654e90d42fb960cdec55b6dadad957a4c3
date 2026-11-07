@@ -1,0 +1,28 @@
+apps/cli/src/commands/build.ts
+  h_3705811fa4502c 364-368,370-377,379,390-393,395-398,405,427-432
+docs/llm-wiki/diagnostics.md
+  h_3705811fa4502c 182,184
+packages/media-export/src/index.ts
+  h_3705811fa4502c 289,380,382-383,385,508-514
+packages/package-builder/src/index.test.ts
+  h_3705811fa4502c 210-211,219-222
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 59,146-150,162,186,268,272-280
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 66,201-221,265-297
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 26,30-33,36,48-49,54-57,59-103,218-229,234,269-291,342,344,350-352,358-379,387
+packages/runtime-web/src/index.ts
+  h_3705811fa4502c 52-55,672-674,686-688,752-753,763,907-951
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "05ca2c654e90d42fb960cdec55b6dadad957a4c3",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
