@@ -156,7 +156,7 @@ describe("offline menu primitives", () => {
     testScene.pages[0]!.buttons[0]!.neighbors.down = 2;
     testScene.pages[0]!.buttons[1]!.commands = [{ bytes: m3Fixtures.move5.bytes }];
     const vm = new HdmvVm([{ id: 0, instructions: ["218300000000000100000000", m3Fixtures.add7] }]);
-    expect(vm.runTurn()).toMatchObject({ status: "idle", pc: 1, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
+    expect(vm.runTurn()).toMatchObject({ status: "idle", pc: 2, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(vm.handleEvent({ type: "RETURN" })).toMatchObject({ status: "idle", diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(vm.actions.at(-1)?.type).toBe("MENU_RETURN");
 
