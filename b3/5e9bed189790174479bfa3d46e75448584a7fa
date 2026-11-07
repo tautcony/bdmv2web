@@ -1,0 +1,81 @@
+README.md
+  h_3705811fa4502c 3,5,7-10,12,16-17,29,31,33,35-37,39,41,43-45,47,49,51-58,60,62-64,68,100-101,103-105,138,140
+  h_3705811fa4502c 50,59,98,102
+AGENTS.md
+  h_3705811fa4502c 8
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 630,640,644,646
+apps/cli/src/index.ts
+  h_3705811fa4502c 1065
+docs/llm-wiki/architecture.md
+  h_3705811fa4502c 25
+docs/llm-wiki/features/offline-menu.md
+  h_3705811fa4502c 112,120
+docs/llm-wiki/features/verification.md
+  h_3705811fa4502c 105
+docs/llm-wiki/index.json
+  h_3705811fa4502c 100-101,103
+docs/llm-wiki/packages/package-builder.md
+  h_3705811fa4502c 28
+docs/llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 127
+docs/llm-wiki/packages/test-runner.md
+  h_3705811fa4502c 3,100
+docs/llm-wiki/troubleshooting.md
+  h_3705811fa4502c 65
+docs/references/README.md
+  h_3705811fa4502c 29,72-73
+docs/references/sources.json
+  h_3705811fa4502c 621
+docs/references/stages/M6-release-verification.md
+  h_3705811fa4502c 7,10-11,25,32,34
+openspec/changes/DEPENDENCIES.md
+  h_3705811fa4502c 39,41,43,56
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  h_3705811fa4502c 17,69,77,86,95
+openspec/changes/converge-contracts-and-distribution/design.md
+  h_3705811fa4502c 57,59,93-94,139
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  h_3705811fa4502c 8,18,43
+openspec/changes/converge-contracts-and-distribution/specs/offline-delivery-assurance/spec.md
+  h_3705811fa4502c 38,40,54
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  h_3705811fa4502c 23,84,91-92
+openspec/changes/export-playable-media/proposal.md
+  h_3705811fa4502c 31
+openspec/changes/export-playable-media/tasks.md
+  h_3705811fa4502c 56,64,83
+openspec/changes/verify-offline-release/design.md
+  h_3705811fa4502c 9,11,19,39,41,55,59,63,67
+openspec/changes/verify-offline-release/proposal.md
+  h_3705811fa4502c 5,11
+openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md
+  h_3705811fa4502c 5,54,71,73,87-88,92,97
+openspec/changes/verify-offline-release/tasks.md
+  h_3705811fa4502c 5,29,31
+packages/package-builder/src/index.test.ts
+  h_3705811fa4502c 71,73-74
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 74,76,206,291
+packages/test-fixtures/src/index.test.ts
+  h_3705811fa4502c 26
+packages/test-fixtures/src/menu-runtime.ts
+  h_3705811fa4502c 47
+packages/test-runner/src/index.test.ts
+  h_3705811fa4502c 188,195,198
+packages/test-runner/src/release-summary.test.ts
+  h_3705811fa4502c 33,36,41,44,53,61,70
+packages/test-runner/src/release-summary.ts
+  h_3705811fa4502c 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b35e9bed189790174479bfa3d46e75448584a7fa",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
