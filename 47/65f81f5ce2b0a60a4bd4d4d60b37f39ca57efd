@@ -1,0 +1,44 @@
+AGENTS.md
+  h_3705811fa4502c 38-45
+docs/README.md
+  h_3705811fa4502c 5-15,19,21,23,27,29,31,33,35-41
+docs/archive/README.md
+  h_3705811fa4502c 1,3-20
+docs/archive/design/bdmv_hdmv_offline_web_architecture.md
+  h_3705811fa4502c 1
+docs/archive/reviews/code-review.md
+  h_3705811fa4502c 473
+docs/archive/reviews/readiness-review-2026-11-02.md
+  h_3705811fa4502c 3,9
+docs/archive/reviews/review-2026-11-04/index.md
+  h_3705811fa4502c 66,98
+docs/archive/reviews/review-2026-11-04/summary.md
+  h_3705811fa4502c 7
+docs/archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md
+  h_3705811fa4502c 4-6,9,16,25-26,71,75-85,121,128,135,141-142,147-150,156-157,162,164,170,172,176-177,185-187,192-195,203-207,215-218,222,227,229,231,237,250,263-265,271-275,281-286,292-293,306-316,322-333,341-360,368-369,376-377,383-386,394-395,401-402,408-409,415-416,420,426,433,440,448-459,461,599,624,632-633,645-647,688-703
+docs/archive/reviews/review-2026-11-07-over-defensive-audit/index.md
+  h_3705811fa4502c 5
+docs/references/README.md
+  h_3705811fa4502c 25
+docs/support/hdmv-support.md
+  h_3705811fa4502c 5
+openspec/changes/DEPENDENCIES.md
+  h_3705811fa4502c 3
+openspec/changes/REVIEW_BACKLOG.md
+  h_3705811fa4502c 3
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  h_3705811fa4502c 63
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  h_3705811fa4502c 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4765f81f5ce2b0a60a4bd4d4d60b37f39ca57efd",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
