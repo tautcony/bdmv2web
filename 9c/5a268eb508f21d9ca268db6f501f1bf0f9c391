@@ -1,0 +1,68 @@
+README.md
+  h_3705811fa4502c 148
+docs/README.md
+  h_3705811fa4502c 17,19,30
+docs/archive/bdmv_hdmv_offline_web_architecture.md
+  h_3705811fa4502c 443,529
+docs/archive/readiness-review-2026-11-02.md
+  h_3705811fa4502c 3,9
+docs/guides/browser-matrix.md
+  h_3705811fa4502c 11,13-18
+docs/guides/development.md
+  h_3705811fa4502c 92,98,100,102-118,132,136,142,147,152,154
+docs/llm-wiki/contracts.md
+  h_3705811fa4502c 35
+docs/llm-wiki/features/offline-menu.md
+  h_3705811fa4502c 116
+docs/llm-wiki/features/verification.md
+  h_3705811fa4502c 24
+docs/llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 96
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 13,15,17,19-31,75
+docs/references/README.md
+  h_3705811fa4502c 39,48,71-72,74
+docs/references/stages/M2-igs-scenes.md
+  h_3705811fa4502c 59-62
+docs/references/stages/M6-release-verification.md
+  h_3705811fa4502c 20-26
+docs/review-2026-11-07-over-defensive-audit/index.md
+  h_3705811fa4502c 1-303
+docs/support/hdmv-support.md
+  h_3705811fa4502c 3,32,36,49-54,56-60,62,64-76,79-84,90,92,96,98,106-110,114,116,120,122,124
+docs/support/protocol-support.md
+  h_3705811fa4502c 10,39-46
+openspec/changes/DEPENDENCIES.md
+  h_3705811fa4502c 3,47
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  h_3705811fa4502c 99
+openspec/changes/REVIEW_BACKLOG.md
+  h_3705811fa4502c 5,7,23
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  h_3705811fa4502c 29,31,91,93
+openspec/changes/converge-contracts-and-distribution/design.md
+  h_3705811fa4502c 51,104,123
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  h_3705811fa4502c 57,59
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  h_3705811fa4502c 56,84
+openspec/changes/export-playable-media/design.md
+  h_3705811fa4502c 23
+openspec/changes/export-playable-media/proposal.md
+  h_3705811fa4502c 27
+openspec/changes/verify-offline-release/design.md
+  h_3705811fa4502c 31
+scripts/generate-synthetic-all-features.mjs
+  h_3705811fa4502c 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9c5a268eb508f21d9ca268db6f501f1bf0f9c391",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
