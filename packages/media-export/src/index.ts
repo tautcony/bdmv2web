@@ -14,6 +14,7 @@ export * from "./seek.js";
 export * from "./linear.js";
 export * from "./budget.js";
 export * from "./pgs.js";
+export * from "./pgs-render.js";
 
 export interface ExtractedPgsTrack { pid: number; sourcePath: string; path: string; byteLength: number; displaySets: ReturnType<typeof parsePgsSup>; }
 
