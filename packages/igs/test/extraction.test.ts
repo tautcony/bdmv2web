@@ -298,7 +298,6 @@ describe("synthetic IGS extraction", () => {
 
   it("reports a continuation without a first fragment and rejects aggregate active ODS bytes over budget", () => {
     const state = createIgsState();
-    const src = { clipId: "00001", pid: IG_PID, packetOffset: 0n, pesOffset: 0n, segmentOffset: 0n, segmentFileOffset: 0n, pts90k: null, timeDomain: 0 };
     const continuation: IgsSegment = { type: 0x15, offset: 0n, data: Uint8Array.of(0, 5, 0, 0x40, 1) };
     consumeSegment(state, continuation, "00001", IG_PID, null, 0n, 0n, 0n);
     expect(state.diagnostics.map((item) => item.code)).toContain("UNRESOLVED_OBJECT");

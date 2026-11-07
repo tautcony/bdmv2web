@@ -1,6 +1,6 @@
-import { ContractError, DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
+import { ContractError, DEFAULT_LIMITS } from "@bdmv2web/core";
 import { discoverBdmvInput, readFileChunks, resolveFileReference, type InputFileTable } from "@bdmv2web/bdmv-io";
-import type { ClipInfo, ParsedDisc, SourceLocation, StreamDeclaration } from "@bdmv2web/bdmv-parser";
+import type { ParsedDisc, SourceLocation, StreamDeclaration } from "@bdmv2web/bdmv-parser";
 import type { IgsDiagnostic, IgsExtraction, IgsOptions, IgsScene, PtsValue, TsPacket } from "./types.js";
 import { consumeSegment, createIgsState, parseSegments } from "./igs.js";
 import { renderIgsAssets, validateIgsSceneAssets } from "./png.js";

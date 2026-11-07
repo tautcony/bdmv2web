@@ -3,10 +3,15 @@
   "private": true,
   "license": "GPL-3.0-only",
   "packageManager": "pnpm@11.25.0",
-  "engines": { "node": ">=24.18.0 <25", "pnpm": "11.25.0" },
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "pnpm": "11.25.0"
+  },
   "scripts": {
     "build": "corepack pnpm generate:contracts && corepack pnpm -r build",
     "cli:dev": "tsx --tsconfig apps/cli/tsconfig.dev.json apps/cli/src/index.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "corepack pnpm build && corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test",
     "test:all": "corepack pnpm -r --no-bail test",
@@ -14,11 +19,15 @@
     "generate:synthetic-all-features": "node scripts/generate-synthetic-all-features.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "24.10.0",
     "esbuild": "0.25.12",
+    "eslint": "10.14.0",
+    "globals": "17.14.0",
     "json-schema-to-typescript": "15.0.4",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
     "vitest": "4.0.8"
   }
 }

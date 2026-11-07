@@ -198,7 +198,6 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
     let lastInstruction: { id: string; simulated: boolean; targetObject?: number; targetPc?: number } | null = null;
     let currentSimulated = scenario.forced.size > 0;
     let runStateCount = 0;
-    let vm!: HdmvVm;
 
     const value = (operand: ReturnType<typeof decodeInstruction>["operands"][number] | null, current: HdmvVm): number => {
       if (!operand) return 0;
@@ -269,7 +268,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
       }
     };
 
-    vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, maxInstructionsPerTurn: MAX_STATES_PER_SCENARIO, onTrace: (entry: TraceEntry) => {
+    const vm: HdmvVm = new HdmvVm(disc.movieObjects, { entries: disc.entries, maxInstructionsPerTurn: MAX_STATES_PER_SCENARIO, onTrace: (entry: TraceEntry) => {
       if (entry.raw) {
         const id = `command:${entry.programId}:${entry.pc}`;
         commandPath.push({ id, simulated: currentSimulated });
@@ -303,7 +302,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
         if (targetObject !== undefined && vm.programId === targetObject && vm.pc === targetPc) {
           observedObjectTransitions.add(`${id}->object:${targetObject}:${currentSimulated ? "simulated" : "actual"}`);
         }
-        traceInstructions.push({ id, programId: entry.programId, pc: entry.pc, ...(entry.action ? { action: entry.action as NavigationAction } : {}), simulated: currentSimulated, ...(targetObject === undefined || targetPc === undefined ? {} : { targetObject, targetPc }) });
+        traceInstructions.push({ id, programId: entry.programId, pc: entry.pc, ...(entry.action ? { action: entry.action } : {}), simulated: currentSimulated, ...(targetObject === undefined || targetPc === undefined ? {} : { targetObject, targetPc }) });
         const branchKey = pendingByLocation.get(`${entry.programId}:${entry.pc}`);
         if (branchKey && ["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(decoded.opcode ?? "")) {
           const targetPc = vm.programId === entry.programId ? vm.pc : -1;

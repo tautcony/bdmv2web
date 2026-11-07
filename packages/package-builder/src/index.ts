@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { deflateSync } from "node:zlib";

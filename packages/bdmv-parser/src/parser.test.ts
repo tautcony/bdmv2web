@@ -7,7 +7,6 @@ import { buildM1ClipInfoProgramAndCpi, buildM1ClipInfoWithHevcVideo, buildM1Clip
 import { discoverBdmvRoot, parseBdmv, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
 
 async function temp(): Promise<string> { return mkdtemp(join(tmpdir(), "bdmv m1 中文 ")); }
-async function write(path: string, bytes: Uint8Array): Promise<void> { await mkdir(join(path, ".."), { recursive: true }); await writeFile(path, bytes); }
 async function skeleton(parent: string, index = buildM1Index()): Promise<string> {
   const root = join(parent, "BDMV");
   await mkdir(join(root, "PLAYLIST"), { recursive: true }); await mkdir(join(root, "CLIPINF"), { recursive: true }); await mkdir(join(root, "STREAM"), { recursive: true });

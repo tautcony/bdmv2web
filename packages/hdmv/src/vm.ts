@@ -40,11 +40,7 @@ type MenuCheckpoint = {
   pendingTitleCall: number | null; titleTransition: boolean; playback: PlaybackContext; queuedActionIds: Set<string>;
   diagnostic: VmDiagnostic | null; firstAction: number; firstDiagnostic: number; randomState: bigint;
 };
-const DEFAULTS = {
-  maxInstructionsPerTurn: DEFAULT_LIMITS.maxInstructionsPerTurn,
-  maxCallDepth: DEFAULT_LIMITS.maxCallDepth,
-  maxQueueDepth: DEFAULT_LIMITS.maxQueueDepth,
-};
+type VmTuning = { maxInstructionsPerTurn: number; maxCallDepth: number; maxQueueDepth: number };
 const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
 const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "ended", PLAY_PLAYLIST_ITEM: "ended", PLAY_PLAYLIST_MARK: "ended" };
 const COMPARE_OPCODES = new Set(["BC", "EQ", "NE", "GE", "GT", "LE", "LT"]);
@@ -63,7 +59,7 @@ export class HdmvVm {
   status: VmStatus = "idle";
   programId = 0; pc = 0; generation = 0; instructionsThisTurn = 0; diagnostic: VmDiagnostic | null = null;
   private readonly programs = new Map<number, VmProgram>(); private readonly callStack: Array<{ programId: number; pc: number }> = [];
-  private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private suspendedPlaylistPlayback: PlaybackContext | null = null; private pendingTitleCall: number | null = null; private titleTransition = false; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: typeof DEFAULTS;
+  private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private suspendedPlaylistPlayback: PlaybackContext | null = null; private pendingTitleCall: number | null = null; private titleTransition = false; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: VmTuning;
   private readonly consumedResponses = new Set<string>(); private readonly eventQueue: VmEvent[] = []; private readonly actionQueue: NavigationAction[] = [];
   private profile: PlayerProfile; private lastAction: NavigationAction | undefined; private instructionDiagnostic: VmDiagnostic | null = null; private resumeAfterPlaylistStop = false;
   private randomSeed: number; private randomState: bigint;
@@ -89,11 +85,11 @@ export class HdmvVm {
       this.record({ source: null, raw: null, decoded: "LIMITS", registerDelta: EMPTY_DELTA, status: "idle", diagnostic });
     }
     this.randomSeed = normalizeRandomSeed(options.randomSeed); this.randomState = BigInt(this.randomSeed);
-    for (const p of programs) this.addProgram(p as VmProgram);
+    for (const p of programs) this.addProgram(p);
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)} seed=${this.randomSeed}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   addProgram(program: VmProgram | MovieObject): void {
-    const p = program as VmProgram;
+    const p = program;
     if (!Number.isInteger(p.id) || p.id < 0) throw new TypeError("Program id must be a non-negative integer");
     this.programs.set(p.id, { id: p.id, instructions: p.instructions, ...(p.resumeIntention !== undefined ? { resumeIntention: p.resumeIntention } : {}), ...(p.menuCallMask !== undefined ? { menuCallMask: p.menuCallMask } : {}), ...(p.titleSearchMask !== undefined ? { titleSearchMask: p.titleSearchMask } : {}) });
   }
@@ -227,7 +223,7 @@ export class HdmvVm {
       this.instructionDiagnostic = null;
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
-    let buttonCommandTerminated = false;
+    let buttonCommandTerminated: boolean;
     if (d.opcode === "BREAK") {
       // BREAK ends the current button command object; it must not change the
       // MovieObject PC or make the shared VM terminal.

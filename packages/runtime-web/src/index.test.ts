@@ -421,8 +421,8 @@ describe("offline menu primitives", () => {
       ],
     });
     const testScene: MenuScene = { width: 100, height: 60, pages: [makePage(0), makePage(1)] };
-    const diagnostic = vi.fn(); let menu!: MenuController; let dispatchCount = 0;
-    menu = new MenuController(testScene, vm, {
+    const diagnostic = vi.fn(); let dispatchCount = 0;
+    const menu: MenuController = new MenuController(testScene, vm, {
       diagnostic,
       dispatchActions: () => {
         dispatchCount++;
@@ -558,11 +558,10 @@ describe("offline menu primitives", () => {
       { id: 1, defaultButtonId: 0xffff, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: bounds(10) }, selected: { bounds: bounds(10) } }, commands: [] }] },
     ] };
     const vm = new HdmvVm([{ id: 0, instructions: [] }]);
-    let menu: MenuController;
     const dispatchActions = () => {
       for (const action of vm.drainActions()) if (action.type === "SET_BUTTON_PAGE" && typeof action.payload.packed === "number") menu.applySetButtonPage(action.payload.packed);
     };
-    menu = new MenuController(testScene, vm, { dispatchActions });
+    const menu = new MenuController(testScene, vm, { dispatchActions });
     expect(menu.page.id).toBe(0); expect(vm.actions).toHaveLength(0);
     menu.start();
     expect(menu.page.id).toBe(1); expect(menu.selectedButtonId).toBe(1); expect(menu.activatedButtonId).toBeNull();
@@ -835,8 +834,8 @@ describe("offline menu primitives", () => {
 
     const previewMessages: string[] = [];
     const previewRun = run((vm) => new PreviewPlaybackBridge(vm, (message) => previewMessages.push(message)));
-    expect(previewRun.controller.selectedButtonId).toBe(menuInteractionFixture.steps[0]!.selectedButtonId);
-    expect(previewRun.vm.trace.find((record) => record.action)?.action?.type).toBe(menuInteractionFixture.steps[1]!.actionType);
+    expect(previewRun.controller.selectedButtonId).toBe(menuInteractionFixture.steps[0].selectedButtonId);
+    expect(previewRun.vm.trace.find((record) => record.action)?.action?.type).toBe(menuInteractionFixture.steps[1].actionType);
     expect(previewMessages[0]).toContain("unavailable");
 
     const mediaActions: PlaybackAction[] = [];
@@ -845,8 +844,8 @@ describe("offline menu primitives", () => {
       dispatch: (action) => { mediaActions.push(action); },
       isCurrent: (generation) => generation === 0,
     }), m5MediaClock);
-    expect(mediaRun.controller.selectedButtonId).toBe(menuInteractionFixture.steps[0]!.selectedButtonId);
-    expect(mediaActions).toMatchObject([{ type: menuInteractionFixture.steps[1]!.actionType, payload: menuInteractionFixture.steps[1]!.actionPayload }]);
+    expect(mediaRun.controller.selectedButtonId).toBe(menuInteractionFixture.steps[0].selectedButtonId);
+    expect(mediaActions).toMatchObject([{ type: menuInteractionFixture.steps[1].actionType, payload: menuInteractionFixture.steps[1].actionPayload }]);
     expect(menuInteractionFixture.verification.notVerified).toContain("direct file:// launch");
   });
   it("switches PSR1 to the explicitly indexed local audio variant without moving video time", async () => {
@@ -1031,8 +1030,7 @@ describe("offline menu primitives", () => {
       await bridge.startMenuBackground();
       const menuScene = scene(); menuScene.pages[0]!.id = 3; menuScene.pages[1]!.id = 2; menuScene.pages[0]!.buttons[0]!.commands = rawButtonCommands.map((bytes) => ({ bytes }));
       const dispatches: Promise<void>[] = []; const reached: PlaybackAction[] = [];
-      let menu: MenuController;
-      menu = new MenuController(menuScene, vm, { dispatchActions: () => {
+      const menu: MenuController = new MenuController(menuScene, vm, { dispatchActions: () => {
         for (const action of vm.drainActions()) {
           reached.push(action);
           if (action.type === "SET_BUTTON_PAGE") {
@@ -1081,8 +1079,7 @@ describe("offline menu primitives", () => {
     await bridge.startMenuBackground();
     const menuScene = scene(); menuScene.pages[0]!.id = 2; menuScene.pages[1]!.id = 3; menuScene.pages[0]!.buttons[0]!.commands = rawButtonCommands.map((bytes) => ({ bytes }));
     const dispatches: Promise<void>[] = []; const reached: PlaybackAction[] = [];
-    let menu: MenuController;
-    menu = new MenuController(menuScene, vm, { dispatchActions: () => {
+    const menu: MenuController = new MenuController(menuScene, vm, { dispatchActions: () => {
       for (const action of vm.drainActions()) {
         reached.push(action);
         if (action.type === "SET_BUTTON_PAGE") {

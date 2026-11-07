@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
+import { lstat, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { Limits } from "@bdmv2web/core";
 import { ContractError, DEFAULT_LIMITS } from "@bdmv2web/core";

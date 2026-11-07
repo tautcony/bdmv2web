@@ -29,7 +29,7 @@ if (!inputArg || !outputArg || extra.length) {
   const node = (id, label, shape = "rect") => {
     const safe = nodeNames.get(id) ?? safeId(id);
     nodeNames.set(id, safe);
-    const wrapped = shape === "round" ? `(\"${mermaid(label)}\")` : shape === "diamond" ? `{{\"${mermaid(label)}\"}}` : `[\"${mermaid(label)}\"]`;
+    const wrapped = shape === "round" ? `("${mermaid(label)}")` : shape === "diamond" ? `{{"${mermaid(label)}"}}` : `["${mermaid(label)}"]`;
     return `${safe}${wrapped}`;
   };
   const lines = ["flowchart LR", "  %% Generated from BDMV metadata; no STREAM/M2TS data is read."];
@@ -49,7 +49,7 @@ if (!inputArg || !outputArg || extra.length) {
 
   for (const program of disc.movieObjects) {
     const objectId = `object:${program.id}`;
-    lines.push(`  subgraph sg_${program.id}[\"MovieObject ${program.id}\"]`);
+    lines.push(`  subgraph sg_${program.id}["MovieObject ${program.id}"]`);
     lines.push("    direction TB");
     lines.push(`    ${node(objectId, `MOBJ ${program.id}`, "round")}`);
     for (let pc = 0; pc < program.instructions.length; pc++) {

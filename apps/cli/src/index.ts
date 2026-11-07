@@ -499,7 +499,6 @@ async function extract(): Promise<void> {
     generatedFiles.push(await generatedFileRecord(transaction.stagingPath, "igs/scenes.json", "igs-scenes"), await generatedFileRecord(transaction.stagingPath, "igs/diagnostics.json", "igs-diagnostics"), await generatedFileRecord(transaction.stagingPath, "igs/source-map.json", "source-map"));
     }
     if (includeSup) {
-      const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes));
       const tracks = await extractReachablePgsTracks(disc, igs.scenes, transaction.stagingPath, (reference, index) => `sup/${reference.clipId}-pid-${reference.pid.toString(16).padStart(4, "0")}-${safeAssetLanguage(reference.language)}-${String(index + 1).padStart(3, "0")}.sup`);
       const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
       const trackRecords = [];

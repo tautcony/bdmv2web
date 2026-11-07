@@ -25,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isPlayerProfile(value: unknown): value is Record<string, unknown> {
   return isRecord(value)
-    && ["menuLanguage", "audioLanguage", "subtitleLanguage"].every((key) => typeof value[key] === "string" && /^[A-Za-z]{3}$/.test(value[key] as string))
+    && ["menuLanguage", "audioLanguage", "subtitleLanguage"].every((key) => typeof value[key] === "string" && /^[A-Za-z]{3}$/.test(value[key]))
     && typeof value.country === "string" && /^[A-Za-z]{2}$/.test(value.country)
     && ["A", "B", "C"].includes(String(value.region))
     && value.outputProfile === "portable"
@@ -54,7 +54,7 @@ function parseManifest(value: unknown, checks: AuditCheck[]): DeliveryManifest |
   return {
     schemaVersion: "1.0",
     files,
-    ...(Array.isArray(value.diagnostics) ? { diagnostics: value.diagnostics.filter(isRecord).map((d) => ({ severity: String(d.severity ?? "unknown"), ...(typeof d.code === "string" ? { code: d.code } : {}), ...(typeof d.acknowledged === "boolean" ? { acknowledged: d.acknowledged } : {}), ...(typeof d.blocksComplete === "boolean" ? { blocksComplete: d.blocksComplete } : {}) })) } : {}),
+    ...(Array.isArray(value.diagnostics) ? { diagnostics: value.diagnostics.filter(isRecord).map((d) => ({ severity: typeof d.severity === "string" ? d.severity : "unknown", ...(typeof d.code === "string" ? { code: d.code } : {}), ...(typeof d.acknowledged === "boolean" ? { acknowledged: d.acknowledged } : {}), ...(typeof d.blocksComplete === "boolean" ? { blocksComplete: d.blocksComplete } : {}) })) } : {}),
     ...(Array.isArray(value.limitations) ? { limitations: value.limitations.filter((v): v is string => typeof v === "string") } : {}),
     ...(typeof value.status === "string" ? { status: value.status } : {}),
   };

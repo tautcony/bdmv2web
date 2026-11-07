@@ -70,8 +70,8 @@ interface ResolvedPlayItem { item: MediaPlanRequirement["playItems"][number]; so
 interface PendingAsset { plan: LinearAssetPlan; args: string[]; width: number; height: number; durationSeconds: number; }
 
 export class LinearMediaExportError extends Error {
-  constructor(readonly diagnostic: { code: "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID" | "MEDIA_ASSET_BUDGET_EXCEEDED" | "MEDIA_OUTPUT_BUDGET_EXCEEDED"; message: string; executable?: string; args?: string[]; limitBytes?: string; actualBytes?: string }) {
-    super(diagnostic.message);
+  constructor(readonly diagnostic: { code: "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID" | "MEDIA_ASSET_BUDGET_EXCEEDED" | "MEDIA_OUTPUT_BUDGET_EXCEEDED"; message: string; executable?: string; args?: string[]; limitBytes?: string; actualBytes?: string }, options?: ErrorOptions) {
+    super(diagnostic.message, options);
     this.name = "LinearMediaExportError";
   }
 }
@@ -107,11 +107,10 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
     const onAbort = () => { cancelled = true; controller.abort(); rejectCancelled?.(jobError("MEDIA_JOB_CANCELLED", executable, args, `Media job '${executable}' was cancelled.`)); };
     options.signal?.addEventListener("abort", onAbort, { once: true });
     parentSignal?.addEventListener("abort", onAbort, { once: true });
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     let rejectTimeout: ((error: Error) => void) | undefined;
     const deadline = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
     const process = options.runProcess(executable, args, timeoutMs, controller.signal);
-    timeout = setTimeout(() => {
+    const timeout = setTimeout(() => {
       controller.abort();
       rejectTimeout?.(jobError("MEDIA_JOB_TIMEOUT", executable, args, `${executable} timed out after ${timeoutMs} ms.`));
     }, timeoutMs);
@@ -123,7 +122,7 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
       if (cancelled) throw jobError("MEDIA_JOB_CANCELLED", executable, args, `Media job '${executable}' was cancelled.`);
       throw jobError("MEDIA_PROCESS_FAILED", executable, args, `${executable} failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      if (timeout) clearTimeout(timeout);
+      clearTimeout(timeout);
       options.signal?.removeEventListener("abort", onAbort);
       parentSignal?.removeEventListener("abort", onAbort);
     }
@@ -364,7 +363,7 @@ async function runWithBudget(ffmpeg: string, args: string[], output: string, rel
     await process.catch(() => undefined);
     if (error instanceof Error && "diagnostic" in error) throw error;
     if (error instanceof Error) throw error;
-    throw new Error(String(error));
+    throw new Error(String(error), { cause: error });
   } finally { clearInterval(timer); }
 }
 
@@ -389,12 +388,12 @@ function validateOutput(probe: Probe, asset: PendingAsset): { width: number; hei
     if (!Number.isFinite(audioDuration) || Math.abs(audioDuration - asset.durationSeconds) > 0.25) throw new Error(`encoded audio duration ${audioDuration} differs from planned ${asset.durationSeconds}`);
     if (video.width !== asset.width || video.height !== asset.height) throw new Error("encoded dimensions differ from planned common dimensions");
     return { width: video.width, height: video.height, durationSeconds: duration };
-  } catch (error) { throw new LinearMediaExportError({ code: "MEDIA_OUTPUT_INVALID", message: `Encoded asset '${asset.plan.path}' failed FFprobe validation: ${error instanceof Error ? error.message : String(error)}` }); }
+  } catch (error) { throw new LinearMediaExportError({ code: "MEDIA_OUTPUT_INVALID", message: `Encoded asset '${asset.plan.path}' failed FFprobe validation: ${error instanceof Error ? error.message : "invalid metadata"}` }, { cause: error }); }
 }
 
 function parseProbe(text: string, subject: string): Probe {
   try { const value = JSON.parse(text) as Probe; if (!Array.isArray(value.streams)) throw new Error("no streams array"); return value; }
-  catch (error) { throw new Error(`invalid ffprobe JSON for '${subject}': ${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) { throw new Error(`invalid ffprobe JSON for '${subject}': ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
 }
 function probeArgs(path: string): string[] { return ["-v", "error", "-show_entries", "stream=index,id,codec_type,codec_name,width,height,display_aspect_ratio,sample_rate,channels,duration:format=start_time,duration", "-of", "json", path]; }
 function streamPid(id: string | undefined): number | null { if (!id) return null; return /^0x[0-9a-f]+$/i.test(id) ? Number.parseInt(id.slice(2), 16) : /^\d+$/.test(id) ? Number(id) : null; }

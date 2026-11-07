@@ -397,6 +397,8 @@ async function boot(): Promise<void> {
     controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; } }, data.inputConfig);
     start.hidden = false; start.disabled = false; showStatus("Images decoded. Select Start menu preview to enable input.");
     let removePointer: (() => void) | undefined;
+    // The test host awaits fired listeners, so the handler returns its completion promise.
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     start.addEventListener("click", async () => {
       if (retrySound) { const retry = retrySound; retrySound = null; start.disabled = true; start.hidden = true; retry(); return; }
       if (retryMedia) { const retry = retryMedia; retryMedia = null; start.disabled = true; start.hidden = true; retry(); return; }
@@ -447,7 +449,7 @@ async function boot(): Promise<void> {
 
 function validateEmbeddedDiscIR(value: unknown): { programs: Array<{ title: string }> } {
   if (!isRecord(value)) throw new Error("Embedded DiscIR must be a JSON object.");
-  if (value.schemaVersion !== "1.0") throw new Error(`Unsupported DiscIR schema version '${String(value.schemaVersion ?? "missing")}'. Expected 1.0.`);
+  if (value.schemaVersion !== "1.0") throw new Error(`Unsupported DiscIR schema version '${typeof value.schemaVersion === "string" ? value.schemaVersion : "missing"}'. Expected 1.0.`);
   for (const key of ["entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"]) if (!Array.isArray(value[key])) throw new Error(`Embedded DiscIR is invalid: '${key}' must be an array.`);
   const ids = new Set<string>();
   for (const key of ["entries", "programs", "menus", "playlists", "mediaAssets"] as const) {

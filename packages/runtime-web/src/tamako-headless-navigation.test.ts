@@ -66,7 +66,6 @@ describe("Tamako current-source headless navigation", () => {
       const events: EventRecord[] = checkpoint ? [...checkpoint.events] : [];
       const activations: Array<{ page: number; button: number }> = checkpoint ? [...checkpoint.activations] : [];
       const diagnostics: string[] = checkpoint ? [...checkpoint.diagnostics] : [];
-      let menu!: MenuController;
       const dispatch = () => {
         const queue: NavigationAction[] = [...vm.drainActions()];
         for (let budget = 0; queue.length && budget < 256; budget++) {
@@ -94,7 +93,7 @@ describe("Tamako current-source headless navigation", () => {
         }
         if (queue.length) diagnostics.push("action queue limit reached");
       };
-      menu = new MenuController(scene, vm, { dispatchActions: dispatch, diagnostic: (message) => diagnostics.push(message), activateButton: (page, button) => activations.push({ page, button: button.id }) });
+      const menu: MenuController = new MenuController(scene, vm, { dispatchActions: dispatch, diagnostic: (message) => diagnostics.push(message), activateButton: (page, button) => activations.push({ page, button: button.id }) });
       let selectedTopMenu: ReturnType<HdmvVm["snapshot"]>;
       let initialMenuPage: number;
       let startActions: ActionRecord[];

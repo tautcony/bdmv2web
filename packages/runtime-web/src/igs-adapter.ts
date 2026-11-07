@@ -171,9 +171,6 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
     };
   });
 
-  for (const page of scene.pages) {
-  }
-
   return {
     scene: {
       id: scene.id,

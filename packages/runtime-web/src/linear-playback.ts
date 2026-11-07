@@ -191,14 +191,14 @@ export class LinearPlaybackBridge implements PlaybackBridge {
     const timeoutMs = this.hooks.timeoutMs ?? 15_000;
     return new Promise((resolve, reject) => {
       let settled = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timer = setTimeout(() => finish(new Error(`Timed out waiting for ${type}.`)), timeoutMs);
       const listeners: Array<{ type: string; listener: EventListener }> = [
         { type, listener: () => { if (ready()) finish(); } },
         { type: "error", listener: () => finish(new Error("Media element reported an error.")) },
         { type: "abort", listener: () => finish(new Error("Media element aborted the active operation.")) },
       ];
       const cleanup = () => {
-        if (timer !== undefined) clearTimeout(timer);
+        clearTimeout(timer);
         for (const entry of listeners) this.media.removeEventListener(entry.type, entry.listener);
         active.listeners = active.listeners.filter((entry) => !listeners.some((waiter) => waiter.listener === entry.listener));
         active.cancelWaiters.delete(cancel);
@@ -210,7 +210,6 @@ export class LinearPlaybackBridge implements PlaybackBridge {
         this.media.addEventListener(entry.type, entry.listener);
         active.listeners.push(entry);
       }
-      timer = setTimeout(() => finish(new Error(`Timed out waiting for ${type}.`)), timeoutMs);
       if (!this.isActive(active)) finish(new Error("Media action was superseded."));
     });
   }

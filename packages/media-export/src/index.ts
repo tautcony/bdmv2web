@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { M2tsPacketReader, PesAssembler } from "@bdmv2web/igs";
 import { parsePgsSup } from "./pgs.js";
-import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates, MediaBudgetError } from "./budget.js";
+import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates } from "./budget.js";
 
 export * from "./closure.js";
 export * from "./external-targets.js";
@@ -63,7 +63,7 @@ export async function extractPgsTrack(sourcePath: string, pid: number, outputPat
         }
       }
     };
-    for await (const chunk of createReadStream(resolve(sourcePath), { highWaterMark: 256 * 1024 })) {
+    for await (const chunk of createReadStream(resolve(sourcePath), { highWaterMark: 256 * 1024 }) as AsyncIterable<Uint8Array>) {
       for (const packet of reader.feed(chunk)) if (packet.pid === pid) accept(assembler.push(packet));
     }
     reader.end();
@@ -209,11 +209,10 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     };
     signal?.addEventListener("abort", abort, { once: true });
     options.signal?.addEventListener("abort", abort, { once: true });
-    let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectTimeout: ((error: Error) => void) | undefined;
     const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
     const processPromise = run(executable, args, limit, controller.signal, onProgress);
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       controller.abort();
       rejectTimeout?.(new MediaJobError({ code: "MEDIA_JOB_TIMEOUT", executable, args: [...args], message: `Media job '${executable}' timed out after ${limit} ms.` }));
     }, limit);
@@ -228,7 +227,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       if (!unavailable) throw new MediaJobError({ code: "MEDIA_PROCESS_FAILED", executable, args: [...args], message: `Media tool '${executable}' failed while running ${args[0] ?? "its requested operation"}: ${error instanceof Error ? error.message : String(error)}` });
       throw new MediaToolError({ code: "MEDIA_TOOL_UNAVAILABLE", executable, args: [...args], message: `Required media tool '${executable}' is unavailable (ENOENT).` });
     } finally {
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
       options.signal?.removeEventListener("abort", abort);
     }
@@ -324,7 +323,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
 
     const audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number }> = [];
     const files = [{ path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size }];
-    for (const { track, stream } of audioStreams) {
+    for (const { track } of audioStreams) {
       const stem = `audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}`;
       const relativePath = `${assetDirectory}/${stem}.m4a`;
       const absolutePath = resolve(output, relativePath);
@@ -359,7 +358,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Complete output directory exceeded maxOutputBytes while publishing media-plan.json." });
     return {
       plan, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
-      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: "h264", pid: input.videoPid, width: outputVideo.width!, height: outputVideo.height!, durationSeconds: videoDuration, loop: loopBackground(input) },
+      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: "h264", pid: input.videoPid, width: outputVideo.width, height: outputVideo.height, durationSeconds: videoDuration, loop: loopBackground(input) },
       audioTracks, files,
     };
   } catch (error) {
@@ -447,7 +446,7 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Reused media package exceeds maxOutputBytes." });
     return {
       plan, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
-      background: { ...backgroundFile, codec: "h264", pid: input.videoPid, width: priorBackground.width as number, height: priorBackground.height as number, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input) },
+      background: { ...backgroundFile, codec: "h264", pid: input.videoPid, width: priorBackground.width, height: priorBackground.height, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input) },
       audioTracks, files,
     };
   } catch (error) {
@@ -509,7 +508,7 @@ function parseProbe(text: string, subject: string): ProbeResult {
     const value = JSON.parse(text) as ProbeResult;
     if (!Array.isArray(value.streams)) throw new Error("no streams array");
     return value;
-  } catch (error) { throw new Error(`ffprobe returned invalid stream metadata for '${subject}': ${error instanceof Error ? error.message : String(error)}`); }
+  } catch (error) { throw new Error(`ffprobe returned invalid stream metadata for '${subject}': ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
 }
 async function probeEncodedOutput(ffprobe: string, path: string, timeoutMs: number, run: MediaProcessRunner): Promise<ProbeResult> {
   const args = probeArgs(path);
@@ -659,7 +658,7 @@ async function runWithBudget(executable: string, args: string[], timeoutMs: numb
         assertActualWithinLimit({ scope: "package", actualBytes: packageBytes, limitBytes: maxOutputBytes, message: `Output directory exceeded maxOutputBytes while encoding '${assetPath}'.` });
       } catch (error) {
         controller.abort();
-        reject(error);
+        reject(error instanceof Error ? error : new Error("Media output monitoring failed.", { cause: error }));
       } finally { checking = false; }
     };
     const timer = setInterval(() => { void check(); }, 10);

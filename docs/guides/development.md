@@ -8,6 +8,7 @@
 - Vitest: `4.0.8`.
 - esbuild: `0.25.12`.
 - JSON Schema to TypeScript: `15.0.4`; Ajv: `8.17.1`.
+- ESLint: `10.14.0` with `typescript-eslint` `8.72.1`.
 
 Install and run the reproducible workspace entry points:
 
@@ -20,6 +21,28 @@ corepack pnpm test
 ```
 
 `corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
+
+## Linting
+
+`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `packages/*/test`, `vitest.config.ts`, and `scripts/*.mjs`. `corepack pnpm lint:fix` applies the automatic fixes.
+
+Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. Run `corepack pnpm build` before linting; `scripts/ci.sh` runs lint between the build and the typecheck.
+
+`eslint.config.mjs` encodes the style the sources use: double quotes, semicolons, trailing commas, dense single-line declarations, non-null assertions after bounds checks, and terse `condition && call()` / `error ? reject() : resolve()` statements. Formatting rules are absent by design - ESLint 10 no longer ships them and no formatter runs in this workspace.
+
+The configuration reports zero problems on the current sources. Every enabled rule is at `error` severity; the allowances are limited to the constructs the sources rely on:
+
+| Allowance | Scope |
+| --- | --- |
+| `no-non-null-assertion: off` | Parsers assert non-null after an explicit bounds check. |
+| `no-unused-expressions` with `allowShortCircuit` / `allowTernary` | VM, IGS, and runtime sources chain side effects in single statements. |
+| `restrict-template-expressions` allows numbers, booleans, nullish, regexps, and `never` | Diagnostic messages interpolate opcodes, PCs, register values, and exhaustive-switch operands. |
+| `no-console: off`, `no-this-alias` with `allowedNames: ["active"]` | CLI progress output and the module-level active-reporter registry. |
+| `require-await: off` | Renderers and adapters expose sync or fire-and-forget seams. |
+
+`*.test.ts` files turn off `no-explicit-any`, the `no-unsafe-*` family, `unbound-method`, `restrict-template-expressions`, and `no-control-regex`: they assert on JSON parsed from CLI output, pass bound methods to vitest matchers, and match ANSI escapes verbatim.
+
+One inline disable sits in `packages/runtime-web/src/browser.ts`: the Start-menu click listener returns its completion promise because the browser test host awaits fired listeners.
 
 ## Contracts
 

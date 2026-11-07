@@ -156,7 +156,7 @@ export class MenuSoundPlayer {
   private handleFailure(error: unknown, soundId: number, buttonId: number, url: string, requestId: number, audio: SoundAudioPort, retry: boolean): void {
     this.activeAudio.delete(audio);
     if (requestId !== this.requestId) return;
-    const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name: unknown }).name) : "";
+    const name = typeof error === "object" && error !== null && "name" in error ? String(error.name) : "";
     if (name === "NotAllowedError") {
       if (!this.hooks.isCurrent(soundId, buttonId)) return;
       this.hooks.report("blocked", `Browser blocked sound ${soundId}; use the retry button to play it.`);
@@ -194,7 +194,7 @@ export class MenuController {
     this.scheduler = scheduler ? schedulerOrConfig : new EventScheduler();
     const inputConfig = scheduler ? DEFAULT_MENU_INPUT_CONFIG : { ...DEFAULT_MENU_INPUT_CONFIG, ...schedulerOrConfig };
     if (!["popup", "topMenu", "custom", "none"].includes(inputConfig.escapeMapping)) throw new TypeError(`Invalid Escape mapping '${String(inputConfig.escapeMapping)}'.`);
-    this.inputConfig = inputConfig as MenuInputConfig;
+    this.inputConfig = inputConfig;
     this.selectPageDefault(false);
   }
   get page(): MenuPage { return this.scene.pages[this.pageIndex]!; }
@@ -802,7 +802,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
         try {
           await Promise.all([this.video.play(), ...(audioTrack ? [this.audio.play()] : [])]);
         } catch (error) {
-          const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name: unknown }).name) : "";
+          const name = typeof error === "object" && error !== null && "name" in error ? String(error.name) : "";
           const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
           // An autoplay block on resume is recoverable through the same retry
           // gesture as the initial start; it must not terminate the menu VM.
@@ -842,7 +842,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
         this.started = true; this.retryGeneration++; this.hooks.clearRetry?.(); return true;
       }).catch((error: unknown) => {
         if (this.mediaSequence !== mediaSequence || this.activeMedia !== media) return false;
-        const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name: unknown }).name) : "";
+        const name = typeof error === "object" && error !== null && "name" in error ? String(error.name) : "";
         const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
         if (name === "NotAllowedError") {
           this.report(`Browser blocked menu media playback; use the retry button to start it. (${message})`);
@@ -973,7 +973,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       }
       if (!this.isCurrentTrackSwitch(generation, sequence)) return;
       const failure = error instanceof Error ? error.message : String(error);
-      const restoreMessage = rollbackError ? ` Previous audio restore failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}` : "";
+      const restoreMessage = rollbackError ? ` Previous audio restore failed: ${rollbackError instanceof Error ? rollbackError.message : typeof rollbackError === "string" ? rollbackError : "non-Error value"}` : "";
       this.report(`Primary audio stream ${psrStreamNumber} could not be confirmed: ${failure}.${restoreMessage}`);
     }
   }
@@ -996,7 +996,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       const seekWait = waitAudioEvent(this.audio, "seeked", this.hooks.trackSwitchTimeoutMs ?? 15_000);
       try { this.audio.currentTime = targetTime; }
       catch (error) { seekWait.cancel(); throw error; }
-      await seekWait;
+      await seekWait.promise;
     }
     this.assertCurrentTrackSwitch(generation, sequence);
     if (this.audio.readyState < 2) {

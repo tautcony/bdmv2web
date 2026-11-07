@@ -97,10 +97,12 @@ corepack pnpm build
 ```sh
 corepack pnpm build         # 编译运行时代码
 corepack pnpm run cli:dev inspect /path/to/BDMV  # 直接运行 CLI
+corepack pnpm lint          # 运行 ESLint（需先 build）
+corepack pnpm lint:fix      # 运行 ESLint 并应用自动修复
 corepack pnpm typecheck     # 类型检查，包括测试文件
 corepack pnpm test          # 运行各包测试
 corepack pnpm test:all      # 运行各包测试，不加 --bail
-bash scripts/ci.sh          # 安装、生成契约、构建、类型检查和测试
+bash scripts/ci.sh          # 安装、生成契约、构建、lint、类型检查和测试
 ```
 
 运行单个包的测试：

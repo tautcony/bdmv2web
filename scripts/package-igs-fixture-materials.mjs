@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 function usage() {
@@ -50,7 +50,6 @@ try {
       const clpiSource = join(bdmvRoot, clpiRelative);
       const clpiInfo = await lstat(clpiSource);
       if (!clpiInfo.isFile() || clpiInfo.isSymbolicLink()) throw new Error(`Expected regular file: ${item.id}/${clpiRelative}`);
-      const clpiBytes = await readFile(clpiSource);
       const sourceRelative = `STREAM/${clip.id}.m2ts`;
       const m2tsSource = join(bdmvRoot, sourceRelative);
       const m2tsInfo = await lstat(m2tsSource);

@@ -143,7 +143,7 @@ function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "back
   const parseTarget = (title = false): EntryTarget => {
     const start = r.offset; const type = r.read(2); const access = title ? r.read(2) : undefined;
     if (title) r.skipBits(28); else r.skipBits(30);
-    let playbackType = 0; let target: number | string | null = null; let objectType: EntryTarget["objectType"] = "unknown";
+    let playbackType: number; let target: number | string | null; let objectType: EntryTarget["objectType"];
     if (type === 1) { objectType = "HDMV"; playbackType = r.read(2); r.skipBits(14); target = r.read(16); r.skipBits(32); }
     else if (type === 2) { objectType = "BDJ"; playbackType = r.read(2); r.skipBits(14); target = r.text(5); r.skip(1); }
     // libbluray aborts the whole index on an unknown object type; skipping an
@@ -185,7 +185,7 @@ function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   const r = new Bits(data); r.checkMagic("MPLS"); const version = r.version(); const listPos = r.u32(); const markPos = r.u32(); const extPos = r.u32();
   r.skip(20); const appLenOffset = r.offset; const appLen = r.u32(); if (appLen > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/appInfoLength", "MPLS app info exceeds file");
   const appEnd = r.offset + appLen;
-  let appInfo: PlaylistAppInfo | null = null;
+  let appInfo: PlaylistAppInfo | null;
   if (appLen === 0) appInfo = null;
   else {
     // Twelve bytes are the minimum for the reserved byte through the UO mask;

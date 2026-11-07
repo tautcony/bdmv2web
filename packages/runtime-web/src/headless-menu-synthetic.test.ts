@@ -58,7 +58,6 @@ function createRig(releasePlayback = true) {
   ], { entries });
   const actions: Array<{ type: string; payload: Record<string, number | string | boolean | null> }> = [];
   const diagnostics: string[] = [];
-  let controller!: MenuController;
   const dispatchActions = () => {
     const pending = [...vm.drainActions()];
     while (pending.length) {
@@ -79,7 +78,7 @@ function createRig(releasePlayback = true) {
       pending.push(...vm.drainActions());
     }
   };
-  controller = new MenuController(scene, vm, { dispatchActions, diagnostic: (message) => diagnostics.push(message) });
+  const controller: MenuController = new MenuController(scene, vm, { dispatchActions, diagnostic: (message) => diagnostics.push(message) });
   return { controller, vm, actions, diagnostics };
 }
 

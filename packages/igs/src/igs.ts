@@ -354,8 +354,8 @@ class BitReader {
   constructor(private readonly data: Uint8Array) {}
   get remaining(): number { return Math.ceil((this.data.length * 8 - this.bit) / 8); }
   get position(): number { return this.bit >>> 3; }
-  bits(n: number): number { if (n < 0 || n > 32 || this.bit + n > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS field of ${n} bits exceeds segment`); let value = 0; for (let i = 0; i < n; i++) value = (value << 1) | ((this.data[this.bit >>> 3]! >> (7 - (this.bit & 7))) & 1), this.bit++; return value >>> 0; }
-  bigBits(n: number): bigint { if (n < 0 || n > 64 || this.bit + n > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS field of ${n} bits exceeds segment`); let value = 0n; for (let i = 0; i < n; i++) value = (value << 1n) | BigInt((this.data[this.bit >>> 3]! >> (7 - (this.bit & 7))) & 1), this.bit++; return value; }
+  bits(n: number): number { if (n < 0 || n > 32 || this.bit + n > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS field of ${n} bits exceeds segment`); let value = 0; for (let i = 0; i < n; i++) { value = (value << 1) | ((this.data[this.bit >>> 3]! >> (7 - (this.bit & 7))) & 1); this.bit++; } return value >>> 0; }
+  bigBits(n: number): bigint { if (n < 0 || n > 64 || this.bit + n > this.data.length * 8) throw new IgsError("IGS_INVALID_SEGMENT", `ICS field of ${n} bits exceeds segment`); let value = 0n; for (let i = 0; i < n; i++) { value = (value << 1n) | BigInt((this.data[this.bit >>> 3]! >> (7 - (this.bit & 7))) & 1); this.bit++; } return value; }
   u8(): number { this.align(); return this.bits(8); }
   u16(): number { this.align(); return this.bits(16); }
   u24(): number { this.align(); return this.bits(24); }

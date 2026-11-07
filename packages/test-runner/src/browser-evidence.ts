@@ -106,8 +106,8 @@ export function evaluateBrowserEvidence(evidence: BrowserEvidence | null | undef
   }
   const matrixCase = normalizedMatrix(context.matrix).find((entry) => entry.caseId === id);
   if (!matrixCase) return { checkId: "BROWSER_EVIDENCE_BINDING", result: "not-verified", message: `Case ${id} is not present in the current browser matrix.`, entityId: id };
-  let expectedMismatch = false;
-  let environmentMismatch = false;
+  let expectedMismatch: boolean;
+  let environmentMismatch: boolean;
   try {
     expectedMismatch = canonicalJson(evidence.expected) !== canonicalJson(matrixCase.expected);
     environmentMismatch = canonicalJson(normalizedEnvironment(evidence.environment)) !== canonicalJson(current.environment);
@@ -138,8 +138,9 @@ export function evaluateBrowserEvidenceMatrix(evidence: readonly BrowserEvidence
 
 function normalizedMatrix(matrix: readonly BrowserMatrixCase[]): BrowserMatrixCase[] {
   if (!Array.isArray(matrix) || matrix.length === 0) throw new TypeError("A non-empty browser matrix is required");
+  const rows: readonly BrowserMatrixCase[] = matrix;
   const ids = new Set<string>();
-  return matrix.map((entry) => {
+  return rows.map((entry) => {
     if (!entry || typeof entry.caseId !== "string" || !entry.caseId.trim() || ids.has(entry.caseId)) throw new TypeError("Browser matrix case IDs must be unique non-empty strings");
     ids.add(entry.caseId);
     return { caseId: entry.caseId, expected: entry.expected };

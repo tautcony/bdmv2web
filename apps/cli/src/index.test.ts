@@ -466,8 +466,6 @@ describe("IGS extract CLI", () => {
       expect(manifest).toMatchObject({ stageStatus: "complete", igs: { support: { status: "unverified" } } });
       expect(manifest.limitations).toContain("IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified");
       expect(manifest.files.map((file: any) => file.path)).toEqual(expect.arrayContaining(["igs/scenes.json", "igs/diagnostics.json", "igs/source-map.json"]));
-      for (const file of manifest.files) {
-      }
       await expect(access(join(target, "assets/graphics"))).rejects.toThrow();
       await expectSourceSnapshot(rootPath, before);
     } finally { await rm(parent, { recursive: true, force: true }); }

@@ -44,6 +44,9 @@ read -r -a PNPM_CMD <<< "${PNPM:-corepack pnpm}"
 run "install" "${PNPM_CMD[@]}" install --frozen-lockfile
 run "generate:contracts" "${PNPM_CMD[@]}" generate:contracts
 run "build" "${PNPM_CMD[@]}" -r build
+# Linting is type-aware and resolves workspace imports through `dist`, so it
+# runs after the build.
+run "lint" "${PNPM_CMD[@]}" lint
 run "typecheck" "${PNPM_CMD[@]}" -r typecheck
 run "test:all" "${PNPM_CMD[@]}" test:all
 

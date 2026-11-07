@@ -574,7 +574,7 @@ describe("offline browser boot", () => {
     const registers = (profile?: Record<string, unknown>) => createMenuVm({
       ir: structuredClone(validIr), scene: null, vmPrograms: [{ id: 7, instructions: [] }],
       ...(profile ? { profile } : {}),
-    } as Parameters<typeof createMenuVm>[0]).snapshot().registers.psr;
+    }).snapshot().registers.psr;
 
     const packaged = registers({ menuLanguage: "jpn", audioLanguage: "fre", subtitleLanguage: "ger", country: "JP", region: "A", outputProfile: "portable", videoProfiles: [], audioProfiles: [] });
     // PSR16 audio language, PSR17 subtitle, PSR18 menu language, PSR19 country, PSR20 region.

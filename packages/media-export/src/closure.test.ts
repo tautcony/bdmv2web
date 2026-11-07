@@ -120,7 +120,7 @@ function playlistFixture(id: string, items: Array<{ index: number; clipId: strin
     })),
     marks: [],
     subPaths: withSubPath ? [{ type: 1, repeat: false, source, items: [{ clipId: "00002", codecId: "M2TS", stcId: 0, connectionCondition: 0, multiClip: false, clips: [{ clipId: "00002", codecId: "M2TS", stcId: 0 }], inTime45k: 0, outTime45k: 45_000, syncPlayItemId: 0, syncPts45k: 0, source }] }] : [],
-  } as ParsedDisc["playlists"][number];
+  };
 }
 
 describe("media plan adaptation", () => {
