@@ -1,0 +1,20 @@
+.gitignore
+  h_3705811fa4502c 10
+apps/cli/src/synthetic-all-features.test.ts
+  h_3705811fa4502c 1-157
+package.json
+  h_3705811fa4502c 13-14
+scripts/generate-synthetic-all-features.mjs
+  h_3705811fa4502c 1-556
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f5a5f18f633f30157d27ad938455ecd956d8c237",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
