@@ -1,0 +1,74 @@
+README.md
+  h_3705811fa4502c 100-101,105
+docs/guides/development.md
+  h_3705811fa4502c 11,25-46
+eslint.config.mjs
+  h_3705811fa4502c 1-102
+package.json
+  h_3705811fa4502c 6-9,13-14,22,25-26,30
+packages/bdmv-io/src/index.ts
+  h_3705811fa4502c 3
+packages/bdmv-parser/src/parser.ts
+  h_3705811fa4502c 146,188
+packages/hdmv/src/graph.ts
+  h_3705811fa4502c 1-2,12,16,26,42,60-61
+packages/hdmv/src/vm.ts
+  h_3705811fa4502c 43,62,88,92,226
+packages/igs/src/extract.ts
+  h_3705811fa4502c 1,3
+packages/igs/src/igs.ts
+  h_3705811fa4502c 357-358
+packages/media-export/src/closure.test.ts
+  h_3705811fa4502c 123
+packages/media-export/src/index.test.ts
+  h_3705811fa4502c 5
+packages/media-export/src/index.ts
+  h_3705811fa4502c 7,66,215,230,326,361,449,511,661
+packages/media-export/src/linear.ts
+  h_3705811fa4502c 73-74,113,125,366,391,396
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 1
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 577
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 400-401,452
+packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts
+  h_3705811fa4502c 271,305
+packages/runtime-web/src/headless-menu-synthetic.test.ts
+  h_3705811fa4502c 81
+packages/runtime-web/src/index.test.ts
+  h_3705811fa4502c 424-425,564,837-838,847-848,1033,1082
+packages/runtime-web/src/index.ts
+  h_3705811fa4502c 159,197,805,845,976,999
+packages/runtime-web/src/linear-playback.ts
+  h_3705811fa4502c 194,201
+packages/runtime-web/src/tamako-headless-navigation.test.ts
+  h_3705811fa4502c 96
+packages/test-runner/src/browser-evidence.ts
+  h_3705811fa4502c 109-110,141,143
+packages/test-runner/src/index.test.ts
+  h_3705811fa4502c 1
+packages/test-runner/src/package-audit.ts
+  h_3705811fa4502c 28,57
+pnpm-lock.yaml
+  h_3705811fa4502c 11-13,20-25,35-37,225-230,543-601,608-616,776-778,791-849,879-891,902-912,917-920,930-932,946-987,991-994,1002-1007,1020-1032,1041-1070,1079-1081,1091-1093,1097-1110,1117-1120,1132-1154,1169-1172,1178-1185,1198-1210,1238-1243,1249-1259,1268-1270,1345-1349,1355-1362,1371-1382,1539-1588,1593-1600,1691-1692,1703-1793,1833-1845,1857-1870,1873-1878,1883-1884,1945-2008,2013-2014,2019-2022,2029-2045,2053-2072,2079-2080,2097-2098,2101-2115,2122-2125,2132-2154,2167-2168,2171-2176,2214-2221,2241-2244,2252-2266,2271-2274,2326-2329,2334-2337
+scripts/ci.sh
+  h_3705811fa4502c 47-49
+scripts/package-igs-fixture-materials.mjs
+  h_3705811fa4502c 4
+scripts/visualize-hdmv-vm-flow.mjs
+  h_3705811fa4502c 32,52
+tsconfig.lint.json
+  h_3705811fa4502c 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "545b995604565a049e3a0280a66ce3a5a5a28686",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
