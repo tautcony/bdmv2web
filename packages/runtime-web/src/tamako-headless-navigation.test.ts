@@ -239,7 +239,6 @@ describe("Tamako current-source headless navigation", () => {
     expect(outcomes.some((outcome) => JSON.stringify(outcome.result).includes('"playlist":42'))).toBe(true);
     expect(outcomes.some((outcome) => outcome.to !== outcome.from)).toBe(true);
     expect(outcomes.every((outcome) => outcome.diagnostics.length === 0)).toBe(true);
-    expect(outcomes).not.toHaveLength(0);
     expect(cursor).toBe(queued.length);
     expect(queued.length).toBeLessThanOrEqual(64);
     const gaps = outcomes.filter((outcome) => (outcome.result as { skipped?: string[] } | null)?.skipped).map(({ from, button, result }) => ({ page: from, button, detail: (result as { skipped: string[] }).skipped[0] }));

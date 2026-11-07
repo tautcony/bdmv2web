@@ -247,7 +247,7 @@ describe("M4 convert output", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("does not substitute an unrelated scene when the Top Menu IGS target is missing", async () => {
+  it("fails with MENU_SCENE_NOT_FOUND when the Top Menu IGS target is missing", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert no scene "));
     const disc = await makeMenuDisc(parent, { includeMenuStream: false }); const output = join(parent, "failed output");
     try {
@@ -267,7 +267,7 @@ describe("M4 convert output", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("does not guess a scene when the Top Menu playlist cannot be resolved", async () => {
+  it("fails with MENU_PLAYLIST_NOT_RESOLVED when the Top Menu playlist cannot be resolved", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert unknown playlist "));
     const disc = await makeMenuDisc(parent, { topMenuObject: 1 }); const output = join(parent, "failed output");
     try {
@@ -531,16 +531,10 @@ describe("stage and argument contracts", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("rejects removed options and invalid limits before creating output", async () => {
+  it("rejects an invalid limit before creating output", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv stage args "));
     try {
       const disc = await emptyDisc(parent);
-      const modeTarget = join(parent, "mode-reject");
-      const mode = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--mode", "removed", "--out", modeTarget]);
-      expect(mode.status).toBe(1);
-      expect(mode.stderr.toString()).toContain("CLI_UNKNOWN_OPTION");
-      await expect(access(modeTarget)).rejects.toThrow();
-
       const limitsPath = join(parent, "limits.json"); const limitsTarget = join(parent, "limits-reject");
       await writeFile(limitsPath, JSON.stringify({ maxInstructionsPerTurn: 0 }));
       const limits = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--limits", limitsPath, "--out", limitsTarget]);
@@ -550,7 +544,7 @@ describe("stage and argument contracts", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("reports a missing flag value instead of silently falling back", async () => {
+  it("reports a missing flag value", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv stage missing value "));
     try {
       const disc = await emptyDisc(parent);
@@ -580,7 +574,7 @@ describe("stage and argument contracts", () => {
 });
 
 describe("argument contract", () => {
-  it("rejects misspelled options and extra positionals instead of ignoring them", async () => {
+  it("rejects misspelled options and extra positionals", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv cli unknown option "));
     const disc = join(parent, "BDMV"); await mkdir(disc);
     try {

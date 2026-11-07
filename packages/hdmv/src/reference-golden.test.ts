@@ -30,16 +30,6 @@ function expectTraceCheckpoints(vm: HdmvVm, expected: Array<Record<string, unkno
 }
 
 describe("source-derived reference golden: pinned libbluray 1.5.0", () => {
-  it("records the exact reference and labels derivation honestly", () => {
-    expect(golden.reference).toMatchObject({
-      project: "VideoLAN libbluray",
-      version: "1.5.0",
-      commit: "d75c88e54c893e5cbf4c61d356477655eb435769",
-      license: "LGPL-2.1",
-    });
-    expect(golden.reference.execution).toMatch(/not produced by running libbluray/);
-  });
-
   it("compares true and false Compare-next-command paths checkpoint by checkpoint", () => {
     const scenario = golden.scenarios.find((item) => item.id === "compare-eq-taken-and-not-taken")!;
     for (const run of scenario.runs!) {

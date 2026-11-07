@@ -173,7 +173,7 @@ describe("linear playlist media export", () => {
     }
   });
 
-  it("keeps uncertain angle and incomplete reachability visible instead of exporting a flattened path", async () => {
+  it("keeps uncertain angle and incomplete reachability visible in the exported plan", async () => {
     const sourceRoot = await mkdtemp(join(tmpdir(), "bdmv-linear-partial-source-"));
     const output = await mkdtemp(join(tmpdir(), "bdmv-linear-partial-output-"));
     await makeSourceTree(sourceRoot, ["00001"]);

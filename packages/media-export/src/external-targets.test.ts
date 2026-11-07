@@ -20,7 +20,7 @@ function fixture(): { disc: ParsedDisc; closure: MediaClosure } {
 }
 
 describe("external source playlist boundaries", () => {
-  it("preserves ordered half-open intervals and repeated clips without claiming concatenated playback", () => {
+  it("preserves ordered half-open intervals and repeated clips", () => {
     const { disc, closure } = fixture(); const map = createExternalMediaTargets(disc, closure);
     expect(map.playlists[0]?.items.map((item) => [item.clipId, item.sourceIn90k, item.sourceOut90k, item.playlistStart90k, item.playlistEnd90k])).toEqual([
       ["00004", "90000", "270000", "0", "180000"], ["00005", "180000", "450000", "180000", "450000"], ["00004", "540000", "630000", "450000", "540000"],
@@ -29,7 +29,7 @@ describe("external source playlist boundaries", () => {
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 2 })).toMatchObject({ status: "available", item: { clipId: "00004", index: 2 }, clipTime90k: "540000", seekTime90k: "540000", remainingItems: [] });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_MARK", playlist: 1, playMark: 0 })).toMatchObject({ status: "available", item: { index: 1 }, clipTime90k: "225000", seekTime90k: "225000" });
   });
-  it("reports missing files, unknown items and out-of-range marks without guessing", () => {
+  it("reports missing files, unknown items and out-of-range marks", () => {
     const { disc, closure } = fixture(); disc.graph.nodes[1]!.state = "missing";
     const map = createExternalMediaTargets(disc, closure);
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 1 })).toMatchObject({ status: "unavailable", code: "EXTERNAL_STREAM_MISSING" });

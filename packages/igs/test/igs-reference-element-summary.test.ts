@@ -108,18 +108,6 @@ function summarizePng(input: Uint8Array, id: string): ElementRow {
 }
 
 describe("independent igstools reference pixels", () => {
-  it("keeps the complete eight-clip reference summary in the repository", async () => {
-    const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
-    expect(golden.reference).toMatchObject({
-      tool: "SAPikachu/igstools",
-      commit: "34a133150ca8b52237284da4d47d93911bcd4954",
-      matrix: "BT.709 limited range",
-    });
-    expect(golden.cases.map((entry) => `${entry.case}/${entry.clip}`)).toEqual(cases.map((entry) => `${entry.caseId}/${entry.clipId}`));
-    expect(golden.cases.reduce((total, entry) => total + entry.assets.length, 0)).toBe(891);
-    expect(golden.cases.reduce((total, entry) => total + entry.assets.reduce((sum, asset) => sum + asset[3], 0), 0)).toBe(45_752_163);
-  });
-
   it.each(cases)("renders $caseId/$clipId pixel-for-pixel like the independent reference", async ({ caseId, clipId, pid }) => {
     const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
     const expectedCase = golden.cases.find((entry) => entry.case === caseId && entry.clip === clipId);

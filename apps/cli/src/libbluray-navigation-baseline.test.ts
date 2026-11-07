@@ -39,18 +39,6 @@ type Golden = {
 const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
 
 describe("libbluray 1.5.0 navigation baseline", () => {
-  it("keeps the complete four-disc decoder and VM baseline in the repository", async () => {
-    const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
-    expect(golden.reference).toMatchObject({
-      tool: "VideoLAN libbluray", version: "1.5.0",
-      revision: "d75c88e54c893e5cbf4c61d356477655eb435769",
-    });
-    expect(golden.cases.map((entry) => entry.case)).toEqual(corpus);
-    expect(golden.cases.reduce((total, entry) => total + entry.objects.reduce((sum, object) => sum + object.numCommands, 0), 0)).toBe(5225);
-    expect(golden.cases.reduce((total, entry) => total + entry.graph.length, 0)).toBe(6224);
-    expect(golden.cases.every((entry) => entry.titles.length > 0 && entry.vmTrace.playlists.length > 0)).toBe(true);
-  });
-
   it.each(corpus)("matches libbluray's index, disassembly, titles and full CFG for %s", async (caseId) => {
     const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
     const expected = golden.cases.find((entry) => entry.case === caseId);

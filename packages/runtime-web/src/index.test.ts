@@ -798,7 +798,7 @@ describe("offline menu primitives", () => {
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(true);
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(false);
   });
-  it("unblocks popup requests and explains that external title video cannot be overlaid", () => {
+  it("unblocks popup requests and reports the unavailable overlay context", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
     vm.handleEvent({ type: "POPUP_MENU", channel: "keyboard" });
     const action = vm.drainActions()[0]!;

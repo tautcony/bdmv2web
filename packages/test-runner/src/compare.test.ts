@@ -16,11 +16,14 @@ const input = {
 
 describe("reference compare adapter", () => {
   it("binds the validated input, trace comparison, and pinned tool metadata", () => {
-    const trace = [{ pc: 2, registers: { PSR1: 3 }, source: { path: "BDMV/MovieObject.bdmv", offset: "54" } }];
+    const actualTrace = [{ pc: 2, registers: { PSR1: 3 }, source: { path: "BDMV/MovieObject.bdmv", offset: "54" } }];
+    // A reference trace is a separate recording; the adapter must compare the two
+    // sequences, not short-circuit on a shared object.
+    const referenceTrace = JSON.parse(JSON.stringify(actualTrace)) as typeof actualTrace;
     const report = createReferenceCompareReport({
       input,
-      actualTrace: trace,
-      reference: { trace, tool: { name: "ReferenceVM", version: "1.2.3", invocation: "reference-vm --fixture synthetic-call-resume-01" } },
+      actualTrace,
+      reference: { trace: referenceTrace, tool: { name: "ReferenceVM", version: "1.2.3", invocation: "reference-vm --fixture synthetic-call-resume-01" } },
     });
 
     expect(report).toMatchObject({

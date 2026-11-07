@@ -50,35 +50,25 @@ describe("M1 BDMV discovery and structure", () => {
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("smokes the committed Tamako Love Story metadata sample without treating counts as protocol goldens", async () => {
+  it("parses the committed metadata-only fixture without STREAM files", async () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
     const disc = await parseBdmv(root);
     expect(disc.entries).toHaveLength(33);
     expect(disc.movieObjects).toHaveLength(17);
     expect(disc.movieObjects.reduce((count, object) => count + object.instructions.length, 0)).toBe(4969);
+    expect(disc.playlists).toHaveLength(26);
+    expect(disc.clips).toHaveLength(18);
+    expect(disc.playlists.reduce((count, playlist) => count + playlist.playItems.length, 0)).toBe(1025);
+    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_BACKUP_DIFFERS")).toBe(false);
+    expect(disc.diagnostics.filter((diagnostic) => diagnostic.code === "BDMV_MISSING_STREAM").length).toBeGreaterThan(0);
+    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_MISSING_CLPI")).toBe(false);
     const playlist = disc.playlists.find((item) => item.id === "00001");
     expect(playlist?.playItems.some((item) => item.clipId === "00002")).toBe(true);
     expect(disc.supportPrediction.status).toBe("partial");
     expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "clip:00002", type: "clip", state: "missing" }));
   });
 
-  it.each([
-    ["tamako", { entries: 33, movieObjects: 17, instructions: 4969, playlists: 26, playItems: 1025, clips: 18 }],
-  ] as const)("parses the %s metadata-only fixture without STREAM files", async (name, expected) => {
-    const root = join(dirname(fileURLToPath(import.meta.url)), `../../../test-data/fixtures/hdmv-navigation/disc-data/${name}/BDMV`);
-    const disc = await parseBdmv(root);
-    expect(disc.entries).toHaveLength(expected.entries);
-    expect(disc.movieObjects).toHaveLength(expected.movieObjects);
-    expect(disc.playlists).toHaveLength(expected.playlists);
-    expect(disc.clips).toHaveLength(expected.clips);
-    expect(disc.movieObjects.reduce((sum, object) => sum + object.instructions.length, 0)).toBe(expected.instructions);
-    expect(disc.playlists.reduce((sum, playlist) => sum + playlist.playItems.length, 0)).toBe(expected.playItems);
-    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_BACKUP_DIFFERS")).toBe(false);
-    expect(disc.diagnostics.filter((diagnostic) => diagnostic.code === "BDMV_MISSING_STREAM").length).toBeGreaterThan(0);
-    expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_MISSING_CLPI")).toBe(false);
-  });
-
-  it("parses and graph-links CLPI referenced by a SubPath without comparing its IGS cue to the main clip", async () => {
+  it("parses and graph-links CLPI referenced by a SubPath", async () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV");
     const disc = await parseBdmv(root);
     const playlist = disc.playlists.find((item) => item.id === "00003")!;
