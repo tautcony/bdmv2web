@@ -10,6 +10,44 @@ const MAX_SCENARIOS_PER_CASE = 128;
 const MAX_STATES_PER_SCENARIO = 50_000;
 let corpusBranchSitesWithBothOutcomes = 0;
 
+/** Per-case VM execution baseline: entries, states, reachable edges, playlist targets, loops and DFS budget. */
+const expected: Record<(typeof corpus)[number], {
+  entries: number;
+  executedEntries: number;
+  observedPlaylists: number[];
+  stats: {
+    states: number; commandStates: number; graphEdges: number; coveredEdges: number; simulatedEdges: number;
+    unavailableEdges: number; unresolvedEdges: number; staticLoops: number; runtimeActualLoops: number;
+    runtimeSimulatedLoops: number; scenarios: number; cycleStatesDeduplicated: number; branchAlternativesQueued: number;
+  };
+}> = {
+  tamako: {
+    entries: 33, executedEntries: 33,
+    observedPlaylists: [0, 1, 3, 24, 25, 26, 27, 42, 57, 58, 59, 60, 61, 62, 67],
+    stats: { states: 7416, commandStates: 3574, graphEdges: 4415, coveredEdges: 3147, simulatedEdges: 501, unavailableEdges: 0, unresolvedEdges: 354, staticLoops: 0, runtimeActualLoops: 2, runtimeSimulatedLoops: 3, scenarios: 43, cycleStatesDeduplicated: 5, branchAlternativesQueued: 413 },
+  },
+  baja: {
+    entries: 6, executedEntries: 6,
+    observedPlaylists: [0, 1, 2, 3, 4, 5],
+    stats: { states: 225, commandStates: 70, graphEdges: 86, coveredEdges: 52, simulatedEdges: 20, unavailableEdges: 6, unresolvedEdges: 3, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 10, scenarios: 8, cycleStatesDeduplicated: 10, branchAlternativesQueued: 2 },
+  },
+  "kyoani-ova": {
+    entries: 5, executedEntries: 5,
+    observedPlaylists: [0, 1, 2, 4, 5],
+    stats: { states: 570, commandStates: 82, graphEdges: 99, coveredEdges: 58, simulatedEdges: 28, unavailableEdges: 5, unresolvedEdges: 2, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 11, scenarios: 10, cycleStatesDeduplicated: 11, branchAlternativesQueued: 4 },
+  },
+  "bang-dream-mygo-vol1": {
+    entries: 4, executedEntries: 4,
+    observedPlaylists: [0, 1, 2, 3],
+    stats: { states: 268, commandStates: 56, graphEdges: 82, coveredEdges: 21, simulatedEdges: 45, unavailableEdges: 6, unresolvedEdges: 0, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 22, scenarios: 11, cycleStatesDeduplicated: 22, branchAlternativesQueued: 10 },
+  },
+  "battle-royale-uhd": {
+    entries: 24, executedEntries: 22,
+    observedPlaylists: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 21, 1997, 1999],
+    stats: { states: 376, commandStates: 112, graphEdges: 144, coveredEdges: 34, simulatedEdges: 83, unavailableEdges: 22, unresolvedEdges: 0, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 96, scenarios: 48, cycleStatesDeduplicated: 96, branchAlternativesQueued: 5 },
+  },
+};
+
 afterAll(() => {
   expect(corpusBranchSitesWithBothOutcomes, "DFS corpus observed both outcomes at a branch site").toBeGreaterThan(0);
 });
@@ -22,15 +60,28 @@ describe("HDMV multi-disc VM execution DFS coverage", () => {
     const result = exploreDisc(disc, graph);
 
     const r = result.report;
-    console.info(JSON.stringify({ case: caseId, entries: r.entries.length, states: r.states, commandStates: r.commandStates, graphEdges: r.graphEdges, coveredEdges: r.coveredEdges.length, simulatedEdges: r.simulatedEdges.length, unavailableEdges: r.unavailableEdges.length, unsupportedEdges: r.unsupportedEdges.length, unresolvedEdges: r.unresolvedEdges.length, omittedStaticEdges: r.omittedStaticEdges, loops: { staticPotential: r.staticLoops.length, runtimeActual: r.runtimeLoops.filter((loop) => loop.kind === "actual").length, runtimeSimulated: r.runtimeLoops.filter((loop) => loop.kind === "simulated").length }, budget: r.budget }));
-    expect(result.report.budget.exhausted, `${caseId} exploration budget`).toBe(false);
-    expect(result.report.omittedStaticEdges, `${caseId} resolved static edges without evidence`).toEqual([]);
-    expect(result.report.uncoveredImmediateObjectJumps, `${caseId} immediate JUMP_OBJECT instructions execute their declared target`).toEqual([]);
-    expect(result.report.entries.length, `${caseId} parsed index entries`).toBeGreaterThan(0);
-    expect(result.report.states, `${caseId} VM states`).toBeGreaterThan(0);
-    if (result.report.conditionalSitesReached > 0) expect(result.report.branchSitesObserved, `${caseId} observed VM branch outcomes`).toBeGreaterThan(0);
-    corpusBranchSitesWithBothOutcomes += result.report.branchSitesWithBothOutcomes;
-    expect(result.report.edgeAccountingComplete, `${caseId} edge accounting`).toBe(true);
+    const want = expected[caseId];
+    expect(r.entries.length, `${caseId} parsed index entries`).toBe(want.entries);
+    expect(r.entries.filter((entry) => entry.status === "executed-hdmv-entry"), `${caseId} executed HDMV entries`).toHaveLength(want.executedEntries);
+    expect(r.observedPlaylists, `${caseId} playlist targets reached by PLAY_PLAYLIST actions`).toEqual(want.observedPlaylists);
+    expect({
+      states: r.states, commandStates: r.commandStates, graphEdges: r.graphEdges,
+      coveredEdges: r.coveredEdges.length, simulatedEdges: r.simulatedEdges.length,
+      unavailableEdges: r.unavailableEdges.length, unresolvedEdges: r.unresolvedEdges.length,
+      staticLoops: r.staticLoops.length,
+      runtimeActualLoops: r.runtimeLoops.filter((loop) => loop.kind === "actual").length,
+      runtimeSimulatedLoops: r.runtimeLoops.filter((loop) => loop.kind === "simulated").length,
+      scenarios: r.budget.scenarios, cycleStatesDeduplicated: r.budget.cycleStatesDeduplicated,
+      branchAlternativesQueued: r.budget.branchAlternativesQueued,
+    }, `${caseId} DFS execution baseline`).toEqual(want.stats);
+    expect(r.unsupportedEdges, `${caseId} unsupported navigation edges`).toEqual([]);
+    expect(r.omittedStaticEdges, `${caseId} resolved static edges without evidence`).toEqual([]);
+    expect(r.uncoveredImmediateObjectJumps, `${caseId} immediate JUMP_OBJECT instructions execute their declared target`).toEqual([]);
+    expect(r.edgeAccountingComplete, `${caseId} edge accounting`).toBe(true);
+    expect(r.budget.exhausted, `${caseId} exploration budget`).toBe(false);
+    expect(r.budget.pendingScenarios, `${caseId} pending scenarios`).toEqual([]);
+    if (r.conditionalSitesReached > 0) expect(r.branchSitesObserved, `${caseId} observed VM branch outcomes`).toBeGreaterThan(0);
+    corpusBranchSitesWithBothOutcomes += r.branchSitesWithBothOutcomes;
   }, 120_000);
 });
 
@@ -38,6 +89,7 @@ type EdgeRow = { id: string; status: "covered" | "simulated" | "unavailable" | "
 type RuntimeLoop = { kind: "actual" | "simulated"; entryId: string; firstSeenAt: string; backEdge: { from: string; to: string }; cycle: string[] };
 type Report = {
   entries: Array<{ id: string; kind: string; target: string; status: string }>;
+  observedPlaylists: number[];
   states: number;
   commandStates: number;
   branchSitesObserved: number;
@@ -94,6 +146,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
   let cyclesDeduplicated = 0;
   let stateBudgetExhausted = false;
   const metadataPlaylists = new Map(disc.playlists.map((playlist) => [Number(playlist.id), playlist]));
+  const observedPlaylists = new Set<number>();
 
   const distinctRoots = [...new Map(roots.map(({ entry }) => [entry.target.target as number, entry])).values()];
   for (const entry of distinctRoots) {
@@ -273,6 +326,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
         const decodedSource = sourceInstruction ? decode(sourceInstruction) : null;
         if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type)) {
           const playlistNumber = Number(action.payload.playlist);
+          observedPlaylists.add(playlistNumber);
           const playlist = metadataPlaylists.get(playlistNumber);
           if (!playlist) unresolvedEdges.set(sourceId, `action targets missing playlist ${playlistNumber}`);
           else {
@@ -407,6 +461,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
       if (entry.status === "queued-hdmv-entry" && root && typeof root.target.target === "number" && reachedObjects.has(root.target.target)) return { ...entry, status: "executed-hdmv-entry" };
       return entry;
     }),
+    observedPlaylists: [...observedPlaylists].sort((left, right) => left - right),
     states: allStates.size,
     commandStates: reachedCommands.size,
     branchSitesObserved: [...branchTargetsByLocation.values()].filter((outcomes) => outcomes.size > 0).length,

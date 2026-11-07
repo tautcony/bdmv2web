@@ -14,21 +14,21 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 ## 逐包基线（2026-11-07 实测）
 
-在 Node `24.18.0` / pnpm `11.25.0` 上跑 `corepack pnpm test:all` 得到下表。44 个测试文件，合计 **515 passed、0 skipped**。
+在 Linux `node:24-bookworm` 容器（Node `24.22.2` / pnpm `11.25.0`）跑 `bash scripts/ci.sh` 得到下表。41 个测试文件，合计 **521 passed、0 skipped**；其中 10 例为 igstools 独立参考像素对照。
 
 | 包 | 用例 | 备注 |
 | --- | ---: | --- |
 | `@bdmv2web/core` | 14 | 契约、游标、时间 |
 | `@bdmv2web/bdmv-io` | 6 | 目录发现、事务 |
-| `@bdmv2web/bdmv-parser` | 70 | 五种格式 + 主备 + 损坏分支 |
-| `@bdmv2web/igs` | 60 | 传输、场景、真实样本（数据缺失时跳过） |
-| `@bdmv2web/hdmv` | 91 | 解码、寄存器、VM、图、循环、golden |
-| `@bdmv2web/media-export` | 55 | 注入 `runProcess`，不依赖本机 ffmpeg |
-| `@bdmv2web/runtime-web` | 115 | 控制器、boot、无头导航 |
-| `@bdmv2web/package-builder` | 11 | 打包、转义、音效 |
+| `@bdmv2web/bdmv-parser` | 69 | 五种格式 + 主备 + 损坏分支 |
+| `@bdmv2web/igs` | 69 | 传输、场景、真实样本（数据缺失时跳过） |
+| `@bdmv2web/hdmv` | 90 | 解码、寄存器、VM、图、循环、golden |
+| `@bdmv2web/media-export` | 53 | 注入 `runProcess`，不依赖本机 ffmpeg |
+| `@bdmv2web/runtime-web` | 114 | 控制器、boot、无头导航 |
+| `@bdmv2web/package-builder` | 10 | 打包、转义、音效 |
 | `@bdmv2web/test-fixtures` | 5 | 夹具自检 |
 | `@bdmv2web/test-runner` | 48 | 审计、判定、报告 |
-| `@bdmv2web/cli` | 40 | 参数契约、事务、stage/delivery |
+| `@bdmv2web/cli` | 43 | 参数契约、事务、stage/delivery |
 
 `docs/guides/development.md` 的 Test baseline 表在同一次测量中已同步为相同数值。计数变化要同时更新两处。
 
@@ -41,6 +41,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 无头导航 | `runtime-web/src/*headless*.test.ts` | 用工作区样本跑 DFS/按钮路径 |
 | 真实样本 | `igs/test/tamako-real-smoke.test.ts`、`runtime-web/src/tamako-*` | 数据缺失时跳过 |
 | 一站式 | `apps/cli/src/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |
+| 独立参考 | `packages/igs/test/igs-reference-element-summary.test.ts` | 重算 IGS 渲染并与 pinned igstools 参考 PNG 的逐元素像素值比对 |
 | 浏览器 | `runtime-web/src/browser.test.ts` | 最小 DOM 桩，不是真实浏览器 |
 
 ## 夹具来源
@@ -52,6 +53,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 全特性自写合成盘 | `test-data/fixtures/synthetic-all-features/` | `scripts/generate-synthetic-all-features.mjs` 按字段生成；libbluray 1.5.0 读回验证 |
 | IG 包夹具 | `test-data/fixtures/hdmv-navigation/` | 由 `scripts/export-igs-packet-fixtures.mjs` 生成 |
 | 外部 ICS 样本 | `test-data/fixtures/igs-parser/` | 带来源与 MIT 许可说明 |
+| igstools 参考摘要 | `docs/evidence/igs-reference-element-summary.json` | pinned igstools 参考 PNG 的元素级 RGBA 值；测试不读取 `.reference-cache` |
 | 工作区本地样本 | `test-data/bdmv/` | 仅本机存在，测试按需跳过 |
 
 规则：新夹具 > 1 MiB 必须用脚本从 manifest 生成，不直接提交二进制；不在夹具/测试名/日志写真实标题、机器路径、`file://` URL。

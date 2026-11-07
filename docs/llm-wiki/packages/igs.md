@@ -101,6 +101,7 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `packages/igs/test/transport.test.ts` | 192B 包、PSI/PES、PTS 回绕、连续性错误 |
 | `packages/igs/test/extraction.test.ts` | 段拼装、版本缓存、RLE、场景完整性 |
 | `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
+| `packages/igs/test/igs-reference-element-summary.test.ts` | 重算 9 个 clip、932 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `docs/evidence/igs-reference-element-summary.json` |
 | `packages/igs/test/m1-m2-m3.integration.test.ts` | 解析 → 场景 → 命令的来源交接 |
 | `packages/igs/test/real-igs.test.ts`、`tamako-*.test.ts` | 工作区本地样本；数据缺失时跳过 |
 
@@ -113,6 +114,6 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | 需求 | 位置 | 同步 |
 | --- | --- | --- |
 | 支持新段/效果 | `consumeSegment` | `types.ts`、`docs/support/igs-support.md`、场景完整性测试 |
-| 改 RLE/像素规则 | `decodeRle`、`png.ts` | 逐元素对照记录 `docs/evidence/` |
+| 改 RLE/像素规则 | `decodeRle`、`png.ts` | `igs-reference-element-summary.test.ts` 的 igstools 参考逐元素对照 |
 | 改 IGS 载体判定 | `extract.ts` 的 `isIgStream` 与 SubPath 解析 | `docs/support/igs-support.md` 的「Implemented and exercised」 |
 | 新增诊断 | `igs.ts`/`transport.ts` | [diagnostics.md](../diagnostics.md) |
