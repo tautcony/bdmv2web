@@ -40,7 +40,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 集成 | `packages/igs/test/m1-m2-m3.integration.test.ts` | 解析 → 场景 → 命令来源 |
 | 无头导航 | `runtime-web/src/*headless*.test.ts` | 用工作区样本跑 DFS/按钮路径 |
 | 真实样本 | `igs/test/tamako-real-smoke.test.ts`、`runtime-web/src/tamako-*` | 数据缺失时跳过 |
-| 互操作 | `*/bdmvkit-*.test.ts` | bdmvkit 生成的夹具 |
+| 一站式 | `apps/cli/src/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |
 | 浏览器 | `runtime-web/src/browser.test.ts` | 最小 DOM 桩，不是真实浏览器 |
 
 ## 夹具来源
@@ -49,7 +49,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | --- | --- | --- |
 | 手写字节构造器 | `packages/test-fixtures/src/bdmv.ts` | 项目自写，证明实现行为，不是协议证据 |
 | 合成菜单向量 | `packages/test-fixtures/src/menu-runtime.ts` | 两按钮焦点/动作 |
-| bdmvkit 生成盘 | `test-data/fixtures/bdmvkit-generated/` | 作者侧互操作 |
+| 全特性自写合成盘 | `test-data/fixtures/synthetic-all-features/` | `scripts/generate-synthetic-all-features.mjs` 按字段生成；libbluray 1.5.0 读回验证 |
 | IG 包夹具 | `test-data/fixtures/hdmv-navigation/` | 由 `scripts/export-igs-packet-fixtures.mjs` 生成 |
 | 外部 ICS 样本 | `test-data/fixtures/igs-parser/` | 带来源与 MIT 许可说明 |
 | 工作区本地样本 | `test-data/bdmv/` | 仅本机存在，测试按需跳过 |

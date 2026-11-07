@@ -31,7 +31,7 @@
 
 - 新用例优先用这些构造器组合出最小 BDMV 目录，再落到临时目录跑 `parseBdmv`。
 - 需要更大样本时用 `scripts/package-hdmv-metadata-fixtures.mjs` 或 `scripts/export-igs-packet-fixtures.mjs` 从已有夹具生成归档，不直接提交 > 1 MiB 的新二进制。
-- `test-data/fixtures/bdmvkit-generated/` 由 bdmvkit 生成，用于互操作；`test-data/fixtures/igs-parser/` 里外部来源的 ICS 样本必须保留来源与许可说明。
+- `test-data/fixtures/synthetic-all-features/` 由 `scripts/generate-synthetic-all-features.mjs` 按字段生成，供一站式跨包测试使用；`test-data/fixtures/igs-parser/` 里外部来源的 ICS 样本必须保留来源与许可说明。
 - 不在夹具、测试名或日志中写入真实碟片标题、机器路径或本地 `file://` URL。
 
 ## 改动入口

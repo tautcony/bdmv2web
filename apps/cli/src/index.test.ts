@@ -9,7 +9,6 @@ import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1Pla
 import { encodeTimestampForFixture } from "@bdmv2web/igs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const generatedDisc = resolve(root, "../../test-data/fixtures/bdmvkit-generated/BDMV");
 
 /**
  * A failed conversion must expose the same report fields as a successful one, so a
@@ -40,50 +39,6 @@ describe("convert CLI", () => {
     const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "inspect", "--format", "json"]);
     expect(result.status).toBe(1); expect(JSON.parse(result.stderr.toString()).code).toBe("CLI_MISSING_INPUT"); expect(result.stdout.toString()).toBe("");
   });
-});
-
-describe("IGS and PGS asset CLI", () => {
-  it("lists IGS MNU streams, image elements and reachable SUP declarations", () => {
-    const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "list-assets", generatedDisc, "--format", "json"]);
-    expect(result.status).toBe(0);
-    const assets = JSON.parse(result.stdout.toString()).assets as Array<Record<string, unknown> & { type: string; path?: string; language?: string }>;
-    expect(assets.filter((asset) => asset.type === "igs").length).toBeGreaterThanOrEqual(2);
-    expect(assets.filter((asset) => asset.type === "igs").every((asset) => asset.format === "mnu" && asset.path?.endsWith(".mnu"))).toBe(true);
-    expect(assets.filter((asset) => asset.type === "sup").map((asset) => asset.language)).toEqual(expect.arrayContaining(["eng", "fra"]));
-    const report = JSON.parse(result.stdout.toString());
-    expect(report.igsImageElements.length).toBeGreaterThanOrEqual(4);
-    expect(result.stdout.toString()).not.toMatch(/BDMV\/STREAM|\/Users\//i);
-  });
-
-  it("filters listing to IGS or SUP and rejects unknown resource types", () => {
-    const run = (type: string) => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "list-assets", generatedDisc, "--type", type, "--format", "json"]);
-    expect(JSON.parse(run("igs").stdout.toString()).assets.every((asset: { type: string }) => asset.type === "igs")).toBe(true);
-    expect(JSON.parse(run("sup").stdout.toString()).assets.every((asset: { type: string }) => asset.type === "sup")).toBe(true);
-    const invalid = run("menu");
-    expect(invalid.status).toBe(1);
-    expect(invalid.stderr.toString()).toContain("CLI_INVALID_ASSET_TYPE");
-  });
-
-  it("exports IGS MNU streams, decoded PNGs and validated SUP tracks", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "bdmv asset export "));
-    const output = join(parent, "assets");
-    try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "export-assets", generatedDisc, "--decode", "png", "--out", output]);
-      expect(result.status, result.stderr.toString()).toBe(0);
-      const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8")) as { assets: Array<Record<string, unknown> & { type: string; path: string; byteLength: number }> };
-      expect(manifest.assets.filter((asset) => asset.type === "igs").map((asset) => asset.format)).toEqual(expect.arrayContaining(["mnu"]));
-      expect(manifest.assets.filter((asset) => asset.type === "igs-png").length).toBeGreaterThanOrEqual(4);
-      expect(manifest.assets.filter((asset) => asset.type === "sup").map((asset) => asset.path)).toEqual(expect.arrayContaining([expect.stringMatching(/\.sup$/)]));
-      expect(manifest.assets.filter((asset) => asset.type === "sup-png").length).toBeGreaterThan(0);
-      for (const asset of manifest.assets) {
-        const bytes = await readFile(join(output, asset.path));
-        expect(bytes.byteLength).toBe(asset.byteLength);
-      }
-      const manifestText = await readFile(join(output, "assets-manifest.json"), "utf8");
-      expect(manifestText).not.toMatch(/BDMV\/STREAM|\/Users\//i);
-      expect(manifest.assets.some((asset) => asset.path.match(/\d{5}-pid-[0-9a-f]{4}\.mnu$/))).toBe(true);
-    } finally { await rm(parent, { recursive: true, force: true }); }
-  }, 120_000);
 });
 
 describe("M4 convert output", () => {
@@ -362,22 +317,6 @@ describe("M4 convert output", () => {
       const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[] };
       expect(menuData.preMenuPlaylistIds).toEqual([1]);
       expect(menuData.menuPlaylistIds).toContain(7);
-    } finally { await rm(parent, { recursive: true, force: true }); }
-  });
-
-  it("extracts well-formed sup track records through the shared PGS extraction path", async () => {
-    const parent = await mkdtemp(join(tmpdir(), "bdmv extract sup "));
-    const output = join(parent, "output");
-    try {
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "extract", generatedDisc, "--type", "sup", "--out", output]);
-      expect(result.status).toBe(0);
-      const tracks = JSON.parse(await readFile(join(output, "sup", "tracks.json"), "utf8")) as { schemaVersion: string; tracks: Array<{ clipId: string; pid: number; language: string; displaySetCount: number; byteLength: number }> };
-      expect(tracks.schemaVersion).toBe("1.0");
-      expect(tracks.tracks.length).toBeGreaterThan(0);
-      expect(tracks.tracks.every((track) => track.displaySetCount > 0 && track.byteLength > 0)).toBe(true);
-      // This fixture references each stream at a single entry point; a disc
-      // that references one stream at two PlayItem in-points yields one track
-      // per entry (cache key clip+pid+sourceIn90k), which no fixture covers.
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

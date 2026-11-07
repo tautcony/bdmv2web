@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
 import { m3Fixtures } from "@bdmv2web/hdmv";
-import { parsePgsSup } from "@bdmv2web/media-export";
 
 const ir = {
   schemaVersion: "1.0" as const,
@@ -42,32 +40,6 @@ describe("menu package primitives", () => {
     } as unknown as Parameters<typeof packagedMediaMetadata>[0];
     const packaged = packagedMediaMetadata(media) as { audioTracks: Array<{ streamNumber: number; psrStreamNumber: number; path: string; pid: number }> };
     expect(packaged.audioTracks.map(({ streamNumber, psrStreamNumber, pid }) => [streamNumber, psrStreamNumber, pid])).toEqual([[0, 1, 0x1100], [1, 2, 0x1101]]);
-  });
-  it("packages validated PGS display sets, palette, pixels, source mapping and file integrity", async () => {
-    const parent = await mkdtemp(resolve(tmpdir(), "bdmv-pgs-package-")); const outputDirectory = resolve(parent, "package");
-    try {
-      const fixture = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated/pgs/english.sup");
-      const displaySets = parsePgsSup(new Uint8Array(await readFile(fixture)));
-      const pgsTracks = [{ playlistId: "00001", playlistNumber: 1, playItemIndex: 0, clipId: "00001", pid: 0x1200, streamNumber: 1, language: "eng", sourceIn90k: "0", sourceOut90k: "90000", source: "BDMV/STREAM/00001.m2ts", path: "assets/subtitles/00001-1200.sup", displaySets }];
-      await mkdir(resolve(outputDirectory, "assets/subtitles"), { recursive: true });
-      await writeFile(resolve(outputDirectory, "assets/subtitles/00001-1200.sup"), await readFile(fixture));
-      await buildMenuPackage({
-        outputDirectory, title: "PGS package", ir, scene, graphics: [],
-        pgsTracks,
-      });
-      await expect(buildMenuPackage({ outputDirectory: resolve(parent, "bounded"), title: "PGS package", ir, scene, graphics: [], pgsTracks, pgsLimits: { maxRuntimeBytes: 32 } })).rejects.toThrow(/maxPgsRuntimeBytes/);
-      const embedded: { __BDMV_MENU_DATA__?: { pgsTracks?: Array<{ pid: number; streamNumber: number; displaySets: Array<{ palette: unknown[]; bitmaps: Array<{ objectId: number; width: number; height: number }>; imageBase64: string }> }> } } = {};
-      runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
-      const track = embedded.__BDMV_MENU_DATA__!.pgsTracks![0]!;
-      expect(track.pid).toBe(0x1200); expect(track.streamNumber).toBe(1); expect(Array.isArray(track.displaySets)).toBe(true);
-      const shown = track.displaySets.find((set) => set.bitmaps.length)!;
-      expect(shown.palette.length).toBeGreaterThan(0);
-      expect(shown.bitmaps[0]).toMatchObject({ objectId: expect.any(Number), width: expect.any(Number), height: expect.any(Number) });
-      expect(Buffer.from(shown.imageBase64, "base64").subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; byteLength: string }>; assets: { pgsTracks: Array<{ pid: number; displaySetCount: number }> } };
-      expect(manifest.files.find((file) => file.path === "assets/subtitles/00001-1200.sup")?.byteLength).toBe(String((await stat(resolve(outputDirectory, "assets/subtitles/00001-1200.sup"))).size));
-      expect(manifest.assets.pgsTracks[0]).toMatchObject({ pid: 0x1200, displaySetCount: displaySets.length });
-    } finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("escapes script termination sequences as data and escapes HTML titles", () => {
     const maliciousTitle = "</script><script>globalThis.pwned=1</script>&\u2028\u2029";

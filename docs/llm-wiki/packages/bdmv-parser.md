@@ -98,7 +98,8 @@ traverseGraph(graph, roots: readonly string[], maxNodes?: number): GraphTraversa
 | 文件 | 覆盖 |
 | --- | --- |
 | `src/parser.test.ts` | 五种格式的正例、版本门、主备回退/冲突、截断与计数越界、可选 UHD 元数据损坏、HEVC `0x24` 属性、Mark 越界、STN/CLPI PID 冲突、真实样本（工作区本地）断言 |
-| `src/bdmvkit-fixture.test.ts` | bdmvkit 生成的互操作夹具 |
+
+跨包一站式覆盖见 `apps/cli/src/synthetic-all-features.test.ts`（`test-data/fixtures/synthetic-all-features/`）。
 
 夹具字节来源：`packages/test-fixtures/src/bdmv.ts`（项目自写字节构造器，不是独立协议证据）。
 

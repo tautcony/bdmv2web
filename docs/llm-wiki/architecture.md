@@ -65,7 +65,7 @@
 | 路径 | 内容 |
 | --- | --- |
 | `test-data/bdmv/` | 工作区本地真实样本（不入库保密内容，路径含真实目录名） |
-| `test-data/fixtures/` | 合成/打包夹具：`bdmvkit-generated/`、`hdmv-navigation/`、`igs-parser/` |
+| `test-data/fixtures/` | 合成/打包夹具：`synthetic-all-features/`、`hdmv-navigation/`、`igs-parser/` |
 | `test-data/output/` | 手工验收产出的菜单包与资产，不参与自动测试 |
 | `.reference-cache/` | 固定 revision 的上游参考源码（libbluray / libhdmv / igstools / bdmvkit），被 `.gitignore` 排除 |
 | `docs/evidence/` | IGS 逐元素对照记录 |

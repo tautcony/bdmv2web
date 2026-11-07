@@ -1,39 +1,7 @@
-import { readFile } from "node:fs/promises";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parsePgsSup, PgsSubtitleTimeline } from "./pgs.js";
-import { extractPgsTrack } from "./index.js";
 
 describe("PGS SUP parsing", () => {
-  it("parses bdmvkit-generated PGS show and clear display sets", async () => {
-    const path = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated/pgs/english.sup");
-    const sets = parsePgsSup(new Uint8Array(await readFile(path)));
-    expect(sets.length).toBeGreaterThanOrEqual(3);
-    const shown = sets.find((set) => set.placements.length > 0);
-    expect(shown).toMatchObject({ width: 1920, height: 1080, placements: [expect.objectContaining({ x: 0, y: 0 })] });
-    expect([...shown!.bitmaps.values()][0]?.pixels.some((value) => value > 0)).toBe(true);
-    const timeline = new PgsSubtitleTimeline(); timeline.register("eng", sets); timeline.select("eng");
-    expect(timeline.at(shown!.pts90k)).toBe(shown);
-    expect(timeline.at(49_500)).toBeNull();
-  });
-
-  it("extracts the reachable title PGS PID from the generated M2TS without an external demuxer", async () => {
-    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../test-data/fixtures/bdmvkit-generated");
-    const output = await mkdtemp(resolve(tmpdir(), "bdmvkit-pgs-"));
-    try {
-      const track = await extractPgsTrack(resolve(root, "BDMV/STREAM/00001.m2ts"), 0x1200, resolve(output, "english.sup"), { timestampOffset90k: 252_480n });
-      const expected = await readFile(resolve(root, "pgs/english.sup"));
-      const expectedDisplaySets = parsePgsSup(new Uint8Array(expected));
-      expect(track).toMatchObject({ pid: 0x1200, byteLength: expect.any(Number) });
-      expect(track.displaySets.length).toBeGreaterThanOrEqual(3);
-      expect(track.displaySets.map((set) => set.pts90k)).toEqual(expectedDisplaySets.map((set) => set.pts90k));
-      expect(track.displaySets.some((set) => set.placements.length > 0 && [...set.bitmaps.values()][0]?.pixels.some((value) => value > 0))).toBe(true);
-    } finally { await rm(output, { recursive: true, force: true }); }
-  });
-
   it("assembles palette, fragmented object, PCS placement, pixels and 90 kHz timeline", () => {
     const first = segment(90_000, 0x15, [0, 7, 0, 0x80, 0, 0, 14, 0, 2, 0, 2, 1, 0, 1, 0, 0]);
     const continuation = segment(90_000, 0x15, [0, 7, 0, 0x40, 0, 1, 2, 0, 0]);

@@ -14,8 +14,8 @@
 
 各项时间映射仍以本项目明确的 `Time90k`、半开区间、媒体时间轴规格为准。参考版本、许可与获取方式在 [`sources.json`](../sources.json)。
 
-## bdmvkit 互操作夹具
+## 全特性自写合成盘
 
-`test-data/fixtures/bdmvkit-generated/` 中的 `BDMV/STREAM/00001.m2ts` 声明 PID `0x1200` 的英语 PGS 字幕，`pgs/english.sup` 是生成器从同一缓存版本输出的 SUP 测试流。`extractPgsTrack` 会从 M2TS 按 PID 无损抽取 SUP，再验证显示集；CLI 按媒体闭包枚举可达字幕 PID，并在包中保留语言、源 clip/PID、PlayItem 源区间、显示集和 RGBA 像素。运行时脚本对像素数据设 64 MiB 上限，清单记录包内文件路径和长度。`parsePgsSup` 与 `PgsSubtitleTimeline` 的单元测试覆盖生成盘显示集、RGBA 像素、clear 时间、选择状态和 PTS 回绕。标题 M2TS 仍交给系统播放器，因此当前产品不把字幕绘制回标题视频；这次变更只补齐抽取、解析和包内数据能力。
+`test-data/fixtures/synthetic-all-features/` 的 M2TS 在 PID `0x1200` 与 `0x1201` 各声明一路 PGS 字幕。`extractPgsTrack` 会从 M2TS 按 PID 无损抽取 SUP，再验证显示集；CLI 按媒体闭包枚举可达字幕 PID，并在包中保留语言、源 clip/PID、PlayItem 源区间、显示集和 RGBA 像素。运行时脚本对像素数据设 64 MiB 上限，清单记录包内文件路径和长度。`parsePgsSup` 与 `PgsSubtitleTimeline` 的单元测试覆盖合成字节的显示集、RGBA 像素、clear 时间、选择状态和 PTS 回绕。标题 M2TS 仍交给系统播放器，因此当前产品不把字幕绘制回标题视频。
 
-菜单动画 loop 点使用 PlayItem 内最后一个有效 entry PlayMark。导出器从该 45 kHz 源时间编码菜单视频和音频，因此 MP4 循环每次从相同的非零 mark 开始。bdmvkit fixture 的验证位置为 PlayItem IN `63000`、loop mark `85522`、OUT `108045`。
+菜单动画 loop 点使用 PlayItem 内最后一个有效 entry PlayMark。导出器从该 45 kHz 源时间编码菜单视频和音频，因此 MP4 循环每次从相同的非零 mark 开始。全特性自写合成盘的验证位置为 PlayItem IN `0`、loop mark `85522`、OUT `180000`。

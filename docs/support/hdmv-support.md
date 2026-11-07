@@ -65,7 +65,7 @@ Evidence references:
 | g2/s0/set5 | MUL | 2 | next; libbluray saturates at uint32 max | none | executes; no independent golden |
 | g2/s0/set6 | DIV | 2 | next; zero divisor yields uint32 max in libbluray | none | executes; no independent golden |
 | g2/s0/set7 | MOD | 2 | next; zero divisor yields uint32 max in libbluray | none | executes; no independent golden |
-| g2/s0/set8 | RND | 2 | deterministic 32-bit configured seed; pinned libbluray 64-bit LCG; output is upper word modulo N plus one | writes the selected value to a GPR and records the register delta; zero range returns one with `HDMV_RND_ZERO_RANGE` | fixed-seed vector and bdmvkit shuffle fixture cover all three playlist branches; distribution uniformity is not claimed |
+| g2/s0/set8 | RND | 2 | deterministic 32-bit configured seed; pinned libbluray 64-bit LCG; output is upper word modulo N plus one | writes the selected value to a GPR and records the register delta; zero range returns one with `HDMV_RND_ZERO_RANGE` | the all-features synthetic disc covers MOVE/RND/PLAY_PL decoding and VM execution; distribution uniformity is not claimed |
 | g2/s0/set9 | AND | 2 | next | none | executes; no independent golden |
 | g2/s0/set10 | OR | 2 | next | none | executes; no independent golden |
 | g2/s0/set11 | XOR | 2 | next | none | executes; no independent golden |

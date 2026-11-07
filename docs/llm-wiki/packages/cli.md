@@ -108,7 +108,7 @@ export-assets: flags: 无                                      values: --type --
 
 ## 测试
 
-`src/index.test.ts`（39 例）：参数契约、profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度。`src/bdmvkit-loop.test.ts`（1 例）覆盖 bdmvkit 夹具的循环导航。
+`src/index.test.ts`（35 例）：参数契约、profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度。`src/synthetic-all-features.test.ts`（8 例）在 `test-data/fixtures/synthetic-all-features/` 上覆盖解析、HDMV 解码与 VM、IGS 多页与弹出菜单、双语言 PGS、循环点、按钮音效与一站式交接。
 
 ## 改动入口
 

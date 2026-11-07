@@ -137,7 +137,8 @@ buildNavigationGraph(objects, appendedPrograms?, { maxStates?, entries? }): Navi
 | `src/control-flow.test.ts` | GOTO/BREAK/RESUME、JUMP_TITLE/CALL_TITLE 事件边界、越界目标 |
 | `src/loops.test.ts` | 静态循环检测 |
 | `src/reference-golden.test.ts` | 从 libbluray 源码推导的检查点 golden（首个差异即失败） |
-| `src/bdmvkit-rnd.test.ts` | RND 三个播放列表分支 |
+
+跨包一站式覆盖见 `apps/cli/src/synthetic-all-features.test.ts`：MOVE/RND/PLAY_PL 序列的解码与 VM 执行。
 
 golden 文件：`src/fixtures/libbluray-1.5.0-source-derived-reference-golden.json`。它由源码推导，不是 libbluray 运行 trace。
 

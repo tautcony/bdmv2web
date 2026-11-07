@@ -103,7 +103,8 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
 | `packages/igs/test/m1-m2-m3.integration.test.ts` | 解析 → 场景 → 命令的来源交接 |
 | `packages/igs/test/real-igs.test.ts`、`tamako-*.test.ts` | 工作区本地样本；数据缺失时跳过 |
-| `packages/igs/test/bdmvkit-fixture.test.ts` | bdmvkit 生成夹具的弹出菜单标志与 clip/PID 溯源 |
+
+跨包一站式覆盖见 `apps/cli/src/synthetic-all-features.test.ts`：两页多 BOG 菜单、effect/animation、按钮音效与弹出菜单超时字段。
 
 合成字节在 `packages/igs/test/fixtures.ts`；外部来源的 ICS 样本在 `test-data/fixtures/igs-parser/`，旁边带来源与许可说明。
 
