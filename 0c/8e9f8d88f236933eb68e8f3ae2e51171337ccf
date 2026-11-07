@@ -1,0 +1,100 @@
+AGENTS.md
+  h_3705811fa4502c 29-37
+apps/cli/tests/e2e/index.test.ts
+  h_3705811fa4502c 11,390,395,400,435,460
+apps/cli/tests/integration/libbluray-navigation-baseline.test.ts
+  h_3705811fa4502c 18
+apps/cli/tests/integration/synthetic-all-features.test.ts
+  h_3705811fa4502c 13
+apps/cli/tsconfig.build.json
+  h_3705811fa4502c 1
+apps/cli/tsconfig.json
+  h_3705811fa4502c 1
+apps/cli/vitest.config.ts
+  h_3705811fa4502c 4
+docs/guides/development.md
+  h_3705811fa4502c 27,120-121,126,140
+docs/llm-wiki/features/igs-extraction.md
+  h_3705811fa4502c 75,79
+docs/llm-wiki/features/offline-menu.md
+  h_3705811fa4502c 120
+docs/llm-wiki/packages/bdmv-parser.md
+  h_3705811fa4502c 102
+docs/llm-wiki/packages/cli.md
+  h_3705811fa4502c 140
+docs/llm-wiki/packages/hdmv.md
+  h_3705811fa4502c 141
+docs/llm-wiki/packages/igs.md
+  h_3705811fa4502c 104-110,112,114
+docs/llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 123,125
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 37-46,69-71,77
+docs/references/stages/M2-igs-field-register.md
+  h_3705811fa4502c 9
+docs/references/stages/M2-igs-scenes.md
+  h_3705811fa4502c 24,38,45,52,59,92-93,100,108
+docs/support/igs-support.md
+  h_3705811fa4502c 17,19,25
+docs/support/protocol-support.md
+  h_3705811fa4502c 33
+eslint.config.mjs
+  h_3705811fa4502c 4,16,19
+packages/hdmv/src/reference-golden.test.ts
+  h_3705811fa4502c 5
+packages/igs/src/mnu.test.ts
+  h_3705811fa4502c 2-4
+packages/igs/src/transport.test.ts
+  h_3705811fa4502c 3-6,27
+packages/igs/tests/helpers/fixtures.ts
+  h_3705811fa4502c 1,96
+packages/igs/tests/integration/extraction.test.ts
+  h_3705811fa4502c 9-13,109
+packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts
+  h_3705811fa4502c 5-6,8
+packages/igs/tests/integration/igs-reference-element-summary.test.ts
+  h_3705811fa4502c 13-14,16,65-67,72
+packages/igs/tests/integration/libbluray-igs-baseline.test.ts
+  h_3705811fa4502c 17-18,20
+packages/igs/tests/integration/m1-m2-m3.integration.test.ts
+  h_3705811fa4502c 8-9
+packages/igs/tests/integration/real-igs.test.ts
+  h_3705811fa4502c 3-4,8,13
+packages/igs/tests/integration/tamako-external-navigation.test.ts
+  h_3705811fa4502c 7,9
+packages/igs/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/igs/tsconfig.json
+  h_3705811fa4502c 1
+packages/igs/vitest.config.ts
+  h_3705811fa4502c 2
+packages/runtime-web/tests/helpers/headless-navigation-fixture.ts
+  h_3705811fa4502c 7
+packages/runtime-web/tests/integration/hdmv-navigation-corpus-dfs.test.ts
+  h_3705811fa4502c 8
+packages/runtime-web/tests/integration/headless-menu-synthetic.test.ts
+  h_3705811fa4502c 3
+packages/runtime-web/tests/integration/tamako-headless-navigation.test.ts
+  h_3705811fa4502c 4-5
+packages/runtime-web/tsconfig.build.json
+  h_3705811fa4502c 1
+packages/runtime-web/tsconfig.json
+  h_3705811fa4502c 1
+packages/runtime-web/vitest.config.ts
+  h_3705811fa4502c 4
+test-data/baselines/README.md
+  h_3705811fa4502c 7-9
+tsconfig.lint.json
+  h_3705811fa4502c 10,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c8e9f8d88f236933eb68e8f3ae2e51171337ccf",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
