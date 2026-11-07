@@ -1,0 +1,20 @@
+README.md
+  h_3705811fa4502c 61,63,65,67
+docs/llm-wiki/features/cli-commands.md
+  h_3705811fa4502c 87
+docs/llm-wiki/packages/cli.md
+  h_3705811fa4502c 95
+docs/llm-wiki/packages/media-export.md
+  h_3705811fa4502c 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fd452de78544e5ea1cd89630ed68f26d113ef782",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
