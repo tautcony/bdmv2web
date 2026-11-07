@@ -1,0 +1,26 @@
+README.md
+  h_3705811fa4502c 45,51-52
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 164-201
+apps/cli/src/index.ts
+  h_3705811fa4502c 2,5,15,25,734-792,801-823,827,831-833,835-839,841-843,847-851,855,867,978-982,998-1011,1013-1015,1022-1028,1178
+apps/cli/src/progress.ts
+  h_3705811fa4502c 1-300
+packages/bdmv-io/src/index.ts
+  h_3705811fa4502c 48-52,57-67
+packages/bdmv-parser/src/parser.ts
+  h_3705811fa4502c 2,45
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 121-122,143,181,194,197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "77647c9db988312c3dfe42a69c4bbd51427c4fad",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
