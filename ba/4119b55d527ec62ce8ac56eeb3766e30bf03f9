@@ -1,0 +1,36 @@
+docs/llm-wiki/architecture.md
+  h_3705811fa4502c 68
+docs/llm-wiki/packages/bdmv-parser.md
+  h_3705811fa4502c 101-102
+docs/llm-wiki/packages/cli.md
+  h_3705811fa4502c 111
+docs/llm-wiki/packages/hdmv.md
+  h_3705811fa4502c 140-141
+docs/llm-wiki/packages/igs.md
+  h_3705811fa4502c 106-107
+docs/llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 123
+docs/llm-wiki/packages/test-fixtures.md
+  h_3705811fa4502c 34
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 43,52
+docs/references/stages/M5-media-playback.md
+  h_3705811fa4502c 17,19,21
+docs/support/hdmv-support.md
+  h_3705811fa4502c 68
+docs/support/igs-support.md
+  h_3705811fa4502c 19
+packages/package-builder/src/index.test.ts
+  h_3705811fa4502c 2,5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ba4119b55d527ec62ce8ac56eeb3766e30bf03f9",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
