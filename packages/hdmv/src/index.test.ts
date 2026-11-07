@@ -97,19 +97,19 @@ describe("M3 HDMV fixtures", () => {
     vm.restoreCheckpoint(checkpoint);
     expect(vm.snapshot()).toEqual(snapshot);
   });
-  it("keeps unsupported semantics diagnostic and allows later menu commands", () => {
+  it("keeps unsupported semantics diagnostic and continues the current object", () => {
     const observed: Array<{ decoded: string | null; status: string; diagnostic?: { code: string } }> = [];
     const vm = new HdmvVm([{ id: 0, instructions: [rawCommand(0x21830000, 1), m3Fixtures.move5] }], {
       onTrace: (entry) => observed.push(entry),
     });
     const initial = vm.runTurn();
-    expect(initial).toMatchObject({ status: "idle", pc: 1, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
-    expect(initial.registers.gpr[0]).toBe(0);
+    expect(initial).toMatchObject({ status: "idle", pc: 2, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
+    expect(initial.registers.gpr[0]).toBe(5);
 
     const result = vm.executeButtonProgram([m3Fixtures.move5], "ig_object");
     expect(result).toMatchObject({ status: "running", fault: null, registers: { gpr: expect.arrayContaining([5]) } });
     expect(result.diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
-    expect(observed.some((entry) => entry.diagnostic?.code === "HDMV_UNVERIFIED_OPCODE" && entry.status === "idle")).toBe(true);
+    expect(observed.some((entry) => entry.diagnostic?.code === "HDMV_UNVERIFIED_OPCODE" && entry.status === "running")).toBe(true);
     expect(observed.some((entry) => entry.decoded?.startsWith("MOVE") && entry.status === "running")).toBe(true);
   });
   it("executes a raw button command in the current VM context with its own source", () => {
@@ -702,8 +702,12 @@ describe("M3 HDMV fixtures", () => {
     const topVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }], { entries: [] });
     topVm.runTurn();
     const top = topVm.handleEvent({ type: "TOP_MENU" });
-    expect(top.status).toBe("idle");
+    expect(top.status).toBe("suspended");
     expect(topVm.actions.at(-1)?.type).toBe("TITLE_SEARCH");
+    expect(topVm.snapshot().waiting).toBeNull();
+    // A title search that cannot resolve releases the transition.
+    topVm.selectTitle(0);
+    expect(topVm.snapshot().status).toBe("idle");
     expect(topVm.snapshot().waiting).toBeNull();
   });
   it("runs IG CALL_OBJECT while a playlist wait is pending and parks the playing position", () => {
@@ -797,6 +801,53 @@ describe("M3 HDMV fixtures", () => {
     vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
     expect(vm.snapshot().programId).toBe(0); expect(vm.snapshot().registers.gpr[0]).toBe(5); expect(vm.snapshot().status).toBe("idle");
   });
+  it("menu input during a playlist wait transfers the object and drops the playlist wait", () => {
+    // libbluray _jump_object() clears playing_object during an interactive
+    // composition transfer; _resume_from_play_pl() then finds no playing
+    // object and a later playlist end leaves the VM untouched.
+    const vm = new HdmvVm([
+      { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
+      { id: 1, instructions: [m3Fixtures.break] },
+    ]);
+    vm.runTurn(); const action = vm.actions[0]!;
+    expect(vm.snapshot().status).toBe("suspended");
+    vm.handleEvent({ type: "MENU_INPUT", payload: { objectId: 1 } });
+    expect(vm.snapshot().programId).toBe(1);
+    expect(vm.snapshot().waiting).toBeNull();
+    expect(vm.snapshot().status).toBe("idle");
+    expect(vm.trace.some((entry) => entry.action?.type === "PLAY_STOP")).toBe(true);
+    vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
+    expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_IGNORED_EVENT");
+    expect(vm.snapshot().programId).toBe(1);
+    expect(vm.snapshot().status).toBe("idle");
+  });
+  it("keeps the playlist continuation when a button command faults during a playlist wait", () => {
+    // libbluray _vm_run() clears only the faulting object (p->object = NULL);
+    // playing_object keeps waiting for playlist end and MEDIA_ENDED resumes it.
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
+    vm.runTurn(); const action = vm.actions[0]!;
+    const faulted = vm.executeButtonProgram([{ words: [0x5040000c, 0, 32], bytes: "5040000c0000000000000020", source: m3Fixtures.move5.source }], "ig_object");
+    expect(faulted.diagnostic?.code).toBe("HDMV_ILLEGAL_OPERAND");
+    expect(faulted.status).toBe("suspended");
+    expect(vm.snapshot().waiting?.id).toBe(action.id);
+    expect(vm.snapshot().diagnostic?.code).toBe("HDMV_ILLEGAL_OPERAND");
+    vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
+    expect(vm.snapshot().status).toBe("idle");
+    expect(vm.snapshot().diagnostic?.code).toBe("HDMV_ILLEGAL_OPERAND");
+  });
+  it("keeps the playlist continuation suspended when a button command hits an unsupported operation", () => {
+    // libbluray logs an unsupported operation and continues the current
+    // object; the MovieObject waiting for playlist end keeps its wait.
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
+    vm.runTurn(); const action = vm.actions[0]!;
+    const result = vm.executeButtonProgram([rawCommand(0x21830000, 1), m3Fixtures.move5], "ig_object");
+    expect(result.diagnostic?.code).toBe("HDMV_UNVERIFIED_OPCODE");
+    expect(result.status).toBe("suspended");
+    expect(result.registers.gpr[0]).toBe(5);
+    expect(vm.snapshot().waiting?.id).toBe(action.id);
+    vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
+    expect(vm.snapshot().status).toBe("idle");
+  });
   it("runs an IG JUMP_OBJECT while playlist playback is suspended and retires that wait", () => {
     const vm = new HdmvVm([
       { id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] },
@@ -843,12 +894,28 @@ describe("M3 HDMV fixtures", () => {
     expect(fullQueue.snapshot().status).toBe("faulted"); expect(fullQueue.snapshot().diagnostic?.code).toBe("VM_QUEUE_LIMIT");
     expect(fullQueue.trace.at(-1)?.event?.type).toBe("TOP_MENU");
   });
-  it("routes top menu to title selection and emits popup requests without a VM wait", () => {
+  it("routes top menu to title selection with input blocked until the search resolves, and emits popup requests without a VM wait", () => {
     const top = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
-    expect(top.handleEvent({ type: "TOP_MENU" }).status).toBe("idle");
+    expect(top.handleEvent({ type: "TOP_MENU" }).status).toBe("suspended");
     expect(top.snapshot().waiting).toBeNull();
     expect(top.actions.at(-1)).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 0 } });
     expect(top.actions.at(-1)).not.toHaveProperty("waitFor");
+    top.selectTitle(0);
+    expect(top.snapshot().status).toBe("idle");
+    // libbluray serializes bd_menu_call() with the title start under one lock,
+    // so a second menu call cannot interleave while the first search is
+    // unresolved. Input is blocked until selectTitle() consumes the search.
+    const entries = [{ id: "topMenu:0", kind: "topMenu" as const, target: { objectType: "HDMV" as const, playbackType: 0, target: 0, source: m3Fixtures.move5.source }, source: m3Fixtures.move5.source }];
+    const menu = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }], { entries });
+    menu.handleEvent({ type: "TOP_MENU" });
+    expect(menu.actions.filter((action) => action.type === "TITLE_SEARCH")).toHaveLength(1);
+    menu.handleEvent({ type: "TOP_MENU" });
+    expect(menu.trace.at(-1)?.diagnostic?.code).toBe("HDMV_INPUT_WHILE_SUSPENDED");
+    expect(menu.actions.filter((action) => action.type === "TITLE_SEARCH")).toHaveLength(1);
+    menu.selectTitle(0);
+    expect(menu.snapshot().status).toBe("idle");
+    menu.handleEvent({ type: "TOP_MENU" });
+    expect(menu.actions.filter((action) => action.type === "TITLE_SEARCH")).toHaveLength(2);
 
     const popup = new HdmvVm([{ id: 0, instructions: [m3Fixtures.break] }]);
     expect(popup.handleEvent({ type: "POPUP_MENU" }).status).toBe("idle");

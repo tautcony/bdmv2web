@@ -123,6 +123,8 @@ export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipI
         state.diagnostics.push(error("IGS_INVALID_SEGMENT", "ICS continuation has no active composition", src));
         return;
       }
+      const combinedLength = current.ics.length + segment.data.length - 9;
+      if (combinedLength > limits.maxReassemblyBytes) throw new IgsError("LIMIT_EXCEEDED", `Combined ICS reassembly ${combinedLength} bytes exceeds maxReassemblyBytes ${limits.maxReassemblyBytes}`);
       current.ics = appendIcsFragment(current.ics, segment.data);
       if (endsComposition) {
         // The combined composition is parsed at the following END segment.

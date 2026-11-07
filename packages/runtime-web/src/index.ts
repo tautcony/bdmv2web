@@ -693,23 +693,26 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   private retryGeneration = 0;
   private activePlaylistResponse: { id: string; generation: number } | null = null;
   private lastTimeUpdateSecond = -1;
-  private activeMedia: MenuLoopMediaPackage;
+  private activeMedia: MenuLoopMediaPackage | null;
   private readonly playlistMedia: readonly MenuLoopMediaPackage[];
   constructor(
     private readonly vm: HdmvVm,
     private readonly video: HTMLVideoElement,
     private readonly audio: HTMLAudioElement,
-    private readonly media: MenuLoopMediaPackage,
+    private readonly media: MenuLoopMediaPackage | undefined,
     private readonly report: (message: string) => void,
     private readonly hooks: MenuLoopPlaybackHooks = {},
     playlistMedia: readonly MenuLoopMediaPackage[] = [],
   ) {
     this.playlistMedia = playlistMedia;
-    this.activeMedia = media;
+    // A package can carry only additional menu playlist media (per-playlist
+    // assets) with no Top Menu background; the bridge then serves playlist
+    // media from playlistMedia and has no primary background.
+    this.activeMedia = media ?? null;
     this.confirmedPrimaryAudioStream = vm.registers.read({ kind: "psr", index: 1 });
-    this.selectedAudioStream = this.pickAudioStream(media);
+    this.selectedAudioStream = media ? this.pickAudioStream(media) : 0;
     this.video.addEventListener?.("ended", () => {
-      if (this.activeMedia.background.loop) return;
+      if (this.activeMedia?.background.loop) return;
       const response = this.activePlaylistResponse;
       if (!response) return;
       this.activePlaylistResponse = null;
@@ -775,7 +778,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
 
   /** Starts the local menu loop from the Start gesture when Top Menu emits no matching PLAY_PL action. */
   async startMenuBackground(): Promise<boolean> {
-    if (!this.media.background.path) {
+    if (!this.media?.background.path) {
       this.report("Menu background playback assets are unavailable."); return false;
     }
     if (this.activeMedia !== this.media) {
@@ -799,16 +802,34 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
         try {
           await Promise.all([this.video.play(), ...(audioTrack ? [this.audio.play()] : [])]);
         } catch (error) {
+          const name = typeof error === "object" && error !== null && "name" in error ? String((error as { name: unknown }).name) : "";
           const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+          // An autoplay block on resume is recoverable through the same retry
+          // gesture as the initial start; it must not terminate the menu VM.
+          if (name === "NotAllowedError") {
+            this.report(`Browser blocked menu media playback; use the retry button to start it. (${message})`);
+            const retryGeneration = ++this.retryGeneration;
+            this.hooks.offerRetry?.(() => {
+              if (retryGeneration !== this.retryGeneration || (response && !this.isPending(response))) return;
+              void this.startMedia(response);
+            });
+            return false;
+          }
           this.report(`Menu media could not resume: ${message}`);
           if (response) this.vm.handleEvent({ type: "MEDIA_ERROR", generation: response.generation, responseTo: response.id, payload: { message } });
           return false;
         }
       }
-      if (response) this.vm.handleEvent({ type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
+      if (response) {
+        // Rebind the response so a later natural media end still reports
+        // MEDIA_ENDED for this playlist wait (the failed attempt cleared it).
+        this.activePlaylistResponse = response;
+        this.vm.handleEvent({ type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
+      }
       return true;
     }
     if (!this.startPromise) {
+      if (!media) return false;
       const audioTrack = this.findAudioTrack(this.selectedAudioStream);
       this.video.loop = media.background.loop;
       this.video.src = media.background.path;
@@ -844,7 +865,13 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     const attempt = this.startPromise;
     const started = await attempt;
     if (this.startPromise === attempt && !started) this.startPromise = null;
-    if (started && response) this.vm.handleEvent({ type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
+    if (started && response) {
+      // The initial attempt and its retry share this branch: a retry succeeds
+      // with the response already released by the failed attempt, so rebind it
+      // to keep reporting MEDIA_ENDED when the playlist media ends naturally.
+      this.activePlaylistResponse = response;
+      this.vm.handleEvent({ type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
+    }
     return started;
   }
 
@@ -870,7 +897,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   }
 
   private findMedia(playlist: number): MenuLoopMediaPackage | undefined {
-    if (playlist === this.media.playlist) return this.media;
+    if (this.media && playlist === this.media.playlist) return this.media;
     return this.playlistMedia.find((candidate) => candidate.playlist === playlist);
   }
 
@@ -897,11 +924,13 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   }
 
   private findAudioTrack(streamNumber: number): MenuLoopMediaPackage["audioTracks"][number] | undefined {
+    if (!this.activeMedia) return undefined;
     const matches = this.activeMedia.audioTracks.filter((track) => track.streamNumber === streamNumber);
     return matches.length === 1 ? matches[0] : undefined;
   }
 
   private findAudioTrackForPsrStream(psrStreamNumber: number): MenuLoopMediaPackage["audioTracks"][number] | undefined {
+    if (!this.activeMedia) return undefined;
     const matches = this.activeMedia.audioTracks.filter((track) => this.psrStreamNumber(track) === psrStreamNumber);
     return matches.length === 1 ? matches[0] : undefined;
   }
@@ -909,7 +938,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
   private psrStreamNumber(track: MenuLoopMediaPackage["audioTracks"][number]): number { return track.psrStreamNumber ?? track.streamNumber + 1; }
 
   private async selectAudioStream(psrStreamNumber: number, generation: number): Promise<void> {
-    if (this.activeMedia.audioTracks.length === 0) {
+    if (!this.activeMedia || this.activeMedia.audioTracks.length === 0) {
       this.rollbackPrimaryAudioStream(this.confirmedPrimaryAudioStream);
       return;
     }
@@ -959,7 +988,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     this.audio.load();
     await metadataWait;
     this.assertCurrentTrackSwitch(generation, sequence);
-    const duration = track.durationSeconds ?? this.activeMedia.background.durationSeconds;
+    const duration = track.durationSeconds ?? this.activeMedia?.background.durationSeconds;
     if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) throw new Error("Menu package is missing a valid generated audio duration.");
     const targetTime = logicalTime % duration;
     if (!Number.isFinite(targetTime) || targetTime < 0) throw new Error("Video logical time cannot be mapped to the audio variant.");

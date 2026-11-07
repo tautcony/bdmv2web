@@ -97,9 +97,9 @@ describe("HDMV control-flow boundaries", () => {
 
     const bdjEntries = entries({ objectType: "BDJ", target: "00001" });
     const titleVm = new HdmvVm([{ id: 0, instructions: [command(0x21830000, 1), m3Fixtures.break] }], { entries: bdjEntries });
-    expect(titleVm.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 1, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
+    expect(titleVm.runTurn()).toMatchObject({ status: "idle", programId: 0, pc: 2, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     expect(titleVm.actions).toHaveLength(0);
-    expect(titleVm.trace.at(-1)).toMatchObject({ pc: 0, decoded: "CALL_TITLE #1", status: "idle", diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
+    expect(titleVm.trace.find((item) => item.decoded?.startsWith("CALL_TITLE"))).toMatchObject({ pc: 0, diagnostic: { code: "HDMV_UNVERIFIED_OPCODE" } });
     const graph = buildNavigationGraph([{ id: 0, instructions: [command(0x21830000, 1)] }], [], { entries: bdjEntries });
     expect(graph.edges).toContainEqual(expect.objectContaining({ kind: "call", to: null, resolution: "unresolved" }));
   });

@@ -131,6 +131,11 @@
 - **WHEN** Top Menu 先播放片头或警告，经过媒体结束和 `TITLE_SEARCH` 后才到达 `PLAY_PLAYLIST_ITEM` 或 `PLAY_PLAYLIST_MARK` 菜单
 - **THEN** 解析跟随这些可达转换，选择第一个带 `uiModel=0` IGS 场景的 Playlist，不只取第一个 `PLAY_PLAYLIST`
 
+#### Scenario: 弹出构图建模的 Top Menu
+
+- **WHEN** 解析出的 Top Menu Playlist 的选中构图是 `uiModel=1`（转换链上没有任何带 `uiModel=0` IGS 场景的 Playlist 时必然如此）
+- **THEN** 转换使用该 Playlist 作为 Top Menu，把它的选中场景打包为菜单面，并把该 Playlist 计入 `menuPlaylistIds`；该 Playlist 的 `PLAY_PLAYLIST` 按菜单面处理（切换场景并使用包内背景媒体），不进入 `preMenuPlaylistIds`，也不静默以 `MEDIA_ENDED` 完成
+
 #### Scenario: 片头不触发外部播放
 
 - **WHEN** 运行时进入 Top Menu 并遇到转换阶段标记的片头 Playlist

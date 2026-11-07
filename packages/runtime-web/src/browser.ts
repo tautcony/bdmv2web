@@ -4,7 +4,7 @@ import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlay
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
-export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
+export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; }
 
@@ -164,7 +164,7 @@ async function boot(): Promise<void> {
     let retryMedia: (() => void) | null = null;
     const menuMedia = (data.menuMedia ?? []).filter((item) => item.playlist !== data.media?.playlist);
     const playlistMedia = (playlist: number): PackageMenuMedia | undefined => playlist === data.media?.playlist ? data.media : menuMedia.find((item) => item.playlist === playlist);
-    const playbackBridge: PlaybackBridge = data.media && video && audio
+    const playbackBridge: PlaybackBridge = (data.media || data.menuMedia?.length) && video && audio
       ? new MenuLoopPlaybackBridge(vm, video, audio, data.media, (message) => { showStatus(message); }, {
         offerRetry: (retry) => { retryMedia = retry; start.textContent = "Retry menu media"; start.hidden = false; start.disabled = false; },
         clearRetry: () => { retryMedia = null; if (!retrySound) start.hidden = true; },
@@ -253,7 +253,11 @@ async function boot(): Promise<void> {
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
           const playlist = action.payload.playlist;
           const localMedia = playlistMedia(playlist);
-          const requestedPlayItem = action.type === "PLAY_PLAYLIST_ITEM" && typeof action.payload.playItem === "number" ? action.payload.playItem : 0;
+          const requestedPlayItem = action.type === "PLAY_PLAYLIST_ITEM" && typeof action.payload.playItem === "number"
+            ? action.payload.playItem
+            : action.type === "PLAY_PLAYLIST_MARK" && typeof action.payload.playMark === "number"
+              ? data.menuPlaylistMarks?.find((item) => item.playlistId === playlist)?.marks.find((mark) => mark.index === action.payload.playMark)?.playItemRef ?? 0
+              : 0;
           const menuScenesForPlaylist = data.menuScenes?.filter((item) => item.playlistId === playlist) ?? [];
           const target = menuScenesForPlaylist.find((item) => (item.playItem ?? 0) === requestedPlayItem) ?? menuScenesForPlaylist[0];
           if (!target) {
@@ -400,7 +404,7 @@ async function boot(): Promise<void> {
       inputStarted = true; start.disabled = true; start.hidden = true;
       let menuMediaStarted: boolean | undefined;
       let pending = { menuPlaylistRequested: false, completion: Promise.resolve() };
-      if (data.vmInitialProgramId !== undefined && data.media && video && audio) {
+      if (data.vmInitialProgramId !== undefined && (data.media || data.menuMedia?.length) && video && audio) {
         if (data.vmFirstPlayProgramId !== undefined && data.vmEntries?.some((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV")) {
           vm.reset(data.vmFirstPlayProgramId);
           const initial = vm.runTurn();
@@ -425,6 +429,11 @@ async function boot(): Promise<void> {
       viewport.resize(canvas, initialRect.width, initialRect.height, window.devicePixelRatio || 1);
       controller!.start();
       void dispatchActions().completion;
+      // The dispatch above can switch scenes synchronously and install input
+      // for the switched controller; remove those listeners before installing
+      // the final set so one input event reaches one controller.
+      removeKeyboard?.();
+      removePointer?.();
       removeKeyboard = installKeyboardInput(window, popupController ?? controller!);
       removePointer = installCanvasPointerInput(canvas, viewport, controller!, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
       redraw();

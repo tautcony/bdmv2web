@@ -1125,6 +1125,64 @@ describe("offline menu primitives", () => {
     expect(vm.trace.filter((record) => record.action?.id === action.id)).toHaveLength(1);
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(false);
   });
+  it("reports MEDIA_ENDED after an initial autoplay block is recovered through the retry gesture", async () => {
+    const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
+    vm.reset(9); vm.runTurn(); const action = vm.drainActions()[0]!;
+    let mediaEnded: (() => void) | undefined;
+    const video = { loop: false, src: "", currentTime: 0, paused: true, play: vi.fn().mockRejectedValueOnce(Object.assign(new Error("gesture required"), { name: "NotAllowedError" })).mockResolvedValue(undefined), addEventListener: (type: string, listener: () => void) => { if (type === "ended") mediaEnded = listener; } } as unknown as HTMLVideoElement;
+    const audio = { loop: false, src: "", currentTime: 0, duration: 100, readyState: 1, paused: true, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), load: vi.fn() } as unknown as HTMLAudioElement;
+    const reports: string[] = []; let retry: (() => void) | undefined;
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false, durationSeconds: 109.234 }, audioTracks: [
+      { streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
+    ] }, (message) => reports.push(message), { offerRetry: (callback) => { retry = callback; } });
+
+    await bridge.dispatch(action);
+    expect(retry).toBeTypeOf("function");
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED")).toBe(false);
+
+    // The failed initial attempt releases the response; the retried start must
+    // rebind it so the natural end of a non-loop playlist still completes.
+    retry!(); await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(vm.trace.filter((record) => record.event?.type === "MEDIA_STARTED")).toHaveLength(1);
+    expect(vm.snapshot()).toMatchObject({ status: "suspended", waiting: { id: action.id } });
+
+    mediaEnded!();
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(true);
+    expect(vm.snapshot().status).toBe("idle");
+  });
+  it("offers the retry gesture when an autoplay block interrupts an already-started media resume", async () => {
+    const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
+    vm.reset(9); vm.runTurn(); const action = vm.drainActions()[0]!;
+    let mediaEnded: (() => void) | undefined;
+    const video = { loop: false, src: "", currentTime: 0, paused: true, play: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(Object.assign(new Error("gesture required"), { name: "NotAllowedError" })).mockResolvedValue(undefined), addEventListener: (type: string, listener: () => void) => { if (type === "ended") mediaEnded = listener; } } as unknown as HTMLVideoElement;
+    const audio = { loop: false, src: "", currentTime: 0, duration: 100, readyState: 1, paused: true, play: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), load: vi.fn() } as unknown as HTMLAudioElement;
+    const reports: string[] = []; let retry: (() => void) | undefined;
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false, durationSeconds: 109.234 }, audioTracks: [
+      { streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" },
+    ] }, (message) => reports.push(message), { offerRetry: (callback) => { retry = callback; } });
+
+    await bridge.dispatch(action);
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED")).toBe(true);
+
+    // The page restores with paused elements: the resume attempt hits an
+    // autoplay block, which must offer the retry gesture instead of failing
+    // the pending playlist wait.
+    await bridge.dispatch(action);
+    expect(reports.some((message) => /blocked.*retry/i.test(message))).toBe(true);
+    expect(retry).toBeTypeOf("function");
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_ERROR")).toBe(false);
+    expect(vm.snapshot().status).toBe("suspended");
+    expect(vm.snapshot().waiting).toMatchObject({ id: action.id });
+
+    retry!(); await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(vm.trace.filter((record) => record.event?.type === "MEDIA_STARTED")).toHaveLength(2);
+
+    // The retried start rebinds the response: a natural media end still
+    // completes the playlist wait.
+    mediaEnded!();
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(true);
+    expect(vm.snapshot().status).toBe("idle");
+  });
   it("does not retry stale media actions and routes NotSupportedError as a capability error", async () => {
     const makeVmAction = () => {
       const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);

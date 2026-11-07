@@ -87,21 +87,21 @@ describe("IGS and PGS asset CLI", () => {
 });
 
 describe("M4 convert output", () => {
-  async function makeMenuDisc(parent: string, options: { includeMenuStream?: boolean; topMenuObject?: number; menuCueMode?: "mpls" | "clpi-only"; multipleMenuScenes?: boolean; duplicateMenuSceneIds?: boolean; explicitIgPriority?: boolean; repeatedMenuPlayItemWithoutIg?: boolean } = {}): Promise<string> {
+  async function makeMenuDisc(parent: string, options: { includeMenuStream?: boolean; topMenuObject?: number; menuCueMode?: "mpls" | "clpi-only"; multipleMenuScenes?: boolean; duplicateMenuSceneIds?: boolean; explicitIgPriority?: boolean; repeatedMenuPlayItemWithoutIg?: boolean; menuUiModel?: 0 | 1; logoUiModel?: 0 | 1; preMenuChain?: boolean } = {}): Promise<string> {
     const disc = join(parent, "BDMV");
     await mkdir(join(disc, "PLAYLIST"), { recursive: true });
     await mkdir(join(disc, "CLIPINF"), { recursive: true });
     await mkdir(join(disc, "STREAM"), { recursive: true });
     await writeFile(join(disc, "index.bdmv"), buildM1Index({ first: 0, top: options.topMenuObject ?? 0 }));
-    await writeFile(join(disc, "MovieObject.bdmv"), buildM1MovieObject([playPlaylistCommand(7)]));
+    await writeFile(join(disc, "MovieObject.bdmv"), buildM1MovieObject(options.preMenuChain ? [playPlaylistCommand(1), playPlaylistCommand(7)] : [playPlaylistCommand(7)]));
     await writeFile(join(disc, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithAudioPid());
     await writeFile(join(disc, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithIgsCue());
     // This unrelated scene is discovered first. The menu IGS declaration below
     // points at clip 00002 in playlist 00007.
-    await writeFile(join(disc, "STREAM", "00001.m2ts"), buildSyntheticClip());
+    await writeFile(join(disc, "STREAM", "00001.m2ts"), buildSyntheticClip(false, options.logoUiModel ?? 0));
     await writeFile(join(disc, "PLAYLIST", "00007.mpls"), options.repeatedMenuPlayItemWithoutIg ? buildMenuPlaylistWithRepeatedUnannotatedPlayItem() : buildMenuIgsPlaylist(options.menuCueMode !== "clpi-only"));
     await writeFile(join(disc, "CLIPINF", "00002.clpi"), options.explicitIgPriority ? buildM1ClipInfoWithTwoIgsCues() : buildM1ClipInfoWithIgsCue());
-    if (options.includeMenuStream !== false) await writeFile(join(disc, "STREAM", "00002.m2ts"), options.explicitIgPriority ? buildSyntheticClipWithTwoIgPids() : options.duplicateMenuSceneIds ? buildSyntheticClipWithDuplicateSceneIds() : options.multipleMenuScenes ? buildSyntheticClipWithTwoCompositions() : buildSyntheticClip());
+    if (options.includeMenuStream !== false) await writeFile(join(disc, "STREAM", "00002.m2ts"), options.explicitIgPriority ? buildSyntheticClipWithTwoIgPids() : options.duplicateMenuSceneIds ? buildSyntheticClipWithDuplicateSceneIds() : options.multipleMenuScenes ? buildSyntheticClipWithTwoCompositions() : buildSyntheticClip(false, options.menuUiModel));
     return disc;
   }
 
@@ -299,6 +299,50 @@ describe("M4 convert output", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
+  it("treats a popup-model Top Menu playlist as the menu surface and keeps it out of preMenuPlaylistIds", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert popup top menu "));
+    const disc = await makeMenuDisc(parent, { menuUiModel: 1 });
+    const output = join(parent, "output");
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title", "Offline Menu"]);
+      expect(result.status).toBe(0);
+      const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
+      const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[] };
+      expect(menuData.menuPlaylistIds).toContain(7);
+      expect(menuData.preMenuPlaylistIds).toBeUndefined();
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("records playlists completed before the Top Menu surface as preMenuPlaylistIds", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert pre-menu chain "));
+    const disc = await makeMenuDisc(parent, { logoUiModel: 1, preMenuChain: true });
+    const output = join(parent, "output");
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--title", "Offline Menu"]);
+      expect(result.status).toBe(0);
+      const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
+      const menuData = JSON.parse(discData.slice(discData.indexOf("=") + 1).replace(/;\s*$/, "")) as { menuPlaylistIds?: number[]; preMenuPlaylistIds?: number[] };
+      expect(menuData.preMenuPlaylistIds).toEqual([1]);
+      expect(menuData.menuPlaylistIds).toContain(7);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("extracts well-formed sup track records through the shared PGS extraction path", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv extract sup "));
+    const output = join(parent, "output");
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "extract", generatedDisc, "--type", "sup", "--out", output]);
+      expect(result.status).toBe(0);
+      const tracks = JSON.parse(await readFile(join(output, "sup", "tracks.json"), "utf8")) as { schemaVersion: string; tracks: Array<{ clipId: string; pid: number; language: string; displaySetCount: number; byteLength: number }> };
+      expect(tracks.schemaVersion).toBe("1.0");
+      expect(tracks.tracks.length).toBeGreaterThan(0);
+      expect(tracks.tracks.every((track) => track.displaySetCount > 0 && track.byteLength > 0)).toBe(true);
+      // This fixture references each stream at a single entry point; a disc
+      // that references one stream at two PlayItem in-points yields one track
+      // per entry (cache key clip+pid+sourceIn90k), which no fixture covers.
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("fails explicitly when one clip and PID cue resolve to multiple IGS compositions", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert ambiguous scene "));
     const disc = await makeMenuDisc(parent, { multipleMenuScenes: true }); const output = join(parent, "failed output");
@@ -435,7 +479,7 @@ describe("IGS extract CLI", () => {
       expect(result.status).toBe(0);
       const scenesDoc = JSON.parse(await readFile(join(target, "igs/scenes.json"), "utf8"));
       expect(scenesDoc.scenes).toHaveLength(1);
-      expect(scenesDoc).toMatchObject({ status: "complete" });
+      expect(scenesDoc).toMatchObject({ schemaVersion: "1.1", status: "complete" });
       expect(scenesDoc.scenes[0].raw).toMatchObject({ clipId: "00001", pid: 0x120, complete: true, width: 1, height: 1, source: { path: "BDMV/STREAM/00001.m2ts", pid: 0x120 } });
       expect(scenesDoc.scenes[0].raw.pages[0].buttons[0].commands[0].bytes).toHaveLength(12);
       const mappings = JSON.parse(await readFile(join(target, "igs/source-map.json"), "utf8"));
@@ -443,7 +487,7 @@ describe("IGS extract CLI", () => {
       expect(mappings.scenes[0].objects[0]).toMatchObject({ objectId: 5, source: { path: "BDMV/STREAM/00001.m2ts", byteOffset: expect.any(String) } });
       const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8"));
       expect(manifest).toMatchObject({ stageStatus: "complete", igs: { support: { status: "unverified" } } });
-      expect(manifest.limitations).toContain("IGS animation and visual effects are not fully verified");
+      expect(manifest.limitations).toContain("IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified");
       expect(manifest.files.map((file: any) => file.path)).toEqual(expect.arrayContaining(["igs/scenes.json", "igs/diagnostics.json", "igs/source-map.json"]));
       for (const file of manifest.files) {
       }
@@ -691,7 +735,7 @@ describe("offline validate CLI", () => {
   });
 });
 
-function buildSyntheticClip(missingObject = false): Uint8Array {
+function buildSyntheticClip(missingObject = false, uiModel: 0 | 1 = 0): Uint8Array {
   const u16 = (value: number) => Uint8Array.of(value >> 8, value & 255);
   const concat = (...parts: Uint8Array[]) => { const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0)); let at = 0; for (const part of parts) { out.set(part, at); at += part.length; } return out; };
   const segment = (type: number, body: Uint8Array) => concat(Uint8Array.of(type, body.length >> 8, body.length & 255), body);
@@ -699,7 +743,7 @@ function buildSyntheticClip(missingObject = false): Uint8Array {
   const command = Uint8Array.from({ length: 12 }, (_, i) => i + 1);
   const button = concat(u16(1), u16(0), Uint8Array.of(0), u16(0), u16(0), u16(0xffff), u16(0xffff), u16(0xffff), u16(0xffff), u16(pageId), u16(pageId), Uint8Array.of(0, 6), u16(pageId), u16(pageId), Uint8Array.of(0, 9), u16(pageId), u16(pageId), u16(1), command);
   const page = concat(Uint8Array.of(1, 0), new Uint8Array(8), Uint8Array.of(0, 0), Uint8Array.of(0, 0), Uint8Array.of(1), u16(1), u16(0xffff), Uint8Array.of(0, 1), u16(1), Uint8Array.of(1), button);
-  const composition = concat(Uint8Array.of(0x80, 0, 0, 0, 1), page);
+  const composition = concat(Uint8Array.of(uiModel === 1 ? 0xc0 : 0x80, 0, 0, 0, 1), page);
   const ics = concat(u16(1), u16(1), Uint8Array.of(0), u16(7), Uint8Array.of(0, 0xc0), Uint8Array.of(composition.length >> 16, composition.length >> 8, composition.length), composition);
   const pds = Uint8Array.of(0, 0, 1, 235, 128, 128, 255);
   const ods = concat(u16(5), Uint8Array.of(0, 0xc0, 0, 0, 5, 0, 1, 0, 1, 1));

@@ -20,10 +20,11 @@
 - **WHEN** ODS 尺寸乘积超过 maxObjectPixels
 - **THEN** 分配前拒绝，给出限制与实际值
 
-#### Scenario: 未支持效果
+#### Scenario: 效果引用不可解析
 
-- **WHEN** 可达场景声明未实现进入/退出效果
-- **THEN** 输出 IGS_UNSUPPORTED_EFFECT 及受影响场景，不能宣称画面完整
+- **WHEN** 可达场景的进入/退出效果引用没有可渲染定义的对象或调色板
+- **THEN** 提取输出 UNRESOLVED_OBJECT 或 UNRESOLVED_PALETTE 诊断并把场景标记为不完整，不宣称画面完整
+- **THEN** 运行时对缺少渲染资产的效果对象输出 IGS_UNRESOLVED_EFFECT_ASSET，效果序列按已解码的 duration90k/paletteId/crop 数据呈现
 
 #### Scenario: 结构诊断的来源
 

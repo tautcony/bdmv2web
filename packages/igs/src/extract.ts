@@ -131,7 +131,10 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   };
   for await (const chunk of chunks) for (const packet of reader.feed(chunk)) processPacket(packet);
   reader.end();
-  pes.end();
+  // An unbounded PES (declared length 0) still pending at EOF is committed by
+  // the assembler; its payload must reach the segment parser and the byte
+  // accounting like any completed PES.
+  for (const unit of pes.end()) processPes(unit);
   for (const [pid, residual] of residuals) if (residual.length) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `PID ${pid} ended with ${residual.length} residual IG segment bytes`, source: source(clipId, pid, streamBytes.get(pid) ?? 0n), affectedSceneIds: [] });
   for (const current of state.current.values()) diagnostics.push({ severity: "error", code: "IGS_UNCOMPLETED_DISPLAY_SET", message: "EOF before END segment; Display Set was not committed", source: current.source, affectedSceneIds: [] });
   for (const pending of state.pendingObjects.values()) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `EOF with incomplete ODS object ${pending.id} version ${pending.version}`, source: pending.source, affectedSceneIds: [] });

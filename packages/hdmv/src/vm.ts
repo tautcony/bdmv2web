@@ -201,20 +201,20 @@ export class HdmvVm {
     let d: DecodedInstruction;
     try { d = decodeInstruction(command, source); }
     catch (error) {
-      this.fail("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), source ?? null);
+      this.failButtonProgram("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), source ?? null);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     if (d.status === "invalid" || !d.opcode) {
-      this.fail(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, from);
+      this.failButtonProgram(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, from);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     const program = this.programs.get(this.programId);
     if (!program) {
-      this.fail("HDMV_INVALID_TARGET", `No program/object ${this.programId}`, d.source, d, before, from);
+      this.failButtonProgram("HDMV_INVALID_TARGET", `No program/object ${this.programId}`, d.source, d, before, from);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     if (this.instructionsThisTurn >= this.opts.maxInstructionsPerTurn) {
-      this.fail("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, d.source, d, before, from);
+      this.failButtonProgram("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, d.source, d, before, from);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     this.instructionsThisTurn++;
@@ -238,7 +238,7 @@ export class HdmvVm {
     if (this.status === "idle") this.status = "running";
     try { buttonCommandTerminated = this.execute(d, program, context) === true; }
     catch (error) {
-      this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, from);
+      this.failButtonProgram(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, from);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
     this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
@@ -272,20 +272,20 @@ export class HdmvVm {
     if (this.status === "idle") this.status = "running";
     while (pc < commands.length && this.status === "running") {
       if (this.instructionsThisTurn >= this.opts.maxInstructionsPerTurn) {
-        this.fail("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, null, undefined, undefined, { programId: ownerProgramId, pc });
+        this.failButtonProgram("VM_EXECUTION_LIMIT", `Exceeded ${this.opts.maxInstructionsPerTurn} instructions in one turn`, null, undefined, undefined, { programId: ownerProgramId, pc });
         break;
       }
       let d: DecodedInstruction;
       try { d = decodeInstruction(commands[pc]!); }
       catch (error) {
-        this.fail("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), null, undefined, undefined, { programId: ownerProgramId, pc });
+        this.failButtonProgram("HDMV_INVALID_INSTRUCTION", error instanceof Error ? error.message : String(error), null, undefined, undefined, { programId: ownerProgramId, pc });
         break;
       }
       const instructionPc = pc; pc += 1; this.instructionsThisTurn++;
       this.instructionDiagnostic = null;
       const before = this.registers.snapshot(); const [a, b] = d.operands;
       if (d.status === "invalid" || !d.opcode) {
-        this.fail(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
+        this.failButtonProgram(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
         break;
       }
       try {
@@ -303,7 +303,7 @@ export class HdmvVm {
           if (buttonCommandTerminated) terminated = true;
         }
       } catch (error) {
-        this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
+        this.failButtonProgram(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
         break;
       }
       this.record({ programId: ownerProgramId, pc: instructionPc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
@@ -502,14 +502,31 @@ export class HdmvVm {
       if (event.type === "MENU_INPUT") {
         if (event.payload?.uoAllowed === false) { this.record({ source: null, raw: null, decoded: null, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: { code: "HDMV_UO_BLOCKED", message: "User operation is prohibited by the current UO mask", source: null } }); return this.snapshot(); }
         const target = Number(event.payload?.objectId);
-        if (Number.isInteger(target) && target >= 0) this.tryTransfer(target, 0, source);
+        // libbluray runs the button program as an interactive composition while
+        // the MovieObject waits for playlist end (hdmv_vm_set_object()).
+        // _jump_object() drops that wait: playing_object = NULL, and a later
+        // playlist end finds no playing object and leaves the VM untouched
+        // (_resume_from_play_pl()). Stop the wait before entering the target
+        // object at PC 0 so the pending MEDIA_ENDED cannot overwrite the
+        // transfer.
+        if (Number.isInteger(target) && target >= 0 && this.tryTransfer(target, 0, source)) {
+          if (this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, source);
+          this.status = "running";
+          this.runTurn();
+        }
       } else if (event.type === "TOP_MENU") {
         // libbluray treats the top-menu key as a player operation: bd_menu_call
         // checks the Menu Call Mask, suspends the playing MovieObject when its
-        // resume intention is set, and starts the Top Menu index entry.
+        // resume intention is set, and starts the Top Menu index entry. The
+        // player performs the suspend and the title start under one lock, so no
+        // user input can interleave between the menu call and the title
+        // selection. Block input until selectTitle() consumes the emitted
+        // TITLE_SEARCH.
         if (event.payload?.uoAllowed === false || program?.menuCallMask === true) { this.record({ source: null, raw: null, decoded: null, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: { code: "HDMV_UO_BLOCKED", message: "TOP_MENU is blocked by UO/menu-call mask state", source: null } }); return this.snapshot(); }
         this.suspendPlayingForMenuCall();
         this.emit("TITLE_SEARCH", { title: 0 }, source);
+        this.status = "suspended";
+        this.titleTransition = true;
       } else if (event.type === "POPUP_MENU") {
         // Popup availability is governed by the playlist/page UO mask, which
         // the runtime checks before dispatching this event.
@@ -838,13 +855,13 @@ export class HdmvVm {
   }
   /** Unsupported player capability: report, stop the current run, keep the VM reusable. */
   private unsupportedOperation(code: string, message: string, source: SourceLocation | null): void {
+    // libbluray logs an unsupported operation in _hdmv_step and continues the
+    // current object (_call_title() returns -1 for an invalid title and the
+    // step loop advances); status and pending transitions stay untouched.
     const issue = { code, message, source };
     this.instructionDiagnostic = issue;
     this.diagnostics.push(issue);
     this.diagnostic = issue;
-    this.pendingTitleCall = null;
-    this.titleTransition = false;
-    this.status = "idle";
   }
   private tryValidateTitle(title: number, source: SourceLocation): boolean {
     try {
@@ -944,6 +961,13 @@ export class HdmvVm {
     if (this.continuation) this.removeAction(this.continuation.action.id);
     this.continuation = null; this.pendingTitleCall = null; this.titleTransition = false; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.playback.pendingActionId = null;
     const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
+    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
+  }
+  /** Record a fault raised while executing a button (interactive composition) program. libbluray _vm_run() clears only the faulting object (p->object = NULL); the MovieObject waiting for playlist end (playing_object) and any suspended call object stay untouched, so the pending playlist end can still resume the MovieObject. */
+  private failButtonProgram(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: ReturnType<RegisterFile["snapshot"]>, location?: { programId: number; pc: number }): void {
+    const issue = { code, message, source };
+    this.diagnostic = issue; this.diagnostics.push(issue);
+    this.status = this.continuation ? "suspended" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {

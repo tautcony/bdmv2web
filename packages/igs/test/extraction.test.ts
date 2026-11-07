@@ -52,6 +52,46 @@ describe("synthetic IGS extraction", () => {
     expect(state.diagnostics).toEqual([]);
   });
 
+  it("rejects combined ICS reassembly that exceeds maxReassemblyBytes", () => {
+    const full = syntheticMenuSegments();
+    const icsLength = ((full[1]! << 8) | full[2]!) >>> 0;
+    const ics = full.subarray(3, 3 + icsLength);
+    const rest = full.subarray(3 + icsLength);
+    const payload = ics.subarray(12);
+    const split = Math.floor(payload.length / 2);
+    const startHeader = ics.subarray(0, 9).slice(); startHeader[8] = 0x80;
+    const endHeader = ics.subarray(0, 9).slice(); endHeader[8] = 0x40;
+    const startData = concat(startHeader, Uint8Array.of(payload.length >>> 16, payload.length >>> 8, payload.length & 255), payload.subarray(0, split));
+    const endData = concat(endHeader, payload.subarray(split));
+    const stream = concat(segmentBytes(0x18, startData), segmentBytes(0x18, endData), rest);
+    const state = createIgsState();
+    for (const segment of parseSegments(stream).segments) consumeSegment(state, segment, "00001", IG_PID, null, 0n, 0n, 0n, { ...DEFAULT_LIMITS, maxReassemblyBytes: 40 });
+    expect(state.scenes).toHaveLength(0);
+    expect(state.diagnostics.some((diagnostic) => diagnostic.code === "LIMIT_EXCEEDED")).toBe(true);
+  });
+
+  it("commits a scene whose final PES is unbounded at EOF", async () => {
+    const bytes = syntheticClip();
+    const unbounded = bytes.slice();
+    // PES_packet_length = 0 in the final packet: the assembler commits this
+    // PES only at EOF, and the extractor must still parse its payload.
+    let pesStart = -1;
+    for (let index = 0; index + 5 < unbounded.length; index += 1) {
+      if (unbounded[index] === 0 && unbounded[index + 1] === 0 && unbounded[index + 2] === 1 && unbounded[index + 3] === 0xbd) pesStart = index;
+    }
+    expect(pesStart).toBeGreaterThan(0);
+    unbounded[pesStart + 4] = 0; unbounded[pesStart + 5] = 0;
+    const result = await extractIgsFromChunks("00001", chunks(unbounded, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }]);
+    expect(result.scenes).toHaveLength(1);
+    expect(result.scenes[0]).toMatchObject({ clipId: "00001", complete: true });
+    // The fixture pads the TS packet with stuffing bytes after the PES. The
+    // assembler cannot know where an unbounded PES ends, so the stuffing tail
+    // is reported as residual bytes; the segment payload itself is parsed and
+    // the scene is committed.
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === "IGS_INVALID_SEGMENT" && diagnostic.message.includes("residual IG segment bytes"))).toBe(true);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === "IGS_UNCOMPLETED_DISPLAY_SET")).toBe(false);
+  });
+
   it("extracts navigation scenes independently from PNG asset rendering", async () => {
     const bytes = syntheticClip();
     const extracted = await extractIgsFromChunks("00001", chunks(bytes, 192), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "0" } }], { renderAssets: false });

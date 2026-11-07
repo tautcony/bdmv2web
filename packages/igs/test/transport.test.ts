@@ -94,6 +94,21 @@ describe("M2TS packet and PES reconstruction", () => {
     expect(complete[0]?.payloadOffset).toBe(22n);
   });
 
+  it("commits an unbounded PES still pending at EOF", () => {
+    const body = Uint8Array.from({ length: 240 }, (_, i) => i & 255);
+    const encoded = pesPacket(body, 77n);
+    encoded[4] = 0; encoded[5] = 0; // declared length 0: committed only at EOF
+    const assembler = new PesAssembler("clip");
+    const first = { packetOffset: 0n, payloadOffset: 4, pid: IG_PID, payloadUnitStart: true, continuityCounter: 0, hasPayload: true, discontinuity: false, transportError: false, continuityError: false, payload: encoded.subarray(0, 184) };
+    const second = { ...first, packetOffset: 192n, payloadUnitStart: false, continuityCounter: 1, payload: encoded.subarray(184) };
+    expect(assembler.push(first)).toEqual([]);
+    expect(assembler.push(second)).toEqual([]);
+    const completed = assembler.end();
+    expect(completed).toHaveLength(1);
+    expect(completed[0]?.payload).toEqual(body);
+    expect(completed[0]?.pts?.raw).toBe(77n);
+  });
+
   it("uses decode time to detect discontinuities when an IGS composition PTS is ahead", () => {
     const assembler = new PesAssembler("clip");
     const original = pesPacket(Uint8Array.of(1), 54_000_000n);

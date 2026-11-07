@@ -241,7 +241,10 @@ async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<Retur
   const extracted = new Map<string, Awaited<ReturnType<typeof extractPgsTrack>> & { packagePath: string }>();
   const result = [];
   for (const [index, reference] of references.entries()) {
-    const key = `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`;
+    // A shared stream referenced at two PlayItem entry points needs one track
+    // per entry: the display set timestamps are shifted to the referenced
+    // source-in point, so the offset is part of the identity.
+    const key = `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`;
     let track = extracted.get(key);
     if (!track) {
       const sourcePath = await resolveInputFile(disc.root, `STREAM/${reference.clipId}.m2ts`);
@@ -306,13 +309,14 @@ async function listAssets(): Promise<void> {
   const igsElements = type === "sup" ? [] : scenes.flatMap((scene) => scene.objects.map((object) => ({ type: "igs-image-element", clipId: scene.clipId, pid: scene.pid, sceneId: scene.id, compositionNumber: scene.compositionNumber, objectId: object.id, objectVersion: object.version, width: object.width, height: object.height })));
   const igsPngs = type === "sup" || !selection.decodePng ? [] : extraction.assets.filter((asset) => selectedClip(asset.source.clipId, selection) && selectedPid(asset.source.pid, selection)).map((asset) => ({ type: "igs-png", path: asset.relativePath, clipId: asset.source.clipId, pid: asset.source.pid, objectId: asset.objectId, objectVersion: asset.objectVersion, paletteId: asset.paletteId, paletteVersion: asset.paletteVersion, width: asset.width, height: asset.height, byteLength: asset.pngBytes.byteLength }));
   const references = type === "igs" ? [] : uniquePgsReferences(reachablePgsReferences(disc, extraction.scenes)).filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection));
-  const subtitles = references.map((item, index) => ({ type: "sup", path: supTrackPath(item.clipId, item.pid, index), clipId: item.clipId, pid: item.pid, language: item.language, streamNumber: item.streamNumber, playlistId: item.playlistId, playItemIndex: item.playItemIndex }));
+  const trackSuffixes = pgsTrackEntrySuffixes(references);
+  const subtitles = references.map((item, index) => ({ type: "sup", path: supTrackPath(item.clipId, item.pid, index, trackSuffixes[index]), clipId: item.clipId, pid: item.pid, language: item.language, streamNumber: item.streamNumber, playlistId: item.playlistId, playItemIndex: item.playItemIndex }));
   const supPngs: Array<{ type: string; path: string; clipId: string; pid: number; displaySet: number }> = [];
   if (selection.decodePng && type !== "igs" && references.length) {
     const temp = await mkdtemp(resolve(tmpdir(), "bdmv-list-assets-"));
     try {
       const tracks = await extractReachablePgsTracks(disc, extraction.scenes, temp, (_reference, index) => `tracks/${index}.sup`, references);
-      for (const track of [...new Map(tracks.map((entry) => [entry.path, entry])).values()]) track.displaySets.forEach((_, index) => supPngs.push({ type: "sup-png", path: supDisplaySetPath(track.clipId, track.pid, track.language, index), clipId: track.clipId, pid: track.pid, displaySet: index + 1 }));
+      tracks.forEach((track, trackIndex) => track.displaySets.forEach((_, displaySetIndex) => supPngs.push({ type: "sup-png", path: supDisplaySetPath(track.clipId, track.pid, track.language, displaySetIndex, trackSuffixes[trackIndex]), clipId: track.clipId, pid: track.pid, displaySet: displaySetIndex + 1 })));
     } finally { await rm(temp, { recursive: true, force: true }); }
   }
   const perM2ts = [...new Set(subtitles.map((asset) => asset.clipId))].map((clipId) => ({ clipId, subtitleTrackCount: subtitles.filter((asset) => asset.clipId === clipId).length }));
@@ -360,14 +364,16 @@ async function exportAssets(): Promise<void> {
     }
     if (type !== "igs") {
       const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes)).filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection));
-      const exportPaths = new Map(references.map((reference, index) => [`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`, supTrackPath(reference.clipId, reference.pid, index)]));
-      const tracks = await extractReachablePgsTracks(disc, igs.scenes, transaction.stagingPath, (reference) => exportPaths.get(`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`)!, references);
+      const trackSuffixes = pgsTrackEntrySuffixes(references);
+      const tracks = await extractReachablePgsTracks(disc, igs.scenes, transaction.stagingPath, (_reference, index) => supTrackPath(references[index]!.clipId, references[index]!.pid, index, trackSuffixes[index]), references);
       const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
       for (const track of uniqueTracks) {
+        const trackIndex = tracks.indexOf(track);
+        const trackSuffix = trackSuffixes[trackIndex] ?? "";
         const trackStat = await lstat(resolve(transaction.stagingPath, track.path));
         files.push({ type: "sup", path: track.path, byteLength: trackStat.size, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length });
         if (selection.decodePng) for (const [index, displaySet] of track.displaySets.entries()) {
-          const path = supDisplaySetPath(track.clipId, track.pid, track.language, index);
+          const path = supDisplaySetPath(track.clipId, track.pid, track.language, index, trackSuffix);
           const target = resolve(transaction.stagingPath, path);
           await mkdir(dirname(target), { recursive: true });
           await writeFile(target, renderPgsDisplaySet(displaySet), { flag: "wx" });
@@ -383,14 +389,25 @@ async function exportAssets(): Promise<void> {
 }
 
 function uniquePgsReferences(references: ReturnType<typeof reachablePgsReferences>): ReturnType<typeof reachablePgsReferences> {
-  return [...new Map(references.map((reference) => [`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`, reference])).values()];
+  return [...new Map(references.map((reference) => [`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`, reference])).values()];
+}
+
+/** Distinct output paths for sup tracks that share one stream across PlayItem entry points. */
+function pgsTrackEntrySuffixes(references: ReturnType<typeof reachablePgsReferences>): string[] {
+  const seen = new Map<string, number>();
+  return references.map((reference) => {
+    const base = `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}`;
+    const occurrence = seen.get(base) ?? 0;
+    seen.set(base, occurrence + 1);
+    return occurrence === 0 ? "" : `-entry${occurrence + 1}`;
+  });
 }
 
 function safeAssetLanguage(language: string): string { return /^[a-z]{3}$/i.test(language) ? language.toLowerCase() : "und"; }
 function igsMnuPath(clipId: string, pid: number): string { return `assets/igs/${clipId}-pid-${pid.toString(16).padStart(4, "0")}.mnu`; }
-function supTrackPath(clipId: string, pid: number, _index: number): string { return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}.sup`; }
-function supDisplaySetPath(clipId: string, pid: number, language: string, index: number): string {
-  return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}-${safeAssetLanguage(language)}-display-${String(index + 1).padStart(5, "0")}.png`;
+function supTrackPath(clipId: string, pid: number, _index: number, entrySuffix = ""): string { return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}${entrySuffix}.sup`; }
+function supDisplaySetPath(clipId: string, pid: number, language: string, index: number, entrySuffix = ""): string {
+  return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}${entrySuffix}-${safeAssetLanguage(language)}-display-${String(index + 1).padStart(5, "0")}.png`;
 }
 
 function renderPgsDisplaySet(display: PgsDisplaySet): Uint8Array {
@@ -462,7 +479,9 @@ async function extract(): Promise<void> {
     }
     if (includeIgs) {
     const sceneRecords = igs.scenes.map((scene) => ({ id: scene.id, raw: serializeIgsScene(scene) }));
-    const sceneJson = `${JSON.stringify({ schemaVersion: "1.0", status: igs.status, support: igs.support, scenes: sceneRecords }, null, 2)}\n`;
+    // Schema 1.1 replaces the per-object RLE index array with indicesLength:
+    // the same schemaVersion must not change payload shape between releases.
+    const sceneJson = `${JSON.stringify({ schemaVersion: "1.1", status: igs.status, support: igs.support, scenes: sceneRecords }, null, 2)}\n`;
     const diagnosticRecords = igs.diagnostics.map((item) => ({ ...item, message: safeDiagnosticMessage(item.message, roots.input) }));
     const diagnosticsJson = `${JSON.stringify({ schemaVersion: "1.0", status: igs.status, diagnostics: diagnosticRecords }, null, 2)}\n`;
     const sourceMap = {
@@ -488,7 +507,7 @@ async function extract(): Promise<void> {
       await writeFile(resolve(transaction.stagingPath, "sup/tracks.json"), `${JSON.stringify({ schemaVersion: "1.0", tracks: trackRecords }, null, 2)}\n`, { flag: "wx" });
       generatedFiles.push(await generatedFileRecord(transaction.stagingPath, "sup/tracks.json", "sup-track-index"));
     }
-    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", selectedTypes: [includeHdmv ? "hdmv" : null, includeIgs ? "igs" : null, includeSup ? "sup" : null].filter(Boolean), igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS animation and visual effects are not fully verified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
+    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", selectedTypes: [includeHdmv ? "hdmv" : null, includeIgs ? "igs" : null, includeSup ? "sup" : null].filter(Boolean), igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
     await writeFile(resolve(transaction.stagingPath, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
     process.stdout.write(`${JSON.stringify({ stageStatus: outcome.status, output: roots.output })}\n`);
@@ -643,7 +662,9 @@ function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, limits: L
           : playMark !== undefined ? playlist.marks.find((mark) => mark.index === playMark)?.playItemRef ?? 0 : 0;
         const target = menuTarget(playlist, playItem);
         if (target) return { ...target, ...(playMark === undefined ? {} : { playMark }), preMenuPlaylistIds: [...preMenuPlaylistIds] };
-        fallbackTarget ??= { playlist, playItem, ...(playMark === undefined ? {} : { playMark }), preMenuPlaylistIds };
+        // Snapshot the ids completed so far: the fallback playlist follows its own
+        // pre-menu chain instead of completing itself silently.
+        fallbackTarget ??= { playlist, playItem, ...(playMark === undefined ? {} : { playMark }), preMenuPlaylistIds: [...preMenuPlaylistIds] };
         if (!preMenuPlaylistIds.includes(Number(playlist.id))) preMenuPlaylistIds.push(Number(playlist.id));
         // A logo, warning, or feature played before the menu: complete it and follow
         // the next title/search or playlist transition.
@@ -776,7 +797,9 @@ async function convert(): Promise<void> {
     // An IGS composition identifies the playlist that owns it, not the role it
     // plays. Always-on compositions (uiModel 0) are menu surfaces. Popup
     // compositions (uiModel 1) belong to title playback and must not replace the
-    // Top Menu background with an overlay-only scene.
+    // Top Menu background with an overlay-only scene. The resolved Top Menu
+    // playlist is the exception: its selected composition is the packaged menu
+    // surface even when the disc models its menu as a popup composition.
     const playlistSceneResults = disc.playlists.flatMap((playlist) => {
       const playItem = playlist.id === menuPlaylist.id ? menuTarget?.playItem : undefined;
       const result = findMenuScene(disc, playlist, extraction.scenes, playItem);
@@ -784,8 +807,14 @@ async function convert(): Promise<void> {
         ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
         : [];
     });
-    const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0);
+    const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0 || item.playlistId === Number(menuPlaylist.id));
     const menuPlaylistIds = [...new Set(menuSceneResults.map((item) => item.playlistId))];
+    // PLAY_PLAYLIST_MARK names a play mark; the runtime needs the mark-to-
+    // PlayItem mapping to select the packaged scene for the marked PlayItem.
+    const menuPlaylistMarks = [...new Set([...menuPlaylistIds, Number(menuPlaylist.id)])].flatMap((id) => {
+      const playlist = disc.playlists.find((item) => Number(item.id) === id);
+      return playlist && playlist.marks.length ? [{ playlistId: id, marks: playlist.marks.map((mark) => ({ index: mark.index, playItemRef: mark.playItemRef })) }] : [];
+    });
     const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
     const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
     const popupContentPlaylists: number[] = [];
@@ -854,6 +883,7 @@ async function convert(): Promise<void> {
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
       scene, popupScenes, menuScenes, menuPlaylistIds, vmPrograms, vmEntries: disc.entries,
+      ...(menuPlaylistMarks.length ? { menuPlaylistMarks } : {}),
       ...(menuTarget?.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: menuTarget.preMenuPlaylistIds } : {}),
       externalTargets,
       bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,

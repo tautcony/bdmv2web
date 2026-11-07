@@ -230,6 +230,69 @@ describe("offline browser boot", () => {
     expect(host.elements.get("menu-background")?.muted).toBe(true);
   });
 
+  it("replaces startup input listeners without leaking duplicates when the first actions switch scenes", async () => {
+    const mainScene = packageData().scene as Record<string, unknown>;
+    const data = packageData({
+      scene: { ...mainScene, id: "main-scene" },
+      vmPrograms: [{ id: 7, instructions: ["228000000000000900000000"] }],
+      media: { playlist: 9, background: { path: "assets/media/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [{ streamNumber: 0, psrStreamNumber: 1, path: "assets/media/audio.m4a", durationSeconds: 10 }] },
+      menuPlaylistIds: [9],
+      menuScenes: [{ playlistId: 9, playItem: 0, scene: { width: 100, height: 60, clipId: "00002", pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } }, commands: [] }] }] } }],
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The startup dispatch switched to the playlist-9 scene and installed its
+    // input listeners; the final installation must replace, not stack.
+    expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
+    expect(host.elements.get("menu-canvas")?.listenerCount("pointerdown")).toBe(1);
+  });
+
+  it("selects the marked PlayItem scene for a PLAY_PLAYLIST_MARK request", async () => {
+    const location = { hash: "", href: "file:///menu/index.html" };
+    vi.stubGlobal("location", location);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
+    vi.stubGlobal("__BDMV_BDMV_PATH__", "/fake/BDMV");
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
+    const menuButton = (objectHex: string) => ({ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } }, commands: [{ bytes: `218200000000000${objectHex}00000000` }] });
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: ["42c200000000000900000001"] }, { id: 8, instructions: ["228000000000002a00000000"] }, { id: 9, instructions: ["228000000000002b00000000"] }], // PLAY_PLAYLIST_MARK playlist 9 mark 1; objects 8/9 request playlists 42/43
+      media: { playlist: 9, background: { path: "assets/media/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [{ streamNumber: 0, psrStreamNumber: 1, path: "assets/media/audio.m4a", durationSeconds: 10 }] },
+      menuPlaylistIds: [9],
+      menuPlaylistMarks: [{ playlistId: 9, marks: [{ index: 0, playItemRef: 0 }, { index: 1, playItemRef: 1 }] }],
+      menuScenes: [
+        { playlistId: 9, playItem: 0, scene: { width: 100, height: 60, clipId: "00002", pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [menuButton("8")] }] } },
+        { playlistId: 9, playItem: 1, scene: { width: 100, height: 60, clipId: "00003", pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [menuButton("9")] }] } },
+      ],
+      externalTargets: { playlists: [
+        { id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00042.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] },
+        { id: "00043", items: [{ index: 0, stcId: 0, clipId: "00007", streamPath: "STREAM/00043.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] },
+      ], complete: true, unknown: [] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Mark 1 maps to PlayItem 1, whose scene requests playlist 43.
+    expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00043.m2ts&mpv_start=0");
+  });
+
+  it("plays packaged playlist media when the package has no primary menu media", async () => {
+    const mainScene = packageData().scene as Record<string, unknown>;
+    const data = packageData({
+      scene: { ...mainScene, id: "main-scene" },
+      vmPrograms: [{ id: 7, instructions: ["228000000000000900000000"] }],
+      menuPlaylistIds: [9],
+      menuScenes: [{ playlistId: 9, playItem: 0, scene: { width: 100, height: 60, clipId: "00002", pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } }, commands: [] }] }] } }],
+      menuMedia: [{ playlist: 9, background: { path: "assets/media/playlist-9/background.mp4", durationSeconds: 10, loop: true }, audioTracks: [{ streamNumber: 0, psrStreamNumber: 1, path: "assets/media/playlist-9/audio.m4a", durationSeconds: 10 }] }],
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.mediaPlayCalls).toContain("menu-background");
+    expect(host.elements.get("runtime-status")?.textContent).not.toContain("unavailable");
+  });
+
   it("completes a packaged pre-menu intro without handing it to the external player", async () => {
     const location = { hash: "", href: "file:///menu/index.html" };
     vi.stubGlobal("location", location);
