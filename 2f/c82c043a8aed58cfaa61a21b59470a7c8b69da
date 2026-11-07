@@ -1,0 +1,52 @@
+.github/workflows/npm-publish.yml
+  h_3705811fa4502c 1-105
+README.md
+  h_3705811fa4502c 16-17,26-34,39,42
+apps/cli/package.json
+  h_3705811fa4502c 2,4,6-18,26-31,34-35,39,48,50
+apps/cli/src/cli/program.ts
+  h_3705811fa4502c 51-52,57
+apps/cli/src/index.ts
+  h_3705811fa4502c 2,9-11,18
+docs/README.md
+  h_3705811fa4502c 18
+docs/guides/development.md
+  h_3705811fa4502c 23,78,116
+docs/guides/release.md
+  h_3705811fa4502c 1-68
+docs/llm-wiki/architecture.md
+  h_3705811fa4502c 27
+docs/llm-wiki/features/media.md
+  h_3705811fa4502c 65
+docs/llm-wiki/index.json
+  h_3705811fa4502c 76-79,156-159
+docs/llm-wiki/packages/package-builder.md
+  h_3705811fa4502c 8,11-12
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 31
+package.json
+  h_3705811fa4502c 2,12
+packages/package-builder/package.json
+  h_3705811fa4502c 9
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 1-3,6,28-33,222,224
+packages/runtime-web/package.json
+  h_3705811fa4502c 8-17,19
+pnpm-lock.yaml
+  h_3705811fa4502c 43,71-73,77-79,179-181
+scripts/build-runtime-browser.mjs
+  h_3705811fa4502c 1-19
+scripts/bundle-cli.mjs
+  h_3705811fa4502c 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2fc82c043a8aed58cfaa61a21b59470a7c8b69da",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
