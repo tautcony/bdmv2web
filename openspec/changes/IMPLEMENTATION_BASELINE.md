@@ -96,7 +96,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profi
 
 PlayerProfile 初始产品默认值为 menuLanguage/audioLanguage/subtitleLanguage=`eng`、country=`US`、region=`A`、outputProfile=`portable`；这是可覆盖的播放器模拟配置，不推断用户所在地或碟片实际语言。CLI 以 `--player-profile FILE` 读取并合并，省略时采用默认值；PSR 数值编码和未指定系统字段初值由 M3 的已核验表确定，不能任意清零。该配置及分析时允许的用户可变状态须进入可达性边界说明。
 
-Limits 的工程初值为：maxReadWindowBytes=8 MiB、maxSegmentBytes=16 MiB、maxReassemblyBytes=64 MiB（全部活动 PID 合计）、maxObjectPixels=16777216、maxInstructionsPerTurn=10000、maxQueueDepth=1024、maxCallDepth=128、maxExplorationStates=100000；maxOutputBytes 默认 null。CLI `convert --limits FILE` 验证 JSON Limits 对象并将其传入转换时和生成菜单包的 HDMV VM；其它限值由各自对应的库阶段消费，不构成 CLI 转换全流程的统一预算。`maxCallDepth` 当前为 CALL 开关（0 禁用），不是多帧深度上限；真正的栈深度限制需多帧调用栈，列为后续 change。上述为保护性工程预算，不声称是 Blu-ray 协议上限；合法输入超预算也应准确报告 limit exceeded，而非格式损坏。M0 提交配置与边界测试，M2/M3/M5 共同消费。
+Limits 的工程初值为：maxReadWindowBytes=8 MiB、maxSegmentBytes=16 MiB、maxReassemblyBytes=64 MiB（全部活动 PID 合计）、maxObjectPixels=16777216、maxInstructionsPerTurn=10000、maxQueueDepth=1024、maxCallDepth=128、maxExplorationStates=100000；maxOutputBytes 默认 null。CLI `convert --limits FILE` 验证 JSON Limits 对象并将其传入转换时和生成菜单包的 HDMV VM；其它限值由各自对应的库阶段消费，不构成 CLI 转换全流程的统一预算。`maxCallDepth` 是 CALL 开关，语义见 [Limits 表](../../docs/guides/development.md#contracts)。上述为保护性工程预算，不声称是 Blu-ray 协议上限；合法输入超预算也应准确报告 limit exceeded，而非格式损坏。M0 提交配置与边界测试，M2/M3/M5 共同消费。
 
 ## 6. 证据与样本交接
 

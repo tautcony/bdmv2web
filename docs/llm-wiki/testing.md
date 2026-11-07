@@ -10,27 +10,25 @@ corepack pnpm typecheck                 # 先 build，再对含测试的源码�
 bash scripts/ci.sh                      # install → generate:contracts → build → typecheck → test:all
 ```
 
-每个包的 `vitest.config.ts` 用 `include` 锁定测试文件，编译产物 `dist/**/*.test.js` 不会被加载（现在也不再产出）。某包匹配不到测试文件时任务失败，不报“通过”。
+每个包的 `vitest.config.ts` 用 `include` 锁定测试文件，编译产物 `dist/**/*.test.js` 不会被加载。某包匹配不到测试文件时任务失败。
 
-## 逐包基线（2026-11-07 实测）
+## 逐包入口
 
-用 Node `24.18.0` / pnpm `11.25.0` 对仅含入库夹具的副本跑 `bash scripts/ci.sh` 得到下表。42 个测试文件，合计 **528 passed、1 skipped**，跳过的是 `packages/igs/test/tamako-real-smoke.test.ts`（需要工作区本地 `test-data/bdmv/`）；同一工作区带该样本时为 529 passed、0 skipped。其中 9 例为 igstools 逐元素 RGBA 对照、10 例为 libbluray IGS 解码对照、5 例为 libbluray 导航与 CFG 对照。
+`corepack pnpm test` 跑全部包的测试，`corepack pnpm test:all` 加 `--no-bail`，单个包失败不阻断其余包。
 
-| 包 | 用例 | 备注 |
-| --- | ---: | --- |
-| `@bdmv2web/core` | 14 | 契约、游标、时间 |
-| `@bdmv2web/bdmv-io` | 6 | 目录发现、事务 |
-| `@bdmv2web/bdmv-parser` | 66 | 五种格式 + 主备 + 损坏分支 |
-| `@bdmv2web/igs` | 77 | 传输、场景、真实样本（数据缺失时跳过）、igstools 与 libbluray 元素级对照 |
-| `@bdmv2web/hdmv` | 90 | 解码、寄存器、VM、图、循环、golden |
-| `@bdmv2web/media-export` | 53 | 注入 `runProcess`，不依赖本机 ffmpeg |
-| `@bdmv2web/runtime-web` | 112 | 控制器、boot、无头导航 |
-| `@bdmv2web/package-builder` | 10 | 打包、转义、音效 |
-| `@bdmv2web/test-fixtures` | 5 | 夹具自检 |
-| `@bdmv2web/test-runner` | 48 | 审计、判定、报告 |
-| `@bdmv2web/cli` | 48 | 参数契约、事务、stage/delivery、libbluray 导航基线 |
-
-`docs/guides/development.md` 的 Test baseline 表在同一次测量中已同步为相同数值。计数变化要同时更新两处。
+| 包 | 命令 | 覆盖 |
+| --- | --- | --- |
+| `@bdmv2web/core` | `corepack pnpm --filter @bdmv2web/core test` | 契约、游标、时间 |
+| `@bdmv2web/bdmv-io` | `corepack pnpm --filter @bdmv2web/bdmv-io test` | 目录发现、事务 |
+| `@bdmv2web/bdmv-parser` | `corepack pnpm --filter @bdmv2web/bdmv-parser test` | 五种格式 + 主备 + 损坏分支 |
+| `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` | 传输、场景、真实样本、igstools 与 libbluray 元素级对照 |
+| `@bdmv2web/hdmv` | `corepack pnpm --filter @bdmv2web/hdmv test` | 解码、寄存器、VM、图、循环、golden |
+| `@bdmv2web/media-export` | `corepack pnpm --filter @bdmv2web/media-export test` | 注入 `runProcess`，不依赖本机 ffmpeg |
+| `@bdmv2web/runtime-web` | `corepack pnpm --filter @bdmv2web/runtime-web test` | 控制器、boot、无头导航 |
+| `@bdmv2web/package-builder` | `corepack pnpm --filter @bdmv2web/package-builder test` | 打包、转义、音效 |
+| `@bdmv2web/test-fixtures` | `corepack pnpm --filter @bdmv2web/test-fixtures test` | 夹具自检 |
+| `@bdmv2web/test-runner` | `corepack pnpm --filter @bdmv2web/test-runner test` | 审计、判定、报告 |
+| `@bdmv2web/cli` | `corepack pnpm --filter @bdmv2web/cli test` | 参数契约、事务、stage/delivery、libbluray 导航基线 |
 
 ## 测试布局
 
@@ -74,7 +72,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 基线 JSON 采用受限深度格式：外层两级展开，`cases` 的每一项占一行，更深的值保持单行紧凑。`scripts/generate-libbluray-baselines.py` 按同一格式写出，重新生成时只改动发生变化的 case 行。
 
-`scripts/generate-libbluray-baselines.py` 与 `scripts/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 的 `regressionPins` 记录本项目 DFS 自身的统计，其中索引条目数与静态 playlist 目标由 libbluray 导航基线驱动。
+`scripts/generate-libbluray-baselines.py` 与 `scripts/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 用本地 DFS explorer 与 libbluray 导航基线对照：index 条目数、静态 playlist 目标集合（`observedPlaylists ⊇ libblurayPlayTargets`）以及 explorer 的边记账不变量。
 
 ## 新增测试
 

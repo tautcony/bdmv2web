@@ -5,7 +5,7 @@
  * Run: corepack pnpm generate:synthetic-all-features
  *
  * The generator writes test-data/fixtures/synthetic-all-features/. It uses no
- * workspace packages, no bdmvkit checkout, and no FFmpeg. Every byte is built
+ * workspace packages and no FFmpeg. Every byte is built
  * from the BDMV field layouts exercised by packages/bdmv-parser, packages/igs,
  * packages/media-export and packages/package-builder. The output is checked in
  * and consumed by apps/cli/src/synthetic-all-features.test.ts.

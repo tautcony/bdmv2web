@@ -32,7 +32,7 @@ type NavigationDescriptor =
 2. 全局 ID 唯一（`entries`/`programs`/`menus`/`playlists`/`mediaAssets` 共用一个命名空间）→ `DUPLICATE_ID`。
 3. 引用完整性：`playlists[].programIds` 与 `playlists[].menuIds` 必须存在 → `DANGLING_REFERENCE`。
 
-`validateStage(value, "runtime")` 会额外跑一次 `parseDiscIR`，用于运行包装载前。
+`runtime/disc-data.js` 里的 `ir` 在打包阶段由 `@bdmv2web/package-builder` 过 `parseDiscIR`；浏览器运行时只检查对象身份（`schemaVersion` 与必需数组），不重复 ID 与引用校验。
 
 ## SourceRef
 

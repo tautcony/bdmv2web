@@ -21,7 +21,7 @@ complete← 以上都没有
 
 关键点：
 
-- **缺证据不是失败证据**。未执行的检查、未提供的入口计数、未验证的覆盖率都只进 `notVerified`，不降低状态。`complete` 的含义是“没有已知失败”。
+- **缺证据不降低状态**。未执行的检查、未提供的入口计数、未验证的覆盖率只进 `notVerified`。这类包的 `complete` 表示没有已知失败。
 - **strict 只改变接受策略**。`partial` 在非 strict 下退出 0，strict 下退出 2；`failed` 始终 1；`complete` 始终 0。
 - **acknowledged 的 error 仍是 partial**。确认只影响说明文字。
 - **limitations 不参与判定**，只出现在 `reasons` 与报告说明里。

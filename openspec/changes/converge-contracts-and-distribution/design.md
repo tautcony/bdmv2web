@@ -48,9 +48,7 @@ const DEFAULTS = {
 
 **关于 `maxCallDepth` 的当前语义**：代码里只有 `if (this.opts.maxCallDepth < 1) throw ...`（`vm.ts:409,447`），且 `callStack` 只保存一帧——它不是深度上限，而是"CALL 是否允许"的开关。这与 `Limits` 中"128 = 保护性预算"的声明不符。
 
-本 change 选择**如实标注**而不是改结构：字段名保留（`Limits` 是对外契约，改名会波及 schema 与配置），在 `IMPLEMENTATION_BASELINE` §5 与 `docs/support/hdmv-support.md` 写明"当前为 CALL 开关（0 禁用），真正的深度限制需多帧调用栈，列为后续 change"。同时补一条测试锁定"`maxCallDepth` 为 0 时 `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`"，防止改动时无声漂移。
-
-若后续要做真深度上限，必须同时改 `callStack` 结构、`MenuCheckpoint` 与 `libbluray` 单帧行为的对照结论——那是独立 change，不在本批夹带。
+字段名保留（`Limits` 是对外契约，改名会波及 schema 与配置）。当前语义记录在 `IMPLEMENTATION_BASELINE` §5 与 `docs/support/hdmv-support.md`：`maxCallDepth` 是 CALL 开关，深度上限列为后续 change，需要同时改 `callStack` 结构、`MenuCheckpoint` 与 libbluray 单帧行为的对照结论。本批补一条测试锁定"`maxCallDepth` 为 0 时 `CALL_OBJECT` 报 `VM_CALL_DEPTH_LIMIT`"。
 
 ### 2. 证据记录保留实际执行的检查（D9=C）
 
@@ -103,7 +101,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 改动：`runtime-web` 新增 `build:browser`（esbuild 打包 `src/browser.ts` → `dist/browser-entry.js`，IIFE、ES2020），`package.json` 的 `exports` 增加 `"./browser-entry"`；builder 改为解析该子路径，删除两处相对路径 alias。补 `files: ["dist"]` 白名单，避免发布带上 `src` 与测试。
 
-验收方式不用"临时删 `src`"这种破坏性操作，改为断言：`grep` builder 产物与源码中不再出现 `runtime-web/src`、`hdmv/src`；并加一条单测用 `node:fs` 拦截读取 `**/src/*.ts` 的路径（若被读取即失败）。
+验收：`grep` builder 产物与源码中不再出现 `runtime-web/src`、`hdmv/src`；并加一条单测用 `node:fs` 拦截读取 `**/src/*.ts` 的路径（若被读取即失败）。
 
 ### 7. 基准先行，修复按数据排序（D5=B）
 
@@ -122,7 +120,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 ## Risks / Trade-offs
 
 - **旧包兼容**：旧包可能含有当前不再使用的清单字段；读取侧忽略未知字段，重新生成报告时使用当前格式。
-- **M6 取消勾选会让"发布完成"后退**：这是有意为之。当前勾选本身就是错的；退回去比留着假通过安全。
+- **M6 取消勾选会让"发布完成"后退**：当前勾选与实际证据不符，取消后以实际证据为准。
 - **`CALL_TITLE` 改 continuation 会动 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 的接口**：两个桥都要改，且 `browser.ts` 的 TITLE_SEARCH 分支与它语义重叠——本 change 只保证"不可用能解除等待"，不合并两处语义（合并属更大重构）。
 - **`SourceRef` 改为真实路径后输出体积上升**：每条指令带 path/offset 会让 IR 变大。用"同文件短索引 + 文件表"记路径可缓解，但会增加一层间接。先按可读性优先（逐条 path），体积问题在有实测数据后处理。
 - **系统交接**：当前正片动作使用 URL Protocol。M6 需记录实际请求、目标 M2TS 和系统播放器观察；没有播放器回传时不声称实际播放状态。

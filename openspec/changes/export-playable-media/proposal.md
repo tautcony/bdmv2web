@@ -24,7 +24,7 @@
 
 ## Impact
 
-CLI、package-builder、runtime 播放动作分发、源文件映射与发布验证。未接入的线性媒体/浏览器播放原语不构成当前产品交付路径。
+CLI、package-builder、runtime 播放动作分发、源文件映射与发布验证。
 
 ## Acceptance Boundary
 

@@ -36,7 +36,7 @@
 
 ## 可复现获取
 
-ITU 当前有效的 H.222.0 v10 (04/2025) [官方记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I) 显示 PDF 条目，但本轮匿名 `curl` 获得的是要求 TIES 登录的 HTML 页面，没有取得规范 PDF。可登录 TIES 后通过该记录的 PDF 链接获取。匿名可复现的历史版获取命令如下；本轮下载得 PDF 3,127,517 bytes：
+ITU-T H.222.0 v10 (04/2025) 的[官方记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I)提供 PDF 条目；匿名请求返回 TIES 登录页 HTML，取得规范 PDF 需要 TIES 登录。H.222.0 (10/2014) 可匿名下载：
 
 ```sh
 curl --fail --location --retry 3 \
@@ -45,7 +45,7 @@ curl --fail --location --retry 3 \
 file H.222.0-2014.pdf
 ```
 
-官方入口：[ITU v10 记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I)；[2014 历史版记录](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items)。本轮目录确认 2014 文本 TS packet/PES 在 clause 2.4.3.2–2.4.3.7，PSI 在 2.4.4；clause 2.6 是 descriptors。v10 的具体 clause/文本尚未匿名下载核对，不能将旧版定位假装成 v10 的独立确认。libbluray 以 VideoLAN 上游 tag `1.5.0` 锁定源码（tag 对象 `d468a3ac8bf4d9c04739962c44d365debbea54a1`，解引用后的 commit 为 `d75c88e54c893e5cbf4c61d356477655eb435769`）：
+官方入口：[ITU v10 记录](https://www.itu.int/rec/T-REC-H.222.0-202504-I)；[2014 历史版记录](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-H.222.0-201410-S%21%21PDF-E&lang=e&type=items)。2014 文本的 TS packet/PES 在 clause 2.4.3.2–2.4.3.7，PSI 在 2.4.4，clause 2.6 为 descriptors；v10 的 clause 与文本以 TIES 访问后的版本为准。libbluray 以 VideoLAN 上游 tag `1.5.0` 锁定源码（tag 对象 `d468a3ac8bf4d9c04739962c44d365debbea54a1`，解引用后的 commit 为 `d75c88e54c893e5cbf4c61d356477655eb435769`）：
 
 ```sh
 git clone https://code.videolan.org/videolan/libbluray.git
@@ -68,7 +68,7 @@ python3 scripts/fetch-reference-cache.py
 
 ## 当前证据边界
 
-- 当前没有受限 BDA Blu-ray 规范书。该访问限制本身不阻止按固定实现开发。libbluray/libhdmv/igstools 是实现参考；公开白皮书只作补充背景。
-- 未解密/解析商业碟、未建立项目独立 golden、未验证像素/导航语义或 V1 Chrome 场景；任何源中的“支持”声明仅属该源自身范围。
+- 行为依据按上文层级生效：固定实现（libbluray / libhdmv / igstools）是一阶来源，公开白皮书只补充其覆盖的架构与格式背景，项目测试与 golden 按各自记录的来源、范围和生成方法生效。
+- 商业碟解密与解析、像素与导航语义、V1 Chrome `file://` 场景的证据状态记录在各阶段页面和 [M6 证据记录](stages/M6-release-verification.md) 中。
 - V1 的 `file://` 与媒体播放策略使用 Google Chrome 实测，验收不限定操作系统，也不要求跨浏览器矩阵。WHATWG/MDN 文档不能代替运行证据。
-- FFmpeg 文档是滚动文档。M5 应选定可再分发构建并记录 `ffmpeg -version`、`ffprobe -version` 和 configure flags；按任务要求在转换输入数组中调用，不能用此索引暗中锁定转码工具版本。
+- FFmpeg 文档是滚动文档。M5 选定可再分发构建并记录 `ffmpeg -version`、`ffprobe -version` 和 configure flags。

@@ -1,6 +1,6 @@
 # HDMV 离线 Web：change 依赖与实施顺序
 
-本图依据仓库根目录的 `bdmv_hdmv_offline_web_architecture.md` 划分首期范围。箭头表示下游完成集成和验收前，必须取得上游已完成的契约及对应验收结果；接口稳定后可提前并行开发。这里记录 change 间的实施依赖，与 OpenSpec 每个 change 内 proposal → specs/design → tasks 的工件依赖不同；OpenSpec CLI 的工件状态不会自动强制执行本图。
+本图依据`docs/archive/bdmv_hdmv_offline_web_architecture.md`（初版架构方案） 划分首期范围。箭头表示下游完成集成和验收前，必须取得上游已完成的契约及对应验收结果；接口稳定后可提前并行开发。这里记录 change 间的实施依赖，与 OpenSpec 每个 change 内 proposal → specs/design → tasks 的工件依赖不同；OpenSpec CLI 的工件状态不会自动强制执行本图。
 
 各阶段规范、官方资料、固定 revision 的参考源码及获取条件见 [开发参考索引](../../docs/references/README.md)。
 
@@ -44,7 +44,7 @@ flowchart TD
 
 ## 交接门槛与开发入口
 
-跨模块契约和产品缺省值统一见 [IMPLEMENTATION_BASELINE.md](IMPLEMENTATION_BASELINE.md)，本轮充分性评估及追踪见 [READINESS_REVIEW.md](READINESS_REVIEW.md)。各 change 的 proposal 已说明实际影响模块，design 说明决策与异常，specs 定义可观察行为，tasks 给出实施和验证。
+跨模块契约和产品缺省值统一见 [IMPLEMENTATION_BASELINE.md](IMPLEMENTATION_BASELINE.md)，2026-11-02 的实施前充分性评估见 [readiness-review-2026-11-02.md](../../docs/archive/readiness-review-2026-11-02.md)。各 change 的 proposal 已说明实际影响模块，design 说明决策与异常，specs 定义可观察行为，tasks 给出实施和验证。
 
 | 门槛 | 必须取得的证据 | 允许开始的后续工作 |
 | --- | --- | --- |

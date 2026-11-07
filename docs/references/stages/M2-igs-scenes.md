@@ -56,10 +56,10 @@
 
 ### M2-REAL-00005 — Tamako workspace-local 观察范围
 
-- **Fixture / evidence / source:** 用户提供的 `test-data/bdmv/tamako-love-story-bd/BDMV/CLIPINF/00005.clpi` 与 `STREAM/00005.m2ts`；证据测试 `packages/igs/test/tamako-real-smoke.test.ts`（仅在本地 STREAM 存在时运行）。测试命令：`pnpm --filter @bdmv2web/igs exec vitest run test/tamako-real-smoke.test.ts`。本次运行结果：1 test passed。
-- **Expected:** smoke 只检查结构提取事实和 partial/unverified 状态，不把合成预期或人工猜测填入真实 disc 观察。
-- **Actual:** CLPI 声明 IGS PID `0x1400`；菜单 playlist `00003` 有 999 个 play item，主项只引用 Clip `00004`，SubPath 含 Clip `00005`。Clip `00005` 得到一个 `1920×1080` scene，7 pages、168 objects、7 palettes，存在对应 PNG assets。当前阶段记录观察到 page 2 和 3 的默认按钮均为 `65534`；smoke 自动断言的是两条 `IGS_INVALID_BUTTON_REFERENCE`，没有断言具体 page/button ID。extract 为 `partial`、support 为 `unverified`。CLPI `00043` 也声明 IGS，但 workspace 缺少匹配 `STREAM/00043.m2ts`，报告 `BDMV_MISSING_STREAM`。
-- **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。真实 smoke 不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材。
+- **Fixture / evidence / source:** 用户提供的 `test-data/bdmv/tamako-love-story-bd/BDMV/CLIPINF/00005.clpi` 与 `STREAM/00005.m2ts`；入库证据是同碟 `STREAM/00005` 与 `00043` 的 IG 包切片，由 `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` 的 tamako 用例驱动。
+- **Expected:** 只记录结构提取事实和 partial 状态，不把合成预期或人工猜测填入真实 disc 观察。
+- **Actual:** CLPI 声明 IGS PID `0x1400`；菜单 playlist `00003` 有 999 个 play item，主项只引用 Clip `00004`，SubPath 含 Clip `00005`。Clip `00005` 得到一个 `1920×1080` scene，7 pages、168 objects、7 palettes，存在对应 PNG assets。当前阶段记录观察到 page 2 和 3 的默认按钮均为 `65534`；两条 `IGS_INVALID_BUTTON_REFERENCE` 诊断不绑定具体 page/button ID。extract 为 `partial`、support 为 `unverified`。CLPI `00043` 也声明 IGS，但 workspace 缺少匹配 `STREAM/00043.m2ts`，报告 `BDMV_MISSING_STREAM`。
+- **Result:** 已观察到 Clip `00005` 的真实解析路径及两个显式缺口。当前测试不对 PNG 像素、页面含义、按钮意图、效果时序或画面相似度作断言；缺失的 Clip `00043` 也没有真实流结果。输入为用户本地素材。
 - **独立参考记录：** 此处记录的是 2026-11-03 当时的状态；随后已对 Tamako `00005`、`00043` 及其他 packet fixture 完成同类工具逐元素/逐像素对照，详见下方 2026-11-04 记录。动画帧在本次输入中没有可比较的多帧对象范围。
 
 

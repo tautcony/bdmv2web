@@ -54,23 +54,9 @@
 
 ## 当前实现与归档状态（2026-11-06）
 
-本 change 的初始问题清单描述的是当时的代码状态，现已部分过时：内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回、菜单 VM/sound 集成、HDMV 默认 Limits 收敛与 `convert --limits` 接线已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
+内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回、菜单 VM/sound 集成、HDMV 默认 Limits 收敛与 `convert --limits` 接线已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
 
-原归档前置表也已过时。当前主规格已存在 `disc-contracts`、`hdmv-navigation` 和 `interactive-graphics-extraction`；`offline-menu-runtime` 与 `offline-delivery-assurance` 主规格仍缺失。归档前应根据 status 的 `existingOutputPaths` 重新做 delta 对照；不要机械套用“先归档旧上游 change”的原步骤。
-
-原始计划如下，仅作历史背景，不作为当前执行指令：
-
-| 能力 | 上游 change | 上游状态 | 处理 |
-| --- | --- | --- | --- |
-| `disc-contracts` | `establish-core-contracts` | ✓ Complete | 先归档上游，本 delta 生效 |
-| `hdmv-navigation` | `execute-hdmv-navigation` | ✓ Complete | 先归档上游，本 delta 生效 |
-| `interactive-graphics-extraction` | `extract-igs-scenes` | ✓ Complete | 先归档上游，本 delta 生效 |
-| `offline-menu-runtime` | `build-offline-menu-runtime` | 13/16 | 上游仍在演化：把本 delta 内容直接并入上游 `spec.md`，本 change 的该目录在 apply 时删除，仅保留 tasks 跟踪 |
-| `offline-delivery-assurance` | `verify-offline-release` | 14/17 | 同上 |
-
-因此 apply 的第一步不是改代码，而是按上表处理规格归属（见 `tasks.md` H.6）。
-
-`restore-build-gate-and-delivery-status` 只有 `ADDED` delta，不受此限制，可随时归档。
+主规格现状：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 已存在；`offline-menu-runtime` 与 `offline-delivery-assurance` 缺失。apply 的第一步按 `openspec status` 的 `existingOutputPaths` 做 delta 对照，把本 change 的 delta 并入对应上游 spec（见 `tasks.md` H.6）。`restore-build-gate-and-delivery-status` 只有 `ADDED` delta，可随时归档。
 
 ## Related
 

@@ -27,7 +27,6 @@ from45k(value: string): Time90k
 assertWithinLimit(value: number | bigint, key: keyof Limits, limits?): void
 allocateBoundedBytes(size, key, limits?): Uint8Array
 checkedObjectPixels(width, height, limits?): number
-validateStage<T>(value: T, stage: "parsed" | "normalized" | "runtime"): T
 validateLimits(value: unknown): Limits
 class BinaryCursor
 ```
@@ -38,7 +37,6 @@ class BinaryCursor
 
 - 不引入 Node 内建。`scripts/build-core-browser.mjs` 会扫描 esbuild metafile，出现 `node:`/`fs`/`path`/`crypto` 直接失败。
 - 不做内容哈希/指纹校验。
-- `validateStage(..., "runtime")` 里对 `BDJ` 只保留、不报错；能力声明由消费者负责。
 
 ### 改动入口
 

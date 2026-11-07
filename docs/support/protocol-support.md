@@ -7,7 +7,7 @@
 - `implementation-reference`: behavior is traced to a pinned implementation revision, exact file/location, and applicable license. For BDMV/HDMV the primary reference is VideoLAN libbluray 1.5.0, commit `d75c88e54c893e5cbf4c61d356477655eb435769`, LGPL-2.1. It establishes what that implementation does within its tested scope.
 - `cross-reference`: another pinned implementation or a public whitepaper is used only where its source and scope are explicit. Whitepaper references include title/version and printed page(s); they provide background, not normative requirements.
 - `project-test`: synthetic fixtures and assertions prove the behavior of this code only. Independent golden data records its source, version/case, derivation or comparison method, and limits. Same-lineage forks or ports are not independent by default.
-- `unverified`: implementation/tests exist but cross-checks or path coverage are incomplete, or independent expected values are missing. Lack of licensed BDA text alone does not block implementation.
+- `unverified`: implementation/tests exist but cross-checks or path coverage are incomplete, or independent expected values are missing.
 - `unsupported`: the product intentionally does not implement the named execution or playback behavior.
 
 ## Status rules
@@ -36,11 +36,11 @@ The parser's version gate accepts only the candidate tags shown above; `0240` is
 
 ## Evidence and fixture gaps
 
-- BDA specification books are agreement-gated. Public BDA whitepapers listed in `.reference-cache/specs/SOURCE.md` provide only explicitly scoped background; they do not define field-level BDMV/HDMV behavior.
-- The primary implementation reference is libbluray 1.5.0 under LGPL-2.1. libhdmv is Alpha and is not treated as independent evidence; inspect source lineage before treating any cross-check as independent.
-- No commercial media is included. Project-authored bytes test known parser branches only and do not establish the correct interpretation of real discs. No independent media-derived expected values are available for any implemented field.
-- Candidate versions and parsed layouts remain `unverified` where source/test coverage or independent expected values are incomplete; lack of BDA text alone is not the reason.
-- Case-variant BDMV ambiguity is conditionally tested only when the filesystem allows both names; the current case-insensitive workspace filesystem cannot exercise that branch. The test records this limitation.
-- This implementation does not validate CLPI clip marks or extension data, MPLS extension records (PiP metadata, extension SubPaths, static HDR metadata), all MPLS advanced playback semantics, MovieObject command targets, BD-J programs, transport streams, or media payload decoding. Those are outside the M1 structural boundary or remain unverified for later stages.
-- `ParsedDisc.discInfo.uhd` reports the INDEX extension 3.1 signalling only. It records what the disc declares; it is not a playback-capability decision.
-- Unknown versions are rejected and are not hidden by backup fallback. This version gate is a conservative implementation rule, not evidence that the listed candidate versions are normatively complete.
+- BDA specification books are agreement-gated; the public whitepapers listed in `.reference-cache/specs/SOURCE.md` cover architecture and format background.
+- The primary implementation reference is libbluray 1.5.0 under LGPL-2.1. libhdmv is Alpha and its field layout conflicts with libbluray, so it is a cross-check of source lineage only.
+- The repository contains project-authored bytes and no commercial media. Their expected values come from the parser branches they were written for.
+- Candidate versions and parsed layouts remain `unverified` where source/test coverage or independent expected values are incomplete.
+- Case-variant BDMV ambiguity is tested only when the filesystem allows both names; the current case-insensitive workspace filesystem cannot exercise that branch.
+- This implementation does not validate CLPI clip marks or extension data, MPLS extension records (PiP metadata, extension SubPaths, static HDR metadata), all MPLS advanced playback semantics, MovieObject command targets, BD-J programs, transport streams, or media payload decoding. Those are outside the M1 structural boundary or belong to later stages.
+- `ParsedDisc.discInfo.uhd` reports the INDEX extension 3.1 signalling only: what the disc declares, not a playback-capability decision.
+- Unknown versions are rejected and backup fallback does not hide them. This version gate is an implementation rule for the listed candidate tags.

@@ -113,7 +113,7 @@ BDMV-menu/
 | 弹出菜单覆盖正片 | 正片由外部播放器播放，无法叠加；包内只覆盖菜单画面 |
 | 菜单素材与场景比例不一致 | 两者各自 `object-fit: contain`，比例不同时按钮与背景可能错位；见 [troubleshooting.md](../troubleshooting.md) |
 | 音视频保真 | 菜单背景转 H.264/AAC；正片不做转码 |
-| 交付状态 | 由 `test-runner` 判定；`complete` 表示“没有已知失败”，不是“全部验证通过” |
+| 交付状态 | 由 `test-runner` 的 `decideDelivery` 判定；缺证据只进 `notVerified`，见 [verification.md](verification.md) |
 
 ## 相关测试
 

@@ -14,9 +14,9 @@
 - [HDMV 支持](support/hdmv-support.md)：指令、虚拟机行为和支持状态。
 - [IGS 支持](support/igs-support.md)：场景提取、图像处理和已知边界。
 
-## 架构
+## 历史归档
 
-- [BDMV/HDMV 离线 Web 架构](architecture/bdmv_hdmv_offline_web_architecture.md)：技术设计与组件关系。
+- [BDMV/HDMV 离线 Web 架构方案（2026-11-02）](archive/bdmv_hdmv_offline_web_architecture.md)：初版技术设计与组件关系，含未实现的设计名和早期包结构。当前能力以本页的支持矩阵和开发指南为准。
 
 ## 参考资料与证据
 
@@ -27,4 +27,5 @@
 
 - [2026-11-04 评审记录](review-2026-11-04/index.md)：评审结论、阶段记录与修复清单。
 - [2026-11-06 HDMV VM 一致性审计](review-2026-11-06-hdmv-vm-conformance/index.md)：对照 libbluray/libhdmv 的逐指令核对、运行模型差异、复现记录与修复顺序。
+- [2026-11-07 过度防御与辩解式内容审计](review-2026-11-07-over-defensive-audit/index.md)：源码死防御与吞错、测试验证表演、文档辩解残留的逐条清单与处理优先级。
 - [归档文档](archive/README.md)：历史决策和已完成评审资料。

@@ -145,7 +145,7 @@ python3 scripts/fetch-reference-cache.py
 | [HDMV 支持](docs/support/hdmv-support.md) | 指令与虚拟机支持范围 |
 | [IGS 支持](docs/support/igs-support.md) | 场景提取与图像处理 |
 | [浏览器验收](docs/guides/browser-matrix.md) | 浏览器验收环境 |
-| [架构说明](docs/architecture/bdmv_hdmv_offline_web_architecture.md) | 技术设计记录 |
+| [历史架构方案](docs/archive/bdmv_hdmv_offline_web_architecture.md) | 2026-11-02 初版设计记录（归档） |
 | [开发参考](docs/references/README.md) | 参考实现、许可与阶段资料 |
 | [OpenSpec](openspec/specs/) | 项目规格 |
 

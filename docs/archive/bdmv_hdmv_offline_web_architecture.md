@@ -139,8 +139,6 @@ flowchart LR
 
 ## 4. TypeScript 项目组织
 
-> **历史设计（非当前实现）**：下面这棵目录树是 2026-11 初版的设想名，实际仓库没有 `apps/studio`，且 `m2ts-demux`、`igs-decoder`、`navigation-hdmv`、`ir-builder` 四个包没有独立存在。对照关系见本节末尾的映射表。读当前布局请直接看仓库根目录或 `docs/guides/development.md`。
-
 ```text
 bdmv2web/
 ├── apps/
@@ -442,7 +440,7 @@ type RuntimeEvent =
 
 ## 9. 纯离线 HTML 的专用打包规范（最重要）
 
-### 9.1 为什么不能直接使用常见 SPA 打包方式
+### 9.1 常见 SPA 打包方式在 `file://` 下的限制
 
 浏览器直接双击打开 `file:///.../index.html` 时，本地文件往往采用不透明来源（opaque origin）。以下方案**不允许成为默认方案**：
 
@@ -528,7 +526,7 @@ V1 使用 Google Chrome 验证，不限定操作系统。记录 Chrome 完整版
 | 便携性 | 整目录复制到另一磁盘/路径后可启动，文件名含空格及中文亦正常 |
 | 资源完整性 | 所有 IR 资产引用都能解析到清单中的文件 |
 
-**声明边界**：严格意义上，不可能通过打包策略强制改变用户浏览器的 `file://` 沙箱、媒体解码器或自动播放政策。因此“直接打开”应当成为**明确浏览器及版本的回归测试承诺**，而不是声称不受所有浏览器策略影响。无法保证的浏览器列为不支持，不暗中要求用户启动 HTTP 服务。
+**边界**：打包策略不能改变浏览器的 `file://` 沙箱、媒体解码器或自动播放政策。“直接打开”是**明确浏览器及版本的回归测试承诺**；未列入承诺的浏览器列为不支持，也不要求用户启动 HTTP 服务。
 
 ---
 
@@ -542,8 +540,6 @@ V1 使用 Google Chrome 验证，不限定操作系统。记录 Chrome 完整版
 - `schemaVersion` 与 `runtimeVersion` 要有兼容关系；不兼容时导出失败或提示迁移。
 - **序列化约定**：TS 运行时可用 `bigint` 表示 90 kHz 时间值，但 `JSON.stringify` 不能直接序列化 `bigint`；IR 数据中一律以十进制字符串（如 `"time90k": "180000"`）保存时间，装载时显式还原 `BigInt`，禁止转换成可能损失精度的浮点值。
 - 每种导航类型使用显式 discriminated union，为未来 BD-J 保留数据位。
-
-> **历史设计（非当前 `DiscIR` 形状）**：下面这段是初版草案。实际类型由 `packages/core/schema/disc-ir.schema.json` 生成到 `packages/core/src/disc-ir.generated.ts`：条目多了 `id` 与 `source`，没有 `role`/`titleNumber`，导航判别字段是 `type` 而不是 `kind`。实际形状见本段代码之后。
 
 ```ts
 export type NavigationKind = 'HDMV' | 'BDJ';

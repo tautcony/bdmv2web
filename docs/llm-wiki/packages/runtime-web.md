@@ -93,7 +93,7 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 
 ## 浏览器启动（`boot`）
 
-1. 读 `globalThis.__BDMV_MENU_DATA__`，校验存在 `ir`；`validateEmbeddedDiscIR` 按 schema 校验。
+1. 读 `globalThis.__BDMV_MENU_DATA__`，校验存在 `ir`；`validateEmbeddedDiscIR` 检查对象身份（`schemaVersion` 与必需数组），完整校验已在打包阶段完成。
 2. 遍历 `__BDMV_MENU_ASSETS__[]`，把 `data:image/png;base64` 解码为 `HTMLImageElement`；失败即报“Could not decode embedded PNG”。
 3. `normalizeScene` 绑定资产；没有 `scene` → 明确错误，不黑屏。
 4. `createMenuVm(data)`：用包内 `profile`、`limits`、`vmEntries` 构造 VM；`vmInitialProgramId` 有效则 `reset`。
