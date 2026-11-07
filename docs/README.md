@@ -18,10 +18,9 @@
 
 - [BDMV/HDMV 离线 Web 架构方案（2026-11-02）](archive/bdmv_hdmv_offline_web_architecture.md)：初版技术设计与组件关系，含未实现的设计名和早期包结构。当前能力以本页的支持矩阵和开发指南为准。
 
-## 参考资料与证据
+## 参考资料
 
 - [开发参考索引](references/README.md)：固定版本参考实现、规范入口、许可和阶段资料。
-- [验证证据](evidence/)：提取与对照记录。
 
 ## 历史资料
 

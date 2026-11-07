@@ -68,7 +68,7 @@
 - **输入：** workspace-local `test-data/bdmv/tamako-love-story-bd/BDMV/STREAM/00005.m2ts`（IG PID 0x1400）。
 - **参考工具：** `SAPikachu/igstools` 0.9.3，固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python 3.15.0、pypng 0.20220715.0、Pillow 13.0.0。工具解码器源自 libav patches，属于实现对照，不能等同规范。
 - **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
-- **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项结果见 [comparison.json](../../evidence/tamako-00005-igstools-comparison.json)。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
+- **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项报告由脚本写到命令行指定目录，不入库。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
 - **更正：** 初次强制 BT.601 与旧实现完全一致只说明实现使用同一矩阵，不足以证明色彩正确。固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）；现在实现改为 BT.709，Tamako 元素与该显式矩阵下的参考结果一致。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据；因此这些结果验证的是对照矩阵下的实现一致性，不判定原盘实际矩阵。
 - **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/compare-igstools-reference.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。
 
@@ -89,7 +89,7 @@
 | tamako | `00005` | 168 | 168 | 14,881,965 | 0 |
 | tamako | `00043` | 168 | 168 | 14,922,045 | 0 |
 
-- **证据：** [总体汇总](../../evidence/igs-fixture-packet-comparison-summary.json)；[逐元素 JSON 报告目录](../../evidence/igs-fixture-packet-comparisons/)；执行脚本 [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 和导出脚本 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素 JSON 报告逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/test/fixtures.ts) 生成。
+- **执行脚本：** [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 与 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素报告由脚本输出到命令行指定目录，逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/test/fixtures.ts) 生成。
 - **适用范围：** 结果覆盖这 8 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段依据见 [字段登记](M2-igs-field-register.md)；任务 2.4 的独立颜色向量和真实同 ODS 多 PDS 资产映射由 `packages/igs/test/extraction.test.ts` 与 `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` 断言。
 
 Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.709 limited range。该 packet fixture 只含 PAT、PMT 与 IGS PID 的筛选包，不含主视频码流；ICS 的 1920×1080 菜单分辨率也不能单独确定 PDS 的颜色矩阵。因此现有结果只能说明该 IGS 图像在 BT.709 对照条件下与参考输出一致，不能回答这张 UHD 盘的菜单源是否应按 BT.709 解码。
