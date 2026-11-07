@@ -161,6 +161,44 @@ describe("M4 convert output", () => {
       }
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
+  it("reports one progress line per step on stderr while stdout stays a single JSON record", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv menu progress "));
+    const disc = await makeMenuDisc(parent);
+    const output = join(parent, "progress output");
+    try {
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", output, "--progress"]);
+      expect(result.status, result.stderr.toString()).toBe(0);
+      const stderr = result.stderr.toString();
+      // Piped stderr gets plain lines: each finished step names its position in the fixed plan.
+      expect(stderr).toContain("bdmv2web convert · 7 steps");
+      // Option parsing is not a step: the plan starts at the first piece of disc work.
+      expect(stderr).not.toContain("Read options");
+      expect(stderr).toContain("profile  region A · portable");
+      for (const [position, step] of [[1, "Parse BDMV structure"], [2, "Extract IGS scenes"], [3, "Resolve Top Menu playlist"], [4, "Select menu scene and media"], [6, "Build menu package"], [7, "Write report and commit"]] as const) {
+        expect(stderr).toContain(`✓ ${position}/7  ${step}`);
+      }
+      // A disc without a loop timeline skips the media step instead of dropping it from the plan.
+      expect(stderr).toContain("5/7  Export menu media");
+      expect(stderr).toContain("no menu media");
+      expect(stderr).toContain("Done in");
+      expect(stderr).toMatch(/package\s+\d+ files/);
+      expect(stderr).not.toMatch(/[\u001b\r]/);
+      const stdout = result.stdout.toString();
+      expect(stdout.trimEnd().split("\n")).toHaveLength(1);
+      expect(JSON.parse(stdout)).toMatchObject({ status: "complete", output: await realpath(output) });
+
+      const quiet = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", disc, "--out", join(parent, "quiet output"), "--no-progress"]);
+      expect(quiet.status).toBe(0);
+      expect(quiet.stderr.toString()).toBe("");
+
+      const ambiguous = await makeMenuDisc(join(parent, "ambiguous"), { multipleMenuScenes: true });
+      const failed = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "convert", ambiguous, "--out", join(parent, "failed output"), "--progress"]);
+      expect(failed.status).toBe(1);
+      expect(failed.stderr.toString()).toContain("✗ 4/7  Select menu scene and media");
+      expect(failed.stderr.toString()).toContain("MENU_SCENE_AMBIGUOUS");
+      expect(failed.stderr.toString()).toContain("Failed in");
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
   it("applies --limits to conversion-time and packaged menu VMs", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu limits "));
     const disc = await makeMenuDisc(parent);

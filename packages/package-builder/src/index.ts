@@ -118,6 +118,8 @@ export interface MenuPackageInput {
   /** Local media for always-on menu playlists other than Top Menu. */
   additionalMenuMedia?: MenuLoopMediaInput[];
   onMediaProgress?: (progress: { assetPath: string; outTimeSeconds: number; durationSeconds: number; state: "continue" | "end" }) => void;
+  /** Announces each assembly phase so a caller can report progress: media export, file writes, runtime bundle, manifest. */
+  onPhase?: (phase: "media" | "assets" | "bundle" | "manifest") => void;
   /** Previous package directory used as the source for media-plan-matched assets on overwrite. */
   reuseMediaFromDirectory?: string;
   pngLimits?: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number };
@@ -138,6 +140,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
   if (pgsPayloadBytes > maxPgsRuntimeBytes) throw new RangeError(`Serialized PGS payload exceeds maxPgsRuntimeBytes (${pgsPayloadBytes} > ${maxPgsRuntimeBytes} bytes).`);
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
+  input.onPhase?.("media");
   const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, preset: "veryfast", ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
   const additionalMedia: Array<{ result: Awaited<ReturnType<typeof exportMenuLoopMedia>>; sanitizedId: string }> = [];
   for (const media of input.additionalMenuMedia ?? []) {
@@ -175,6 +178,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     ...additionalMedia.map(({ sanitizedId }) => ({ path: `media-plans/playlist-${sanitizedId}.json`, kind: "media-plan", required: true })),
     ...(input.externalTargets ? [{ path: "runtime/bdmv-config.js", kind: "external-config", required: true }, { path: "external-targets.json", kind: "runtime", required: true }] : []),
   ];
+  input.onPhase?.("assets");
   await Promise.all([
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize, !!input.externalTargets)),
     writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(input.menuScenes?.length ? { menuScenes: input.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
@@ -187,8 +191,10 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<void> {
     writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
   ]);
   // Bundling reads runtime-web's TypeScript entry directly; the source-path coupling is scheduled for removal in D7 (batch 2), so `packages/runtime-web/src/` stays in the build scope for now.
+  input.onPhase?.("bundle");
   const entry = resolve(import.meta.dirname, "../../runtime-web/src/browser.ts");
   await build({ entryPoints: [entry], outfile: resolve(runtimeDirectory, "app.bundle.js"), bundle: true, platform: "browser", format: "iife", target: "es2020", legalComments: "none", alias: { "@bdmv2web/hdmv": resolve(import.meta.dirname, "../../hdmv/src/index.ts"), "@bdmv2web/media-export/external-targets": resolve(import.meta.dirname, "../../media-export/src/external-targets.ts") } });
+  input.onPhase?.("manifest");
   await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility(metadata, !!input.externalTargets), null, 2)}\n`);
   // M6 reserves compatibility.json and asset-manifest.json as report metadata and rejects them in manifest.files.
   const manifestFiles = await Promise.all(files.filter((file) => file.path !== "compatibility.json" && file.path !== "asset-manifest.json").map(async (file) => {

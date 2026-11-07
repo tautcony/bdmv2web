@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { link, lstat, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { assertDisjointRoots, beginOutputTransaction, resolveInputFile } from "@bdmv2web/bdmv-io";
+import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";
 import { ContractError, DEFAULT_PLAYER_PROFILE, parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import { DEFAULT_LIMITS, validateLimits } from "@bdmv2web/core/limits";
 import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
@@ -12,6 +12,7 @@ import { computeMediaClosure, createExternalMediaTargets, extractPgsTrack, resol
 import { buildMenuPackage } from "@bdmv2web/package-builder";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 import { auditOutputPackage, classifyDiagnostics, createDependencyAuditReport, createReleaseSummary, decideDelivery, decideStageOutcome, summarizeDeliveryCoverage, type DeliveryDiagnostic } from "@bdmv2web/test-runner";
+import { failActiveProgress, ProgressReporter, type ProgressMode } from "./progress.js";
 
 const argv = process.argv.slice(2);
 const command = argv[0];
@@ -21,7 +22,7 @@ const supported = new Set(["inspect", "extract", "convert", "validate", "compare
 const commandOptions: Record<string, { flags: ReadonlySet<string>; values: ReadonlySet<string> }> = {
   inspect: { flags: new Set(["--strict", "--no-strict", "--allow-partial"]), values: new Set(["--out", "--format"]) },
   extract: { flags: new Set(["--strict", "--no-strict", "--all"]), values: new Set(["--out", "--format", "--type"]) },
-  convert: { flags: new Set(["--strict", "--no-strict", "--overwrite"]), values: new Set(["--out", "--player-profile", "--limits", "--title", "--format"]) },
+  convert: { flags: new Set(["--strict", "--no-strict", "--overwrite", "--progress", "--no-progress"]), values: new Set(["--out", "--player-profile", "--limits", "--title", "--format"]) },
   validate: { flags: new Set(["--strict", "--no-strict", "--offline"]), values: new Set(["--format"]) },
   compare: { flags: new Set(["--strict", "--no-strict"]), values: new Set(["--format"]) },
   "list-assets": { flags: new Set([]), values: new Set(["--type", "--format", "--out", "--m2ts", "--pid", "--decode"]) },
@@ -730,32 +731,128 @@ async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playli
   };
 }
 
+/** The visible work of a conversion; option parsing happens before the plan is printed. */
+const CONVERT_STEPS = {
+  structure: "Parse BDMV structure",
+  scenes: "Extract IGS scenes",
+  playlist: "Resolve Top Menu playlist",
+  scene: "Select menu scene and media",
+  media: "Export menu media",
+  package: "Build menu package",
+  report: "Write report and commit",
+} as const;
+
+/** `undefined` keeps the default: a live line on a terminal, silence when piped. */
+function progressMode(): ProgressMode | undefined {
+  if (argv.includes("--no-progress")) return "none";
+  if (argv.includes("--progress")) return process.stderr.isTTY ? "tty" : "plain";
+  return undefined;
+}
+
+function countOf(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KiB", "MiB", "GiB"] as const;
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
+  return `${value < 10 ? value.toFixed(1) : String(Math.round(value))} ${units[unit]}`;
+}
+
+/** Committed package size from `manifest.json`; a missing manifest produces no summary line. */
+async function packageSummary(packageRoot: string): Promise<string | undefined> {
+  const manifest = await readJsonObject(resolve(packageRoot, "manifest.json"));
+  if (!Array.isArray(manifest.files)) return undefined;
+  let files = 0;
+  let bytes = 0;
+  for (const file of manifest.files) {
+    if (typeof file !== "object" || file === null) continue;
+    const record = file as Record<string, unknown>;
+    files += 1;
+    bytes += typeof record.byteLength === "string" ? Number(record.byteLength) || 0 : 0;
+  }
+  return `${countOf(files, "file", "files")} · ${formatBytes(bytes)}`;
+}
+
+/** Selected scene plus one loop length for the resolved menu media. */
+function menuSceneDetail(scene: { clipId: string; pid: number }, media: Awaited<ReturnType<typeof menuLoopMediaInput>>): string {
+  const label = `clip ${scene.clipId} · PID 0x${scene.pid.toString(16)}`;
+  if (media === null) return `${label} · no loop media`;
+  return `${label} · loop ${((media.outTime45k - media.inTime45k) / 45000).toFixed(1)}s`;
+}
+
+/** Canonical path for an output target whose parent exists, matching the committed output path. */
+async function plannedOutputPath(path: string): Promise<string> {
+  const target = resolve(path);
+  try { return resolve(await realpath(dirname(target)), basename(target)); } catch { return target; }
+}
+
 async function convert(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "convert requires a BDMV input path");
   // Argument contract first: every option value is resolved before the input is parsed and
   // before any output transaction exists. A missing value must never be masked by disc
   // diagnostics, and a late failure must never leave a staging directory behind.
-  const limits = await loadLimits(optionValue("--limits"));
-  const profile = await loadPlayerProfile(optionValue("--player-profile"));
   const outOption = optionValue("--out");
   const titleOption = optionValue("--title");
   const overwrite = argv.includes("--overwrite");
+  const limits = await loadLimits(optionValue("--limits"));
+  const profile = await loadPlayerProfile(optionValue("--player-profile"));
+  // Best effort: the header names the output only for inputs that resolve to a BDMV
+  // root; anything else is reported by the first step with the parser's own code.
+  const plannedRoot = await locateBdmvRoot(input).catch(() => undefined);
+  const plannedOut = outOption !== undefined
+    ? await plannedOutputPath(outOption)
+    : plannedRoot === undefined ? undefined : await plannedOutputPath(resolve(dirname(plannedRoot), "BDMV-menu"));
+  const plannedTitle = titleOption ?? (plannedRoot === undefined ? undefined : basename(dirname(plannedRoot)));
+  const mode = progressMode();
+  const progress = new ProgressReporter({
+    command: "convert",
+    steps: Object.values(CONVERT_STEPS),
+    source: input,
+    details: [
+      ...(plannedOut === undefined ? [] : [["output", plannedOut] as const]),
+      ...(plannedTitle === undefined ? [] : [["title", plannedTitle] as const]),
+      ["profile", `region ${profile.region} · ${profile.outputProfile}`] as const,
+    ],
+    ...(mode === undefined ? {} : { mode }),
+  });
+
+  progress.start(CONVERT_STEPS.structure);
   const disc = await parseBdmv(input);
   const fatalDiagnostics = classifyDiagnostics(disc.diagnostics);
   if (fatalDiagnostics.hasFatal) {
+    progress.fail(CONVERT_STEPS.structure, firstBlockingCode(fatalDiagnostics.blocking));
     stageFailure(firstBlockingCode(fatalDiagnostics.blocking), fatalDiagnostics.blocking);
     return;
   }
-  const out = outOption ?? resolve(dirname(disc.root), "BDMV-menu");
-  const title = titleOption ?? basename(dirname(disc.root));
+  progress.done(CONVERT_STEPS.structure, `${countOf(disc.entries.length, "entry", "entries")} · ${countOf(disc.playlists.length, "playlist", "playlists")} · ${countOf(disc.clips.length, "clip", "clips")}`);
+  const out = plannedOut ?? resolve(dirname(disc.root), "BDMV-menu");
+  const title = plannedTitle ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
+  // The header names the target for inputs that follow the documented BDMV layout.
+  if (plannedOut === undefined) progress.info("output", roots.output);
+  if (plannedTitle === undefined) progress.info("title", title);
+
+  progress.start(CONVERT_STEPS.scenes);
   const extraction = await extractIgsScenes(disc);
+  progress.done(CONVERT_STEPS.scenes, `${countOf(extraction.scenes.length, "scene", "scenes")} · ${countOf(extraction.assets.length, "image", "images")} · ${countOf(extraction.streams.length, "stream", "streams")}`);
+
+  progress.start(CONVERT_STEPS.playlist);
   const menuTarget = findTopMenuPlaylist(disc, profile, limits, extraction.scenes);
   const menuPlaylist = menuTarget?.playlist;
   const menuMedia = await menuLoopMediaInput(disc, menuPlaylist, { ...(menuTarget ? { playItemIndex: menuTarget.playItem } : {}) });
+  progress.done(CONVERT_STEPS.playlist, menuTarget === undefined
+    ? "no HDMV Top Menu entry"
+    : `playlist ${menuTarget.playlist.id} · PlayItem ${menuTarget.playItem}`);
+
+  progress.start(CONVERT_STEPS.scene);
   const transaction = await beginOutputTransaction(roots.output, { overwrite });
   try {
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
+      progress.fail(CONVERT_STEPS.scene, code);
       await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu package\n\n${message}\n\nStatus: **failed**.\n`);
       // The failure report keeps the same shape as the success report so a consumer
       // can read one schema regardless of how the conversion ended (P2-P2-5).
@@ -767,6 +864,7 @@ async function convert(): Promise<void> {
       const report = { schemaVersion: "1.0", status: "failed", code, auditScope: "convert", reasons: [message], notVerified: [], diagnostics, blockingDiagnostics: classifyDiagnostics(diagnostics).blocking };
       await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
       await transaction.commit();
+      progress.finish("failed", [["output", roots.output], ["report", "report.json · status failed"]], code);
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
     };
@@ -877,8 +975,11 @@ async function convert(): Promise<void> {
       limitations: menuMedia ? [] : ["Menu loop media is unavailable; the menu background holds its final frame."],
     }, strictDefault());
     const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
-    let progressAsset = "";
-    let lastProgressPercent = -5;
+    const plannedMedia = [
+      menuMedia === null ? null : "background",
+      additionalMenuMedia.length ? countOf(additionalMenuMedia.length, "extra playlist", "extra playlists") : null,
+    ].filter((item): item is string => item !== null);
+    progress.done(CONVERT_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
     await buildMenuPackage({
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
@@ -894,23 +995,37 @@ async function convert(): Promise<void> {
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
       onMediaProgress: ({ assetPath, outTimeSeconds, durationSeconds, state }) => {
-        const percent = state === "end" ? 100 : durationSeconds > 0 ? Math.min(99, Math.floor(outTimeSeconds / durationSeconds * 100)) : 0;
-        if (assetPath !== progressAsset) {
-          progressAsset = assetPath;
-          lastProgressPercent = -5;
+        const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
+        const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;
+        progress.progress(ratio, `${basename(assetPath)} ${seconds}`);
+      },
+      onPhase: (phase) => {
+        if (phase === "media") {
+          if (plannedMedia.length) progress.start(CONVERT_STEPS.media);
+          return;
         }
-        if (percent - lastProgressPercent < 5 && state !== "end") return;
-        lastProgressPercent = percent;
-        const line = `[ffmpeg] ${assetPath} ${percent}% (${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)} s)`;
-        if (process.stderr.isTTY) process.stderr.write(`\r${line}`);
-        else process.stderr.write(`${line}\n`);
-        if (state === "end" && process.stderr.isTTY) process.stderr.write("\n");
+        if (phase === "assets") {
+          if (plannedMedia.length) progress.done(CONVERT_STEPS.media, plannedMedia.join(" + "));
+          else progress.skip(CONVERT_STEPS.media, "no menu media");
+          progress.start(CONVERT_STEPS.package);
+          return;
+        }
+        if (phase === "bundle") { progress.note("bundling runtime"); return; }
+        progress.done(CONVERT_STEPS.package, "manifest written");
+        progress.start(CONVERT_STEPS.report);
       },
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
     const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
     await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
+    progress.done(CONVERT_STEPS.report, `status ${decision.status}`);
+    const packageText = await packageSummary(roots.output);
+    progress.finish(decision.status, [
+      ["output", roots.output],
+      ...(packageText === undefined ? [] : [["package", packageText] as const]),
+      ["report", `report.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`],
+    ]);
     process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output })}\n`);
     if (decision.exitCode !== 0) process.exitCode = decision.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
@@ -1060,6 +1175,7 @@ main().catch((error: unknown) => {
   const e = error instanceof Error ? error : new Error(String(error));
   const code = error instanceof ContractError ? error.code : "E_IO";
   const record = { code, message: e.message, path: error instanceof ContractError ? error.path : null };
+  failActiveProgress(code);
   process.stderr.write(rawOptionValue("--format") === "json" ? `${JSON.stringify(record)}\n` : `${code}: ${e.message}\n`);
   process.exitCode = 1;
 });

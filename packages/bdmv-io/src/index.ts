@@ -45,20 +45,26 @@ export interface InputFileTable {
   readonly files: ReadonlyMap<string, string>;
 }
 
-export async function discoverBdmvInput(inputPath: string): Promise<{ root: string; table: InputFileTable }> {
+/**
+ * Resolve the BDMV root of an input path (a BDMV directory or its direct parent)
+ * without walking the tree, so callers can name paths before a full discovery.
+ */
+export async function locateBdmvRoot(inputPath: string): Promise<string> {
   const requested = resolve(inputPath);
   if ((await lstat(requested)).isSymbolicLink()) throw new ContractError("SYMLINK_REJECTED", inputPath, "Input root symlinks are not accepted");
   const canonical = await realpath(requested);
   if (!(await stat(canonical)).isDirectory()) throw new ContractError("PATH_NOT_DIRECTORY", inputPath, "Expected a BDMV root or its direct parent");
-  let root = canonical;
-  if (basename(canonical).toLocaleLowerCase("en-US") !== "bdmv") {
-    const children = await readdir(canonical, { withFileTypes: true });
-    const candidate = selectBdmvChild(children.map((entry) => ({
-      name: entry.name,
-      kind: entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "other",
-    })), inputPath);
-    root = await realpath(resolve(canonical, candidate));
-  }
+  if (basename(canonical).toLocaleLowerCase("en-US") === "bdmv") return canonical;
+  const children = await readdir(canonical, { withFileTypes: true });
+  const candidate = selectBdmvChild(children.map((entry) => ({
+    name: entry.name,
+    kind: entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "other",
+  })), inputPath);
+  return await realpath(resolve(canonical, candidate));
+}
+
+export async function discoverBdmvInput(inputPath: string): Promise<{ root: string; table: InputFileTable }> {
+  const root = await locateBdmvRoot(inputPath);
   const paths: string[] = [];
   const walk = async (dir: string): Promise<void> => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {

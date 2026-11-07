@@ -1,5 +1,5 @@
 import { BinaryCursor, ContractError, DEFAULT_LIMITS, serializeOffset, type Limits } from "@bdmv2web/core";
-import { discoverBdmvInput, readRegisteredFile } from "@bdmv2web/bdmv-io";
+import { discoverBdmvInput, locateBdmvRoot, readRegisteredFile } from "@bdmv2web/bdmv-io";
 import type { AtcSequence, ClipHeader, ClipInfo, DiscAppInfo, EntryTarget, GraphEdge, GraphNode, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, Playlist, PlaylistAppInfo, PlayMark, SoundEntry, SourceLocation, StcSequence, StreamDeclaration, SubPath, UhdMetadata } from "./model.js";
 
 // 0240 is the 3D/MVC profile. libbluray does not restrict the version field and
@@ -42,7 +42,7 @@ interface LocatedFile { primary?: FileEntry; backup?: FileEntry; }
 
 function normCase(s: string): string { return s.toLocaleLowerCase("en-US"); }
 function fileName(s: string): string { return s.split("/").pop() ?? s; }
-export async function discoverBdmvRoot(inputPath: string): Promise<string> { return (await discoverBdmvInput(inputPath)).root; }
+export async function discoverBdmvRoot(inputPath: string): Promise<string> { return locateBdmvRoot(inputPath); }
 
 function diagnose(diagnostics: ParseDiagnostic[], code: string, message: string, file?: FileEntry, offset?: number, severity: ParseDiagnostic["severity"] = "warning", recoverable = true, entityId: string | null = null): void {
   diagnostics.push({ severity, code, message, sourcePath: file?.rel ?? null, offset: offset === undefined ? null : String(offset), entityId, action: null, recoverable, stage: "structural", affectedEntryIds: [] });

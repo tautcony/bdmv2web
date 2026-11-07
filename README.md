@@ -42,11 +42,13 @@ corepack pnpm build
 | `extract <BDMV> --out DIR` | 必须指定 `--type hdmv\|igs\|sup` 或 `--all`；`--strict` | 按类型写协议分析 JSON 及 `manifest.json`。HDMV 命令和结构、IGS 场景/来源映射、SUP 轨道索引分目录保存；不输出 PNG 或 SUP 文件 |
 | `list-assets <BDMV>` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--format table\|json`、`--out FILE` | stdout 默认显示资源汇总和明细，包括 M2TS clip、PID、IGS 图像对象属性及 SUP 轨道；`--out` 写完整 JSON |
 | `export-assets <BDMV> --out DIR` | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` | 导出所选 PID 的 igstools 兼容 `.mnu` 和/或已验证的 `.sup`；指定 `--decode png` 时另外输出图像 PNG；附 `assets-manifest.json` |
-| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--limits FILE`、`--overwrite`、`--strict` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
+| `convert <BDMV>` | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--limits FILE`、`--overwrite`、`--strict`、`--progress`、`--no-progress` | 菜单包：`index.html`、`runtime/`、`assets/`、`manifest.json`、`asset-manifest.json`、`media-plan.json`、`external-targets.json`、`compatibility.json`、`report.json`。默认目录为 `<BDMV 父目录>/BDMV-menu`；影片 PGS 需单独导出 |
 | `validate <菜单包目录> --offline` | `--format json`、`--strict` | 更新 `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
 | `compare <输入>` | `--strict`、`--format json` | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
 `partial` 默认退出码为 0，`--strict` 时为 2；失败为 1。`inspect --allow-partial` 强制返回 0。`convert` 生成统一离线菜单包；输出目录已存在时需加 `--overwrite`。
+
+`convert` 在 stderr 输出 7 步进度：解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交（参数解析在打印计划前完成，不占步骤）。开头给出 `input`、`output`、`title`、`profile`，随后每步一行，含 `i/7`、标题、状态、耗时和关键数量（条目数、场景数、播放列表号、媒体类型）；媒体编码期间显示 ffmpeg 百分比与已编码时长。结束时 `Done in …` 汇总输出目录、包文件数与大小、诊断数，失败时以 `Failed in … · <code>` 结束。stderr 接到终端时用单行动态刷新；重定向到文件或管道时默认不输出进度，`--progress` 改为逐行输出，`--no-progress` 关闭。stdout 始终只有一行 JSON。
 
 `convert --limits FILE` 接受 JSON 限制对象；省略的字段使用[默认 Limits](packages/core/src/limits.ts)。配置应用于转换时的 HDMV VM 和生成菜单包里的 HDMV VM。VM 使用 `maxInstructionsPerTurn`、`maxQueueDepth` 和 `maxCallDepth`；当前 `maxCallDepth` 是 CALL 开关（0 禁用），不是多层调用深度上限。其它字段会校验并随配置保留，但 `convert` 尚未把它们传入 BDMV 解析、IGS 提取和媒体导出阶段。
 
