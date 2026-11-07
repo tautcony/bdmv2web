@@ -1,0 +1,14 @@
+docs/llm-wiki/packages/test-fixtures.md
+  h_3705811fa4502c 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8fc2fbdf9534a02a3036922824631c86e7b76c29",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
