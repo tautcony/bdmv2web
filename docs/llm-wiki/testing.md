@@ -86,7 +86,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 场景 | 要求 |
 | --- | --- |
 | 媒体导出测试 | 注入假 `runProcess`，不需要 ffmpeg |
-| `convert` 实跑 | 需要 `ffmpeg`/`ffprobe`，且含 `libx264`、`aac` |
+| `build` 实跑 | 需要 `ffmpeg`/`ffprobe`，且含 `libx264`、`aac` |
 | 真实样本测试 | 需要 `test-data/bdmv/` 或打包夹具；缺失即跳过 |
 | 导航语料 | 单例预算 120s，机器过载时先跑单包 |
 | 大小写变体目录 | 大小写不敏感文件系统无法构造，测试会记录该限制 |

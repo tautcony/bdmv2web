@@ -62,9 +62,9 @@ PES 载荷按 3 字节段头（类型 + 16 位长度）切分；不完整的段�
 
 | 调用方 | 选项 | 产物 |
 | --- | --- | --- |
-| `convert` | `renderAssets: true`（默认） | 场景 + PNG，交给 `package-builder` |
+| `build` | `renderAssets: true`（默认） | 场景 + PNG，交给 `package-builder` |
 | `extract --type igs` | `renderAssets: false` | 场景 JSON + 诊断 + source-map，不含 PNG |
-| `export-assets` | `captureStreams: true` | 额外保留 igstools 兼容 `.mnu` 字节 |
+| `export` | `captureStreams: true` | 额外保留 igstools 兼容 `.mnu` 字节 |
 
 `IgsExtraction.status`：有 error 且无场景 → `failed`；有 error/warning 或无场景 → `partial`；否则 `complete`。`support.status` 固定 `unverified`。
 
@@ -82,7 +82,7 @@ PES 载荷按 3 字节段头（类型 + 16 位长度）切分；不完整的段�
 
 | 现象 | 原因 | 检查 |
 | --- | --- | --- |
-| `IGS_NO_DISPLAY_SETS` | PID 线索错误，或该 clip 没有 IG 流 | `list-assets --type igs` 看 PID；CLPI `0x91` 声明 |
+| `IGS_NO_DISPLAY_SETS` | PID 线索错误，或该 clip 没有 IG 流 | `list --type igs` 看 PID；CLPI `0x91` 声明 |
 | 场景 `complete: false` | 缺对象/调色板、效果未支持、段损坏 | `igs/diagnostics.json` 的 `affectedSceneIds` |
 | PNG 全透明 | 调色板索引缺失（稀疏表）或 PDS 版本不匹配 | 对照 `objectId`/`paletteId` 版本 |
 | 按钮命中偏移 | 场景坐标与视频比例不同（见 [troubleshooting.md](../troubleshooting.md)） | 场景宽高、`object-fit: contain` 的双重 letterbox |

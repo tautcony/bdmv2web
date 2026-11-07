@@ -7,9 +7,9 @@
 | 判定 | 函数 | 输出字段 | 使用命令 |
 | --- | --- | --- | --- |
 | 阶段是否达成 | `decideStageOutcome` | `stageStatus` | `inspect`、`extract` |
-| 交付是否完整 | `decideDelivery` | `status` | `convert`、`validate` |
+| 交付是否完整 | `decideDelivery` | `status` | `build`、`validate` |
 
-`inspect`/`extract` 永远不会输出 `status`；`convert`/`validate` 也不会用 `stageStatus` 表达交付结论。
+`inspect`/`extract` 永远不会输出 `status`；`build`/`validate` 也不会用 `stageStatus` 表达交付结论。
 
 ## 交付状态规则
 
@@ -41,9 +41,9 @@ complete← 以上都没有
 
 详见 [packages/test-runner.md](../packages/test-runner.md) 的检查项 ID 表。
 
-## `convert` 与 `validate` 的关系
+## `build` 与 `validate` 的关系
 
-| 项 | `convert` | `validate` |
+| 项 | `build` | `validate` |
 | --- | --- | --- |
 | 输入 | 原 BDMV | 已生成的包目录 |
 | 判定依据 | 解析/提取/适配诊断 + 入口计数 | 包审计 + `manifest.diagnostics` + 入口计数 |
@@ -110,7 +110,7 @@ complete← 以上都没有
 | --- | --- | --- |
 | `status: complete` + 多条 `notVerified` | 没有已知失败，但证据不全 | 看 `notVerified` 决定补哪类证据 |
 | `status: partial` + `MANIFEST_STATUS_UNVERIFIED` | manifest 写的是旧结论 | 以 `decision.status` 为准；重新生成或接受差异 |
-| `status: failed` + `PACKAGE_MISSING_ASSET` | manifest 列了文件但磁盘没有 | 重新 `convert`，或修生成逻辑 |
+| `status: failed` + `PACKAGE_MISSING_ASSET` | manifest 列了文件但磁盘没有 | 重新 `build`，或修生成逻辑 |
 | `OFFLINE_URL_MISSING` | 运行时引用的资产没打包 | 检查 `asset-manifest.json` 与 `disc-data.js` 引用 |
 | `BUNDLE_NETWORK_API` | 运行时代码出现网络 API | 改 `runtime-web`，不要改审计放行 |
 | `BUNDLE_DYNAMIC_ACCESS` | 动态访问全局 | `not-verified`，需要人工确认该表达式不会取到网络 API |

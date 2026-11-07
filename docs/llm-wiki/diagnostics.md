@@ -37,17 +37,20 @@ rg '"CODE_NAME"' packages apps
 | 码 | 含义 | 首查 |
 | --- | --- | --- |
 | `CLI_USAGE` | 无命令、命令未知、位置参数过多 | `commandOptions` |
-| `CLI_UNKNOWN_OPTION` | 命令不支持的选项 | 拼写；`convert --mode` 已移除 |
+| `CLI_UNKNOWN_OPTION` | 命令不支持的选项 | 拼写；`build --mode` 已移除 |
 | `CLI_MISSING_VALUE` | 带值选项缺值 | 参数顺序 |
 | `CLI_MISSING_INPUT` / `CLI_MISSING_OUTPUT` | 缺输入 / 缺 `--out` | 命令用法 |
 | `CLI_INVALID_FORMAT` | `--format` 值不支持 | `validate` 只接受 `json` |
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 | `--player-profile` |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 | `--type` 与 `--all` |
-| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` / `CLI_INVALID_DECODE` | 资产命令参数非法 | `list-assets`/`export-assets` |
+| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` / `CLI_INVALID_DECODE` | 资产命令参数非法 | `list`/`export`/`render` |
+| `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 | 使用 ISO 639-2 三字母码 |
+| `CLI_RENDER_SELECTION` | `render` 混用输入类型或选项不适用 | 检查 BDMV、`--mnu`、`--sup` 的组合 |
+| `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 | 输入文件格式与完整性 |
 | `CLI_OFFLINE_REQUIRED` | `validate` 缺 `--offline` | 命令用法 |
 | `INVALID_LIMITS_FILE` | `--limits` 文件不是合法 JSON | 文件内容 |
 | `INVALID_LIMIT` | limits 键未知或值非法 | 允许键与取值范围 |
-| `E_NOT_IMPLEMENTED` | 命令已注册但未实现（`compare`），退出码 1 | 改走现有 `convert` + `validate` 组合 |
+| `E_NOT_IMPLEMENTED` | 命令已注册但未实现（`compare`），退出码 1 | 改走现有 `build` + `validate` 组合 |
 | `STAGE_FAILED` | 阶段失败时的兜底码：无 `fatal` 诊断时取首条诊断码，取不到才用它 | 同一次运行的完整诊断列表 |
 | `E_IO` | 非 `ContractError` 的异常统一出口 | stderr 的 `message` |
 
@@ -142,7 +145,7 @@ rg '"CODE_NAME"' packages apps
 
 ### 只由库路径产生的媒体码
 
-以下码来自 `computeMediaClosure`、`createMediaPlan`、`exportLinearMedia`。`convert` 与 `validate` 不调用这三个入口，因此不会在主链路输出中出现。码形如 `{ code, message, source }`，不带 `severity`。
+以下码来自 `computeMediaClosure`、`createMediaPlan`、`exportLinearMedia`。`build` 与 `validate` 不调用这三个入口，因此不会在主链路输出中出现。码形如 `{ code, message, source }`，不带 `severity`。
 
 | 码 | 来源 | 含义 |
 | --- | --- | --- |
@@ -170,7 +173,7 @@ rg '"CODE_NAME"' packages apps
 | 码 | 含义 | 首查 |
 | --- | --- | --- |
 | `MENU_PLAYLIST_NOT_RESOLVED` | 无法从入口解析 Top Menu 播放列表 | `findTopMenuPlaylist` 的 64 步链；入口是否为 HDMV |
-| `MENU_SCENE_NOT_FOUND` | 播放列表的 clip/PID 没有对应场景 | `list-assets --type igs` |
+| `MENU_SCENE_NOT_FOUND` | 播放列表的 clip/PID 没有对应场景 | `list --type igs` |
 | `MENU_SCENE_AMBIGUOUS` | 同一 clip/PID 多个场景 | 场景 `compositionNumber` 与来源偏移 |
 | `M4_MENU_OBJECT_CONTEXT_MISSING` | 没有可用的 Top Menu/First Play MovieObject | 入口表与对象表 |
 | `M4_ENTRY_NOT_PROJECTED` | 入口没有受支持的导航目标，已从包内菜单省略（warning） | 该入口的 `objectType` 与目标对象 |

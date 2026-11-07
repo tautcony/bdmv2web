@@ -97,7 +97,7 @@ interface PlayerProfile {
 
 `validateLimits(value)` 拒绝未知键（`INVALID_LIMIT`）；`maxCallDepth`/`maxQueueDepth` 允许 0，其余必须为正安全整数。分配前用 `allocateBoundedBytes` / `checkedObjectPixels` / `assertWithinLimit`；超限报 `LIMIT_EXCEEDED`，非法长度报 `INVALID_LENGTH`。
 
-`convert --limits FILE` 把整个 `Limits` 对象传给转换期 VM 并嵌入包内 `disc-data.js` 的 `limits` 字段；包内 VM 只消费其中的 VM 相关三项。其它字段会被校验并保留在配置里，但不传给解析、IGS 提取与媒体导出。
+`build --limits FILE` 把整个 `Limits` 对象传给转换期 VM 并嵌入包内 `disc-data.js` 的 `limits` 字段；包内 VM 只消费其中的 VM 相关三项。其它字段会被校验并保留在配置里，但不传给解析、IGS 提取与媒体导出。
 
 ## 诊断对象
 

@@ -54,7 +54,7 @@ reset(programId) ──▶ runTurn() ──▶ 快照（idle/suspended/stopped/f
 
 `MENU_INPUT` 的键盘与指针走同一判定：运行时 `MenuController` 先按页面 UO mask 过滤，VM 再应用一次 `uoAllowed`。被禁操作报 `HDMV_UO_BLOCKED`，键盘与指针结果一致。`MEDIA_*` 与 still 完成事件不受 UO 过滤。
 
-## 3. 转换期导航（`convert` 如何找到菜单）
+## 3. 转换期导航（`build` 如何找到菜单）
 
 `findTopMenuPlaylist` 在转换期跑一次 VM，用于从 First Play 走到 Top Menu：
 

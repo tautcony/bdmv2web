@@ -25,7 +25,7 @@
 - 预算按配置码率估算（默认视频 8 Mb/s、音频 192 kb/s、容器开销 5%），标 `estimateBasis: "configured-target-bitrate-assumption"`。
 - 能力报告只检查 M1：无缝分支、多角度、PiP、HDR、强制字幕、TextST 标 `unsupported` 或 `unknown`，`strictUpgradeAllowed: false`。
 
-`createMediaPlan` 当前没有被 `convert` 调用；`convert` 直接用 `menuLoopMediaInput` 计算单个播放列表的循环区间。
+`createMediaPlan` 当前没有被 `build` 调用；`build` 直接用 `menuLoopMediaInput` 计算单个播放列表的循环区间。
 
 ## 3. 菜单循环导出
 
@@ -58,7 +58,7 @@ media-plan.json
 
 - 各 PlayItem 的分辨率、宽高比、采样率、声道必须一致 → 否则 `MEDIA_LINEAR_FORMAT_MISMATCH`。
 - 某语言音轨不完整 → `MEDIA_AUDIO_VARIANT_INCOMPLETE`，不产出半成品。
-- 输出 `linear-media-plan.json` 与资产；`convert` 尚未使用这条路径。
+- 输出 `linear-media-plan.json` 与资产；`build` 尚未使用这条路径。
 
 `MediaTimelineMap` 管理播放列表时间 ↔ 包内媒体时间：同播放列表区间不得重叠，同一 `mappingId` 不得重复；45k 与 90k 输入都先归一化。`seekTimeline` 用该映射把播放列表时间换成媒体 seek 目标。
 
@@ -66,9 +66,9 @@ media-plan.json
 
 - `parsePgsSup` 解析显示集（PCS/WDS/PDS/ODS/END），输出尺寸、调色板、位图、叠加位置。
 - `PgsSubtitleTimeline` 按语言选择；PTS 回绕按 epoch 延续。
-- `export-assets` 写 `.sup`；`--decode png` 写显示集 PNG；`package-builder` 把显示集序列化进 `disc-data.js` 供浏览器叠加。
+- `export` 写 `.sup`；`--decode png` 写显示集 PNG，`render` 可独立从 BDMV、`.mnu` 或 `.sup` 生成 PNG；`package-builder` 把显示集序列化进 `disc-data.js` 供浏览器叠加。
 
-当前 `convert` 的主流程不自动附带 PGS 轨道；需要字幕时用 `export-assets` 单独导出。
+当前 `build` 的主流程不自动附带 PGS 轨道；需要字幕时用 `export` 单独导出。
 
 ## 6. 正片交接
 
@@ -99,7 +99,7 @@ media-plan.json
 ## 排查顺序
 
 1. `ffmpeg`/`ffprobe` 是否在 `PATH`、是否带 `libx264`/`aac`。
-2. `list-assets` 能否看到目标 clip 与 PID。
+2. `list` 能否看到目标 clip 与 PID。
 3. `media-plan.json` 的 `playlistId`、`clipId`、`inTime45k`/`outTime45k`、`audioTracks` 是否与预期一致。
 4. `--overwrite` 时是否复用了旧媒体（看计划里的编码参数与源区间）。
 5. 浏览器侧 `external-targets.json` 的 `streamPath` 是否指向真实存在的 `STREAM/*.m2ts`。

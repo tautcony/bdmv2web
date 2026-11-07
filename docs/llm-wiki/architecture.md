@@ -42,9 +42,9 @@
 
 `ParsedDisc.analysisStage` 固定为 `structural`：结构解析成功不代表控制流已验证。`supportPrediction.status` 固定为 `partial`。
 
-## 一次 `convert` 的时序
+## 一次 `build` 的时序
 
-入口：`apps/cli/src/index.ts` → `async function convert()`。
+入口：`apps/cli/src/index.ts` → `cli/program.ts` 的 `dispatch` → `commands/build.ts` 的 `build()`。
 
 1. **参数先于输入**：`loadLimits(--limits)`、`loadPlayerProfile(--player-profile)` 在任何解析与输出事务之前完成校验。
 2. `parseBdmv(input)` → `ParsedDisc`；`classifyDiagnostics` 出现 `fatal` 立即失败，不创建 staging。

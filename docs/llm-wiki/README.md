@@ -38,7 +38,7 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 | 要做的事 | 先读 | 主要代码 |
 | --- | --- | --- |
 | 跑通构建与测试 | [testing.md](testing.md) | `package.json`、`scripts/ci.sh` |
-| 加一个 CLI 选项或命令 | [features/cli-commands.md](features/cli-commands.md)、[packages/cli.md](packages/cli.md) | `apps/cli/src/index.ts` 的 `commandOptions` + 对应 `async function` |
+| 加一个 CLI 选项或命令 | [features/cli-commands.md](features/cli-commands.md)、[packages/cli.md](packages/cli.md) | `apps/cli/src/cli/program.ts` 的 `.option(...)` + `apps/cli/src/commands/<命令>.ts` |
 | 修 BDMV 结构解析 | [packages/bdmv-parser.md](packages/bdmv-parser.md) | `packages/bdmv-parser/src/parser.ts` |
 | 修 IGS 场景/图像 | [features/igs-extraction.md](features/igs-extraction.md)、[packages/igs.md](packages/igs.md) | `packages/igs/src/{transport,igs,extract,png}.ts` |
 | 修导航指令或 VM 行为 | [features/navigation.md](features/navigation.md)、[packages/hdmv.md](packages/hdmv.md) | `packages/hdmv/src/{decode,registers,vm,graph}.ts` |
@@ -54,7 +54,7 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 
 | 文件 | 内容 |
 | --- | --- |
-| [architecture.md](architecture.md) | 流水线、包依赖、数据与产物边界、一次 `convert` 的完整时序 |
+| [architecture.md](architecture.md) | 流水线、包依赖、数据与产物边界、一次 `build` 的完整时序 |
 | [contracts.md](contracts.md) | DiscIR、Time90k、SourceRef、PlayerProfile、Limits、诊断与事件信封、契约改动流程 |
 | [packages/foundation.md](packages/foundation.md) | `core` + `bdmv-io`：契约、限流、输入发现、事务输出 |
 | [packages/bdmv-parser.md](packages/bdmv-parser.md) | `bdmv-parser`：文件解析、主备回退、引用图、ParsedDisc |
@@ -69,9 +69,9 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 | [features/cli-commands.md](features/cli-commands.md) | 7 个命令的输入、产物、退出码、失败码 |
 | [features/navigation.md](features/navigation.md) | HDMV 执行模型、事件/generation、UO、导航图与媒体闭包 |
 | [features/igs-extraction.md](features/igs-extraction.md) | 从 M2TS 到场景与 PNG 的完整链路 |
-| [features/offline-menu.md](features/offline-menu.md) | `convert` 管线、包结构、浏览器启动与交互 |
+| [features/offline-menu.md](features/offline-menu.md) | `build` 管线、包结构、浏览器启动与交互 |
 | [features/media.md](features/media.md) | 媒体闭包、计划、循环导出、线性变体、PGS、外部播放器 |
-| [features/verification.md](features/verification.md) | 审计、交付状态规则、`convert` 与 `validate` 的关系 |
+| [features/verification.md](features/verification.md) | 审计、交付状态规则、`build` 与 `validate` 的关系 |
 | [diagnostics.md](diagnostics.md) | 诊断码分组、含义、产生位置、首查方向 |
 | [troubleshooting.md](troubleshooting.md) | 症状驱动的排查路径与命令 |
 | [testing.md](testing.md) | 测试布局、夹具来源、逐包基线、新增测试做法 |

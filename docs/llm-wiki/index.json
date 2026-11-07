@@ -9,7 +9,7 @@
       "openspec/specs/",
       "openspec/changes/",
       "packages/",
-      "apps/cli/src/index.ts"
+      "apps/cli/src/cli/program.ts"
     ]
   },
   "entry": "README.md",
@@ -25,10 +25,10 @@
     {
       "path": "architecture.md",
       "kind": "overview",
-      "summary": "转换/交付/校验三段边界、包依赖、数据形态、一次 convert 的完整时序、状态归属。",
+      "summary": "转换/交付/校验三段边界、包依赖、数据形态、一次 build 的完整时序、状态归属。",
       "covers": ["pipeline", "package graph", "data flow", "artifacts", "ownership"],
       "keywords": ["架构", "流水线", "依赖", "convert 时序", "产物"],
-      "keyFiles": ["apps/cli/src/index.ts", "packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts"]
+      "keyFiles": ["apps/cli/src/cli/program.ts", "packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts"]
     },
     {
       "path": "contracts.md",
@@ -113,18 +113,18 @@
     {
       "path": "packages/cli.md",
       "kind": "package",
-      "summary": "参数契约、六个命令实现要点、错误出口、退出码与扩展位置。",
+      "summary": "参数契约、七个命令实现要点、错误出口、退出码与扩展位置。",
       "covers": ["argument contract", "commands", "exit codes", "error handling"],
-      "keywords": ["cli", "commandOptions", "exit code", "CLI_INVALID_PROFILE", "convert", "validate"],
-      "keyFiles": ["apps/cli/src/index.ts"]
+      "keywords": ["cli", "commandOptions", "exit code", "CLI_INVALID_PROFILE", "build", "validate"],
+      "keyFiles": ["apps/cli/src/cli/program.ts"]
     },
     {
       "path": "features/cli-commands.md",
       "kind": "feature",
-      "summary": "七个命令的输入、选项、产物、失败码与退出码；含常用命令小抄。",
-      "covers": ["inspect", "extract", "list-assets", "export-assets", "convert", "validate", "compare"],
+      "summary": "八个命令的输入、选项、产物、失败码与退出码；含常用命令小抄。",
+      "covers": ["inspect", "extract", "list", "export", "render", "build", "validate", "compare"],
       "keywords": ["命令", "产物", "退出码", "CLI"],
-      "keyFiles": ["apps/cli/src/index.ts", "README.md"]
+      "keyFiles": ["apps/cli/src/cli/program.ts", "README.md"]
     },
     {
       "path": "features/navigation.md",
@@ -132,7 +132,7 @@
       "summary": "解码→执行→导航图→媒体闭包四环；事件/代次、上下文、UO、转换期找菜单。",
       "covers": ["VM execution", "event protocol", "UO mask", "navigation graph", "top menu resolution"],
       "keywords": ["导航", "VM", "Top Menu", "媒体闭包", "UO"],
-      "keyFiles": ["packages/hdmv/src/vm.ts", "packages/hdmv/src/graph.ts", "packages/media-export/src/closure.ts", "apps/cli/src/index.ts"]
+      "keyFiles": ["packages/hdmv/src/vm.ts", "packages/hdmv/src/graph.ts", "packages/media-export/src/closure.ts", "apps/cli/src/cli/program.ts"]
     },
     {
       "path": "features/igs-extraction.md",
@@ -147,7 +147,7 @@
       "kind": "feature",
       "summary": "菜单包结构、场景选择、disc-data 字段、浏览器启动、交互与媒体边界。",
       "covers": ["package layout", "scene selection", "boot", "interaction", "media", "sound", "boundaries"],
-      "keywords": ["离线菜单", "file://", "popup", "convert", "输入映射"],
+      "keywords": ["离线菜单", "file://", "popup", "build", "输入映射"],
       "keyFiles": ["packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts"]
     },
     {
@@ -161,10 +161,10 @@
     {
       "path": "features/verification.md",
       "kind": "feature",
-      "summary": "阶段/交付两类判定、严格模式、convert 与 validate 的关系、报告字段与证据类型。",
+      "summary": "阶段/交付两类判定、严格模式、build 与 validate 的关系、报告字段与证据类型。",
       "covers": ["delivery decision", "stage outcome", "strict", "reports", "evidence", "notVerified"],
       "keywords": ["交付判定", "validate", "manifest", "auditScope", "gaps"],
-      "keyFiles": ["packages/test-runner/src/decisions.ts", "packages/test-runner/src/package-audit.ts", "packages/test-runner/src/release-summary.ts", "apps/cli/src/index.ts"]
+      "keyFiles": ["packages/test-runner/src/decisions.ts", "packages/test-runner/src/package-audit.ts", "packages/test-runner/src/release-summary.ts", "apps/cli/src/cli/program.ts"]
     },
     {
       "path": "diagnostics.md",
@@ -180,7 +180,7 @@
       "summary": "症状驱动排查：构建、inspect/extract、convert、浏览器、交互、音频、弹窗、外部播放、validate、VM。",
       "covers": ["build failures", "convert failures", "browser boot", "interaction", "audio", "popup", "external playback", "validate", "VM"],
       "keywords": ["排查", "故障", "黑屏", "点击偏移", "无声音"],
-      "keyFiles": ["packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts", "apps/cli/src/index.ts"]
+      "keyFiles": ["packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts", "apps/cli/src/cli/program.ts"]
     },
     {
       "path": "testing.md",

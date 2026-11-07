@@ -33,7 +33,7 @@ corepack pnpm build
 将 BDMV 目录转换为离线菜单包：
 
 ```sh
-corepack pnpm run cli:dev convert /path/to/BDMV --out ./BDMV-menu
+corepack pnpm run cli:dev build /path/to/BDMV --out ./BDMV-menu
 ```
 
 用浏览器打开 `BDMV-menu/index.html`。复制或移动菜单时，请保留整个输出目录。
@@ -52,20 +52,25 @@ corepack pnpm run cli:dev validate ./BDMV-menu --offline
 | --- | --- | --- |
 | `inspect <BDMV>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE`、`--strict` |
 | `extract <BDMV> --out DIR` | 导出 HDMV、IGS、SUP 分析数据 | `--type hdmv\|igs\|sup` 或 `--all` |
-| `list-assets <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
-| `export-assets <BDMV> --out DIR` | 导出 `.mnu`、`.sup` 和可选的 PNG | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` |
-| `convert <BDMV>` | 生成离线菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--overwrite`、`--strict` |
+| `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
+| `export <BDMV> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png` |
+| `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG` |
+| `build <BDMV>` | 生成离线菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--overwrite`、`--strict` |
 | `validate <菜单包目录> --offline` | 校验菜单包并更新审计报告 | `--format json`、`--strict` |
 
-`convert` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 允许覆盖。影片 PGS 字幕通过 `export-assets --type sup` 单独导出。
+`build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。影片 PGS 字幕通过 `export --type sup` 导出。
 
-`--m2ts` 和 `--pid` 的值可通过 `list-assets` 查询。`export-assets --decode png` 会在导出原始资源的同时生成 PNG。
+`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --decode png` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.mnu` 或 `.sup` 输入。
+
+`assets-manifest.json` 的 `sup-png` 条目记录 `displaySet`、`startSeconds`、`endSeconds`、`width` 和 `height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条显示集的起点，单位秒（3 位小数），以轨道起点为 0；无法确定时写 `null`。全透明显示集不输出 PNG，不写入清单。
+
+`convert` 等同于 `build`。`bdmv2web --help` 列出全部命令，`bdmv2web <命令> --help` 列出该命令的选项。
 
 命令成功时退出码为 0，失败时为 1；使用 `--strict` 时，部分完成的结果退出码为 2。完整选项、输出文件和错误码见[开发指南](docs/guides/development.md)。
 
 ## 播放器档案
 
-通过 `convert --player-profile FILE` 设置菜单语言、音轨语言、字幕语言、地区和播放配置：
+通过 `build --player-profile FILE` 设置菜单语言、音轨语言、字幕语言、地区和播放配置：
 
 ```json
 {

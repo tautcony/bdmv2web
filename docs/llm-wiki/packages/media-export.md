@@ -6,10 +6,10 @@
 
 | 文件 | 内容 | 被谁使用 |
 | --- | --- | --- |
-| `src/closure.ts` | `computeMediaClosure` | CLI `convert`、库调用 |
-| `src/media-plan.ts` | `createMediaPlan` | 库/测试（`convert` 未调用） |
+| `src/closure.ts` | `computeMediaClosure` | CLI `build`、库调用 |
+| `src/media-plan.ts` | `createMediaPlan` | 库/测试（`build` 未调用） |
 | `src/index.ts` | `exportMenuLoopMedia`、`extractPgsTrack`、`pidSpecifier`、`durationSeconds`、`resolveMenuLoopStart45k`、`runMediaProcess` | CLI、`package-builder` |
-| `src/linear.ts` | `exportLinearMedia`、`primaryAudioStreamNumberForLanguage` | 库/测试（`convert` 未调用） |
+| `src/linear.ts` | `exportLinearMedia`、`primaryAudioStreamNumberForLanguage` | 库/测试（`build` 未调用） |
 | `src/pgs.ts` | `parsePgsSup`、`PgsSubtitleTimeline` | CLI 资产导出、`runtime-web` 的字幕数据 |
 | `src/timeline.ts` | `MediaTimelineMap`、`normalizeSourceTime` | 库/测试 |
 | `src/seek.ts` | `seekTimeline`、`MEDIA_HAVE_METADATA`/`MEDIA_HAVE_CURRENT_DATA` | 库/测试 |
@@ -40,7 +40,7 @@ computeMediaClosure(disc, movieGraph, buttonGraphs?, { maxStates?: number }): Me
 
 `complete: false` 不阻止导出，但会进入诊断与 `notVerified`。
 
-## 菜单循环导出（`convert` 实际使用）
+## 菜单循环导出（`build` 实际使用）
 
 ```ts
 exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): Promise<MenuLoopMediaResult>
@@ -60,7 +60,7 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 
 `resolveMenuLoopStart45k(playItemIndex, inTime45k, outTime45k, marks)`：从 `type` 为 entry mark 的标记里取循环起点；没有则返回 `undefined`（从 in 点开始）。
 
-## 线性导出（库能力，未接入 `convert`）
+## 线性导出（库能力，未接入 `build`）
 
 `exportLinearMedia(mediaPlan, options)` 把一个播放列表的多个 PlayItem 拼成一个 mp4（每个音轨变体一个资产）：
 
@@ -74,7 +74,8 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 
 - `parsePgsSup(data, options)`：解析 SUP 的 PCS/WDS/PDS/ODS/END，得到 `PgsDisplaySet[]`（尺寸、调色板、位图、叠加位置）。CRC/长度异常按诊断返回，不猜。
 - `PgsSubtitleTimeline`：按语言注册并选择显示集；跨 33 位 PTS 回绕时延续时间轴。
-- CLI `list-assets` / `export-assets` 用 `extractPgsTrack(sourcePath, pid, outputPath, { maxBytes, timestampOffset90k })` 写出 `.sup`；`--decode png` 额外导出显示集 PNG。
+- CLI `list` / `export` 用 `extractPgsTrack(sourcePath, pid, outputPath, { maxBytes, timestampOffset90k })` 写出 `.sup`；`--decode png` 与 `render` 使用 `pgs-render.ts` 导出非全透明显示集 PNG。
+- `pgs-render.ts` 的 `renderPgsDisplaySet(display, n, endTime90k, origin90k)` 同时返回 `startTime90k`/`endTime90k`（90 kHz）和 `startSeconds`/`endSeconds`（秒，相对 `origin90k`：轨道起点，独立 SUP 为首个显示集）。`pgsSeconds90k` 对负数与无符号回绕返回 `null`。
 
 ## 外部播放目标
 
@@ -113,5 +114,5 @@ resolveExternalPlayTarget(targets, request): ExternalPlayTarget
 | --- | --- | --- |
 | 改 ffmpeg 参数 | `exportMenuLoopMedia` 的编码段 | 同步 `media-plan.json` 的 `encoder` 字段与复用判定条件 |
 | 支持新视频编码 | `exportMenuLoopMedia` 的 codec 检查 + `runtime-web` 的 `<video>` 能力 | 浏览器侧也要能播 |
-| 改闭包策略 | `closure.ts` | 影响 `convert` 是否导出额外播放列表 |
+| 改闭包策略 | `closure.ts` | 影响 `build` 是否导出额外播放列表 |
 | 改 PGS 解析 | `pgs.ts` | 同步 `package-builder` 的 `serializePgsTrack` 与浏览器字幕渲染 |

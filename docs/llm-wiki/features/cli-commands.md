@@ -1,6 +1,6 @@
 # 功能：CLI 命令
 
-七个命令，六个已实现。输入统一为 BDMV 根或包含 `BDMV/` 的父目录。
+八个命令中七个已实现，`compare` 未实现。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`render` 也接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
@@ -8,13 +8,16 @@
 | --- | --- | --- | --- |
 | `inspect` | 看结构和诊断 | stdout 表格/JSON；可选 `--out` JSON | 已实现 |
 | `extract` | 导出协议分析 JSON | `<out>/hdmv|igs|sup/*` + `manifest.json` | 已实现 |
-| `list-assets` | 列 IGS/SUP 资源 | stdout 表/JSON；可选 `--out` | 已实现 |
-| `export-assets` | 导出 `.mnu`/`.sup`/PNG | `assets-manifest.json` + 资产 | 已实现 |
-| `convert` | 生成离线菜单包 | `BDMV-menu/` 整目录 | 已实现 |
+| `list` | 列 IGS/SUP 资源 | stdout 表/JSON；可选 `--out` | 已实现 |
+| `export` | 导出 `.mnu`/`.sup` 原始资源 | `assets-manifest.json` + 资产 | 已实现 |
+| `render` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
+| `build` | 生成离线菜单包 | `BDMV-menu/` 整目录 | 已实现 |
 | `validate` | 重算离线包审计 | `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` | 已实现 |
 | `compare` | 参考对照 | — | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
-`--format` 的生效范围：`inspect`、`list-assets` 用它选择 `table|json`；`validate` 只校验取值必须为 `json`；`compare` 用它决定错误输出格式；`extract`、`convert`、`export-assets` 接受该选项但不改变输出。
+命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。`convert` 是 `build` 的历史别名。
+
+`--format` 的生效范围：`inspect`、`list` 用它选择 `table|json`；`validate` 只校验取值必须为 `json`；`compare` 用它决定错误输出格式；`extract`、`build`、`export`、`render` 接受该选项但不改变输出。
 
 ## `inspect`
 
@@ -54,7 +57,7 @@
 
 不写 PNG 与 `.sup` 文件。`--type sup` 只写索引。
 
-## `list-assets`
+## `list`
 
 | 选项 | 作用 |
 | --- | --- |
@@ -66,7 +69,7 @@
 
 报告包含：M2TS clip 列表、PID 与编码、IGS 图像对象（id/版本/尺寸/调色板）、可达 SUP 轨道（clip/PID/语言/时长）。
 
-## `export-assets`
+## `export`
 
 | 选项 | 作用 |
 | --- | --- |
@@ -81,9 +84,32 @@
 - `assets/subtitles/<clipId>-pid-<pid>.sup`：可达 PGS 轨道。
 - `assets/igs/*.png`、`assets/subtitles/*.png`：`--decode png` 时按元素/显示集导出。
 - `assets-manifest.json`：`{ type, format?, path, byteLength, language?, streamNumber?, displaySetCount? }`。
-- `.sup`/`.mnu` 文件名：多个 PlayItem 入口指向同一流时第二个入口起带 `-entryN` 后缀。
+- `sup-png` 条目另含 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条的起点，单位秒（3 位小数）。最后一个显示集用轨道结束时间；时间以轨道起点为 0（独立 `.sup` 以首个显示集为 0）。无法确定时写 `null`。
+- 全透明显示集不写 PNG，也不写 `sup-png` 条目。
+- `.sup`/`.mnu` 文件名：多个 PlayItem 入口指向同一流时从第二个入口起带 `-entryN` 后缀。
 
-## `convert`
+## `render`
+
+| 选项 | 作用 |
+| --- | --- |
+| `--out DIR` | 必填 |
+| `--mnu FILE` / `--sup FILE` | 直接渲染独立资源；也可用位置参数传入 `.mnu`/`.sup` |
+| `--type all\|igs\|sup` | 仅 BDMV 输入；选择 PNG 来源 |
+| `--m2ts` / `--pid` | 仅 BDMV 输入；`--pid` 也用于独立 MNU 的场景标识 |
+| `--language LANG` | 仅独立 SUP；写入清单的三字母语言 |
+
+产物：
+
+```text
+<out>/
+  assets-manifest.json
+  assets/graphics/*.png              # IGS 元素
+  assets/subtitles/*.png             # PGS 显示集
+```
+
+`render` 不写 `.mnu`/`.sup`。独立 SUP 的文件名为 `<源文件名>-display-<00001>.png`；独立 MNU 使用 IGS 元素命名。清单条目与 `export --decode png` 相同。
+
+## `build`
 
 | 选项 | 默认 | 作用 |
 | --- | --- | --- |
@@ -117,7 +143,7 @@ runtime/bdmv-config.js         # 有外部播放时
 assets/audio/sound-N.wav
 assets/media/background.mp4
 assets/media/audio-*.m4a
-report.json                    # convert 成功与失败路径都写
+report.json                    # build 成功与失败路径都写
 reports/                       # validate 之后出现
 ```
 
@@ -162,14 +188,18 @@ bdmv2web compare <input> [--format json]
 | 码 | 触发 |
 | --- | --- |
 | `CLI_USAGE` | 无命令、命令名未知、位置参数过多 |
-| `CLI_UNKNOWN_OPTION` | 命令不支持的选项 |
+| `CLI_UNKNOWN_OPTION` | 命令不支持的选项，`commander` 会给出最接近的拼写建议 |
 | `CLI_MISSING_VALUE` | 带值选项缺值 |
+| `CLI_INVALID_ARGUMENT` | 带值选项给了空值，例如 `--out=` |
 | `CLI_MISSING_INPUT` / `CLI_MISSING_OUTPUT` | 缺输入/`--out` |
 | `CLI_INVALID_FORMAT` | `--format` 值不支持 |
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 |
 | `INVALID_LIMITS_FILE` / `INVALID_LIMIT` | limits JSON 不可读 / 键或值非法 |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 |
-| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` / `CLI_INVALID_DECODE` | `list-assets`/`export-assets` 参数非法 |
+| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` / `CLI_INVALID_DECODE` | 资产命令参数非法 |
+| `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 |
+| `CLI_RENDER_SELECTION` | `render` 混用 BDMV 与 `.mnu`/`.sup`，或选项不适用于输入类型 |
+| `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 |
 | `CLI_OFFLINE_REQUIRED` | `validate` 缺 `--offline` |
 
 ## 小抄
@@ -177,10 +207,12 @@ bdmv2web compare <input> [--format json]
 ```sh
 corepack pnpm run cli:dev inspect "/path/BDMV" --format json
 corepack pnpm run cli:dev extract "/path/BDMV" --out /tmp/analysis --all
-corepack pnpm run cli:dev list-assets "/path/BDMV" --type igs
-corepack pnpm run cli:dev export-assets "/path/BDMV" --out /tmp/assets --type igs --decode png
-corepack pnpm run cli:dev convert "/path/BDMV" --out /tmp/menu --player-profile profile.json
+corepack pnpm run cli:dev list "/path/BDMV" --type igs
+corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/assets --type igs
+corepack pnpm run cli:dev render "/path/BDMV" --out /tmp/png --type sup
+corepack pnpm run cli:dev render --sup /tmp/subtitle.sup --out /tmp/png
+corepack pnpm run cli:dev build "/path/BDMV" --out /tmp/menu --player-profile profile.json
 corepack pnpm run cli:dev validate /tmp/menu --offline --strict
 ```
 
-`--decode` 只接受 `png`；`--m2ts`/`--pid` 取值来自 `list-assets` 的表格或 JSON。
+`--decode` 只接受 `png`；`--m2ts`/`--pid` 取值来自 `list` 的表格或 JSON。

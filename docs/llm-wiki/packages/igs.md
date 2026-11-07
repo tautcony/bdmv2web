@@ -21,6 +21,7 @@ parseSegments(input, baseOffset?, residual?, clipId?, pid?, pts?): SegmentParseR
 consumeSegment(state, segment, clipId, pid, pts, packetOffset, pesOffset, segmentFileOffset, limits?)
 decodeRle(data, width, height, limits?): Uint8Array
 renderSceneAssets(scene): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] }
+parseIgsMnu(data, options?): IgsExtraction
 encodeRgbaPng(width, height, rgba): Uint8Array
 ```
 
@@ -31,8 +32,10 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `limits` | `DEFAULT_LIMITS` | 读窗口、重组、像素上限 |
 | `chunkSize` | `limits.maxReadWindowBytes`（默认 8 MiB） | 读文件块大小 |
 | `renderAssets` | `true` | 关闭后只解析场景，不生成 PNG（`extract --type hdmv` 用） |
-| `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export-assets` 用） |
+| `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export` 用） |
 | `table` | 自动发现 | 复用已验证的输入文件表 |
+
+`parseIgsMnu` 接受每段带 `IG` + PTS + DTS 头的 MNU，也接受旧版每 PES 一个 `IG` 头、后续段复用 PTS 的形态。
 
 ## 提取流程
 
