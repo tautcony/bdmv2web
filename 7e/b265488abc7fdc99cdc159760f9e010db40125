@@ -1,0 +1,28 @@
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 250,270,534,547,577
+packages/bdmv-parser/src/parser.test.ts
+  h_3705811fa4502c 53,59-64,71
+packages/igs/test/libbluray-igs-baseline.test.ts
+  h_3705811fa4502c 126
+packages/media-export/src/external-targets.test.ts
+  h_3705811fa4502c 23,32
+packages/media-export/src/linear-variants.test.ts
+  h_3705811fa4502c 15,21
+packages/media-export/src/linear.test.ts
+  h_3705811fa4502c 176
+packages/runtime-web/src/index.test.ts
+  h_3705811fa4502c 801
+packages/test-runner/src/compare.test.ts
+  h_3705811fa4502c 19-22,25-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7eb265488abc7fdc99cdc159760f9e010db40125",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
