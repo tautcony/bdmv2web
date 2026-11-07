@@ -1,0 +1,68 @@
+apps/cli/src/index.test.ts
+  h_3705811fa4502c 90,96,101,104,302-345,482,490,738,746
+apps/cli/src/index.ts
+  h_3705811fa4502c 244-247,312-313,319,367-368,371-372,376,392-403,408-410,482-484,510,665-667,800-802,810,812-817,886
+docs/architecture/bdmv_hdmv_offline_web_architecture.md
+  h_3705811fa4502c 720
+docs/review-2026-11-06-daily/fix-checklist.md
+  h_3705811fa4502c 1-128
+docs/review-2026-11-06-daily/fixes-plan.md
+  h_3705811fa4502c 1-38
+docs/review-2026-11-06-daily/index.md
+  h_3705811fa4502c 1-37
+docs/review-2026-11-06-daily/phases/phase-1-hdmv-core.md
+  h_3705811fa4502c 1-55
+docs/review-2026-11-06-daily/phases/phase-2-cli-igs.md
+  h_3705811fa4502c 1-75
+docs/review-2026-11-06-daily/phases/phase-3-runtime-export-builder.md
+  h_3705811fa4502c 1-77
+docs/review-2026-11-06-daily/summary.md
+  h_3705811fa4502c 1-60
+docs/support/hdmv-support.md
+  h_3705811fa4502c 100
+docs/support/igs-support.md
+  h_3705811fa4502c 14,34
+openspec/changes/converge-contracts-and-distribution/specs/interactive-graphics-extraction/spec.md
+  h_3705811fa4502c 23,25-27
+openspec/changes/export-playable-media/design.md
+  h_3705811fa4502c 31
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  h_3705811fa4502c 134-138
+openspec/specs/interactive-graphics-extraction/spec.md
+  h_3705811fa4502c 89,91-93
+packages/hdmv/src/control-flow.test.ts
+  h_3705811fa4502c 100,102
+packages/hdmv/src/index.test.ts
+  h_3705811fa4502c 100,106-107,112,705,708-711,804-850,897,899,903-918
+packages/hdmv/src/vm.ts
+  h_3705811fa4502c 204,208,213,217,241,275,281,288,306,505-516,520-524,528-529,858-860,966-972
+packages/igs/src/extract.ts
+  h_3705811fa4502c 134-137
+packages/igs/src/igs.ts
+  h_3705811fa4502c 126-127
+packages/igs/test/extraction.test.ts
+  h_3705811fa4502c 55-94
+packages/igs/test/transport.test.ts
+  h_3705811fa4502c 97-111
+packages/package-builder/src/index.ts
+  h_3705811fa4502c 92-93,142,144-147,150-151,154,156,172,175,180,187,201
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 233-295
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 7,167,256-260,407,432-436
+packages/runtime-web/src/index.test.ts
+  h_3705811fa4502c 1128-1185
+packages/runtime-web/src/index.ts
+  h_3705811fa4502c 696,702,708-711,713,715,781,805,807-817,823-828,832,868-874,900,927,933,941,991
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "73b3d6234b9784eddaf68ae8e1d2c68e36216a20",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
