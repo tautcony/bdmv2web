@@ -1,0 +1,16 @@
+.github/workflows/npm-publish.yml
+  h_3705811fa4502c 104-115,117
+docs/guides/release.md
+  h_3705811fa4502c 54,58-82,85-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c1c01eeea0833bcd9f5fa180d82ab79dd41c1ded",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
