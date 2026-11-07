@@ -1,0 +1,32 @@
+apps/cli/src/index.ts
+  h_3705811fa4502c 1042-1047,1135-1138,1142
+packages/bdmv-io/src/index.ts
+  h_3705811fa4502c 157-160
+packages/runtime-web/src/browser.test.ts
+  h_3705811fa4502c 136
+packages/runtime-web/src/browser.ts
+  h_3705811fa4502c 450-453
+packages/runtime-web/src/igs-adapter.test.ts
+  h_3705811fa4502c 76-77
+packages/runtime-web/src/igs-adapter.ts
+  h_3705811fa4502c 220
+packages/runtime-web/src/index.ts
+  h_3705811fa4502c 288,356,483
+packages/test-runner/src/browser-evidence.test.ts
+  h_3705811fa4502c 9-11,30-36
+packages/test-runner/src/browser-evidence.ts
+  h_3705811fa4502c 16,37,62
+packages/test-runner/src/package-audit.ts
+  h_3705811fa4502c 242-243
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "70213b521522f9f05917effa40b80cdd36585dbf",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
