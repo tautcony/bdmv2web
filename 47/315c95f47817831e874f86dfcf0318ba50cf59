@@ -1,0 +1,48 @@
+apps/cli/src/libbluray-navigation-baseline.test.ts
+  h_3705811fa4502c 4,19
+docs/evidence/igs-fixture-packet-comparison-summary.json
+  h_3705811fa4502c 13,23-30
+docs/guides/development.md
+  h_3705811fa4502c 77
+docs/llm-wiki/architecture.md
+  h_3705811fa4502c 69,72
+docs/llm-wiki/features/igs-extraction.md
+  h_3705811fa4502c 77
+docs/llm-wiki/packages/igs.md
+  h_3705811fa4502c 104-105
+docs/llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 123
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 49,58-60,69-71,74-76
+docs/references/stages/M2-igs-scenes.md
+  h_3705811fa4502c 107
+docs/references/stages/M3-hdmv-navigation.md
+  h_3705811fa4502c 28
+packages/igs/test/igs-reference-element-summary.test.ts
+  h_3705811fa4502c 3,17
+packages/igs/test/libbluray-igs-baseline.test.ts
+  h_3705811fa4502c 4,21,141
+packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts
+  h_3705811fa4502c 9,18
+scripts/generate-libbluray-baselines.py
+  h_3705811fa4502c 13,17-19,38,439-461,473,476-477
+test-data/baselines/README.md
+  h_3705811fa4502c 1-13
+test-data/baselines/igs-reference-element-summary.json
+  h_3705811fa4502c 1-29
+test-data/baselines/libbluray-1.5.0-igs-baseline.json
+  h_3705811fa4502c 1-20
+test-data/baselines/libbluray-1.5.0-navigation-baseline.json
+  h_3705811fa4502c 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "47315c95f47817831e874f86dfcf0318ba50cf59",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
