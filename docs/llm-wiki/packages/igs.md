@@ -102,12 +102,15 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `packages/igs/test/extraction.test.ts` | 段拼装、版本缓存、RLE、场景完整性 |
 | `packages/igs/test/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
 | `packages/igs/test/igs-reference-element-summary.test.ts` | 重算 9 个 clip、932 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `docs/evidence/igs-reference-element-summary.json` |
+| `packages/igs/test/libbluray-igs-baseline.test.ts` | 对 9 个 clip 的 display set、ICS 页面/BOG/按钮/进入退出效果、256 项调色板与 913 个对象 RLE 与 libbluray 1.5.0 `graphics_processor_decode_ts()` 输出逐项比对；golden 在 `docs/evidence/libbluray-1.5.0-igs-baseline.json` |
 | `packages/igs/test/m1-m2-m3.integration.test.ts` | 解析 → 场景 → 命令的来源交接 |
 | `packages/igs/test/real-igs.test.ts`、`tamako-*.test.ts` | 工作区本地样本；数据缺失时跳过 |
 
 跨包一站式覆盖见 `apps/cli/src/synthetic-all-features.test.ts`：两页多 BOG 菜单、effect/animation、按钮音效与弹出菜单超时字段。
 
 合成字节在 `packages/igs/test/fixtures.ts`；外部来源的 ICS 样本在 `test-data/fixtures/igs-parser/`，旁边带来源与许可说明。
+
+两份独立 golden 覆盖同一批对象：`libbluray-igs-baseline.test.ts` 逐 case/clip 核对 libbluray 解码出的 object id/version 集合与 igstools RGBA 参考摘要的资产集合一致。libbluray golden 由 `scripts/generate-libbluray-baselines.py` 调用 `scripts/libbluray-igs-dump.c` 本地生成，测试只读入库 JSON。
 
 ## 改动入口
 

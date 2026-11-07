@@ -120,7 +120,9 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 
 ## 测试
 
-`src/index.test.ts`（控制器/输入/效果/音效/检查点）、`browser.test.ts`（boot、弹窗、媒体策略、状态提示）、`igs-adapter.test.ts`、`media-clock.test.ts`、`linear-playback.test.ts`、`headless-menu-synthetic.test.ts`、`hdmv-navigation-corpus-dfs.test.ts`（5 个真实盘 case 的 DFS 精确基线：状态数、覆盖边、PLAY_PLAYLIST 目标、unsupportedEdges 为空）、`baja-studio-headless-navigation.test.ts`、`tamako-headless-navigation.test.ts`。弹出菜单适配与场景选取的跨包覆盖见 `apps/cli/src/synthetic-all-features.test.ts`。
+`src/index.test.ts`（控制器/输入/效果/音效/检查点）、`browser.test.ts`（boot、弹窗、媒体策略、状态提示）、`igs-adapter.test.ts`、`media-clock.test.ts`、`linear-playback.test.ts`、`headless-menu-synthetic.test.ts`、`hdmv-navigation-corpus-dfs.test.ts`（5 个真实盘 case 的 DFS 实现回归 pin：状态数、覆盖边、unsupportedEdges 为空；索引条目数与静态 PLAY_PL 目标由 `docs/evidence/libbluray-1.5.0-navigation-baseline.json` 驱动）、`baja-studio-headless-navigation.test.ts`、`tamako-headless-navigation.test.ts`。弹出菜单适配与场景选取的跨包覆盖见 `apps/cli/src/synthetic-all-features.test.ts`。
+
+真实盘导航的独立基线在 `apps/cli/src/libbluray-navigation-baseline.test.ts`：逐命令对照 libbluray `mobj_dump -d` 反汇编、`bd_info` index、`bd_list_titles -a` 标题结构，并逐边对照由 libbluray 反汇编独立派生的完整 CFG。DFS 统计本身是本项目探索器的回归 pin。
 
 `browser.test.ts` 用最小 DOM 桩，不是真实浏览器；真实 `file://` 验收记录在 `docs/references/stages/M6-release-verification.md`。
 

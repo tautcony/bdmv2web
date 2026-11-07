@@ -100,3 +100,12 @@ Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.
 - **字段登记：** ICS、page、BOG、button、PDS、ODS 与 Display Set 的实现字段、版本键、libbluray 1.5.0 固定 revision 和本地样本见 [IGS 字段与版本依据](M2-igs-field-register.md)。解析器现保留此前被跳过的 ICS frame-rate code 和 button numeric-select value；外部真实 ICS 样本断言 frame-rate code 为 1、首按钮 numeric-select value 为 `65535`。
 - **独立颜色向量：** `packages/igs/test/extraction.test.ts` 对 6 个固定 YCbCrA 输入解码 PNG RGBA 全像素并与静态预期比较。输入和结果为：`(Y,Cb,Cr,A)=(16,128,128,0) → (0,0,0,0)`；`(235,128,128,1) → (255,255,255,1)`；`(126,128,128,127) → (128,128,128,127)`；`(81,90,240,128) → (255,24,0,128)`；`(145,54,34,254) → (0,216,0,254)`；`(41,240,110,255) → (0,15,255,255)`。覆盖黑白/中性灰、色彩分量、舍入、裁剪和 alpha 直通。
 - **真实多 palette 映射：** Battle Royale UHD Clip `00005` 的 packet fixture 断言 object 13/version 0 各自生成 palette 0、1、2、3 的资产；object 22、23、24、27、30/version 0 各自生成 palette 1、2、3 的资产。还断言 PDS 0/version 0 entry 0 值和 ODS 27/version 0 的尺寸及 RLE 索引样本。对应全部真实元素的同类工具像素比较在前节报告中为零差异。
+
+## 2026-11-07 — libbluray 1.5.0 IGS 元素级解码基线
+
+- **参考实现：** VideoLAN libbluray 1.5.0，固定 revision `d75c88e54c893e5cbf4c61d356477655eb435769`，解码入口 `src/libbluray/decoders/graphics_processor.c` 的 `graphics_processor_decode_ts()`。`scripts/libbluray-igs-dump.c` 链接本机 libbluray 静态库并由 `scripts/generate-libbluray-baselines.py` 调用。
+- **输入：** 已入库的 9 个 IG packet fixture（`test-data/fixtures/hdmv-navigation/disc-data/` 与 `test-data/fixtures/igs-parser/`）。192 字节 TS 包按 6144 字节 read unit 重新分组，不足处补 null packet；`stc=-1` 让 libbluray 立即解码完整 display set。
+- **入库证据：** [libbluray-1.5.0-igs-baseline.json](../../evidence/libbluray-1.5.0-igs-baseline.json)。9 个 clip、55 组 256 项调色板、913 个对象。逐 case 记录 display set 的 complete/epochStart/validPts、ICS 的页面/BOG/按钮/进入退出效果/超时、按钮的 20 个字段、调色板 256 项 YCrCbT，以及对象 RLE 的宽高、run/EOL 计数、48 个等距索引采样和 16 个索引分箱。
+- **自动化对照：** `packages/igs/test/libbluray-igs-baseline.test.ts`（11 例）。逐 case 把 `extractIgsFromChunks()` 的结果与上述字段全部比对，并逐 case/clip 核对 libbluray 解出的 object id/version 集合与 igstools RGBA 参考摘要的 932 个资产名解析出的 913 个 object id/version 集合一致。测试只读入库 JSON 和夹具，运行时不需要本机 libbluray。
+- **结果：** 9 个 clip 的 display set、ICS、调色板与对象 RLE 摘要全部一致；object id/version 集合与 igstools 参考逐 clip 相等，无缺失或额外项。
+- **适用范围：** libbluray 解码给出 YCrCbT 调色板条目与 RLE 索引；逐像素 RGBA 保真由 pinned igstools 的 `picture_to_png` 参考覆盖（见 2026-11-04 节）。按本页已记录的来源关系，igstools 解码器源自 libav patches，与 libbluray 来源可能重合，两份证据分别覆盖元素结构/RLE 与 RGBA 转换路径，按一个参考族计。本次比对未涉及动画帧、多帧对象范围或各盘原始色彩矩阵判定。

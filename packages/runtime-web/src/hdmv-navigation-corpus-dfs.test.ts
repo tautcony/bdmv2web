@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
@@ -5,14 +6,21 @@ import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, HdmvVm, type NavigationAction, type StaticNavigationLoop, type TraceEntry } from "@bdmv2web/hdmv";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const libblurayGoldenPath = resolve(repo, "docs/evidence/libbluray-1.5.0-navigation-baseline.json");
 const corpus = ["tamako", "baja", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
 const MAX_SCENARIOS_PER_CASE = 128;
 const MAX_STATES_PER_SCENARIO = 50_000;
 let corpusBranchSitesWithBothOutcomes = 0;
 
-/** Per-case VM execution baseline: entries, states, reachable edges, playlist targets, loops and DFS budget. */
-const expected: Record<(typeof corpus)[number], {
-  entries: number;
+/**
+ * DFS exploration counters. These measure this project's own explorer and are
+ * regression pins, not independent baselines. The independent baseline lives in
+ * docs/evidence/libbluray-1.5.0-navigation-baseline.json and is asserted by
+ * apps/cli/src/libbluray-navigation-baseline.test.ts: libbluray's index,
+ * per-command disassembly, title list, VM events and the derived control-flow
+ * graph. Index entry counts below are checked against that baseline at runtime.
+ */
+const regressionPins: Record<(typeof corpus)[number], {
   executedEntries: number;
   observedPlaylists: number[];
   stats: {
@@ -22,27 +30,27 @@ const expected: Record<(typeof corpus)[number], {
   };
 }> = {
   tamako: {
-    entries: 33, executedEntries: 33,
+    executedEntries: 33,
     observedPlaylists: [0, 1, 3, 24, 25, 26, 27, 42, 57, 58, 59, 60, 61, 62, 67],
     stats: { states: 7416, commandStates: 3574, graphEdges: 4415, coveredEdges: 3147, simulatedEdges: 501, unavailableEdges: 0, unresolvedEdges: 354, staticLoops: 0, runtimeActualLoops: 2, runtimeSimulatedLoops: 3, scenarios: 43, cycleStatesDeduplicated: 5, branchAlternativesQueued: 413 },
   },
   baja: {
-    entries: 6, executedEntries: 6,
+    executedEntries: 6,
     observedPlaylists: [0, 1, 2, 3, 4, 5],
     stats: { states: 225, commandStates: 70, graphEdges: 86, coveredEdges: 52, simulatedEdges: 20, unavailableEdges: 6, unresolvedEdges: 3, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 10, scenarios: 8, cycleStatesDeduplicated: 10, branchAlternativesQueued: 2 },
   },
   "kyoani-ova": {
-    entries: 5, executedEntries: 5,
+    executedEntries: 5,
     observedPlaylists: [0, 1, 2, 4, 5],
     stats: { states: 570, commandStates: 82, graphEdges: 99, coveredEdges: 58, simulatedEdges: 28, unavailableEdges: 5, unresolvedEdges: 2, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 11, scenarios: 10, cycleStatesDeduplicated: 11, branchAlternativesQueued: 4 },
   },
   "bang-dream-mygo-vol1": {
-    entries: 4, executedEntries: 4,
+    executedEntries: 4,
     observedPlaylists: [0, 1, 2, 3],
     stats: { states: 268, commandStates: 56, graphEdges: 82, coveredEdges: 21, simulatedEdges: 45, unavailableEdges: 6, unresolvedEdges: 0, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 22, scenarios: 11, cycleStatesDeduplicated: 22, branchAlternativesQueued: 10 },
   },
   "battle-royale-uhd": {
-    entries: 24, executedEntries: 22,
+    executedEntries: 22,
     observedPlaylists: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 21, 1997, 1999],
     stats: { states: 376, commandStates: 112, graphEdges: 144, coveredEdges: 34, simulatedEdges: 83, unavailableEdges: 22, unresolvedEdges: 0, staticLoops: 1, runtimeActualLoops: 0, runtimeSimulatedLoops: 96, scenarios: 48, cycleStatesDeduplicated: 96, branchAlternativesQueued: 5 },
   },
@@ -58,10 +66,26 @@ describe("HDMV multi-disc VM execution DFS coverage", () => {
     const disc = await parseBdmv(bdmvRoot);
     const graph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries, maxStates: 200_000 });
     const result = exploreDisc(disc, graph);
+    const golden = JSON.parse(await readFile(libblurayGoldenPath, "utf8")) as {
+      cases: Array<{
+        case: string;
+        discInfo: { firstPlay: boolean; topMenu: boolean; hdmvTitles: number };
+        graph: Array<[string, string | null, string, string]>;
+        vmTrace: { playlists: number[] };
+      }>;
+    };
+    const libbluray = golden.cases.find((entry) => entry.case === caseId);
+    expect(libbluray, `${caseId} libbluray baseline`).toBeDefined();
 
     const r = result.report;
-    const want = expected[caseId];
-    expect(r.entries.length, `${caseId} parsed index entries`).toBe(want.entries);
+    const want = regressionPins[caseId];
+    expect(r.entries.length, `${caseId} parsed index entries`).toBe(
+      libbluray!.discInfo.hdmvTitles + Number(libbluray!.discInfo.firstPlay) + Number(libbluray!.discInfo.topMenu));
+    const libblurayPlayTargets = [...new Set(libbluray!.graph
+      .filter((edge) => edge[2] === "play" && edge[1]?.startsWith("playlist:"))
+      .map((edge) => Number(edge[1]!.slice("playlist:".length))))].sort((left, right) => left - right);
+    expect(r.observedPlaylists, `${caseId} DFS observed every static playlist target from libbluray`)
+      .toEqual(expect.arrayContaining(libblurayPlayTargets));
     expect(r.entries.filter((entry) => entry.status === "executed-hdmv-entry"), `${caseId} executed HDMV entries`).toHaveLength(want.executedEntries);
     expect(r.observedPlaylists, `${caseId} playlist targets reached by PLAY_PLAYLIST actions`).toEqual(want.observedPlaylists);
     expect({
@@ -73,7 +97,7 @@ describe("HDMV multi-disc VM execution DFS coverage", () => {
       runtimeSimulatedLoops: r.runtimeLoops.filter((loop) => loop.kind === "simulated").length,
       scenarios: r.budget.scenarios, cycleStatesDeduplicated: r.budget.cycleStatesDeduplicated,
       branchAlternativesQueued: r.budget.branchAlternativesQueued,
-    }, `${caseId} DFS execution baseline`).toEqual(want.stats);
+    }, `${caseId} DFS execution regression pin`).toEqual(want.stats);
     expect(r.unsupportedEdges, `${caseId} unsupported navigation edges`).toEqual([]);
     expect(r.omittedStaticEdges, `${caseId} resolved static edges without evidence`).toEqual([]);
     expect(r.uncoveredImmediateObjectJumps, `${caseId} immediate JUMP_OBJECT instructions execute their declared target`).toEqual([]);
