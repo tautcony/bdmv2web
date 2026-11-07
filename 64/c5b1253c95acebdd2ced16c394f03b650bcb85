@@ -1,0 +1,18 @@
+packages/igs/src/index.ts
+  h_3705811fa4502c 6
+packages/igs/src/mnu.ts
+  h_3705811fa4502c 1-90
+packages/igs/test/mnu.test.ts
+  h_3705811fa4502c 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "64c5b1253c95acebdd2ced16c394f03b650bcb85",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
