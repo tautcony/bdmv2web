@@ -1,0 +1,56 @@
+README.zh-CN.md
+  h_3705811fa4502c 5-7,9,11,18-34,36,48,50,57,68,73,81,84,108,180-186,190
+  h_3705811fa4502c 10,35
+README.md
+  h_3705811fa4502c 5-7,9,11,18-36,48,57,66,68,73,81,84,108,180-184,186,190
+  h_3705811fa4502c 10,50
+apps/cli/README.md
+  h_3705811fa4502c 3,5-7,16-18,20,32,48-52,56
+apps/cli/tests/integration/libbluray-navigation-baseline.test.ts
+  h_3705811fa4502c 21-22,41,48,84
+docs/guides/development.md
+  h_3705811fa4502c 84,86-89
+docs/llm-wiki/packages/igs.md
+  h_3705811fa4502c 107-108
+docs/llm-wiki/packages/runtime-web.md
+  h_3705811fa4502c 123
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 45-46
+docs/references/README.md
+  h_3705811fa4502c 67,71
+docs/references/stages/M2-igs-scenes.md
+  h_3705811fa4502c 79,88,93-95,109-111
+packages/igs/tests/integration/igs-reference-element-summary.test.ts
+  h_3705811fa4502c 35,120-122
+packages/igs/tests/integration/libbluray-igs-baseline.test.ts
+  h_3705811fa4502c 150,159-161
+packages/runtime-web/tests/integration/hdmv-navigation-corpus-dfs.test.ts
+  h_3705811fa4502c 10-13,24,402,445
+scripts/generate-libbluray-baselines.py
+  h_3705811fa4502c 38,41,48,100-101,402-407,411
+scripts/generate-synthetic-all-features.mjs
+  h_3705811fa4502c 11-20
+scripts/summarize-igstools-references.py
+  h_3705811fa4502c 1-114
+test-data/baselines/README.md
+  h_3705811fa4502c 9,13-15
+test-data/baselines/igs-reference-element-summary.json
+  h_3705811fa4502c 7-8,25
+test-data/baselines/libbluray-1.5.0-igs-baseline.json
+  h_3705811fa4502c 16
+test-data/baselines/libbluray-1.5.0-navigation-baseline.json
+  h_3705811fa4502c 13-14
+test-data/fixtures/synthetic-all-features/BDMV/STREAM/00002.m2ts_ig-packets.bin.offset-runs.json
+  h_3705811fa4502c 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50e7ecee00244151933238a20de47eea68721588",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
