@@ -26,7 +26,7 @@ corepack pnpm test
 
 `corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/*.mjs`. `corepack pnpm lint:fix` applies the automatic fixes.
 
-Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. Run `corepack pnpm build` before linting; `scripts/ci.sh` runs lint between the build and the typecheck.
+Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. Run `corepack pnpm build` before linting; `scripts/ci.sh` runs lint as a parallel lane beside the typecheck and the test suites, after the build.
 
 `eslint.config.mjs` encodes the style the sources use: double quotes, semicolons, trailing commas, dense single-line declarations, non-null assertions after bounds checks, and terse `condition && call()` / `error ? reject() : resolve()` statements. Formatting rules are absent by design - ESLint 10 no longer ships them and no formatter runs in this workspace.
 
@@ -125,21 +125,30 @@ The reference comparisons read committed baselines: `test-data/baselines/libblur
 
 `build` compiles with each package's `tsconfig.build.json` (tests excluded), while `typecheck` keeps `tsc -p tsconfig.json --noEmit` over all source including tests. The two can fail independently: a type error inside a `*.test.ts` breaks `typecheck` and leaves `build` green. `rootDir: "src"` and the `src`-only `include` belong to `tsconfig.build.json`; the main `tsconfig.json` spans `src/**` and `tests/**`.
 
-The gate is executed by hand through the platform-independent script:
+Locally the gate runs as one command through the platform-independent script:
 
 ```sh
 bash scripts/ci.sh
 ```
 
-It runs `corepack pnpm install --frozen-lockfile` → `corepack pnpm generate:contracts` → `corepack pnpm -r build` → `corepack pnpm -r typecheck` → `corepack pnpm test:all`, prints each command with its duration, and stops at the first failing step. It does not verify the integrity of the large `test-data/` fixtures.
+The script composes stage modules from `scripts/ci/` in dependency order and prints each command with its duration:
+
+| Stage | Command | Depends on |
+| --- | --- | --- |
+| `10-install.sh` | `corepack pnpm install --frozen-lockfile` | - |
+| `20-generate.sh` | `corepack pnpm generate:contracts` | install |
+| `30-build.sh` | `corepack pnpm -r build` (topological, concurrent across independent packages) | generate |
+| `40-lint.sh`, `40-typecheck.sh`, `40-test.sh` | `corepack pnpm lint` / `-r typecheck` / `test:all` | build |
+
+Lint resolves workspace imports through `dist`, typecheck resolves them through `dist` declarations, and the test suites import workspace packages through `dist`, so the three `40-*` stages run as parallel lanes after the build. A failing lane does not stop the others: every lane runs to completion and all lane results are reported before the gate exits. A failing sequential stage stops the gate at that stage. The gate does not verify the integrity of the large `test-data/` fixtures.
 
 `corepack pnpm` runs the pnpm version pinned by `packageManager` in `package.json`, and it ships with Node, so the gate needs no globally installed `pnpm`. Root scripts spell out `corepack pnpm` so the nested calls they make resolve through the same shim and `corepack pnpm build` works from a clean checkout. A global install remains usable: `PNPM=pnpm bash scripts/ci.sh`.
 
-Measured 2026-11-05 on an idle machine (Node 22.22.2 via corepack, pnpm 11.25.0): install 0s (lockfile already satisfied) → `generate:contracts` 1s → `build` 14s → `typecheck` 19s → `test:all` 117s; total 2m32s, exit 0. `generate:contracts` is idempotent — rerunning it leaves `packages/core/src/disc-ir.generated.ts` byte-identical.
+Measured 2026-11-08 on an idle machine (Node 24.18.0 via corepack, pnpm 11.25.0, Apple Silicon): install 0s (lockfile already satisfied) → `generate:contracts` 1s → `build` 4s → lanes `lint` 5s, `typecheck` 5s, `test:all` 19s in parallel; total 24s, exit 0. `generate:contracts` is idempotent — rerunning it leaves `packages/core/src/disc-ir.generated.ts` byte-identical.
 
 `apps/cli`, `media-export`, and `runtime-web` set `testTimeout: 15000`; their cases take 5–6s on a busy machine, over the vitest default of 5s. Per-test budgets override it: `120_000` for the navigation corpus and Tamako headless cases in `runtime-web`, the two `igs` reference comparisons, and `60_000` for the `cli` libbluray navigation baseline. `hdmv` and `igs` set no global timeout.
 
-**CI:** GitHub Actions runs this gate on pushes to `master`, pull requests, and manual dispatch. The workflow uses the repository-pinned Node version and runs `bash scripts/ci.sh`; check the Actions result for the commit under review.
+**CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the same stage modules as job nodes. The `build` job runs install, generate, and build, then uploads every package's `dist/` as the `workspace-dist` artifact. The `lint`, `typecheck`, and per-package `test` jobs (one job per workspace package, 11 in the matrix) download the artifact, install dependencies, and run their stage; `fail-fast: false` keeps every failing package's node red without stopping the others. The test jobs install FFmpeg because the media-export suites invoke a real ffmpeg/ffprobe when a test does not inject a runner. The workflow triggers on pushes to `master`, pull requests, and manual dispatch; check the Actions result for the commit under review.
 
 ## Repository hygiene
 

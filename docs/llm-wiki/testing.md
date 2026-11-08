@@ -7,7 +7,7 @@ corepack pnpm test                      # 各包 vitest run（fail-fast 语义�
 corepack pnpm test:all                  # -r --no-bail，收集全部失败
 corepack pnpm --filter @bdmv2web/igs test
 corepack pnpm typecheck                 # 先 build，再对含测试的源码做 tsc --noEmit
-bash scripts/ci.sh                      # install → generate:contracts → build → typecheck → test:all
+bash scripts/ci.sh                      # install → generate:contracts → build → lint/typecheck/test:all 并行 lane
 ```
 
 每个包的 `vitest.config.ts` 用 `include` 锁定测试文件，编译产物 `dist/**/*.test.js` 不会被加载。某包匹配不到测试文件时任务失败。

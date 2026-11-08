@@ -9,16 +9,126 @@ on:
 permissions:
   contents: read
 
+# The gate runs as separate job nodes: build first, then lint, typecheck, and
+# one test job per workspace package in parallel. Every job runs the same
+# stage modules from scripts/ci/ that the local gate (scripts/ci.sh) runs.
 jobs:
   build:
+    name: build (install → generate → build)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - name: Install FFmpeg for PGS asset tests
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: bash scripts/ci/10-install.sh
+      - name: Generate contracts
+        run: bash scripts/ci/20-generate.sh
+      - name: Build packages
+        run: bash scripts/ci/30-build.sh
+      - name: Upload dist for the check jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-dist
+          path: |
+            packages/*/dist/
+            apps/*/dist/
+          if-no-files-found: error
+
+  lint:
+    name: lint
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Download dist from the build job
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-dist
+      - name: Install dependencies
+        run: bash scripts/ci/10-install.sh
+      - name: Generate contracts
+        run: bash scripts/ci/20-generate.sh
+      - name: Lint
+        run: bash scripts/ci/40-lint.sh
+
+  typecheck:
+    name: typecheck
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Download dist from the build job
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-dist
+      - name: Install dependencies
+        run: bash scripts/ci/10-install.sh
+      - name: Generate contracts
+        run: bash scripts/ci/20-generate.sh
+      - name: Typecheck
+        run: bash scripts/ci/40-typecheck.sh
+
+  test:
+    name: test ${{ matrix.package }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # Every package's test job runs to completion; each failing package
+      # turns its own node red.
+      fail-fast: false
+      matrix:
+        package:
+          - "@bdmv2web/core"
+          - "@bdmv2web/test-runner"
+          - "@bdmv2web/test-fixtures"
+          - "@bdmv2web/bdmv-io"
+          - "@bdmv2web/bdmv-parser"
+          - "@bdmv2web/hdmv"
+          - "@bdmv2web/igs"
+          - "@bdmv2web/media-export"
+          - "@bdmv2web/runtime-web"
+          - "@bdmv2web/package-builder"
+          - "bdmv2web"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Download dist from the build job
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-dist
+      # The media-export suites invoke a real ffmpeg/ffprobe when the test
+      # does not inject a runner, so the binary must be on PATH.
+      - name: Install FFmpeg for media export tests
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Run workspace gate
-        run: bash scripts/ci.sh
+      - name: Install dependencies
+        run: bash scripts/ci/10-install.sh
+      - name: Generate contracts
+        run: bash scripts/ci/20-generate.sh
+      - name: Test ${{ matrix.package }}
+        run: corepack pnpm --filter "${{ matrix.package }}" test
