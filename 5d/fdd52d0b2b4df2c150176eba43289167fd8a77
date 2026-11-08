@@ -1,0 +1,34 @@
+.github/workflows/ci.yml
+  h_3705811fa4502c 12-14,17,22-23,26-127,129-134
+docs/guides/development.md
+  h_3705811fa4502c 29,128,134-143,147,151
+docs/llm-wiki/testing.md
+  h_3705811fa4502c 10
+scripts/ci.sh
+  h_3705811fa4502c 4-22,28-30,32-36,39-76,78-81
+scripts/ci/10-install.sh
+  h_3705811fa4502c 1-6
+scripts/ci/20-generate.sh
+  h_3705811fa4502c 1-8
+scripts/ci/30-build.sh
+  h_3705811fa4502c 1-8
+scripts/ci/40-lint.sh
+  h_3705811fa4502c 1-7
+scripts/ci/40-test.sh
+  h_3705811fa4502c 1-9
+scripts/ci/40-typecheck.sh
+  h_3705811fa4502c 1-8
+scripts/ci/lib.sh
+  h_3705811fa4502c 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5dfdd52d0b2b4df2c150176eba43289167fd8a77",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
