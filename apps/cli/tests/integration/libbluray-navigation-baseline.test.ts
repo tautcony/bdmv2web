@@ -18,6 +18,8 @@ import { buildNavigationGraph, decodeInstruction } from "@bdmv2web/hdmv";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const goldenPath = resolve(repositoryRoot, "test-data/baselines/libbluray-1.5.0-navigation-baseline.json");
 const corpusRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data");
+const syntheticRoot = resolve(repositoryRoot, "test-data/fixtures/synthetic-all-features");
+const discRoot = (caseId: string) => caseId === "synthetic-all-features" ? syntheticRoot : resolve(corpusRoot, caseId);
 
 type CommandRow = { pc: number; bytes: string; opcode: string | null; disasm: string };
 type ObjectRow = { id: number; numCommands: number; resumeIntention: number; menuCallMask: number; titleSearchMask: number; commands: CommandRow[] };
@@ -36,14 +38,14 @@ type Golden = {
   }>;
 };
 
-const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
+const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd", "synthetic-all-features"] as const;
 
 describe("libbluray 1.5.0 navigation baseline", () => {
   it.each(corpus)("matches libbluray's index, disassembly, titles and full CFG for %s", async (caseId) => {
     const golden = JSON.parse(await readFile(goldenPath, "utf8")) as Golden;
     const expected = golden.cases.find((entry) => entry.case === caseId);
     expect(expected, `missing libbluray baseline for ${caseId}`).toBeDefined();
-    const disc = await parseBdmv(resolve(corpusRoot, caseId, "BDMV"));
+    const disc = await parseBdmv(resolve(discRoot(caseId), "BDMV"));
 
     const expectedEntries = expected!.discInfo.hdmvTitles
       + Number(expected!.discInfo.firstPlay) + Number(expected!.discInfo.topMenu);
@@ -79,7 +81,7 @@ describe("libbluray 1.5.0 navigation baseline", () => {
     for (const title of expected!.titles) {
       const playlist = disc.playlists.find((candidate) => Number(candidate.id) === title.playlist);
       expect(playlist, `${caseId} playlist ${title.playlist}`).toBeDefined();
-      expect({ clips: playlist!.playItems.length, chapters: playlist!.marks.length },
+      expect({ clips: playlist!.playItems.length, chapters: playlist!.marks.filter((mark) => mark.type === 1).length },
         `${caseId} playlist ${title.playlist} structure`).toEqual({ clips: title.clips, chapters: title.chapters });
     }
 

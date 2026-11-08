@@ -32,6 +32,7 @@ const cases = [
   { caseId: "battle-royale-uhd", clipId: "00002", pid: 0x1400 },
   { caseId: "battle-royale-uhd", clipId: "00005", pid: 0x1400 },
   { caseId: "kyoani-ova", clipId: "00005", pid: 0x1400 },
+  { caseId: "synthetic-all-features", clipId: "00002", pid: 0x1400 },
   { caseId: "synthetic-igs-parser", clipId: "00001", pid: 0x120 },
   { caseId: "tamako", clipId: "00005", pid: 0x1400 },
   { caseId: "tamako", clipId: "00043", pid: 0x1400 },
@@ -116,7 +117,9 @@ describe("independent igstools reference pixels", () => {
 
     const source = caseId === "synthetic-igs-parser"
       ? resolve(repositoryRoot, "test-data/fixtures/igs-parser/synthetic-single-object.m2ts")
-      : resolve(fixtureRoot, caseId, "BDMV", "STREAM", `${clipId}.m2ts_ig-packets.bin`);
+      : caseId === "synthetic-all-features"
+        ? resolve(repositoryRoot, "test-data/fixtures/synthetic-all-features/BDMV/STREAM", `${clipId}.m2ts_ig-packets.bin`)
+        : resolve(fixtureRoot, caseId, "BDMV", "STREAM", `${clipId}.m2ts_ig-packets.bin`);
     const bytes = await readFile(source);
     const result = await extractIgsFromChunks(clipId, chunks(bytes, 4093), [{
       pid,

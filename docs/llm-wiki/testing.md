@@ -42,8 +42,8 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 真实样本 | `igs/tests/integration/tamako-external-navigation.test.ts`、`runtime-web/tests/integration/tamako-*` | 数据缺失时跳过 |
 | 一站式 | `apps/cli/tests/integration/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |
 | 独立参考 | `packages/igs/tests/integration/igs-reference-element-summary.test.ts` | 重算 IGS 渲染并与 pinned igstools 参考 PNG 的逐元素像素值比对 |
-| 独立参考 | `packages/igs/tests/integration/libbluray-igs-baseline.test.ts` | 对 8 个 clip 的 display set、ICS、页面/BOG/按钮/效果、256 项调色板与 RLE 对象与 libbluray 解码结果逐项比对 |
-| 独立参考 | `apps/cli/tests/integration/libbluray-navigation-baseline.test.ts` | 对 4 个真实盘的 index、逐命令反汇编、标题结构、完整 CFG 及 VM playlist 事件与 libbluray 基线比对 |
+| 独立参考 | `packages/igs/tests/integration/libbluray-igs-baseline.test.ts` | 对 9 个 clip 的 display set、ICS、页面/BOG/按钮/效果、256 项调色板与 RLE 对象与 libbluray 解码结果逐项比对 |
+| 独立参考 | `apps/cli/tests/integration/libbluray-navigation-baseline.test.ts` | 对 4 个真实盘与 1 个合成盘的 index、逐命令反汇编、标题结构、完整 CFG 及 VM playlist 事件与 libbluray 基线比对 |
 | 浏览器 | `runtime-web/src/browser.test.ts` | 最小 DOM 桩，不是真实浏览器 |
 
 ## 夹具与基线来源

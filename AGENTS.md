@@ -13,7 +13,6 @@ This file records cross-cutting requirements repeated in Codex conversations for
 
 ## Portability, privacy, and input data
 
-- Do not commit real disc titles, machine-specific mount paths, local `file://` URLs, or other user-identifying data in fixtures, tests, logs, or Git history. Use synthetic or suitably anonymized examples.
 - Do not add SHA-256, payload fingerprint, or file-size verification to package validation or release gates. Do not recreate equivalent content-fingerprint checks under another name. Path and file-existence checks may remain where required by the feature.
 - Do not constrain reusable loaders or APIs to the names of current sample discs. Keep sample-specific lists in tests that explicitly define test coverage or expected results.
 - Keep browser and shared TypeScript packages free of Node-only globals and types unless they need them. Put Node typings and dependencies only in packages that use Node APIs, following the existing pnpm workspace conventions.

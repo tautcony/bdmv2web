@@ -2,16 +2,38 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Turn a Blu-ray BDMV directory into an offline browser menu, while keeping the original M2TS video playable through the system player.
+[![npm version](https://img.shields.io/npm/v/bdmv2web)](https://www.npmjs.com/package/bdmv2web)
+[![node](https://img.shields.io/node/v/bdmv2web)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-## Features
+Inspect a Blu-ray BDMV disc and build an offline web menu package.
+
+`bdmv2web` reads a Blu-ray BDMV directory and writes a self-contained browser menu. The package holds menu navigation, background video, audio tracks, button graphics, and sound effects, and runs from the local filesystem without a web server or network access. The original M2TS files stay where they are and open in the system player from the menu.
 
 - Build an offline menu package with menu navigation, background video, audio tracks, button graphics, and sound effects.
 - Inspect BDMV structure and export HDMV, IGS, and SUP data together with menu assets.
 - Open the original M2TS files referenced by the menu with an external player.
 - Validate the offline dependencies of a menu package and produce a compatibility report.
 
-## Requirements
+## Table of Contents
+
+- [Install](#install)
+  - [Dependencies](#dependencies)
+  - [From npm](#from-npm)
+  - [From source](#from-source)
+- [Usage](#usage)
+  - [CLI](#cli)
+  - [Player profile](#player-profile)
+- [Development](#development)
+  - [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [Maintainers](#maintainers)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Install
+
+### Dependencies
 
 | Dependency | Version or requirement | Purpose |
 | --- | --- | --- |
@@ -23,16 +45,16 @@ Turn a Blu-ray BDMV directory into an offline browser menu, while keeping the or
 
 Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; pass `--codec h264` to use H.264 (`crf` defaults to 18). HDR sources are tone mapped to SDR BT.709 by default, which requires FFmpeg built with `zscale` (libzimg) or `libplacebo`. Without either one the package is still produced, but the HDR tag is preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning is reported in diagnostics (the picture appears washed out on SDR displays).
 
-## Installation
+### From npm
 
-Install globally from npm; the command is `bdmv2web`:
+Install globally; the command is `bdmv2web`:
 
 ```sh
 npm install -g bdmv2web
 bdmv2web --version
 ```
 
-Build from source:
+### From source
 
 ```sh
 corepack pnpm install --frozen-lockfile
@@ -41,14 +63,14 @@ corepack pnpm build
 corepack pnpm bundle:cli
 ```
 
-After building from source, `apps/cli/dist/index.js` is the executable entry point. When developing inside the repository, call the CLI with `corepack pnpm run cli:dev <command> [options]`.
+After building from source, `apps/cli/dist/index.js` is the executable entry point. Inside the repository, call the CLI with `corepack pnpm run cli:dev <command> [options]`.
 
-## Quick start
+## Usage
 
 Convert a BDMV directory into an offline menu package:
 
 ```sh
-corepack pnpm run cli:dev build /path/to/BDMV --out ./BDMV-menu
+bdmv2web build /path/to/BDMV --out ./BDMV-menu
 ```
 
 Open `BDMV-menu/index.html` in a browser. Keep the whole output directory when copying or moving the menu.
@@ -56,10 +78,10 @@ Open `BDMV-menu/index.html` in a browser. Keep the whole output directory when c
 Validate the generated menu package:
 
 ```sh
-corepack pnpm run cli:dev validate ./BDMV-menu --offline
+bdmv2web validate ./BDMV-menu --offline
 ```
 
-## Commands
+### CLI
 
 `<BDMV>` may point to a BDMV directory or to a parent directory that contains `BDMV/`.
 
@@ -83,7 +105,7 @@ Values for `--m2ts` and `--pid` can be looked up with `list`. `export --decode p
 
 The exit code is 0 on success and 1 on failure; with `--strict`, a partially completed result exits with 2. See the [development guide](docs/guides/development.md) for the full option list, output files, and error codes.
 
-## Player profile
+### Player profile
 
 Use `build --player-profile FILE` to set menu language, audio language, subtitle language, region, and playback profile:
 
@@ -155,10 +177,14 @@ python3 scripts/fetch-reference-cache.py
 
 ## Documentation
 
-See the [development guide](docs/guides/development.md) for the toolchain, CLI details, and build process.
+The [development guide](docs/guides/development.md) covers the toolchain, CLI details, and build process. Protocol support boundaries are recorded in the [support documents](docs/support/protocol-support.md).
 
-More material is indexed in the [documentation index](docs/README.md).
+The [documentation index](docs/README.md) lists every guide, support matrix, and archived design or review record.
+
+## Maintainers
+
+- TautCony ([@tautcony](https://github.com/tautcony))
 
 ## License
 
-[GNU GPL v3](LICENSE).
+[GPL-3.0-only](LICENSE). Copyright (C) 2026 TautCony.

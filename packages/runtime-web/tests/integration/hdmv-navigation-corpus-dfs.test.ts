@@ -7,7 +7,10 @@ import { buildNavigationGraph, decodeInstruction, findStaticNavigationLoops, Hdm
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const libblurayGoldenPath = resolve(repo, "test-data/baselines/libbluray-1.5.0-navigation-baseline.json");
-const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"] as const;
+const corpus = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd", "synthetic-all-features"] as const;
+const corpusRoot = resolve(repo, "test-data/fixtures/hdmv-navigation/disc-data");
+const syntheticRoot = resolve(repo, "test-data/fixtures/synthetic-all-features");
+const bdmvRootFor = (caseId: string) => caseId === "synthetic-all-features" ? resolve(syntheticRoot, "BDMV") : resolve(corpusRoot, caseId, "BDMV");
 const MAX_SCENARIOS_PER_CASE = 128;
 const MAX_STATES_PER_SCENARIO = 50_000;
 let corpusBranchSitesWithBothOutcomes = 0;
@@ -18,7 +21,7 @@ afterAll(() => {
 
 describe("HDMV multi-disc VM execution DFS coverage", () => {
   it.each(corpus)("executes index entries and classifies reachable graph edges for %s", async (caseId) => {
-    const bdmvRoot = resolve(repo, `test-data/fixtures/hdmv-navigation/disc-data/${caseId}/BDMV`);
+    const bdmvRoot = bdmvRootFor(caseId);
     const disc = await parseBdmv(bdmvRoot);
     const graph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries, maxStates: 200_000 });
     const result = exploreDisc(disc, graph);
@@ -396,7 +399,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
       const missing = unavailablePlaylist.get(source);
       if (missing) edgeRows.push({ id, status: "unavailable", reason: `missing STREAM clips: ${missing.join(",")}` });
       else if (metadataPlaylists.has(playlistNumber)) edgeRows.push({ id, status: "simulated", reason: "metadata playlist resolved; playback completion is simulated" });
-      else edgeRows.push({ id, status: "unresolved", reason: `playlist ${playlistNumber} is not present in parsed metadata` });
+      else edgeRows.push({ id, status: "unavailable", reason: `playlist ${playlistNumber} is not present in parsed metadata` });
       continue;
     }
     if (edge.resolution === "unresolved") {
@@ -439,7 +442,7 @@ function exploreDisc(disc: ParsedDisc, graph: ReturnType<typeof buildNavigationG
     graphEdges: edgeRows.length + conditionalShadowEdges,
     coveredEdges: edgeRows.filter((edge) => edge.status === "covered").map((edge) => edge.id),
     simulatedEdges: edgeRows.filter((edge) => edge.status === "simulated").map((edge) => edge.id),
-    unavailableEdges: edgeRows.filter((edge) => edge.status === "unavailable").map((edge) => ({ edge: edge.id, missingClips: edge.reason?.replace("missing STREAM clips: ", "").split(",") ?? [] })),
+    unavailableEdges: edgeRows.filter((edge) => edge.status === "unavailable").map((edge) => ({ edge: edge.id, missingClips: edge.reason?.startsWith("missing STREAM clips: ") ? edge.reason.slice("missing STREAM clips: ".length).split(",") : [] })),
     unsupportedEdges: edgeRows.filter((edge) => edge.status === "unsupported").map((edge) => ({ edge: edge.id, reason: edge.reason ?? "unsupported" })),
     unresolvedEdges: edgeRows.filter((edge) => edge.status === "unresolved").map((edge) => ({ edge: edge.id, reason: edge.reason ?? "unresolved" })),
     omittedStaticEdges,

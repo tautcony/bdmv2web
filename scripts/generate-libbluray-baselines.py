@@ -35,15 +35,17 @@ CACHE = ROOT / ".reference-cache" / "repositories"
 LIBBLURAY_SRC = CACHE / "libbluray-1.5.0" / "src"
 IGS_DUMP_SRC = ROOT / "scripts" / "libbluray-igs-dump.c"
 CORPUS_ROOT = ROOT / "test-data" / "fixtures" / "hdmv-navigation" / "disc-data"
+SYNTHETIC_ROOT = ROOT / "test-data" / "fixtures" / "synthetic-all-features"
 BASELINES = ROOT / "test-data" / "baselines"
 
-NAVIGATION_CASES = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd"]
+NAVIGATION_CASES = ["tamako", "kyoani-ova", "bang-dream-mygo-vol1", "battle-royale-uhd", "synthetic-all-features"]
 IG_CASES = [
     ("bang-dream-mygo-vol1", "00010", 0x1400),
     ("bang-dream-mygo-vol1", "00011", 0x1400),
     ("battle-royale-uhd", "00002", 0x1400),
     ("battle-royale-uhd", "00005", 0x1400),
     ("kyoani-ova", "00005", 0x1400),
+    ("synthetic-all-features", "00002", 0x1400),
     ("synthetic-igs-parser", "00001", 0x120),
     ("tamako", "00005", 0x1400),
     ("tamako", "00043", 0x1400),
@@ -95,6 +97,8 @@ def compile_tools(work: Path) -> tuple[Path, Path]:
 def ig_packet_source(case: str, clip: str) -> Path:
     if case == "synthetic-igs-parser":
         return ROOT / "test-data" / "fixtures" / "igs-parser" / "synthetic-single-object.m2ts"
+    if case == "synthetic-all-features":
+        return SYNTHETIC_ROOT / "BDMV" / "STREAM" / f"{clip}.m2ts_ig-packets.bin"
     return CORPUS_ROOT / case / "BDMV" / "STREAM" / f"{clip}.m2ts_ig-packets.bin"
 
 
@@ -395,10 +399,16 @@ def libbluray_index(root: Path) -> dict:
     }
 
 
+def disc_root(case: str) -> Path:
+    if case == "synthetic-all-features":
+        return SYNTHETIC_ROOT
+    return CORPUS_ROOT / case
+
+
 def generate_navigation(mobj_dump: Path) -> dict:
     cases = []
     for case in NAVIGATION_CASES:
-        root = CORPUS_ROOT / case
+        root = disc_root(case)
         info = parse_disc_info(run("bd_info", str(root)))
         titles = parse_title_list(run("bd_list_titles", "-a", str(root)))
         objects = parse_mobj_dump(run(str(mobj_dump), "-d", str(root / "BDMV" / "MovieObject.bdmv")))

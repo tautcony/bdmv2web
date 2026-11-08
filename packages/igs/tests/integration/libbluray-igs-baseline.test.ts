@@ -147,6 +147,7 @@ describe("libbluray 1.5.0 IG decoder baseline", () => {
     ["bang-dream-mygo-vol1", "00010", 0x1400],
     ["bang-dream-mygo-vol1", "00011", 0x1400], ["battle-royale-uhd", "00002", 0x1400],
     ["battle-royale-uhd", "00005", 0x1400], ["kyoani-ova", "00005", 0x1400],
+    ["synthetic-all-features", "00002", 0x1400],
     ["synthetic-igs-parser", "00001", 0x120], ["tamako", "00005", 0x1400],
     ["tamako", "00043", 0x1400],
   ] as const)("matches libbluray's decoded display set for %s/%s", async (caseId, clipId, pid) => {
@@ -155,7 +156,9 @@ describe("libbluray 1.5.0 IG decoder baseline", () => {
     expect(expected, `missing libbluray decoder baseline for ${caseId}/${clipId}`).toBeDefined();
     const source = caseId === "synthetic-igs-parser"
       ? resolve(repositoryRoot, "test-data/fixtures/igs-parser/synthetic-single-object.m2ts")
-      : resolve(fixtureRoot, caseId, "BDMV", "STREAM", `${clipId}.m2ts_ig-packets.bin`);
+      : caseId === "synthetic-all-features"
+        ? resolve(repositoryRoot, "test-data/fixtures/synthetic-all-features/BDMV/STREAM", `${clipId}.m2ts_ig-packets.bin`)
+        : resolve(fixtureRoot, caseId, "BDMV", "STREAM", `${clipId}.m2ts_ig-packets.bin`);
     const bytes = await readFile(source);
     const result = await extractIgsFromChunks(clipId, chunks(bytes, 4093), [{
       pid, source: { path: `BDMV/CLIPINF/${clipId}.clpi`, origin: "primary", offset: "0" },

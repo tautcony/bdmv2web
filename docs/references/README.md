@@ -64,11 +64,11 @@ SAPikachu/igstools 固定为已核验的 `34a133150ca8b52237284da4d47d93911bcd49
 python3 scripts/fetch-reference-cache.py
 ```
 
-缓存来源包括 libbluray、igstools、libhdmv 和 bdmvkit 四个上游仓库。bdmvkit 固定在 commit `57890760c60b3c31dacc9db1112467d4510925aa`，源码与 `COPYING` / `COPYING.LESSER` 以 LGPL-3.0-or-later 授权，仅作为生成互操作测试盘的参考工具，不进入产品运行时。继续分发缓存前必须逐项审查许可证。H.222.0 的本地 PDF 不保留。
+缓存来源包括 libbluray、igstools、libhdmv 和 bdmvkit 四个上游仓库。bdmvkit 固定在 commit `57890760c60b3c31dacc9db1112467d4510925aa`，源码与 `COPYING` / `COPYING.LESSER` 以 LGPL-3.0-or-later 授权；其 `tests/bluray_sim` ctypes harness 驱动 libbluray 生成基线，不进入产品运行时。继续分发缓存前必须逐项审查许可证。H.222.0 的本地 PDF 不保留。
 
 ## 当前证据边界
 
-- 行为依据按上文层级生效：固定实现（libbluray / libhdmv / igstools）是一阶来源，公开白皮书只补充其覆盖的架构与格式背景，项目测试与 golden 按各自记录的来源、范围和生成方法生效。
+- 行为依据按上文层级生效：固定实现（libbluray / igstools）是一阶来源，公开白皮书只补充其覆盖的架构与格式背景，项目测试与 golden 按各自记录的来源、范围和生成方法生效。libhdmv 仅登记为 Alpha 交叉核对材料：其 `hdmv-inspect` 在已登记语料盘上的 index 解析全部失败，insn 映射输出与 libbluray 基线不一致，未纳入基线（记录见 [M3](stages/M3-hdmv-navigation.md)）；bdmvkit 的 `bluray_sim` ctypes harness 用于驱动 libbluray 生成基线。
 - 商业碟解密与解析、像素与导航语义及系统播放器交接的证据状态记录在各阶段页面和 [M6 证据记录](stages/M6-release-verification.md) 中。
 - WHATWG/MDN 文档不能代替运行证据。浏览器环境（含 `file://` 直接打开与播放策略）不在当前交付门槛内。
 - FFmpeg 文档是滚动文档。M5 选定可再分发构建并记录 `ffmpeg -version`、`ffprobe -version` 和 configure flags。

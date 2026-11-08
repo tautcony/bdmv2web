@@ -1,0 +1,16 @@
+{
+  "sourceM2ts": "BDMV/STREAM/00002.m2ts",
+  "packetSize": 192,
+  "pids": [
+    0,
+    4096,
+    5120
+  ],
+  "runs": [
+    {
+      "fixturePacketStart": 0,
+      "sourcePacketStart": 0,
+      "packetCount": 6
+    }
+  ]
+}

@@ -2,16 +2,38 @@
 
 [English](README.md) | 简体中文
 
-将 Blu-ray BDMV 目录转换为可离线打开的浏览器菜单，并支持通过系统播放器播放原始 M2TS 视频。
+[![npm 版本](https://img.shields.io/npm/v/bdmv2web)](https://www.npmjs.com/package/bdmv2web)
+[![node](https://img.shields.io/node/v/bdmv2web)](https://nodejs.org)
+[![许可](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-## 功能
+检查 Blu-ray BDMV 光盘结构并生成可离线打开的菜单包。
+
+`bdmv2web` 读取 Blu-ray BDMV 目录，输出自带全部资源的浏览器菜单包。菜单包包含菜单导航、背景视频、音轨、按钮图形和音效，直接从本地文件系统打开即可运行，不需要 Web 服务器或网络访问。原始 M2TS 文件保留在原位置，可从菜单中调用系统播放器播放。
 
 - 生成包含菜单导航、背景视频、音轨、按钮图形和音效的离线菜单包。
 - 检查 BDMV 结构，导出 HDMV、IGS、SUP 数据与菜单资源。
 - 通过播放器打开菜单关联的原始 M2TS 文件。
 - 校验菜单包的离线依赖并生成兼容性报告。
 
-## 环境要求
+## 目录
+
+- [安装](#安装)
+  - [依赖](#依赖)
+  - [从 npm 安装](#从-npm-安装)
+  - [从源码构建](#从源码构建)
+- [使用](#使用)
+  - [CLI](#cli)
+  - [播放器档案](#播放器档案)
+- [开发](#开发)
+  - [仓库结构](#仓库结构)
+- [文档](#文档)
+- [维护者](#维护者)
+- [参与贡献](#参与贡献)
+- [许可](#许可)
+
+## 安装
+
+### 依赖
 
 | 依赖 | 版本或要求 | 用途 |
 | --- | --- | --- |
@@ -23,16 +45,16 @@
 
 默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）或 `libplacebo`；两者都缺时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
 
-## 安装
+### 从 npm 安装
 
-从 npm 全局安装，安装后命令名为 `bdmv2web`：
+全局安装后命令名为 `bdmv2web`：
 
 ```sh
 npm install -g bdmv2web
 bdmv2web --version
 ```
 
-从源码构建：
+### 从源码构建
 
 ```sh
 corepack pnpm install --frozen-lockfile
@@ -43,12 +65,12 @@ corepack pnpm bundle:cli
 
 从源码构建后，`apps/cli/dist/index.js` 为可直接执行的命令入口。在仓库中开发时，使用 `corepack pnpm run cli:dev <命令> [参数]` 调用 CLI。
 
-## 快速开始
+## 使用
 
 将 BDMV 目录转换为离线菜单包：
 
 ```sh
-corepack pnpm run cli:dev build /path/to/BDMV --out ./BDMV-menu
+bdmv2web build /path/to/BDMV --out ./BDMV-menu
 ```
 
 用浏览器打开 `BDMV-menu/index.html`。复制或移动菜单时，请保留整个输出目录。
@@ -56,10 +78,10 @@ corepack pnpm run cli:dev build /path/to/BDMV --out ./BDMV-menu
 校验生成的菜单包：
 
 ```sh
-corepack pnpm run cli:dev validate ./BDMV-menu --offline
+bdmv2web validate ./BDMV-menu --offline
 ```
 
-## 常用命令
+### CLI
 
 `<BDMV>` 可指向 BDMV 目录，也可指向包含 `BDMV/` 的父目录。
 
@@ -83,7 +105,7 @@ corepack pnpm run cli:dev validate ./BDMV-menu --offline
 
 命令成功时退出码为 0，失败时为 1；使用 `--strict` 时，部分完成的结果退出码为 2。完整选项、输出文件和错误码见[开发指南](docs/guides/development.md)。
 
-## 播放器档案
+### 播放器档案
 
 通过 `build --player-profile FILE` 设置菜单语言、音轨语言、字幕语言、地区和播放配置：
 
@@ -110,7 +132,6 @@ corepack pnpm run cli:dev validate ./BDMV-menu --offline
 | `outputProfile` | 是 | `portable` | `portable` |
 | `videoProfiles` | 否 | 字符串数组 | `[]` |
 | `audioProfiles` | 否 | 字符串数组 | `[]` |
-
 
 ## 开发
 
@@ -155,10 +176,15 @@ python3 scripts/fetch-reference-cache.py
 | `test-data/` | 测试夹具、光盘数据和输出目录 |
 
 ## 文档
-工具链、CLI 详情和构建流程见[开发指南](docs/guides/development.md)。
 
-更多资料见[文档索引](docs/README.md)。
+工具链、CLI 详情和构建流程见[开发指南](docs/guides/development.md)。协议支持边界见[支持范围文档](docs/support/protocol-support.md)。
+
+全部指南、支持矩阵与归档的设计和审查记录见[文档索引](docs/README.md)。
+
+## 维护者
+
+- TautCony（[@tautcony](https://github.com/tautcony)）
 
 ## 许可
 
-[GNU GPL v3](LICENSE)。
+[GPL-3.0-only](LICENSE)。Copyright (C) 2026 TautCony。

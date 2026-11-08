@@ -76,7 +76,7 @@
 
 - **目的：** 把同类 IGS 工具作为独立的图像解码/调色板转换参考，对按钮 normal/selected/activated 状态引用的图像逐项核对，再逐像素比较导出的 PNG。比较键包含 page、object ID/version、palette ID/version；覆盖报告分别列出缺失和额外引用。每个图像逐 RGBA 通道比较，包括 alpha，不只比整页或按钮截图。
 - **参考实现与转换：** `SAPikachu/igstools` 固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python `3.15.0`、pypng `0.20220715.0`、Pillow `13.0.0`。参考解码显式配置 BT.709 limited range；工具的 16-bit RGBA 样本按 `(value + 128) // 257` 转为 8-bit 后，与项目对应 PNG 的 RGBA 像素做精确比较。输入由项目的提取器生成；工具页面组装不用于计算，参考图像由其 IGS segment、RLE、palette 解码路径和 `picture_to_png` 导出。此处是固定对照条件，不代表各 fixture 的原盘色彩矩阵已被独立确认。
-- **结果：** 8 个案例共 993 条按钮状态图像引用，覆盖 891 个唯一元素，共 45,752,163 像素。元素覆盖无缺失/额外项；对象版本及 palette 版本均在逐项报告中；所有 RGBA 像素完全一致，差异像素数为 0。样本无多帧对象范围，因此未产生动画帧对照。
+- **结果：** 8 个案例共 993 条按钮状态图像引用，覆盖 891 个唯一元素，共 45,752,163 像素。元素覆盖无缺失/额外项；对象版本及 palette 版本均在逐项报告中；所有 RGBA 像素完全一致，差异像素数为 0。样本无多帧对象范围，因此未产生动画帧对照。2026-11-08 追加 `synthetic-all-features` `00002`（6 条按钮状态引用、1 个唯一元素、1 像素、0 差异），参考 PNG 在 `.reference-cache/verification/igs-fixtures-20261108/`。
 
 | Fixture | Clip | 按钮状态引用 | 唯一元素 | 像素 | 不同 RGBA 像素 |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -85,12 +85,14 @@
 | battle-royale-uhd | `00002` | 277 | 215 | 4,396,600 | 0 |
 | battle-royale-uhd | `00005` | 87 | 68 | 8,363,970 | 0 |
 | kyoani-ova | `00005` | 45 | 32 | 834,622 | 0 |
+| synthetic-all-features | `00002` | 6 | 1 | 1 | 0 |
 | synthetic-igs-parser | `00001` | 3 | 1 | 1 | 0 |
 | tamako | `00005` | 168 | 168 | 14,881,965 | 0 |
 | tamako | `00043` | 168 | 168 | 14,922,045 | 0 |
 
-- **执行脚本：** [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 与 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素报告由脚本输出到命令行指定目录，逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/tests/helpers/fixtures.ts) 生成。
-- **适用范围：** 结果覆盖这 8 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段依据见 [字段登记](M2-igs-field-register.md)；任务 2.4 的独立颜色向量和真实同 ODS 多 PDS 资产映射由 `packages/igs/tests/integration/extraction.test.ts` 与 `packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts` 断言。
+- **执行脚本：** [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 与 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素报告由脚本输出到命令行指定目录，逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/tests/helpers/fixtures.ts) 生成。参考 PNG 的逐元素摘要由 [summarize-igstools-references.py](../../../scripts/summarize-igstools-references.py) 写入 `test-data/baselines/igs-reference-element-summary.json`。
+- **igstools 效果段限制：** 固定 revision 的 igstools 以 `>4H` 读取效果对象描述符，把规范中的 window id（u8）与 forced-on 标志（u8）合并为一个 u16 作为窗口键（如 windowId=1、forced-on=0x40 时查键 0x140），任何非空效果序列都会触发 KeyError。2026-11-04 对照的 8 个 clip 能通过解析，说明它们的按钮段效果序列为空。`synthetic-all-features` `00001` 是第一个携带效果序列的 fixture，不纳入 igstools 对照与 libbluray IGS 基线；其菜单效果的解码行为由 libbluray 导航基线与项目单元测试覆盖。
+- **适用范围：** 结果覆盖这 9 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段依据见 [字段登记](M2-igs-field-register.md)；任务 2.4 的独立颜色向量和真实同 ODS 多 PDS 资产映射由 `packages/igs/tests/integration/extraction.test.ts` 与 `packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts` 断言。
 
 Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.709 limited range。该 packet fixture 只含 PAT、PMT 与 IGS PID 的筛选包，不含主视频码流；ICS 的 1920×1080 菜单分辨率也不能单独确定 PDS 的颜色矩阵。因此现有结果只能说明该 IGS 图像在 BT.709 对照条件下与参考输出一致，不能回答这张 UHD 盘的菜单源是否应按 BT.709 解码。
 
@@ -104,7 +106,7 @@ Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.
 
 - **参考实现：** VideoLAN libbluray 1.5.0，固定 revision `d75c88e54c893e5cbf4c61d356477655eb435769`，解码入口 `src/libbluray/decoders/graphics_processor.c` 的 `graphics_processor_decode_ts()`。`scripts/libbluray-igs-dump.c` 链接本机 libbluray 静态库并由 `scripts/generate-libbluray-baselines.py` 调用。
 - **输入：** 已入库的 8 个 IG packet fixture（`test-data/fixtures/hdmv-navigation/disc-data/` 与 `test-data/fixtures/igs-parser/`）。192 字节 TS 包按 6144 字节 read unit 重新分组，不足处补 null packet；`stc=-1` 让 libbluray 立即解码完整 display set。
-- **入库证据：** [libbluray-1.5.0-igs-baseline.json](../../../test-data/baselines/libbluray-1.5.0-igs-baseline.json)。8 个 clip、51 组 256 项调色板、872 个对象。逐 case 记录 display set 的 complete/epochStart/validPts、ICS 的页面/BOG/按钮/进入退出效果/超时、按钮的 20 个字段、调色板 256 项 YCrCbT，以及对象 RLE 的宽高、run/EOL 计数、48 个等距索引采样和 16 个索引分箱。
-- **自动化对照：** `packages/igs/tests/integration/libbluray-igs-baseline.test.ts`（10 例）。逐 case 把 `extractIgsFromChunks()` 的结果与上述字段全部比对，并逐 case/clip 核对 libbluray 解出的 object id/version 集合与 igstools RGBA 参考摘要的 891 个资产名解析出的 872 个 object id/version 集合一致。测试只读入库 JSON 和夹具，运行时不需要本机 libbluray。
-- **结果：** 8 个 clip 的 display set、ICS、调色板与对象 RLE 摘要全部一致；object id/version 集合与 igstools 参考逐 clip 相等，无缺失或额外项。
+- **入库证据：** [libbluray-1.5.0-igs-baseline.json](../../../test-data/baselines/libbluray-1.5.0-igs-baseline.json)。9 个 clip、52 组 256 项调色板、873 个对象。逐 case 记录 display set 的 complete/epochStart/validPts、ICS 的页面/BOG/按钮/进入退出效果/超时、按钮的 20 个字段、调色板 256 项 YCrCbT，以及对象 RLE 的宽高、run/EOL 计数、48 个等距索引采样和 16 个索引分箱。
+- **自动化对照：** `packages/igs/tests/integration/libbluray-igs-baseline.test.ts`（10 例）。逐 case 把 `extractIgsFromChunks()` 的结果与上述字段全部比对，并逐 case/clip 核对 libbluray 解出的 object id/version 集合与 igstools RGBA 参考摘要的 892 个资产名解析出的 873 个 object id/version 集合一致。测试只读入库 JSON 和夹具，运行时不需要本机 libbluray。
+- **结果：** 9 个 clip 的 display set、ICS、调色板与对象 RLE 摘要全部一致；object id/version 集合与 igstools 参考逐 clip 相等，无缺失或额外项。
 - **适用范围：** libbluray 解码给出 YCrCbT 调色板条目与 RLE 索引；逐像素 RGBA 保真由 pinned igstools 的 `picture_to_png` 参考覆盖（见 2026-11-04 节）。按本页已记录的来源关系，igstools 解码器源自 libav patches，与 libbluray 来源可能重合，两份证据分别覆盖元素结构/RLE 与 RGBA 转换路径，按一个参考族计。本次比对未涉及动画帧、多帧对象范围或各盘原始色彩矩阵判定。

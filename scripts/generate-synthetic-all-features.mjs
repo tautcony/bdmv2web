@@ -8,7 +8,16 @@
  * workspace packages and no FFmpeg. Every byte is built
  * from the BDMV field layouts exercised by packages/bdmv-parser, packages/igs,
  * packages/media-export and packages/package-builder. The output is checked in
- * and consumed by apps/cli/src/synthetic-all-features.test.ts.
+ * and consumed by apps/cli/tests/integration/synthetic-all-features.test.ts.
+ *
+ * The IG packet sidecar for clip 00002 (STREAM/00002.m2ts_ig-packets.bin, read
+ * by the libbluray IGS baseline and the igstools element summary) is extracted
+ * from the written m2ts once and committed:
+ *   node scripts/extract-m2ts-pid-packets.mjs --source test-data/fixtures/synthetic-all-features/BDMV/STREAM/00002.m2ts \
+ *     --output test-data/fixtures/synthetic-all-features/BDMV/STREAM/00002.m2ts_ig-packets.bin \
+ *     --source-label BDMV/STREAM/00002.m2ts --pids 0,0x1000,0x1400
+ * Clip 00001 has no sidecar: its effect-bearing menu segment cannot be parsed
+ * by the pinned igstools revision (see docs/references/stages/M2-igs-scenes.md).
  */
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
