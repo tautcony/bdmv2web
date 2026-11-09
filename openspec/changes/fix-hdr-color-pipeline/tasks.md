@@ -64,7 +64,7 @@
 - [x] 7.2 更新 `docs/llm-wiki/packages/media-export.md` 滤镜链、降级行为、能力要求
 - [x] 7.3 README 说明 ffmpeg 所需编码器与 tone map 滤镜能力
 - [x] 7.4 用合成 HDR10 素材（bt2020/smpte2084、10-bit）确认降级路径的实际输出标记与 warning
-- [x] 7.5 使用具备所需滤镜的 FFmpeg 与合成测试视频验证 `zscale` / `libplacebo` 两条色调映射链：断言滤镜链选择、命令返回状态、编码结果元数据与可测帧数值范围。验收：具备该构建时给出可复现的输入、命令与数值结果；不具备时该项标注 `not-verified`，不阻断本轮交付。2026-11-09：`zscale` 链在 macOS 静态 9.0.2（libzimg）上 pass（`bt709/bt709/bt709`、8 位、YAVG 61.12）；`libplacebo` 链在 Ubuntu 6.1.1 容器上 pass（同标记、YAVG 92.20），软件 Vulkan 需 `hwupload` 桥接。构建来源、SHA256 与命令见 [verification.md](./verification.md)。
+- [x] 7.5 使用具备所需滤镜的 FFmpeg 与合成测试视频验证 `zscale` / `libplacebo` 两条色调映射链：断言滤镜链选择、命令返回状态、编码结果元数据与可测帧数值范围。验收：具备该构建时给出可复现的输入、命令与数值结果；不具备时该项标注 `not-verified`，不阻断本轮交付。2026-11-09：`zscale` 链在 macOS 静态 9.0.2（libzimg）上 pass（`bt709/bt709/bt709`、8 位、YAVG 61.12，全量 71 passed 无跳过）；`libplacebo` 链 not-verified（本机可得构建均未启用该滤镜，不使用容器执行 FFmpeg，链选择由 `color.test.ts` 断言但不作执行证据）。构建来源、SHA256 与命令见 [verification.md](./verification.md)。
 - [x] 7.7 用合成 SDR 样本验证编码输出新增 BT.709 标记、未误用 HDR 处理链，且帧级数值回归在预先定义的容差内。验收：`ffprobe` 色彩字段与计划一致；固定容差的帧数值比较通过。2026-11-09：`h264/yuv420p/bt709/bt709/bt709`，YAVG 71.74 → 71.75（容差 2），pass；见 [verification.md](./verification.md)。
 
 ### Removed (scope change 2026-11-09)

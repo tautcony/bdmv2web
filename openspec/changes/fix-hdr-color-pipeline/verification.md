@@ -2,13 +2,12 @@
 
 每个任务的执行证据。提交 hash 可用 `git log -1 -- <artifact>` 定位；本文件与所列代码/测试在同一次提交内。
 
-环境：macOS arm64，Node 24.18.0，pnpm 11.25.0。色彩用例在三套 FFmpeg 能力上分别执行：
+环境：macOS arm64，Node 24.18.0，pnpm 11.25.0。色彩用例在两套本机 FFmpeg 上分别执行：
 
 | 构建 | configure 关键项 | 用途 |
 | --- | --- | --- |
 | Homebrew `ffmpeg 9.0.2` | 无 `libzimg`、无 `libplacebo` | 降级路径（7.4） |
 | 静态构建 `9.0.2-https://www.martin-riedl.de`（macOS arm64） | `--enable-libzimg --enable-libx264`，无 `libplacebo` | `zscale` 链（7.5） |
-| Ubuntu 24.04 容器内 `ffmpeg 6.1.1-3ubuntu5` | `--enable-libzimg --enable-libplacebo --enable-libx264` | `libplacebo` 链（7.5） |
 
 静态构建来源与校验：`https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip`，SHA256 `c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924`（与官方 `.sha256` 一致），解压到仓库外的 `~/tools/ffmpeg-tonemap/`。macOS 用例通过 `BDMV2WEB_FFMPEG` / `BDMV2WEB_FFPROBE` 切换构建，测试代码不需要改动。
 
@@ -32,18 +31,16 @@
 
 ### 链 B：`libplacebo`
 
-- 执行环境：`docker run --name bdmv-ffmpeg-lp ubuntu:24.04`，`apt install ffmpeg mesa-vulkan-drivers libvulkan1`。该构建的 `libplacebo` 是 GPU 滤镜，软件环境下自建设备失败（`Found no suitable device`，llvmpipe 已被枚举但未被接受），因此用 ffmpeg 自身的 Vulkan 设备上传硬件帧：
-  - `ffmpeg -init_hw_device vulkan=vk -i src.mp4 -filter_complex "[0:v]format=yuv420p10le,hwupload,libplacebo=tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:format=yuv420p,hwdownload,format=yuv420p,scale=trunc(iw/2)*2:trunc(ih/2)*2" ...`
-- 结果：输出 `h264,yuv420p,tv,bt709,bt709,bt709`，8 位，YAVG 92.20、YMIN 17、YMAX 234，10 帧。滤镜字符串本身可用，输出标记与位深符合计划。
-- 说明：该分支没有通过 vitest 用例执行（容器内没有 Node，且用例的 `skipIf` 逻辑针对 `zscale` 缺失场景），这里是用 `color.ts` 里同一条滤镜字符串直接调用 ffmpeg 取证；链选择逻辑由 `color.test.ts` 的 `falls back to libplacebo when zscale is unavailable` 锁定。
-- 结论：**滤镜链与输出标记 pass**；设备自建路径在纯软件 Vulkan 下不可用，需 GPU 或 hwupload 桥接，记为环境限制而非滤镜缺陷。
+- 状态：**not-verified**。
+- 原因：本机两套可用构建都只启用 `libzimg`（Homebrew 二者皆无，martin-riedl 静态构建开 `--enable-libzimg` 未开 `--enable-libplacebo`）。`libplacebo` 是 GPU 滤镜，需要有 Vulkan 设备的构建；按项目约束不使用容器/虚拟化执行 FFmpeg，本环境拿不到该构建。
+- 已有覆盖：链选择逻辑由 `color.test.ts` 的 `falls back to libplacebo when zscale is unavailable` 断言（`plan.filterChain === "libplacebo-tonemap"`、`videoFilter` 含 `libplacebo=tonemapping=bt.2390`）；真实执行与输出标记仍缺证据，保持未验证。
+- 后续：需要一台原生带 `libplacebo` 的 FFmpeg（且具备 Vulkan 设备）才能闭合；届时不改测试代码，同一用例自动执行断言。
 
 ### 结论与限制
 
-- 两条链都取得了真实执行证据，7.5 的“具备该构建时给出可复现的输入、命令与数值结果”已满足。
+- `zscale` 链取得真实执行证据，7.5 中该分支的“具备该构建时给出可复现的输入、命令与数值结果”已满足；`libplacebo` 分支保持 not-verified，未以链选择断言冒充执行证据。
 - 合成 64×48 图案只证明滤镜链可执行、输出标记正确、亮度落界，不证明真实 UHD 素材的观感。
 - `zscale` 链 YMAX 252 高于窄范围上限 235：`tonemap=hable` 在高饱和合成图案上有过冲；SDR 路径断言了合法范围，色调映射路径只断言均值与动态范围，这是已知的断言不对称。
-- Ubuntu 的 x264 0.164 对 `-x264-params ...:range=tv` 报 `Error parsing option 'range = tv'` 后继续编码（输出仍为 `color_range=tv`）。本机 x264 0.165.x 接受该写法；该差异属编码器参数可移植性，不影响本次滤镜链结论。
 
 ## 7.7 SDR 输出标记与帧级数值
 
@@ -60,10 +57,11 @@
 
 ## 用例清单
 
-| 用例 | 依赖 | Homebrew 9.0.2 | 静态 9.0.2（libzimg） | Ubuntu 6.1.1（libplacebo） |
-| --- | --- | --- | --- | --- |
-| SDR 标记与亮度守恒 | ffmpeg + libx264 + ffprobe | pass | pass | 未在该构建上执行用例（链相同，无需） |
-| 无色调映射滤镜时保留 BT.2020/PQ | 同上，且无 zscale/libplacebo | pass | 不适用（存在 zscale，按设计提前返回） | 不适用 |
-| 色调映射到 BT.709 | 同上，且有 zscale 或 libplacebo | skipped | **pass**（zscale 链） | **pass**（libplacebo 链，见 7.5 链 B） |
+| 用例 | 依赖 | Homebrew 9.0.2 | 静态 9.0.2（libzimg） |
+| --- | --- | --- | --- |
+| SDR 标记与亮度守恒 | ffmpeg + libx264 + ffprobe | pass | pass |
+| 无色调映射滤镜时保留 BT.2020/PQ | 同上，且无 zscale/libplacebo | pass | 不适用（存在 zscale，按设计提前返回） |
+| 色调映射到 BT.709（`zscale`） | 同上，且有 zscale | skipped | **pass** |
+| 色调映射到 BT.709（`libplacebo`） | 同上，且仅 libplacebo | 无构建，not-verified | 无构建，not-verified |
 
-缺少 ffmpeg 的环境整体跳过该文件，不阻断构建；`color.test.ts` 的计划与参数断言不依赖外部程序，始终执行，覆盖 `zscale` 缺失时选 `libplacebo-tonemap` 的分支。
+缺少 ffmpeg 的环境整体跳过该文件，不阻断构建；`color.test.ts` 的计划与参数断言不依赖外部程序，始终执行，覆盖 `zscale` 缺失时选 `libplacebo-tonemap` 的分支（仅链选择，不是执行证据）。
