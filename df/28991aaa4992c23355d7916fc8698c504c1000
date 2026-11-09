@@ -1,0 +1,18 @@
+openspec/changes/fix-hdr-color-pipeline/design.md
+  h_3705811fa4502c 187,208
+openspec/changes/fix-hdr-color-pipeline/tasks.md
+  h_3705811fa4502c 67
+openspec/changes/fix-hdr-color-pipeline/verification.md
+  h_3705811fa4502c 5,34-37,41,60-65,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df28991aaa4992c23355d7916fc8698c504c1000",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
