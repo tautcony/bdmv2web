@@ -1,0 +1,34 @@
+apps/cli/src/cli/program.ts
+  h_3705811fa4502c 101-107
+apps/cli/src/commands/compare.ts
+  h_3705811fa4502c 1-6,8-29,31-74
+apps/cli/tests/e2e/index.test.ts
+  h_3705811fa4502c 3,850-1043
+openspec/changes/IMPLEMENTATION_BASELINE.md
+  h_3705811fa4502c 61
+openspec/changes/verify-offline-release/tasks.md
+  h_3705811fa4502c 3,11,13,20,33,38-39
+openspec/changes/verify-offline-release/verification.md
+  h_3705811fa4502c 1-61
+packages/test-runner/src/index.test.ts
+  h_3705811fa4502c 60-77
+packages/test-runner/src/package-audit.ts
+  h_3705811fa4502c 36-73,410-413
+packages/test-runner/src/release-summary.test.ts
+  h_3705811fa4502c 3,81-177
+packages/test-runner/src/release-summary.ts
+  h_3705811fa4502c 123,125,127
+packages/test-runner/src/report.ts
+  h_3705811fa4502c 38-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ab468e6bbc7e01cb06fd08a23ece7fccf2db7a84",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
