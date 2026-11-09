@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>{{TITLE}}</title>
+  <link rel="stylesheet" href="runtime/style.css">
+  {{#EXTERNAL_PLAYBACK}}<script defer src="runtime/bdmv-config.js"></script>{{/EXTERNAL_PLAYBACK}}
+  <script defer src="runtime/disc-data.js"></script>
+  {{#HAS_ASSET_BATCHES}}
+  {{ASSET_SCRIPTS}}
+  {{/HAS_ASSET_BATCHES}}
+  <script defer src="runtime/app.bundle.js"></script>
+</head>
+<body>
+  <main>
+    <div id="menu-stage"{{#HAS_SCENE_SIZE}} style="aspect-ratio:{{SCENE_ASPECT_RATIO}}"{{/HAS_SCENE_SIZE}}>
+      <video id="menu-background" aria-hidden="true" playsinline></video>
+      <audio id="menu-audio"></audio>
+      <canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas>
+      <canvas id="popup-canvas" aria-label="Blu-ray popup menu" hidden></canvas>
+    </div>
+    <button id="start-menu" type="button" hidden>Start menu preview</button>
+    <button id="audio-mute-toggle" class="audio-mute-toggle" type="button" aria-label="Mute menu audio" aria-pressed="false" title="Mute menu audio">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path class="sound-on" d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6"/>
+        <path class="sound-off" d="M11 5 6 9H3v6h3l5 4V5Zm4 4 5 6m0-6-5 6"/>
+      </svg>
+    </button>
+    <p id="runtime-status" role="status" aria-live="polite" class="is-visible">
+      <span id="runtime-status-message">Loading menu preview…</span>
+      <button id="runtime-status-copy" type="button" aria-label="Copy status message" title="Copy status message" data-copied="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="copy-outline" d="M9 9h10v12H9z"/>
+          <path class="copy-outline" d="M13 9V4H4v13h1"/>
+          <path class="copied-mark" d="m5 12 4 4 10-10"/>
+        </svg>
+      </button>
+    </p>
+    <pre id="runtime-diagnostics" hidden></pre>
+  </main>
+</body>
+</html>
