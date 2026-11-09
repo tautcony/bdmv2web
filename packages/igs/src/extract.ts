@@ -18,8 +18,8 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
     for (const item of playlist.playItems) {
       const primaryMplsStreams = item.streams.filter((stream) => isIgStream(stream) && stream.streamType === 1);
       const targets: Array<{ clipId: string; mplsStreams: StreamDeclaration[] }> = [];
-      // CLPI can provide the cue when MPLS does not, but do not probe an unrelated
-      // primary clip just because another stream type points to subpath content.
+      // CLPI supplies the cue when MPLS declares no IGS stream. The probe covers
+      // the PlayItem's own clip; subpath IGS clips are collected separately.
       const primaryClipInfo = disc.clips.find((clip) => sameId(clip.id, item.clipId));
       const primaryHasClpiIg = primaryClipInfo?.programs.some((program) => program.streams.some((stream) => stream.codingType === 0x91)) ?? false;
       if (primaryMplsStreams.length || primaryHasClpiIg) targets.push({ clipId: item.clipId, mplsStreams: primaryMplsStreams });
@@ -153,7 +153,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
       affectedSceneIds: [],
       details: { mplsClpiPids: cuePids.join(","), pmtPids: streamPids.join(","), mplsClpiSources: JSON.stringify(structuralEvidence), pmtSources: JSON.stringify(pmtEvidence) },
     });
-    for (const scene of state.scenes) diagnostics.push({ severity: "error", code: "IGS_PID_CONFLICT", message: `Scene ${scene.id} was discarded because its PID conflicts with structure cues`, source: scene.source, affectedSceneIds: [scene.id] });
+    for (const scene of state.scenes) diagnostics.push({ severity: "error", code: "IGS_PID_CONFLICT", message: `Scene ${scene.id} was discarded; its PID conflicts with structure cues`, source: scene.source, affectedSceneIds: [scene.id] });
     state.scenes.length = 0;
   }
   if (!expectedPidCues.length && !streamPids.length) diagnostics.push({ severity: "warning", code: "IGS_PID_UNRESOLVED", message: "No IG PID could be established from MPLS/CLPI/PMT", source: null, affectedSceneIds: [] });

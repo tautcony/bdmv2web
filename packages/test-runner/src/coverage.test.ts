@@ -30,7 +30,7 @@ describe("M6 named coverage populations", () => {
     });
   });
 
-  it("reports an unspecified population as N/A instead of inferring a denominator", () => {
+  it("reports an unspecified population as N/A", () => {
     expect(summarizeCoverage({ passed: 3 })).toMatchObject({
       status: "N/A", denominator: null, passed: 3, percent: null, complete: false,
       reason: expect.stringContaining("denominator is unknown"),

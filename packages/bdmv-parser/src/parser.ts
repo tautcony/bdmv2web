@@ -96,9 +96,9 @@ function parseIndexAppInfo(r: Bits, dataLength: number, file: FileEntry, origin:
 
 /**
  * INDX extension 3.1 carries the UHD disc type, 4K flag and HDR signalling.
- * The declared extension length is only a consistency hint: entry and payload
- * bounds are checked against the file (libbluray bounds them by `bits->end`),
- * because discs that under-report the length are still playable (P1-P2-1).
+ * The declared extension length is a consistency hint; entry and payload
+ * bounds are checked against the file, as libbluray does with `bits->end`
+ * (P1-P2-1).
  */
 function parseIndexUhdExtension(r: Bits, dataLength: number, file: FileEntry, origin: "primary" | "backup", extension: number, warn: Warn): UhdMetadata | null {
   r.seek(extension); const lengthOffset = r.offset; const length = r.u32(); const declaredEnd = r.offset + length;
@@ -350,8 +350,8 @@ function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
         else if (codingType === 0x24) {
           r.skip(1); // Format and frame rate.
           // Only dynamic range and colour space are modelled. The aspect/reserved
-          // bits and oc_flag/cr_flag are consumed to stay byte-aligned but are
-          // deliberately not exposed: no consumer needs them (D-7).
+          // bits and oc_flag/cr_flag are consumed to reach the record end and are
+          // not exposed (D-7).
           r.skipBits(4 + 2); r.read(1); r.read(1);
           dynamicRangeType = r.read(4); colorSpace = r.read(4);
         }

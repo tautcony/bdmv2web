@@ -328,7 +328,7 @@ describe("M1 BDMV discovery and structure", () => {
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("rejects truncated raw MovieObject command records rather than padding them", async () => {
+  it("rejects truncated raw MovieObject command records", async () => {
     const parent = await temp(); const root = await skeleton(parent); const broken = buildM1MovieObject(); broken[53] = 3; await writeFile(join(root, "MovieObject.bdmv"), broken);
     try { const disc = await parseBdmv(root); expect(disc.movieObjects).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "TRUNCATED_INPUT")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
@@ -507,7 +507,7 @@ describe("M1 BDMV discovery and structure", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it("records an out-of-range CLPI TS type length instead of dropping the clip", async () => {
+  it("records an out-of-range CLPI TS type length and retains the clip", async () => {
     const parent = await temp(); const root = await skeleton(parent);
     const tsType = buildM1ClipInfoWithSequence(); tsType[189] = 0xff;
     await writeFile(join(root, "CLIPINF", "00001.clpi"), tsType);
@@ -556,7 +556,7 @@ describe("M1 BDMV discovery and structure", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
-  it.each([0x00, 0xc0] as const)("rejects an index title with object type byte 0x%# instead of shifting later records", async (firstByte) => {
+  it.each([0x00, 0xc0] as const)("rejects an index title with object type byte 0x%#", async (firstByte) => {
     const parent = await temp(); const bytes = buildM1Index({ hdmvTitle: 0, bdjTitle: "00042" }); bytes[118] = firstByte;
     const root = await skeleton(parent, bytes);
     try {

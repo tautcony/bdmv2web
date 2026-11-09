@@ -43,7 +43,7 @@ export interface ReleaseSummary {
   checks: AuditCheck[];
 }
 
-/** Aggregate fresh component facts; stored status fields are deliberately ignored. */
+/** Aggregate fresh component facts. Status fields are computed from those facts. */
 export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary {
   const coverage = input.coverage ?? {};
   const checks: AuditCheck[] = [];

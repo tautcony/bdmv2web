@@ -419,7 +419,7 @@ export class HdmvVm {
     if (event.type === "MENU_INPUT" || event.type === "TOP_MENU" || event.type === "POPUP_MENU" || event.type === "RETURN") return this.handleUserEvent(event);
     if (this.titleTransition && !this.continuation && (event.type === "MEDIA_UNAVAILABLE" || event.type === "MEDIA_ERROR")) {
       // A player that cannot start the selected title releases the transition
-      // instead of leaving the VM without a responder.
+      // and returns the VM to `idle` with a media diagnostic.
       this.titleTransition = false; this.status = "idle";
       const issue = { code: event.type === "MEDIA_ERROR" ? "HDMV_MEDIA_ERROR" : "HDMV_MEDIA_UNAVAILABLE", message: `Title transition failed: ${event.type}`, source: null };
       this.diagnostic = issue; this.diagnostics.push(issue);
@@ -780,10 +780,9 @@ export class HdmvVm {
   }
   private stopPlayingContinuation(playing: Continuation, source: SourceLocation): void {
     this.removeAction(playing.action.id);
-    // Do not consume the response key: a menu checkpoint that restores this
-    // continuation must still be resumable by a late MEDIA_ENDED. A response
-    // with no restored continuation is ignored because no pending action
-    // matches it.
+    // The response key stays unconsumed: a menu checkpoint that restores this
+    // continuation remains resumable by a late MEDIA_ENDED. A response with no
+    // restored continuation has no matching pending action and is ignored.
     this.continuation = null;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
     this.emit("PLAY_STOP", {}, source);
@@ -807,7 +806,7 @@ export class HdmvVm {
     }
     if (this.status === "suspended") this.status = "idle";
   }
-  /** Re-issue the saved playlist action because the previous action was stopped when the title changed. */
+  /** Re-issue the saved playlist action with a fresh generation. */
   private replayParkedPlayback(): boolean {
     const parked = this.suspendedPlaylistContinuation;
     if (!parked) return false;

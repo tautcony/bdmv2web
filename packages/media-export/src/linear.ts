@@ -350,10 +350,10 @@ function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPla
     budget: { rates, estimateBasis: "configured-target-bitrate-assumption", existingOutputBytes: existingOutputBytes.toString(), estimatedOutputBytes: estimatedOutputBytes.toString(), maxAssetBytes: options.maxAssetBytes ?? null, maxOutputBytes: options.maxOutputBytes ?? null },
     assets: assets.map(({ assetId, path, playlistId, routes, audioLanguage, codec, repeat, aspectRatio, width, height, mappings, duration45k, estimatedBytes }) => ({ assetId, path, playlistId, routes, audioLanguage, codec, repeat, aspectRatio, width, height, mappings, duration45k, estimatedBytes })), diagnostics: [...diagnostics],
     limitations: [
-      "Each reachable Playlist is encoded as its own asset; distinct Playlist branches are never concatenated together.",
+      "Each reachable Playlist is encoded as its own asset.",
       "The looping menu background remains the independent background.mp4 asset produced by the menu-loop export path.",
-      "Persistent source-stream references are not emitted as playback assets; STREAM M2TS files are used only as transcode inputs.",
-      ...(!source.reachability.complete ? ["Reachability is incomplete; emitted assets cover only proven, parsed PlayItem sequences and status remains partial."] : []),
+      "Playback assets are the per-Playlist exports. Persistent source-stream references stay unpackaged; STREAM M2TS files are transcode inputs.",
+      ...(!source.reachability.complete ? ["Emitted assets cover the parsed PlayItem sequences; reachability is incomplete and the status remains partial."] : []),
     ],
   };
   return plan;

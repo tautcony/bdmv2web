@@ -107,7 +107,7 @@ describe("check result aggregation priority", () => {
     expect(summarize([unverified("OFFLINE_A"), unverified("OFFLINE_B")]).dependencyAudit.status).toBe("not-verified");
   });
 
-  it("treats an empty check set as not-verified rather than pass", () => {
+  it("treats an empty check set as not-verified", () => {
     const summary = summarize([]);
     expect(summary.dependencyAudit.status).toBe("not-verified");
     expect(summary.release.status).toBe("complete");
@@ -163,7 +163,7 @@ describe("delivery decision truth table", () => {
     expect(decide({ hasUnsupportedReachableCapability: true }, false)).toMatchObject({ status: "partial", exitCode: 0 });
   });
 
-  it("keeps acknowledged errors partial instead of upgrading them", () => {
+  it("keeps acknowledged errors partial", () => {
     const diagnostics = [{ severity: "error", code: "MEDIA_TARGET_UNAVAILABLE", acknowledged: true, acknowledgement: { by: "reviewer", reason: "accepted" } }];
     expect(decide({ diagnostics }, true)).toMatchObject({ status: "partial", exitCode: 2 });
   });

@@ -39,7 +39,7 @@ npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
 | `dist/runtime/app.bundle.js` | Menu runtime read while packaging a disc |
 | `package.json`, `LICENSE` | Package metadata and licence |
 
-`pnpm pack` rewrites the `workspace:*` entries of `devDependencies` to fixed versions. Those entries stay out of the published dependency graph because the build inlines every workspace package into `dist/index.js`.
+`pnpm pack` rewrites the `workspace:*` entries of `devDependencies` to fixed versions. `dist/index.js` inlines every workspace package, and the published dependency graph lists no workspace entries.
 
 ## Publish workflow
 
@@ -57,7 +57,7 @@ Authentication uses npm Trusted Publishing over OIDC: the job requests `id-token
 
 ## First release
 
-Trusted publishing cannot create a package that does not exist yet, because the trusted-publisher entry lives on the package's settings page. The first version is therefore published once from a logged-in machine:
+Trusted publishing requires an existing package with a trusted-publisher entry configured on its settings page. Publish the first version once from a logged-in machine:
 
 ```sh
 corepack pnpm install --frozen-lockfile
@@ -68,12 +68,12 @@ npm login
 npm publish /tmp/bdmv2web-pack/bdmv2web-<version>.tgz --access public --provenance=false
 ```
 
-Publish the tarball rather than the package directory: the directory's `devDependencies` use the `workspace:` protocol, which npm does not resolve.
+Publish the tarball. The package directory's `devDependencies` use the `workspace:` protocol, which npm does not resolve.
 
 After the upload completes:
 
 1. Register the trusted publisher on npmjs.com under the package's Settings, or with npm `>=11.15`: `npm trust github bdmv2web --file npm-publish.yml --allow-publish`.
-2. Tag the released commit and push the tag. The workflow re-runs the tarball checks and skips the upload because the version exists.
+2. Tag the released commit and push the tag. The workflow re-runs the tarball checks and skips the upload for a version that already exists.
 
 ## Later releases
 
@@ -85,7 +85,7 @@ Raise `version` in `apps/cli/package.json`, commit, create `v<version>`, and pus
 2. Add a Trusted Publisher for `bdmv2web` with repository `tautcony/bdmv2web`, workflow filename `npm-publish.yml`, and environment `npm`. The entry requires the package to exist, so it follows the first release.
 3. Keep `repository.url` in `apps/cli/package.json` equal to `https://github.com/tautcony/bdmv2web`; trusted publishing compares the two.
 
-Prerelease versions publish to the `latest` dist-tag because the workflow passes no `--tag`.
+Prerelease versions publish to the `latest` dist-tag; the workflow passes no `--tag`.
 
 ## Menu runtime bundle
 

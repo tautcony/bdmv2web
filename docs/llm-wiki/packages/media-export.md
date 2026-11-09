@@ -19,7 +19,7 @@
 
 ## 错误类型
 
-`exportMenuLoopMedia` 与 `exportLinearMedia` 抛出两类带 `diagnostic` 字段的错误，调用方据此取码而不是解析 `message`：
+`exportMenuLoopMedia` 与 `exportLinearMedia` 抛出两类带 `diagnostic` 字段的错误，调用方从 `diagnostic.code` 取错误码：
 
 | 类 | `diagnostic.code` 取值 |
 | --- | --- |

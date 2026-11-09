@@ -509,7 +509,7 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
       background: { ...backgroundFile, codec: encoding.codec, pid: input.videoPid, width: priorBackground.width, height: priorBackground.height, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input) },
       audioTracks, files,
       warnings: priorPlan.encoding.video.color.filterChain === "hdr-passthrough-fallback"
-        ? [{ code: "MEDIA_HDR_TONEMAP_UNAVAILABLE", message: "Reused menu media keeps BT.2020/PQ signalling because the originating package was exported without a tone mapping filter." }]
+        ? [{ code: "MEDIA_HDR_TONEMAP_UNAVAILABLE", message: "Reused menu media keeps BT.2020/PQ signalling; the originating package was exported without a tone mapping filter." }]
         : [],
     };
   } catch (error) {
@@ -717,11 +717,11 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
     },
     budget: { ...estimate, existingOutputBytes: existingOutputBytes.toString(), plannedPackageBytes: plannedPackageBytes.toString(), maxAssetBytes, maxOutputBytes },
     limitations: [
-      input.stillMode === 2 ? "This output covers the single infinite-still PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : loopBackground(input) ? "This output covers the repeated menu background clip and its declared audio tracks only; it does not represent the complete HDMV playlist timeline." : "This output covers one non-repeating PlayItem and its declared audio tracks only; it does not represent the complete HDMV playlist timeline.",
+      input.stillMode === 2 ? "This output covers the single infinite-still PlayItem and its declared audio tracks." : loopBackground(input) ? "This output covers the repeated menu background clip and its declared audio tracks." : "This output covers one non-repeating PlayItem and its declared audio tracks.",
       "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.",
-      ...(fallback ? ["The FFmpeg build provides no tone mapping filter, so HDR source signalling was preserved instead of converted to SDR; SDR displays render this asset with reduced contrast."] : []),
+      ...(fallback ? ["No tone mapping filter is available; HDR source signalling is preserved and SDR displays render this asset with reduced contrast. Install an FFmpeg build with libzimg to convert HDR to SDR."] : []),
       ...(hdrWithoutHevc ? ["HDR signalling is written into an H.264 stream, which browsers decode as SDR; use --codec hevc to keep HDR playback."] : []),
-      reused ? "Encoded assets were reused from a prior package because its media plan matched; source content changes at the same path are not fingerprinted." : "On overwrite, prior media assets are reused only when playlist, clip, time bounds, stream declarations, and encoding settings match; source content changes at the same path are not fingerprinted.",
+      reused ? "Encoded assets are reused from a prior package when its media plan matches; source content changes at the same path are not fingerprinted." : "On overwrite, prior media assets are reused when playlist, clip, time bounds, stream declarations, and encoding settings match; source content changes at the same path are not fingerprinted.",
     ],
   };
 }

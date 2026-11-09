@@ -41,7 +41,7 @@ traverseGraph(graph, roots: readonly string[], maxNodes?: number): GraphTraversa
 1. `discoverBdmvInput` 得到 `root` + 全量文件表。
 2. 只读取元数据文件：`index.bdmv`、`MovieObject.bdmv`、`PLAYLIST/*.mpls`、`CLIPINF/*.clpi`、`AUXDATA/sound.bdmv`。STREAM 只登记不加载。
 3. `index.bdmv` 用 `critical: true`：失败或版本不支持 → `fatal BDMV_REQUIRED_FILE_MISSING` / `BDMV_UNSUPPORTED_VERSION`。
-4. `MovieObject.bdmv` 缺失或损坏 → `error BDMV_REQUIRED_FILE_MISSING`（不 fatal，因为 `inspect` 仍可给出结构）。
+4. `MovieObject.bdmv` 缺失或损坏 → `error BDMV_REQUIRED_FILE_MISSING`（非 fatal；`inspect` 仍输出结构）。
 5. 逐个 MPLS / CLPI 解析，单文件失败只产生 `error` 诊断，其余继续。
 6. `sound.bdmv` 可选：缺失 → `info BDMV_OPTIONAL_SOUND_MISSING`，读取时只读前 `min(maxReadWindowBytes, maxSegmentBytes)` 字节。
 7. `buildGraph` 汇总节点与边；CLI/`media-export` 用 `traverseGraph` 从入口出发找可达集。

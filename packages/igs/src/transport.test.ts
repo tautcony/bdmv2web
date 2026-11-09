@@ -14,14 +14,14 @@ describe("M2TS packet and PES reconstruction", () => {
     expect(expected.map((p) => p.pid)).toEqual([0, 0x100, IG_PID]);
   });
 
-  it("diagnoses 188-byte TS instead of silently treating it as M2TS", () => {
+  it("reports sync loss for 188-byte TS input and emits no packets", () => {
     const reader = new M2tsPacketReader("clip");
     expect(reader.feed(new Uint8Array(188).fill(0xff))).toEqual([]);
     reader.end();
     expect(reader.diagnostics.some((d) => d.code === "TS_SYNC_LOST" || d.code === "TS_TRUNCATED_PACKET")).toBe(true);
   });
 
-  it("discards a partial PSI section on continuity damage instead of splicing later bytes", () => {
+  it("discards a partial PSI section on continuity damage", () => {
     const reader = new M2tsPacketReader("clip");
     const section = reader.feed(patPacket())[0]!.payload.subarray(1, 17);
     const diagnostics: IgsDiagnostic[] = [];

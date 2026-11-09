@@ -417,7 +417,7 @@ describe("offline browser boot", () => {
     expect(host.elements.get("menu-background")?.muted).toBe(true);
   });
 
-  it("switches to packaged menu IGS data for a menu playlist instead of opening it as a feature", async () => {
+  it("switches to packaged menu IGS data for a menu playlist", async () => {
     const location = { hash: "", href: "file:///menu/index.html" };
     vi.stubGlobal("location", location);
     vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
@@ -462,7 +462,7 @@ describe("offline browser boot", () => {
     expect(host.elements.get("runtime-status")?.textContent).not.toContain("no packaged IGS composition");
   });
 
-  it("hands a popup-only content playlist to the external player instead of replacing the menu", async () => {
+  it("hands a popup-only content playlist to the external player", async () => {
     const location = { hash: "", href: "file:///menu/index.html" };
     vi.stubGlobal("location", location);
     vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
@@ -642,7 +642,7 @@ describe("offline browser boot", () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it("applies the packaged player profile to the menu VM registers instead of falling back to defaults", async () => {
+  it("applies the packaged player profile to the menu VM registers", async () => {
     const { createMenuVm } = await import("./browser.js");
     const decoded = (word: number, width = 3) => Array.from({ length: width }, (_, index) => String.fromCharCode((word >>> (8 * (width - 1 - index))) & 0xff)).join("");
     const registers = (profile?: Record<string, unknown>) => createMenuVm({

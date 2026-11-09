@@ -61,7 +61,7 @@ export function computeMediaClosure(
   const widenToAllPlaylists = () => {
     for (const id of allPlaylists) selectedPlaylists.add(id);
     // Widen by scanning the already parsed structural graph. This bounded
-    // graph walk is deliberately independent of navigation exploration budget.
+    // graph walk runs independently of the navigation exploration budget.
     for (const node of disc.graph.nodes) {
       if (MEDIA_NODE_TYPES.has(node.type) || node.type === "stream") {
         requiredNodes.add(node.id);

@@ -659,7 +659,7 @@ export class PreviewPlaybackBridge implements PlaybackBridge {
       this.report(`Playback unavailable in menu preview (${action.type}).`);
       this.vm.handleEvent({ type: "MEDIA_UNAVAILABLE", generation: action.generation, responseTo: action.id });
     } else if (action.type === "MENU_CALL") {
-      this.report("Popup composition is unavailable because this package does not have an in-browser title overlay context.");
+      this.report("Popup composition is unavailable in menu preview; the package has no in-browser title overlay context.");
     } else if (["STILL_ON", "STILL_OFF", "MENU_RETURN"].includes(action.type)) {
       this.report(`${action.type} is not available in menu preview.`);
     }

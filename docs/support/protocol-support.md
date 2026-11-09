@@ -8,12 +8,12 @@
 - `cross-reference`: another pinned implementation or a public whitepaper is used only where its source and scope are explicit. Whitepaper references include title/version and printed page(s); they provide background, not normative requirements.
 - `project-test`: synthetic fixtures and assertions prove the behavior of this code only. Independent golden data records its source, version/case, derivation or comparison method, and limits. Same-lineage forks or ports are not independent by default.
 - `unverified`: implementation/tests exist but cross-checks or path coverage are incomplete, or independent expected values are missing.
-- `unsupported`: the product intentionally does not implement the named execution or playback behavior.
+- `unsupported`: the product does not implement the named execution or playback behavior.
 
 ## Status rules
 
 - `unverified`: implementation and/or project tests exist, but stated evidence scope, cross-checks, or independent expected values remain incomplete.
-- `unsupported`: the product intentionally does not implement the named execution or playback behavior.
+- `unsupported`: the product does not implement the named execution or playback behavior.
 - `supported`: not assigned in M1. No format or version is currently declared supported.
 
 Fixtures in `packages/test-fixtures` are project-authored binary byte builders and hand-authored expectations. They test parser behavior and boundaries, not independent protocol correctness. For each behavior record evidence tier, exact source revision/file/license, applicable whitepaper title/version/page, test/golden provenance, and conflict or unsupported scope. The pinned implementation is the primary behavior reference; project tests and independent goldens record the validation actually completed.
@@ -32,7 +32,7 @@ Fixtures in `packages/test-fixtures` are project-authored binary byte builders a
 | Multi-angle/SubPath playback, TS parsing, media decoding | Declarations are retained for downstream analysis only | unsupported for playback in this stage | `openspec/changes/parse-bdmv-structure/design.md`; TS/VM work is owned by downstream changes | MPLS structure fixture checks retention only; no playback claim |
 | M1→M2/M3 ParsedDisc handoff | Entry→MovieObject, MPLS/CLPI track PID and coding declaration, raw command source, and M2 IGS scene source | unverified | Parser model plus consumer APIs; no protocol claim | `m1-m2-m3-source-handoff` in `packages/igs/tests/integration/m1-m2-m3.integration.test.ts`; parser success remains `analysisStage=structural` and `supportPrediction.status=partial` |
 
-The parser's version gate accepts only the candidate tags shown above; `0240` is the 3D/MVC profile and is accepted by the shared gate for every metadata file, matching the reference readers rather than asserting per-file normative completeness. Unknown primary versions are rejected before a format is returned; `packages/bdmv-parser/src/parser.test.ts` checks this for INDX, MOBJ, MPLS, CLPI and sound, and checks that an older backup does not mask an unknown primary INDX version. Positive structural expectations are hand-authored byte fixtures in `packages/test-fixtures/src/bdmv.ts`; malformed/truncated and unknown-version cases are separate parser inputs. This provides reproducible implementation tests, not full validation of every candidate-version field layout, so the status stays `unverified`.
+The parser's version gate accepts only the candidate tags shown above; `0240` is the 3D/MVC profile and the shared gate accepts it for every metadata file, as the reference readers do. Unknown primary versions are rejected before a format is returned; `packages/bdmv-parser/src/parser.test.ts` checks this for INDX, MOBJ, MPLS, CLPI and sound, and checks that an older backup does not mask an unknown primary INDX version. Positive structural expectations are hand-authored byte fixtures in `packages/test-fixtures/src/bdmv.ts`; malformed/truncated and unknown-version cases are separate parser inputs. This provides reproducible implementation tests, not full validation of every candidate-version field layout, so the status stays `unverified`.
 
 ## Evidence and fixture gaps
 

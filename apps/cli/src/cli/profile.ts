@@ -15,9 +15,8 @@ export async function loadPlayerProfile(path: string | undefined): Promise<Playe
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new ContractError("CLI_INVALID_PROFILE", "/", "--player-profile must contain a JSON object");
   const record = parsed as Record<string, unknown>;
-  // Reuse the PSR word rules instead of accepting any non-empty string: these
-  // values become PSR16-19, and a semantically invalid value can only fail later
-  // as an opaque E_IO when the VM is constructed (D-11).
+  // These values become PSR16-19. `profileWordField` applies the PSR word rules
+  // and reports CLI_INVALID_PROFILE for a value that does not satisfy them (D-11).
   const menuLanguage = profileWordField(record, "menuLanguage", 3);
   const audioLanguage = profileWordField(record, "audioLanguage", 3);
   const subtitleLanguage = profileWordField(record, "subtitleLanguage", 3);

@@ -112,7 +112,7 @@ describe("M4 build output", () => {
       for (const [position, step] of [[1, "Parse BDMV structure"], [2, "Extract IGS scenes"], [3, "Resolve Top Menu playlist"], [4, "Select menu scene and media"], [6, "Build menu package"], [7, "Write report and commit"]] as const) {
         expect(stderr).toContain(`✓ ${position}/7  ${step}`);
       }
-      // A disc without a loop timeline skips the media step instead of dropping it from the plan.
+      // A disc without a loop timeline keeps the media step in the plan and reports no menu media.
       expect(stderr).toContain("5/7  Export menu media");
       expect(stderr).toContain("no menu media");
       expect(stderr).toContain("Done in");
@@ -191,7 +191,7 @@ describe("M4 build output", () => {
         await expect(access(join(parent, `menu-invalid-${index}`))).rejects.toThrow();
       }
 
-      // Case is normalised rather than rejected, so `ENG`/`us` mean `eng`/`US`.
+      // Case is normalised: `ENG`/`us` mean `eng`/`US`.
       const mixedCase = join(parent, "profile-mixed.json");
       await writeFile(mixedCase, JSON.stringify({ ...caseBase, menuLanguage: "ENG", country: "us" }));
       const normalised = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", disc, "--player-profile", mixedCase, "--out", join(parent, "menu-mixed")]);
@@ -444,7 +444,7 @@ describe("IGS extract CLI", () => {
       expect(mappings.scenes[0].objects[0]).toMatchObject({ objectId: 5, source: { path: "BDMV/STREAM/00001.m2ts", byteOffset: expect.any(String) } });
       const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8"));
       expect(manifest).toMatchObject({ stageStatus: "complete", igs: { support: { status: "unverified" } } });
-      expect(manifest.limitations).toContain("IGS effect sequences are rendered and presented; effect flag semantics beyond the synthetic fixtures remain unverified");
+      expect(manifest.limitations).toContain("IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only");
       expect(manifest.files.map((file: any) => file.path)).toEqual(expect.arrayContaining(["igs/scenes.json", "igs/diagnostics.json", "igs/source-map.json"]));
       await expect(access(join(target, "assets/graphics"))).rejects.toThrow();
       await expectSourceSnapshot(rootPath, before);

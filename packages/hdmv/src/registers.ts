@@ -47,8 +47,8 @@ export class RegisterFile {
     if (profile.menuLanguage !== undefined) this.psr[18] = profileWord(profile.menuLanguage, 3, "menuLanguage");
     if (profile.country !== undefined) this.psr[19] = profileWord(profile.country, 2, "country");
     if (profile.region !== undefined) this.psr[20] = regionWord(profile.region);
-    // `outputProfile: portable` is intentionally a product-level label only.
-    // PSR21 expresses a distinct output preference and no verified portable mapping exists.
+    // `outputProfile: portable` is a product-level label. PSR21 carries the
+    // caller's output preference and has no portable mapping.
     this.psr[21] = uint32(profile.outputPreference ?? defaults[21]!, "outputPreference");
     for (let i = 48; i <= 61; i++) this.psr[i] = 0xffffffff;
     for (const [index, value] of Object.entries(profile.capabilityValues ?? {})) {

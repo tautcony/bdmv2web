@@ -20,7 +20,7 @@ corepack pnpm typecheck
 corepack pnpm test
 ```
 
-`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file instead of the TypeScript sources. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
+`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
 
 ## Linting
 
@@ -28,7 +28,7 @@ corepack pnpm test
 
 Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. Run `corepack pnpm build` before linting; `scripts/ci.sh` runs lint as a parallel lane beside the typecheck and the test suites, after the build.
 
-`eslint.config.mjs` encodes the style the sources use: double quotes, semicolons, trailing commas, dense single-line declarations, non-null assertions after bounds checks, and terse `condition && call()` / `error ? reject() : resolve()` statements. Formatting rules are absent by design - ESLint 10 no longer ships them and no formatter runs in this workspace.
+`eslint.config.mjs` encodes the style the sources use: double quotes, semicolons, trailing commas, dense single-line declarations, non-null assertions after bounds checks, and terse `condition && call()` / `error ? reject() : resolve()` statements. No formatter runs in this workspace, and ESLint 10 ships no formatting rules.
 
 The configuration reports zero problems on the current sources. Every enabled rule is at `error` severity; the allowances are limited to the constructs the sources rely on:
 
@@ -42,7 +42,7 @@ The configuration reports zero problems on the current sources. Every enabled ru
 
 `*.test.ts` files turn off `no-explicit-any`, the `no-unsafe-*` family, `unbound-method`, `restrict-template-expressions`, and `no-control-regex`: they assert on JSON parsed from CLI output, pass bound methods to vitest matchers, and match ANSI escapes verbatim.
 
-One inline disable sits in `packages/runtime-web/src/browser.ts`: the Start-menu click listener returns its completion promise because the browser test host awaits fired listeners.
+One inline disable sits in `packages/runtime-web/src/browser.ts`: the Start-menu click listener returns its completion promise, and the browser test host awaits that promise.
 
 ## Contracts
 
@@ -148,7 +148,7 @@ Measured 2026-11-08 on an idle machine (Node 24.18.0 via corepack, pnpm 11.25.0,
 
 `apps/cli`, `media-export`, and `runtime-web` set `testTimeout: 15000`; their cases take 5–6s on a busy machine, over the vitest default of 5s. Per-test budgets override it: `120_000` for the navigation corpus and Tamako headless cases in `runtime-web`, the two `igs` reference comparisons, and `60_000` for the `cli` libbluray navigation baseline. `hdmv` and `igs` set no global timeout.
 
-**CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the same stage modules as job nodes. The `build` job runs install, generate, and build, then uploads every package's `dist/` as the `workspace-dist` artifact. The `lint`, `typecheck`, and per-package `test` jobs (one job per workspace package, 11 in the matrix) download the artifact, install dependencies, and run their stage; `fail-fast: false` keeps every failing package's node red without stopping the others. The test jobs install FFmpeg because the media-export suites invoke a real ffmpeg/ffprobe when a test does not inject a runner. The workflow triggers on pushes to `master`, pull requests, and manual dispatch; check the Actions result for the commit under review.
+**CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the same stage modules as job nodes. The `build` job runs install, generate, and build, then uploads every package's `dist/` as the `workspace-dist` artifact. The `lint`, `typecheck`, and per-package `test` jobs (one job per workspace package, 11 in the matrix) download the artifact, install dependencies, and run their stage; `fail-fast: false` keeps every failing package's node red without stopping the others. The test jobs install FFmpeg; the media-export suites invoke a real ffmpeg/ffprobe when a test does not inject a runner. The workflow triggers on pushes to `master`, pull requests, and manual dispatch; check the Actions result for the commit under review.
 
 ## Repository hygiene
 

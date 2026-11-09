@@ -102,9 +102,9 @@ export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): D
   if (onlyBdj) reasons.push("No valid HDMV entry is available for this release profile.");
   if (input.hasMissingRequiredAsset) reasons.push("A required package asset is missing.");
 
-  // Absence of evidence is not evidence of failure: checks that were never run,
-  // counts that were never supplied and evidence that was not verified are
-  // collected here instead of downgrading the status (D-2R).
+  // Checks that never ran, counts that were never supplied and evidence that
+  // was not verified are collected in `notVerified`; the status keeps its
+  // value (D-2R).
   const unverifiedChecks = input.checks.filter((check) => check.result === "not-verified");
   notVerified.push(...unverifiedChecks.map((check) => check.checkId));
   if (input.checks.length === 0) notVerified.push("NO_AUDIT_CHECKS");

@@ -805,7 +805,7 @@ describe("offline menu primitives", () => {
     expect(action.type).toBe("MENU_CALL");
     const messages: string[] = [];
     new PreviewPlaybackBridge(vm, (message) => messages.push(message)).dispatch(action);
-    expect(messages).toEqual(["Popup composition is unavailable because this package does not have an in-browser title overlay context."]);
+    expect(messages).toEqual(["Popup composition is unavailable in menu preview; the package has no in-browser title overlay context."]);
     expect(vm.trace.some((record) => record.event?.type === "MEDIA_UNAVAILABLE" && record.event.responseTo === action.id)).toBe(false);
   });
   it("routes an activated movie button to the visible unavailable report", () => {
@@ -1227,7 +1227,7 @@ describe("offline menu primitives", () => {
     expect(video.loop).toBe(false); expect(audio.loop).toBe(false);
     expect(vm.snapshot().status).toBe("idle"); expect(vm.trace.some((record) => record.event?.type === "MEDIA_STARTED")).toBe(false);
   });
-  it("returns unavailable for an unmatched VM playlist action instead of mapping it onto the menu loop", async () => {
+  it("returns unavailable for an unmatched VM playlist action", async () => {
     const vm = new HdmvVm([{ id: 9, instructions: [m3Fixtures.playPlaylist42] }]);
     vm.reset(9); vm.runTurn(); const action = vm.drainActions()[0]!;
     const video = { loop: false, src: "", play: vi.fn() } as unknown as HTMLVideoElement;

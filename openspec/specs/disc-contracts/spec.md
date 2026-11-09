@@ -51,7 +51,7 @@
 #### Scenario: 非法联合
 
 - **WHEN** 同一 navigation 对象混入 HDMV 和 BDJ 专属目标字段
-- **THEN** schema 拒绝该对象，而不是任选一类执行
+- **THEN** schema 拒绝该对象并报告校验错误
 
 ### Requirement: 安全读取与诊断
 

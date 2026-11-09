@@ -121,7 +121,7 @@ describe("menu-loop media export", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
-  it("fails before encoding when a declared PID is absent instead of choosing another stream", async () => {
+  it("fails before encoding when a declared PID is absent", async () => {
     const root = await mkdtemp(join(tmpdir(), "bdmv-media-export-missing-"));
     const calls: string[][] = [];
     const run: MediaProcessRunner = async (_executable, args) => {
@@ -320,7 +320,7 @@ describe("menu-loop media export", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
-  it("refuses an existing invalid output at the cache target instead of reusing or overwriting it", async () => {
+  it("refuses an existing invalid output at the cache target", async () => {
     const root = await mkdtemp(join(tmpdir(), "bdmv-media-invalid-cache-target-"));
     const cachedTarget = join(root, "assets/media/background.mp4");
     await mkdir(join(root, "assets/media"), { recursive: true });
@@ -436,7 +436,7 @@ describe("menu-loop media export", () => {
       expect(kept.plan.encoding.video.color).toMatchObject({ policy: "tonemap", filterChain: "hdr-passthrough-fallback", output: { primaries: "bt2020", transfer: "smpte2084", matrix: "bt2020nc", bitDepth: 10 } });
       expect(kept.plan.encoding.video.pixelFormat).toBe("yuv420p10le");
       expect(kept.warnings.map((warning) => warning.code)).toEqual(["MEDIA_HDR_TONEMAP_UNAVAILABLE"]);
-      expect(kept.plan.limitations.some((limitation) => /no tone mapping filter/.test(limitation))).toBe(true);
+      expect(kept.plan.limitations.some((limitation) => /tone mapping filter/.test(limitation))).toBe(true);
       const keptEncode = fallback.calls.find((args) => args.includes("0:i:0x1011"))!;
       expect(keptEncode).toEqual(expect.arrayContaining(["-pix_fmt", "yuv420p10le", "-x265-params", "log-level=error:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=tv"]));
     } finally {

@@ -460,8 +460,8 @@ export async function build(): Promise<void> {
       }
     }
     const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null);
-    // Delivery status is decided from facts that are all known before packaging, so
-    // the package can record the same conclusion instead of inventing its own (D-2R).
+    // Delivery status is decided from facts that are all known before packaging.
+    // The package records the same conclusion (D-2R).
     const decisionFacts = deliveryDiagnostics(diagnostics);
     const decision = decideDelivery({
       checks: [],

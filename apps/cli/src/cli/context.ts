@@ -3,8 +3,7 @@ export type ParsedOptions = Record<string, unknown>;
 /**
  * The options of the command currently running. Commander owns parsing,
  * help and dispatch; this module-level snapshot is what the command bodies
- * read, so each handler keeps a flat `options.x` shape instead of threading
- * a parser result through every helper.
+ * read, and each handler keeps a flat `options.x` shape.
  */
 let activeInput: string | undefined;
 let activeOptions: ParsedOptions = {};
