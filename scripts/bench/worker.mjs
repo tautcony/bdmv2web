@@ -212,9 +212,14 @@ async function main() {
     await gc.stop();
     await prepared.afterMeasurement?.();
   }
+  const task = bench.tasks[0];
+  // `throws: true` keeps the bench running after an operation throws, and the
+  // failed call still contributes a latency sample. An errored task has no
+  // usable distribution, so the fork fails instead of reporting it.
+  if (task?.result?.state === "errored") throw new Error(`${caseId} threw during measurement: ${task.result.error.message}`, { cause: task.result.error });
   if (last && typeof last.then === "function") last = await last;
   await prepared.validate?.(last);
-  const task = bench.tasks[0], samples = [...(task?.result?.latency?.samples ?? [])];
+  const samples = [...(task?.result?.latency?.samples ?? [])];
   if (samples.length < minSamples) throw new Error(`Tinybench recorded ${samples.length} samples; required ${minSamples}`);
   const rawMsPerCall = callsPerSample === 1 ? samples : samples.map((sample) => sample / callsPerSample);
   const peak = (read) => Math.max(...memorySamples.map(read));

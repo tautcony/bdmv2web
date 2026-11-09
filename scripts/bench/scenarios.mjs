@@ -50,6 +50,11 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
       });
     }
   }
+  result.push({
+    caseId: "cli.startup.version", suite: "scenario", category: "cli", name: "CLI process start and version",
+    sample: "cli-runtime", fixture: { id: "cli-runtime", version: "1", parameters: {} },
+    scope: "cli-startup", options: { operation: "version" },
+  });
   if (igsRenderCase) {
     result.push({
       caseId: "cli.perf.igs.render", suite: "scenario", category: "cli", name: "CLI MNU PNG render", sample: igsRenderCase.sample,
@@ -125,10 +130,13 @@ async function outputFileCount(directory) {
 
 async function runCli(root, caseDef, outputDir, sequence) {
   const cli = fileFor(root, "apps/cli/dist/index.js");
-  const input = caseDef.options.operation === "validate" ? caseDef.options.packagePath : fileFor(root, caseDef.options.input);
+  const input = caseDef.options.operation === "validate" ? caseDef.options.packagePath
+    : caseDef.options.operation === "version" ? undefined
+      : fileFor(root, caseDef.options.input);
   const output = join(outputDir, `output-${sequence}-${caseDef.options.operation}`);
   let args;
-  if (caseDef.options.operation === "inspect") args = ["inspect", input, "--allow-partial", "--format", "json"];
+  if (caseDef.options.operation === "version") args = ["--version"];
+  else if (caseDef.options.operation === "inspect") args = ["inspect", input, "--allow-partial", "--format", "json"];
   else if (caseDef.options.operation === "extract") args = ["extract", input, "--type", "hdmv", "--out", output];
   else if (caseDef.options.operation === "render") args = ["render", input, "--out", output];
   else if (caseDef.options.operation === "validate") args = ["validate", input, "--offline", "--format", "json"];
@@ -140,6 +148,9 @@ async function runCli(root, caseDef, outputDir, sequence) {
     throw new Error(`CLI ${args[0]} failed with exit ${error?.status ?? "unknown"}${stderr ? `: ${stderr}` : ""}`, { cause: error });
   }
   const report = args[0] === "inspect" || args[0] === "validate" ? JSON.parse(stdout) : null;
+  // `--version` exits before any command module loads, so it measures the
+  // process start and argument parsing that every CLI case also pays for.
+  if (args[0] === "--version") return { command: "version", stdoutBytes: Buffer.byteLength(stdout.trim()), output: null };
   if (args[0] === "inspect" && !["complete", "partial"].includes(report.stageStatus)) throw new Error(`CLI inspect stageStatus is ${String(report.stageStatus)}`);
   if (args[0] === "extract" || args[0] === "render") {
     const stageReportPath = args[0] === "extract" ? join(output, "manifest.json") : join(output, "assets-manifest.json");
@@ -194,7 +205,7 @@ export async function prepareScenarioCase(caseDef, root) {
     const bytes = new Uint8Array(await readFile(fileFor(root, options.file)));
     const repeated = new Uint8Array(bytes.length * options.scale);
     for (let i = 0; i < options.scale; i++) repeated.set(bytes, i * bytes.length);
-    const run = () => extractIgsFromChunks(options.clipId, packetChunks(repeated, 192 * 47), [{ pid: options.pid, source: { path: options.file, origin: "primary", offset: "0" } }], { chunkSize: 192 * 47 });
+    const run = () => extractIgsFromChunks(options.clipId, packetChunks(repeated, 192 * 47), [{ pid: options.pid, source: { path: options.file, origin: "primary", offset: "0" } }], { chunkSize: 192 * 47, renderAssets: false });
     const packetCount = repeated.byteLength / options.packetSize;
     const sample = await run();
     if (!sample.scenes.length) throw new Error(`PES fixture yielded no IGS scenes at ${packetCount} packets`);

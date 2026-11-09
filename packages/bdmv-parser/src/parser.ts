@@ -381,10 +381,16 @@ export function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" |
       for (const map of maps) {
         const block = mapBase + map.start; if (!Number.isSafeInteger(block) || block < mapBase || block + 4 > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${block}`, "CPI entry block exceeds section"); r.seek(block); const fineStart = r.u32();
         if (map.coarse > Math.floor((cpiEnd - r.offset) / 8)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${block}`, "CPI coarse entry count exceeds section");
-        const coarseEntries = []; for (let j = 0; j < map.coarse; j++) { const refFine = r.read(18); const pts = r.read(14); const spn = r.u32(); coarseEntries.push({ refFine, pts, spn }); }
+        const coarseEntries: Array<{ refFine: number; pts: number; spn: number }> = []; for (let j = 0; j < map.coarse; j++) { const refFine = r.read(18); const pts = r.read(14); const spn = r.u32(); coarseEntries.push({ refFine, pts, spn }); }
         const fineBlock = block + fineStart; if (!Number.isSafeInteger(fineBlock) || fineBlock < r.offset || fineBlock > cpiEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${fineBlock}`, "CPI fine entry block exceeds section"); r.seek(fineBlock);
         if (map.fine > Math.floor((cpiEnd - r.offset) / 4)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${block}`, "CPI fine entry count exceeds section");
-        for (let j = 0; j < map.fine; j++) { const source = r.source(file.rel, origin); const angleChange = !!r.read(1); r.skipBits(3); const pts = r.read(11); const spnOffset = r.read(17); let coarseEntry: typeof coarseEntries[number] | undefined; for (const entry of coarseEntries) if (entry.refFine <= j) coarseEntry = entry; const pts45k = coarseEntry ? ((coarseEntry.pts & ~1) << 18) + (pts << 8) : pts << 8; const spn = ((coarseEntry?.spn ?? 0) & ~0x1ffff) + spnOffset; cpi.push({ pid: map.pid, epStreamType: map.type, pts45k, spn, angleChange, source }); }
+        // Each fine entry belongs to the last coarse entry whose `refFine` does
+        // not exceed it. `j` only increases, so one cursor walks the coarse
+        // entries instead of scanning them for every fine entry.
+        const coarseOrdered = coarseEntries.every((entry, index) => index === 0 || coarseEntries[index - 1]!.refFine <= entry.refFine);
+        const sortedCoarse = coarseOrdered ? coarseEntries : [...coarseEntries].sort((a, b) => a.refFine - b.refFine);
+        let coarseIndex = 0;
+        for (let j = 0; j < map.fine; j++) { const source = r.source(file.rel, origin); const angleChange = !!r.read(1); r.skipBits(3); const pts = r.read(11); const spnOffset = r.read(17); while (coarseIndex + 1 < sortedCoarse.length && sortedCoarse[coarseIndex + 1]!.refFine <= j) coarseIndex += 1; const candidate = sortedCoarse[coarseIndex]; const coarseEntry = candidate && candidate.refFine <= j ? candidate : undefined; const pts45k = coarseEntry ? ((coarseEntry.pts & ~1) << 18) + (pts << 8) : pts << 8; const spn = ((coarseEntry?.spn ?? 0) & ~0x1ffff) + spnOffset; cpi.push({ pid: map.pid, epStreamType: map.type, pts45k, spn, angleChange, source }); }
       }
     }
   }
@@ -422,21 +428,30 @@ function choose<T>(kind: string, located: LocatedFile, bytes: Map<string, Uint8A
 }
 
 export function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[], playlists: Playlist[], clips: ClipInfo[], sounds: SoundEntry[], files: FileEntry[], diagnostics: ParseDiagnostic[]): ParsedDisc["graph"] {
-  const nodes: GraphNode[] = []; const edges: GraphEdge[] = []; const add = (node: GraphNode) => { if (!nodes.some((item) => item.id === node.id)) nodes.push(node); };
+  const nodes: GraphNode[] = []; const edges: GraphEdge[] = []; const seen = new Set<string>();
+  const add = (node: GraphNode) => { if (seen.has(node.id)) return; seen.add(node.id); nodes.push(node); };
   const fileByPath = new Map(files.map((file) => [normCase(file.rel), file]));
+  // The reference lookups below resolve once per node instead of rescanning the
+  // arrays; the first match wins, as the linear searches did.
+  const objectById = new Map<number, MovieObject>();
+  for (const object of objects) if (!objectById.has(object.id)) objectById.set(object.id, object);
+  const clipByKey = new Map<string, ClipInfo>();
+  for (const clip of clips) { const key = normCase(clip.id); if (!clipByKey.has(key)) clipByKey.set(key, clip); }
+  const fileByRelativePath = new Map<string, FileEntry>();
+  for (const file of files) { const key = bdmvRelativePath(file.rel); if (!fileByRelativePath.has(key)) fileByRelativePath.set(key, file); }
   const pathSource = (file: FileEntry) => sourceFor(file, "", "primary", 0);
   for (const entry of entries) {
     const id = `entry:${entry.id}`;
     add({ id, type: entry.kind === "title" ? "title" : "entry", state: "present", source: entry.source });
     if (entry.target.objectType === "HDMV" && typeof entry.target.target === "number") {
-      const targetId = `movieObject:${entry.target.target}`; const object = objects.find((item) => item.id === entry.target.target);
+      const targetId = `movieObject:${entry.target.target}`; const object = objectById.get(entry.target.target);
       edges.push({ from: id, to: targetId, kind: "entry-target", resolution: object ? "resolved" : "missing", source: entry.source });
       if (!object) add({ id: targetId, type: "movieObject", state: "missing", source: entry.source });
     } else if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") {
       const targetId = `bdjo:${entry.target.target}`; const bdjoFile = fileByPath.get(normCase(`BDMV/BDJO/${entry.target.target}.bdjo`));
       add({ id: targetId, type: "bdjo", state: bdjoFile ? "present" : "missing", source: bdjoFile ? pathSource(bdjoFile) : entry.source });
       edges.push({ from: id, to: targetId, kind: "bdj-target", resolution: bdjoFile ? "resolved" : "missing", source: entry.source });
-      if (!bdjoFile) diagnose(diagnostics, "BDMV_MISSING_BDJO", `BD-J entry ${entry.id} references missing BDJO ${entry.target.target}`, files.find((file) => bdmvRelativePath(file.rel) === entry.source.path), Number(entry.source.offset), "error", true, id);
+      if (!bdjoFile) diagnose(diagnostics, "BDMV_MISSING_BDJO", `BD-J entry ${entry.id} references missing BDJO ${entry.target.target}`, fileByRelativePath.get(entry.source.path), Number(entry.source.offset), "error", true, id);
     }
   }
   for (const object of objects) {
@@ -451,11 +466,11 @@ export function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[
       const clipId = `clip:${item.clipId}`; const streamFile = fileByPath.get(normCase(`BDMV/STREAM/${item.clipId}.m2ts`));
       add({ id: clipId, type: "clip", state: streamFile ? "present" : "missing", source: streamFile ? pathSource(streamFile) : item.source });
       edges.push({ from: itemId, to: clipId, kind: "clip-reference", resolution: streamFile ? "resolved" : "missing", source: item.source });
-      const infoId = `clipInfo:${item.clipId}`; const info = clips.find((clip) => normCase(clip.id) === normCase(item.clipId));
+      const infoId = `clipInfo:${item.clipId}`; const info = clipByKey.get(normCase(item.clipId));
       add({ id: infoId, type: "clipInfo", state: info ? "present" : "missing", source: info?.source ?? item.source });
       edges.push({ from: itemId, to: infoId, kind: "clip-info-reference", resolution: info ? "resolved" : "missing", source: item.source });
-      if (!streamFile) diagnose(diagnostics, "BDMV_MISSING_STREAM", `PlayItem ${playlist.id}/${item.index} references missing STREAM clip ${item.clipId}`, files.find((file) => bdmvRelativePath(file.rel) === item.source.path), Number(item.source.offset), "error", true, itemId);
-      if (!info) diagnose(diagnostics, "BDMV_MISSING_CLPI", `PlayItem ${playlist.id}/${item.index} references missing CLPI ${item.clipId}`, files.find((file) => bdmvRelativePath(file.rel) === item.source.path), Number(item.source.offset), "error", true, itemId);
+      if (!streamFile) diagnose(diagnostics, "BDMV_MISSING_STREAM", `PlayItem ${playlist.id}/${item.index} references missing STREAM clip ${item.clipId}`, fileByRelativePath.get(item.source.path), Number(item.source.offset), "error", true, itemId);
+      if (!info) diagnose(diagnostics, "BDMV_MISSING_CLPI", `PlayItem ${playlist.id}/${item.index} references missing CLPI ${item.clipId}`, fileByRelativePath.get(item.source.path), Number(item.source.offset), "error", true, itemId);
       if (info) {
         const declared = new Map(info.programs.flatMap((program) => program.streams.map((stream) => [stream.pid, stream] as const)));
         for (const stream of item.streams) {
@@ -464,8 +479,8 @@ export function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[
           if (stream.streamType !== 1) continue;
           if (stream.pid === null) continue;
           const clipStream = declared.get(stream.pid);
-          if (!clipStream) diagnose(diagnostics, "BDMV_STN_CLPI_PID_CONFLICT", `STN PID ${stream.pid} is not declared by CLPI ${info.id}`, files.find((file) => bdmvRelativePath(file.rel) === stream.source.path), Number(stream.source.offset), "warning", true, itemId);
-          else if (stream.codingType !== null && stream.codingType !== clipStream.codingType) diagnose(diagnostics, "BDMV_STN_CLPI_CODING_CONFLICT", `STN and CLPI coding types differ for PID ${stream.pid}`, files.find((file) => bdmvRelativePath(file.rel) === stream.source.path), Number(stream.source.offset), "warning", true, itemId);
+          if (!clipStream) diagnose(diagnostics, "BDMV_STN_CLPI_PID_CONFLICT", `STN PID ${stream.pid} is not declared by CLPI ${info.id}`, fileByRelativePath.get(stream.source.path), Number(stream.source.offset), "warning", true, itemId);
+          else if (stream.codingType !== null && stream.codingType !== clipStream.codingType) diagnose(diagnostics, "BDMV_STN_CLPI_CODING_CONFLICT", `STN and CLPI coding types differ for PID ${stream.pid}`, fileByRelativePath.get(stream.source.path), Number(stream.source.offset), "warning", true, itemId);
         }
       }
     }
@@ -479,16 +494,16 @@ export function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[
         add({ id: clipId, type: "clip", state: streamFile ? "present" : "missing", source: streamFile ? pathSource(streamFile) : subItem.source });
         edges.push({ from: subPathId, to: clipId, kind: "subpath-clip-reference", resolution: streamFile ? "resolved" : "missing", source: subItem.source });
         const infoId = `clipInfo:${subItem.clipId}`;
-        const info = clips.find((clip) => normCase(clip.id) === normCase(subItem.clipId));
+        const info = clipByKey.get(normCase(subItem.clipId));
         add({ id: infoId, type: "clipInfo", state: info ? "present" : "missing", source: info?.source ?? subItem.source });
         edges.push({ from: subPathId, to: infoId, kind: "subpath-clip-info-reference", resolution: info ? "resolved" : "missing", source: subItem.source });
-        if (!streamFile) diagnose(diagnostics, "BDMV_MISSING_STREAM", `SubPlayItem ${playlist.id}/${subPathIndex}/${subItemIndex} references missing STREAM clip ${subItem.clipId}`, files.find((file) => bdmvRelativePath(file.rel) === subItem.source.path), Number(subItem.source.offset), "error", true, subPathId);
-        if (!info) diagnose(diagnostics, "BDMV_MISSING_CLPI", `SubPlayItem ${playlist.id}/${subPathIndex}/${subItemIndex} references missing CLPI ${subItem.clipId}`, files.find((file) => bdmvRelativePath(file.rel) === subItem.source.path), Number(subItem.source.offset), "error", true, subPathId);
+        if (!streamFile) diagnose(diagnostics, "BDMV_MISSING_STREAM", `SubPlayItem ${playlist.id}/${subPathIndex}/${subItemIndex} references missing STREAM clip ${subItem.clipId}`, fileByRelativePath.get(subItem.source.path), Number(subItem.source.offset), "error", true, subPathId);
+        if (!info) diagnose(diagnostics, "BDMV_MISSING_CLPI", `SubPlayItem ${playlist.id}/${subPathIndex}/${subItemIndex} references missing CLPI ${subItem.clipId}`, fileByRelativePath.get(subItem.source.path), Number(subItem.source.offset), "error", true, subPathId);
       }
     }
     for (const mark of playlist.marks) {
       const item = playlist.playItems[mark.playItemRef];
-      if (!item || mark.time45k < item.inTime45k || mark.time45k > item.outTime45k) diagnose(diagnostics, "BDMV_INVALID_REFERENCE", `PlayMark ${mark.index} points outside a valid PlayItem interval`, files.find((file) => bdmvRelativePath(file.rel) === mark.source.path), Number(mark.source.offset), "error", true, playlistId);
+      if (!item || mark.time45k < item.inTime45k || mark.time45k > item.outTime45k) diagnose(diagnostics, "BDMV_INVALID_REFERENCE", `PlayMark ${mark.index} points outside a valid PlayItem interval`, fileByRelativePath.get(mark.source.path), Number(mark.source.offset), "error", true, playlistId);
     }
   }
   for (const clip of clips) for (const program of clip.programs) for (const stream of program.streams) add({ id: `stream:${clip.id}:${stream.pid}`, type: "stream", state: "present", source: stream.source });

@@ -53,7 +53,7 @@ console.log(r.rows.length, r.skipped.length, r.failures.length, r.samples.count,
 '
 ```
 
-A keepable record has `schemaVersion` 1, no failures, a reason for every skip, and a `samples.count` that matches the sum of fork `stats.sampleCount`. A record whose run was interrupted before `run.json` appeared, or whose case list is a scratch subset, is not a baseline.
+A keepable record has `schemaVersion` 1, no failures, a reason for every skip, and a `samples.count` that matches the sum of fork `stats.sampleCount`. A record whose run was interrupted before `run.json` appeared, or whose case list is a scratch subset, is not a baseline. A row that drifted by 25% or more between the first and last fifth of its window (marked `!` in reports) is not a stable comparison point; shorten the window or explain the drift before using it as a baseline.
 
 ## Keep what you will compare
 

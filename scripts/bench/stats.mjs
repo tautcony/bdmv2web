@@ -1,5 +1,8 @@
 /** Distribution helpers shared by the runner, comparison, and reports. */
 
+/** Window drift above this share of the median marks a row unstable. */
+export const DRIFT_LIMIT_PERCENT = 25;
+
 export function percentile(values, p) {
   if (!values.length) return null;
   return percentileOfSorted([...values].sort((a, b) => a - b), p);
@@ -16,9 +19,23 @@ export function median(values) {
 }
 
 /**
+ * Change between the first and the last fifth of the measured window, as a
+ * share of the whole median. Samples stay in the order they were recorded.
+ */
+export function driftPercent(values) {
+  if (values.length < 10) return null;
+  const span = Math.max(1, Math.floor(values.length / 5));
+  const head = percentile(values.slice(0, span), 0.5);
+  const tail = percentile(values.slice(-span), 0.5);
+  const overall = percentile(values, 0.5);
+  return overall > 0 ? (tail - head) / overall * 100 : null;
+}
+
+/**
  * Per-call distribution. Percentiles are linear-interpolated over the sorted
  * samples; outliers use the 1.5 IQR fence; throughput is calls per second at
- * the median.
+ * the median. `driftPercent` reports how much slower the last fifth ran than
+ * the first, so a window that never settled is visible.
  */
 export function summarizeSamples(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -36,6 +53,7 @@ export function summarizeSamples(values) {
     mad: percentileOfSorted(sorted.map((value) => Math.abs(value - medianValue)).sort((a, b) => a - b), 0.5),
     iqr, outlierCount: outliers, outlierPercent: sampleCount ? outliers / sampleCount * 100 : 0,
     throughputPerSecond: medianValue > 0 ? 1000 / medianValue : null,
+    driftPercent: driftPercent(values),
     sampleCount,
   };
 }

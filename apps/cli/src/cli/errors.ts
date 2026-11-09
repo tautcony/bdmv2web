@@ -1,5 +1,5 @@
 import { optionValue } from "./context.js";
-import { ContractError } from "@bdmv2web/core";
+import { ContractError } from "@bdmv2web/core/contract-error";
 
 export function fail(code: string, message: string, path?: string): never {
   throw new ContractError(code, path ?? "/", message);

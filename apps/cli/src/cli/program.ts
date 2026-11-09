@@ -1,23 +1,28 @@
 import { Command, InvalidArgumentError } from "commander";
-import { build } from "../commands/build.js";
-import { compareReference } from "../commands/compare.js";
-import { exportAssets } from "../commands/export.js";
-import { extract } from "../commands/extract.js";
-import { inspect } from "../commands/inspect.js";
-import { listAssets } from "../commands/list.js";
-import { renderPng } from "../commands/render.js";
-import { validate } from "../commands/validate.js";
 import { setActiveCommand, type ParsedOptions } from "./context.js";
 
 export type CommandName = "inspect" | "extract" | "build" | "validate" | "compare" | "list" | "export" | "render";
 
+/**
+ * One command module per name, imported on first use. Loading every command up
+ * front costs ~870 ms before a single argument is read, which `--version` and
+ * `--help` never need.
+ */
+const loaders: Record<CommandName, () => Promise<() => Promise<void>>> = {
+  inspect: async () => (await import("../commands/inspect.js")).inspect,
+  extract: async () => (await import("../commands/extract.js")).extract,
+  build: async () => (await import("../commands/build.js")).build,
+  validate: async () => (await import("../commands/validate.js")).validate,
+  compare: async () => (await import("../commands/compare.js")).compareReference,
+  list: async () => (await import("../commands/list.js")).listAssets,
+  export: async () => (await import("../commands/export.js")).exportAssets,
+  render: async () => (await import("../commands/render.js")).renderPng,
+};
+
 /** Commander parses and dispatches; each command body reads the snapshot this leaves behind. */
-export function dispatch(name: CommandName, input: string | undefined, options: ParsedOptions): Promise<void> {
+export async function dispatch(name: CommandName, input: string | undefined, options: ParsedOptions): Promise<void> {
   setActiveCommand(input, options);
-  const handlers: Record<CommandName, () => Promise<void>> = {
-    inspect, extract, build, validate, compare: compareReference, list: listAssets, export: exportAssets, render: renderPng,
-  };
-  return handlers[name]();
+  return (await loaders[name]())();
 }
 
 /** Reject `--out=` instead of turning an empty string into a path. */

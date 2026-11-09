@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getCaseDefinitions } from "./cases.mjs";
 import { parseBenchArguments, summarizeSamples } from "./index.mjs";
+import { driftPercent } from "./stats.mjs";
 
 test("legacy benchmark definitions retain twelve stable cases", async () => {
   const definitions = await getCaseDefinitions({ root: process.cwd() });
@@ -75,8 +76,16 @@ test("fork summary reports per-call distribution statistics", () => {
   assert.deepEqual(summarizeSamples([1, 3, 2]), {
     min: 1, max: 3, mean: 2, median: 2, p90: 2.8, p95: 2.9, p99: 2.98,
     deviation: Math.sqrt(2 / 3), cvPercent: Math.sqrt(2 / 3) / 2 * 100,
-    mad: 1, iqr: 1, outlierCount: 0, outlierPercent: 0, throughputPerSecond: 500, sampleCount: 3,
+    mad: 1, iqr: 1, outlierCount: 0, outlierPercent: 0, throughputPerSecond: 500, driftPercent: null, sampleCount: 3,
   });
+});
+
+test("drift compares the first and last fifth of the window", () => {
+  const flat = [...Array(10).fill(1)];
+  assert.equal(driftPercent(flat), 0);
+  const slowing = [...Array(5).fill(1), ...Array(5).fill(3)];
+  assert.equal(Math.round(driftPercent(slowing)), 100);
+  assert.equal(driftPercent([1, 2, 3]), null);
 });
 
 test("fork summary counts samples outside the interquartile fence", () => {

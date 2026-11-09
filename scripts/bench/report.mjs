@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { Option } from "commander";
 import { createProgram, exitWithError, parseOptions } from "./cli.mjs";
 import { environmentIdentity, runIdentity, stable } from "./compatibility.mjs";
-import { forkMedians, median } from "./stats.mjs";
+import { DRIFT_LIMIT_PERCENT, forkMedians, median } from "./stats.mjs";
 
 const RUN_MODES = ["benchmark", "cpu", "heap", "memory", "browser"];
 const FORMATS = ["json", "markdown", "html"];
@@ -62,6 +62,8 @@ function forkSummary(row) {
     opsPerSecond: medianFork > 0 ? 1000 / medianFork : null,
     worstCvPercent: perFork("cvPercent").length ? Math.max(...perFork("cvPercent")) : null,
     outlierPercent: median(perFork("outlierPercent")),
+    driftPercent: perFork("driftPercent").length ? perFork("driftPercent").reduce((worst, value) => (Math.abs(value) > Math.abs(worst) ? value : worst)) : null,
+    unstable: perFork("driftPercent").some((value) => Math.abs(value) >= DRIFT_LIMIT_PERCENT),
   };
 }
 function profileKey(row, run) {
@@ -123,16 +125,20 @@ function sourceLabel(series) {
 function formatCell(value, digits = 4) {
   return Number.isFinite(value) ? Number(value).toPrecision(digits) : "—";
 }
+/** Drift stays a signed percentage with one decimal, never exponential. */
+function formatDrift(value) {
+  return Number.isFinite(value) ? value.toFixed(1) : "—";
+}
 function markdown(trend, baseDir = process.cwd()) {
-  const lines = ["# Benchmark trends", "", `Runs: ${trend.runCount}; environment series: ${trend.environmentSeriesCount}.`, "", "| Case | Fixture | Environment series | Run | Fork count | Calls/sample | Median of fork medians (ms) | p95 (ms) | p99 (ms) | Ops/s | Worst fork CV % | Outliers % | Profiles |", "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"];
+  const lines = ["# Benchmark trends", "", `Runs: ${trend.runCount}; environment series: ${trend.environmentSeriesCount}.`, "", "| Case | Fixture | Environment series | Run | Fork count | Calls/sample | Median of fork medians (ms) | p95 (ms) | p99 (ms) | Ops/s | Worst fork CV % | Outliers % | Drift % | Profiles |", "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"];
   for (const series of trend.series) for (const run of series.runs) {
-    lines.push(`| ${series.caseId} | ${series.fixture?.id ?? "—"} | ${series.environmentSeries} | ${run.runId} | ${run.forkCount} | ${run.callsPerSample} | ${formatCell(run.forkMedianMs, 5)} | ${formatCell(run.p95Ms, 5)} | ${formatCell(run.p99Ms, 5)} | ${formatCell(run.opsPerSecond, 4)} | ${formatCell(run.worstCvPercent, 3)} | ${formatCell(run.outlierPercent, 3)} | ${profileLinks(run.profiles, baseDir)} |`);
+    lines.push(`| ${series.caseId} | ${series.fixture?.id ?? "—"} | ${series.environmentSeries} | ${run.runId} | ${run.forkCount} | ${run.callsPerSample} | ${formatCell(run.forkMedianMs, 5)} | ${formatCell(run.p95Ms, 5)} | ${formatCell(run.p99Ms, 5)} | ${formatCell(run.opsPerSecond, 4)} | ${formatCell(run.worstCvPercent, 3)} | ${formatCell(run.outlierPercent, 3)} | ${formatDrift(run.driftPercent)}${run.unstable ? " !" : ""} | ${profileLinks(run.profiles, baseDir)} |`);
   }
   if (trend.statuses.length) {
     lines.push("", "## Skipped and failed cases", "", "| Run | Case | Status | Reason |", "| --- | --- | --- | --- |");
     for (const item of trend.statuses) lines.push(`| ${item.runId} | ${item.caseId} | ${item.status} | ${String(item.reason).replaceAll("|", "\\|").replaceAll("\n", " ")} |`);
   }
-  lines.push("", "Each plotted value is the median of independent process fork medians. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values.");
+  lines.push("", "Each plotted value is the median of independent process fork medians. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values. Drift is the change between the first and last fifth of a fork's samples as a share of its median; a row marked `!` drifted by 25% or more.");
   return `${lines.join("\n")}\n`;
 }
 function escapeXml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
@@ -157,7 +163,7 @@ function plotRow(series, seriesIndex) {
 }
 function runRow(series, run, baseDir) {
   const profiles = run.profiles.map((profile) => { const href = relative(baseDir, resolve(profile.runDirectory, profile.path)); return `<a href="${escapeXml(href)}">${escapeXml(profile.path)}</a>`; }).join(", ");
-  return `<tr><td><strong>${escapeXml(series.name || series.caseId)}</strong><br><small>${escapeXml(series.caseId)}</small></td><td>${escapeXml(series.fixture?.id ?? "")}<br><small>${escapeXml(series.sample ?? "")}</small></td><td>${escapeXml(sourceLabel(series))}</td><td>${escapeXml(series.scope ?? "")}</td><td>${escapeXml(run.outputStatuses.join(", ") || "measured")}</td><td>${escapeXml(series.environmentSeries)}<br><small>${escapeXml(cpuLabel(series.environment))}</small></td><td>${escapeXml(series.environment?.node ?? "")}/${escapeXml(series.environment?.v8 ?? "")}</td><td>${escapeXml(JSON.stringify(series.environment?.nodeOptions ?? series.environment?.execArgv ?? []))}</td><td>${escapeXml(String(series.environment?.buildMode ?? "unknown"))} (${escapeXml(String(series.environment?.profileBuildMode ?? "unknown"))})</td><td>${escapeXml(run.runId)}</td><td>${run.forkCount}</td><td>${run.callsPerSample}</td><td>${formatCell(run.forkMedianMs, 5)}</td><td>${formatCell(run.minForkMedianMs, 5)}–${formatCell(run.maxForkMedianMs, 5)}</td><td>${formatCell(run.p95Ms, 5)}</td><td>${formatCell(run.p99Ms, 5)}</td><td>${formatCell(run.opsPerSecond, 4)}</td><td>${formatCell(run.worstCvPercent, 3)}</td><td>${formatCell(run.outlierPercent, 3)}</td><td>${profiles || "—"}</td></tr>`;
+  return `<tr><td><strong>${escapeXml(series.name || series.caseId)}</strong><br><small>${escapeXml(series.caseId)}</small></td><td>${escapeXml(series.fixture?.id ?? "")}<br><small>${escapeXml(series.sample ?? "")}</small></td><td>${escapeXml(sourceLabel(series))}</td><td>${escapeXml(series.scope ?? "")}</td><td>${escapeXml(run.outputStatuses.join(", ") || "measured")}</td><td>${escapeXml(series.environmentSeries)}<br><small>${escapeXml(cpuLabel(series.environment))}</small></td><td>${escapeXml(series.environment?.node ?? "")}/${escapeXml(series.environment?.v8 ?? "")}</td><td>${escapeXml(JSON.stringify(series.environment?.nodeOptions ?? series.environment?.execArgv ?? []))}</td><td>${escapeXml(String(series.environment?.buildMode ?? "unknown"))} (${escapeXml(String(series.environment?.profileBuildMode ?? "unknown"))})</td><td>${escapeXml(run.runId)}</td><td>${run.forkCount}</td><td>${run.callsPerSample}</td><td>${formatCell(run.forkMedianMs, 5)}</td><td>${formatCell(run.minForkMedianMs, 5)}–${formatCell(run.maxForkMedianMs, 5)}</td><td>${formatCell(run.p95Ms, 5)}</td><td>${formatCell(run.p99Ms, 5)}</td><td>${formatCell(run.opsPerSecond, 4)}</td><td>${formatCell(run.worstCvPercent, 3)}</td><td>${formatCell(run.outlierPercent, 3)}</td><td>${formatDrift(run.driftPercent)}${run.unstable ? " !" : ""}</td><td>${profiles || "—"}</td></tr>`;
 }
 function captureRow(capture, baseDir) {
   return capture.artifacts.map((artifact) => {
@@ -174,8 +180,8 @@ function html(trend, baseDir = process.cwd()) {
   const captureRows = trend.profileRuns.map((capture) => captureRow(capture, baseDir)).join("");
   const statusRows = trend.statuses.map((item) => `<li>${escapeXml(item.runId)} · ${escapeXml(item.caseId)}: ${escapeXml(item.status)} ${escapeXml(String(item.reason).slice(0, 220))}${String(item.reason).length > 220 ? "…" : ""}</li>`).join("");
   const style = "body{font:14px system-ui;margin:2rem;color:#17202a}svg{width:100%;height:auto;border:1px solid #ccd1d1}text{font:12px system-ui}table{border-collapse:collapse;width:100%;table-layout:fixed}td,th{border-bottom:1px solid #ddd;padding:.4rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}small{color:#667}details{margin:1rem 0}";
-  const summary = `${trend.runCount} benchmark runs · ${trend.profileRunCount} profile records · ${trend.environmentSeriesCount} environment series. Each row is one case and environment; points show median fork time and min–max fork medians in milliseconds. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values.`;
-  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Benchmark trends</title><style>${style}</style><h1>Benchmark trends</h1><p>${summary}</p><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Benchmark fork median trends">${plotRows}</svg><h2>Run records</h2><table><thead><tr><th>Case</th><th>Fixture</th><th>Source</th><th>Scope</th><th>Output status</th><th>Environment</th><th>Node/V8</th><th>Node options</th><th>Build mode</th><th>Run</th><th>Forks</th><th>Calls/sample</th><th>Median of fork medians (ms)</th><th>Fork median range (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Ops/s</th><th>Worst fork CV %</th><th>Outliers %</th><th>CPU profiles</th></tr></thead><tbody>${runRows}</tbody></table><h2>Profile and browser captures</h2><p>Capture artifacts are listed with their recorded environment and build mode.</p><table><thead><tr><th>Case</th><th>Mode</th><th>Fixture</th><th>Build mode</th><th>Environment</th><th>Run</th><th>Artifact</th></tr></thead><tbody>${captureRows}</tbody></table><h2>Run status</h2><ul>${statusRows}</ul><script type="application/json" id="trend-data">${data}</script>`;
+  const summary = `${trend.runCount} benchmark runs · ${trend.profileRunCount} profile records · ${trend.environmentSeriesCount} environment series. Each row is one case and environment; points show median fork time and min–max fork medians in milliseconds. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values. Drift compares the first and last fifth of a fork's samples against its median; rows marked ! drifted by 25% or more.`;
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Benchmark trends</title><style>${style}</style><h1>Benchmark trends</h1><p>${summary}</p><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Benchmark fork median trends">${plotRows}</svg><h2>Run records</h2><table><thead><tr><th>Case</th><th>Fixture</th><th>Source</th><th>Scope</th><th>Output status</th><th>Environment</th><th>Node/V8</th><th>Node options</th><th>Build mode</th><th>Run</th><th>Forks</th><th>Calls/sample</th><th>Median of fork medians (ms)</th><th>Fork median range (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Ops/s</th><th>Worst fork CV %</th><th>Outliers %</th><th>Drift %</th><th>CPU profiles</th></tr></thead><tbody>${runRows}</tbody></table><h2>Profile and browser captures</h2><p>Capture artifacts are listed with their recorded environment and build mode.</p><table><thead><tr><th>Case</th><th>Mode</th><th>Fixture</th><th>Build mode</th><th>Environment</th><th>Run</th><th>Artifact</th></tr></thead><tbody>${captureRows}</tbody></table><h2>Run status</h2><ul>${statusRows}</ul><script type="application/json" id="trend-data">${data}</script>`;
 }
 
 export { buildTrend, findRuns, html, loadRuns, markdown, parseArgs };

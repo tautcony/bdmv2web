@@ -1,6 +1,6 @@
 # Performance benchmarks
 
-The benchmark suite covers twelve BDMV, graph, MNU, and PGS component cases, synthetic scale cases, prepared-data CLI inspect/extract/render scenarios, package assembly from prepared scene and PNG inputs, and the generated offline menu opened in a browser through `file://`. Each case has a stable ID, a fixture ID and version, fixture parameters, and a timing scope.
+The benchmark suite covers twelve BDMV, graph, MNU, and PGS component cases, synthetic scale cases, CLI process start, prepared-data CLI inspect/extract/render scenarios, package assembly from prepared scene and PNG inputs, and the generated offline menu opened in a browser through `file://`. Each case has a stable ID, a fixture ID and version, fixture parameters, and a timing scope.
 
 ## Run component and scenario benchmarks
 
@@ -24,11 +24,15 @@ The runner writes one schema version 1 record to a new run directory and prints 
 
 Per-call samples are stored in `samples.f64` next to `run.json` as little-endian float64; each fork points at its block with `{ encoding, file, offset, count }`, and the record's `samples` field names the file, encoding, byte size, and sample count. Every timing sample is retained; a batched sample covers `callsPerSample` calls.
 
-Per-fork statistics cover min, mean, median, p90, p95, p99, max, standard deviation, coefficient of variation, median absolute deviation, interquartile range, outlier count and share, call throughput, and sample count. Rows declare `unit: "ms/call"`.
+Per-fork statistics cover min, mean, median, p90, p95, p99, max, standard deviation, coefficient of variation, median absolute deviation, interquartile range, outlier count and share, call throughput, window drift, and sample count. Rows declare `unit: "ms/call"`.
 
 Timing follows the configured warmup duration, measurement duration, and minimum sample count. An operation already in progress completes after the measurement duration. Component input loading and fixture preparation run outside the timed operation.
 
+Window drift compares the median of the first fifth of a fork's samples with the last fifth, relative to the whole median. Operations that allocate grow the heap as the window runs, so late samples run slower than early ones and the median depends on where it landed. Reports mark a row `!` when any fork drifts by 25 percent or more; such a row is not a stable comparison point until the window is shortened or the per-sample allocation drops.
+
 Operations faster than the 1 ms sample target are timed in batches: the worker warms the operation for the configured warmup duration, measures one call, times the estimated call count, and divides every sample by that count. Each recorded value stays milliseconds per call, and each measured interval is long enough for the timer to resolve. Rows record `callsPerSample`, one case uses the same count in every fork, and `--calls-per-sample N` fixes the count instead of calibrating. Batching changes sample resolution only; medians, percentiles, and throughputs remain per call.
+
+CLI cases run the built `apps/cli/dist/index.js` as a child process, so each sample covers process start, argument parsing, and the modules the selected command loads. `cli.startup.version` times only process start and argument parsing; a command case minus that baseline is the command's own cost. Command modules load on first use, so `--version` and `--help` do not load the commands they never run. `scale.pes-*x.extract` times transport scanning and IGS scene extraction; asset rendering is a separate case (`perf.igs.battle-royale.render`).
 
 ## Capture profiles and memory
 
@@ -69,7 +73,7 @@ corepack pnpm bench:report test-data/bench/runs --format markdown --out test-dat
 corepack pnpm bench:report test-data/bench/runs --format html --out test-data/bench/reports/trend.html
 ```
 
-Trend series separate by case, fixture parameters, scope, runtime environment, and benchmark configuration. Each HTML plot shows milliseconds, revision labels, and the minimum and maximum fork medians. Tables list run IDs, environment details, output statuses, per-fork medians, calls per sample, p95 and p99, calls per second, coefficient of variation, outlier share, and relative links to CPU profiles, heap profiles, memory records, and browser artifacts. Percentiles interpolate linearly over the sample; outliers are samples outside the 1.5 IQR fence; calls per second derive from the median fork median. Run directories and report directories stay together for downloadable artifacts.
+Trend series separate by case, fixture parameters, scope, runtime environment, and benchmark configuration. Each HTML plot shows milliseconds, revision labels, and the minimum and maximum fork medians. Tables list run IDs, environment details, output statuses, per-fork medians, calls per sample, p95 and p99, calls per second, coefficient of variation, outlier share, window drift, and relative links to CPU profiles, heap profiles, memory records, and browser artifacts. Percentiles interpolate linearly over the sample; outliers are samples outside the 1.5 IQR fence; calls per second derive from the median fork median. Run directories and report directories stay together for downloadable artifacts.
 
 ## CI runs
 
