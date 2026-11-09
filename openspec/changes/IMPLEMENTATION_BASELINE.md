@@ -58,7 +58,7 @@ interface EventEnvelope<T> {
 | extract INPUT --out DIR | 结构/原始命令，M2 接入后含 IG/PNG | 明确已完成与未完成阶段，不生成播放器 |
 | convert INPUT [--out DIR] | 统一离线菜单包，影片交给默认关联程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 可指定不重叠的其他目标；strict 开启 |
 | validate DIR --offline [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
-| compare INPUT DIR --trace FILE | 指定输入序列的参考比较 | 开发命令；CLI 已注册，当前返回 `E_NOT_IMPLEMENTED`，接线与退出码由 M6 `X-COMPARE` 跟踪；参考缺席为 not-verified |
+| compare INPUT --actual FILE [--reference FILE] [--reference-tool NAME] [--reference-version V] [--out FILE] | 指定输入序列的参考比较 | 开发命令，可用原碟和参考工具；退出码 0/1/2 由 M6 规格固定，参考缺席或未记录工具版本为 not-verified（退出 2），参考文件不得与被测 trace 相同 |
 
 `--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
 

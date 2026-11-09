@@ -35,7 +35,12 @@ export function createCompatibilityReport(audit: OfflinePackageAudit, decision: 
 
 export function createDependencyAuditReport(audit: OfflinePackageAudit): DependencyAuditReport {
   const relevant = audit.checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
-  const status = relevant.length === 0 || relevant.some((check) => check.result === "not-verified") ? "not-verified" : relevant.some((check) => check.result === "fail") ? "fail" : "pass";
+  // `fail` outranks `not-verified`: a missing evidence item must not hide a failure.
+  const status = relevant.some((check) => check.result === "fail")
+    ? "fail"
+    : relevant.length === 0 || relevant.some((check) => check.result === "not-verified")
+      ? "not-verified"
+      : "pass";
   return { schemaVersion: "1.0", status, externalReferences: relevant.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"), checks: relevant };
 }
 

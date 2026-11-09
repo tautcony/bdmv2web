@@ -57,8 +57,24 @@ describe("offline package audit", () => {
     expect(createDependencyAuditReport({ ...base, checks: [] })).toMatchObject({ status: "not-verified", checks: [] });
   });
 
-  it("audits listed runtime files", async () => {
-    const imageName = "assets/海报 %图.png";
+  it("accepts only declared STREAM clip paths as external playback targets", async () => {
+    const valid = await packageRoot({
+      "index.html": "<main>ready</main>",
+      "external-targets.json": JSON.stringify({ playlists: [{ id: "00007", items: [{ clipId: "00002", streamPath: "STREAM/00002.m2ts" }] }] }),
+    });
+    expect((await auditOutputPackage(valid)).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass" }));
+
+    for (const streamPath of ["/etc/passwd", "../STREAM/00002.m2ts", "STREAM\\00002.m2ts", "https://example.com/00002.m2ts", "STREAM/00003.m2ts"]) {
+      const root = await packageRoot({
+        "index.html": "<main>ready</main>",
+        "external-targets.json": JSON.stringify({ playlists: [{ id: "00007", items: [{ clipId: "00002", streamPath }] }] }),
+      });
+      const checks = (await auditOutputPackage(root)).checks;
+      expect(checks, streamPath).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGET_UNDECLARED", result: "fail", evidence: expect.objectContaining({ clipId: "00002", streamPath }) }));
+    }
+  });
+
+  it("audits listed runtime files", async () => {    const imageName = "assets/海报 %图.png";
     const html = `<img src="assets/%E6%B5%B7%E6%8A%A5%20%25%E5%9B%BE.png"><script src="app.js"></script>`;
     const root = await packageRoot({ "index.html": html, "app.js": "(() => { document.body.dataset.ready = 'yes'; })();", [imageName]: pngSignature });
     await mkdir(join(root, "reports"));

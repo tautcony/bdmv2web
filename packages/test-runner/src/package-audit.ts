@@ -33,6 +33,44 @@ function isPlayerProfile(value: unknown): value is Record<string, unknown> {
     && Array.isArray(value.audioProfiles) && value.audioProfiles.every((item) => typeof item === "string");
 }
 
+/** A declared target is exactly `STREAM/<clipId>.m2ts`; this rejects absolute paths, dot segments, backslashes and schemes. */
+const DECLARED_STREAM_PATH = /^STREAM\/([0-9]{5})\.m2ts$/i;
+
+/**
+ * Check that every external playback target stays a declared BDMV STREAM clip.
+ * The configured BDMV root and the system player stay unobservable here, so the
+ * audit reports those separately as `not-verified` instead of asserting them.
+ */
+function auditExternalTargets(checks: AuditCheck[], path: string, source: string): void {
+  let parsed: unknown;
+  try { parsed = JSON.parse(source); } catch { add(checks, "EXTERNAL_TARGET_INVALID", "fail", "external-targets.json is not valid JSON", path); return; }
+  if (!isRecord(parsed) || !Array.isArray(parsed.playlists)) { add(checks, "EXTERNAL_TARGET_INVALID", "fail", "external-targets.json must contain a playlists array", path); return; }
+  let playItems = 0;
+  let invalid = false;
+  for (const [playlistIndex, playlist] of parsed.playlists.entries()) {
+    if (!isRecord(playlist) || !Array.isArray(playlist.items)) {
+      invalid = true;
+      add(checks, "EXTERNAL_TARGET_INVALID", "fail", "Each external playlist must contain an items array", `${path}/playlists/${playlistIndex}`);
+      continue;
+    }
+    for (const [itemIndex, item] of playlist.items.entries()) {
+      playItems += 1;
+      const location = `${path}/playlists/${playlistIndex}/items/${itemIndex}`;
+      if (!isRecord(item) || typeof item.clipId !== "string" || typeof item.streamPath !== "string") {
+        invalid = true;
+        add(checks, "EXTERNAL_TARGET_INVALID", "fail", "Each external PlayItem must declare clipId and streamPath", location);
+        continue;
+      }
+      const match = DECLARED_STREAM_PATH.exec(item.streamPath);
+      if (!match || match[1]!.toLowerCase() !== item.clipId.toLowerCase()) {
+        invalid = true;
+        add(checks, "EXTERNAL_TARGET_UNDECLARED", "fail", "External target must be STREAM/<clipId>.m2ts for its own clip; absolute paths, traversal, backslashes and schemes are rejected", location, { clipId: item.clipId, streamPath: item.streamPath });
+      }
+    }
+  }
+  if (!invalid) add(checks, "EXTERNAL_TARGETS_DECLARED", "pass", "Every external target is a declared BDMV STREAM clip path", path, { playItems });
+}
+
 function samePlayerProfile(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
   const keys = ["menuLanguage", "audioLanguage", "subtitleLanguage", "country", "region", "outputProfile", "videoProfiles", "audioProfiles"];
   return keys.every((key) => JSON.stringify(left[key]) === JSON.stringify(right[key]));
@@ -367,6 +405,10 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
         } catch { bdmvPath = undefined; }
         if (typeof bdmvPath !== "string" || !bdmvPath || bdmvPath.includes("\0")) add(checks, "EXTERNAL_CONFIG_INVALID", "fail", "BDMV path configuration is invalid", path);
         else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV path and URL Protocol playback must be verified in the current environment", path);
+        continue;
+      }
+      if (path === "external-targets.json") {
+        auditExternalTargets(checks, path, await readFile(canonical, "utf8"));
         continue;
       }
     } catch { add(checks, entry.required === false ? "PACKAGE_OPTIONAL_ASSET_MISSING" : "PACKAGE_MISSING_ASSET", entry.required === false ? "not-verified" : "fail", "Manifest asset is missing or unreadable", path); }

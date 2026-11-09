@@ -98,8 +98,13 @@ export function buildProgram(version?: string): Command {
   withStrict(validateCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("validate", input, options));
 
   const compareCommand = program.command("compare")
-    .description("Compare generated output against reference evidence (not implemented)")
-    .argument("[input]", "package directory")
+    .description("Compare an actual VM trace against an independent reference trace")
+    .argument("[input]", "compare input sequence JSON file")
+    .requiredOption("--actual <file>", "actual VM trace JSON", nonEmpty)
+    .option("--reference <file>", "independent reference trace JSON", nonEmpty)
+    .option("--reference-tool <name>", "reference tool name", nonEmpty)
+    .option("--reference-version <version>", "reference tool version", nonEmpty)
+    .option("--out <file>", "write the comparison report to this path", nonEmpty)
     .option("--format <format>", "json", nonEmpty);
   withStrict(compareCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("compare", input, options));
 

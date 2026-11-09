@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
@@ -847,3 +847,197 @@ function concatBytes(...parts: Uint8Array[]): Uint8Array {
   for (const part of parts) { out.set(part, offset); offset += part.length; }
   return out;
 }
+
+describe("compare command", () => {
+  const cli = resolve(root, "dist/index.js");
+  const inputSequence = (fixtureId: string): Record<string, unknown> => ({
+    fixtureId,
+    sourceLabel: "synthetic fixture",
+    playerProfile: { menuLanguage: "eng", audioLanguage: "eng", subtitleLanguage: "eng", country: "US", region: "A", outputProfile: "portable", videoProfiles: ["hd"], audioProfiles: ["stereo"] },
+    initialRegisters: { 1: 0 },
+    stableEntry: "title-0",
+    seed: 7,
+    events: [{ at90k: "0", type: "play" }],
+  });
+  const trace = (opcode: string): Array<Record<string, unknown>> => [{ pc: 0, opcode, registers: { 1: 0 } }];
+
+  async function workspace(): Promise<string> {
+    return mkdtemp(join(tmpdir(), "bdmv2web-compare-"));
+  }
+  async function writeJson(directory: string, name: string, value: unknown): Promise<string> {
+    const path = join(directory, name);
+    await writeFile(path, JSON.stringify(value));
+    return path;
+  }
+  function runCompare(input: string, args: string[]): ReturnType<typeof spawnSync> {
+    return spawnSync(process.execPath, [cli, "compare", input, ...args], { encoding: "utf8" });
+  }
+
+  it("passes with exit 0 when the reference trace matches", async () => {
+    const directory = await workspace();
+    try {
+      const input = await writeJson(directory, "input.json", inputSequence("synthetic-pass"));
+      const actual = await writeJson(directory, "actual.json", trace("PLAY_PL"));
+      const reference = await writeJson(directory, "reference.json", trace("PLAY_PL"));
+      const result = runCompare(input, ["--actual", actual, "--reference", reference, "--reference-tool", "libbluray", "--reference-version", "1.5.0"]);
+      expect(result.status).toBe(0);
+      expect(JSON.parse(String(result.stdout))).toMatchObject({
+        result: "pass",
+        fixtureId: "synthetic-pass",
+        referenceTool: { name: "libbluray", version: "1.5.0" },
+      });
+      expect(String(result.stderr)).toBe("");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("reports the first divergence with exit 1", async () => {
+    const directory = await workspace();
+    try {
+      const input = await writeJson(directory, "input.json", inputSequence("synthetic-diff"));
+      const actual = await writeJson(directory, "actual.json", trace("PLAY_PL_ITEM"));
+      const reference = await writeJson(directory, "reference.json", trace("PLAY_PL"));
+      const result = runCompare(input, ["--actual", actual, "--reference", reference, "--reference-tool", "libbluray", "--reference-version", "1.5.0"]);
+      expect(result.status).toBe(1);
+      const report = JSON.parse(String(result.stdout));
+      expect(report.result).toBe("fail");
+      expect(report.comparison).toMatchObject({ equal: false, index: 0 });
+      expect(report.comparison.differingFields).toContain("/opcode");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("reports not-verified with exit 2 when no reference trace is supplied", async () => {
+    const directory = await workspace();
+    try {
+      const input = await writeJson(directory, "input.json", inputSequence("synthetic-missing"));
+      const actual = await writeJson(directory, "actual.json", trace("PLAY_PL"));
+      const result = runCompare(input, ["--actual", actual]);
+      expect(result.status).toBe(2);
+      const report = JSON.parse(String(result.stdout));
+      expect(report.result).toBe("not-verified");
+      expect(report.referenceTrace).toBeNull();
+      expect(report.reason).toMatch(/reference/i);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("rejects a reference that is the actual trace file", async () => {
+    const directory = await workspace();
+    try {
+      const input = await writeJson(directory, "input.json", inputSequence("synthetic-self"));
+      const actual = await writeJson(directory, "actual.json", trace("PLAY_PL"));
+      const result = runCompare(input, ["--actual", actual, "--reference", actual, "--reference-version", "1.5.0"]);
+      expect(result.status).toBe(1);
+      expect(String(result.stderr)).toContain("COMPARE_REFERENCE_NOT_INDEPENDENT");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("rejects an invalid input sequence and a missing actual trace", async () => {
+    const directory = await workspace();
+    try {
+      const input = await writeJson(directory, "input.json", { fixtureId: "x", sourceLabel: "y" });
+      const actual = await writeJson(directory, "actual.json", trace("PLAY_PL"));
+      expect(runCompare(input, ["--actual", actual])).toMatchObject({ status: 1 });
+      expect(String(runCompare(input, ["--actual", actual]).stderr)).toContain("COMPARE_INPUT_INVALID");
+
+      const valid = await writeJson(directory, "valid.json", inputSequence("synthetic-invalid"));
+      const missing = runCompare(valid, ["--actual", join(directory, "absent.json")]);
+      expect(missing.status).toBe(1);
+      expect(String(missing.stderr)).toContain("COMPARE_ACTUAL_INVALID");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("writes the same report to --out as to stdout", async () => {
+    const directory = await workspace();
+    try {
+      const input = await writeJson(directory, "input.json", inputSequence("synthetic-out"));
+      const actual = await writeJson(directory, "actual.json", trace("PLAY_PL"));
+      const reference = await writeJson(directory, "reference.json", trace("PLAY_PL"));
+      const out = join(directory, "reports", "compare.json");
+      const result = runCompare(input, ["--actual", actual, "--reference", reference, "--reference-tool", "libbluray", "--reference-version", "1.5.0", "--out", out]);
+      expect(result.status).toBe(0);
+      expect(JSON.parse(await readFile(out, "utf8"))).toEqual(JSON.parse(String(result.stdout)));
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+});
+
+describe("offline validate CLI (M6)", () => {
+  const cli = resolve(root, "dist/index.js");
+
+  async function makePackage(directory: string, payload: Record<string, string>): Promise<void> {
+    const files = [];
+    for (const [path, content] of Object.entries(payload)) {
+      const target = join(directory, path);
+      await mkdir(dirname(target), { recursive: true });
+      const bytes = Buffer.from(content);
+      await writeFile(target, bytes);
+      files.push({ path, kind: path.endsWith(".html") ? "html" : path.endsWith(".js") ? "runtime" : "asset", byteLength: String(bytes.length) });
+    }
+    files.sort((a, b) => a.path.localeCompare(b.path, "en"));
+    await writeFile(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", status: "complete", files }));
+  }
+  function validate(directory: string, options: { env?: NodeJS.ProcessEnv } = {}) {
+    return spawnSync(process.execPath, [cli, "validate", directory, "--offline", "--format", "json"], { encoding: "utf8", ...(options.env ? { env: options.env } : {}) });
+  }
+
+  it("fails when the startup file or a required asset is missing", async () => {
+    const missingAsset = await mkdtemp(join(tmpdir(), "bdmv validate missing asset "));
+    const unlistedStartup = await mkdtemp(join(tmpdir(), "bdmv validate unlisted startup "));
+    try {
+      await makePackage(missingAsset, { "index.html": "<main>ready</main>", "assets/menu.png": "png" });
+      await rm(join(missingAsset, "assets", "menu.png"));
+      const missing = validate(missingAsset);
+      expect(missing.status).toBe(1);
+      const missingChecks = JSON.parse(String(missing.stdout)).checks as Array<{ checkId: string; result: string }>;
+      expect(missingChecks).toContainEqual(expect.objectContaining({ checkId: "PACKAGE_MISSING_ASSET", result: "fail" }));
+
+      await makePackage(unlistedStartup, { "assets/menu.png": "png" });
+      await writeFile(join(unlistedStartup, "index.html"), "<main>ready</main>");
+      const unlisted = validate(unlistedStartup);
+      expect(unlisted.status).toBe(1);
+      const unlistedChecks = JSON.parse(String(unlisted.stdout)).checks as Array<{ checkId: string; result: string }>;
+      expect(unlistedChecks).toContainEqual(expect.objectContaining({ checkId: "PACKAGE_ENTRY_UNLISTED", result: "fail" }));
+    } finally {
+      await rm(missingAsset, { recursive: true, force: true });
+      await rm(unlistedStartup, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts declared STREAM targets and rejects undeclared external targets", async () => {
+    const declared = await mkdtemp(join(tmpdir(), "bdmv validate external ok "));
+    const escaped = await mkdtemp(join(tmpdir(), "bdmv validate external escape "));
+    const targets = (streamPath: string) => JSON.stringify({ playlists: [{ id: "00007", items: [{ clipId: "00002", streamPath }] }] });
+    try {
+      await makePackage(declared, { "index.html": "<main>ready</main>", "external-targets.json": targets("STREAM/00002.m2ts") });
+      const ok = validate(declared);
+      expect(ok.status).toBe(0);
+      expect(JSON.parse(String(ok.stdout)).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass" }));
+
+      await makePackage(escaped, { "index.html": "<main>ready</main>", "external-targets.json": targets("../../etc/passwd") });
+      const bad = validate(escaped);
+      expect(bad.status).toBe(1);
+      const badChecks = JSON.parse(String(bad.stdout)).checks as Array<{ checkId: string; result: string }>;
+      expect(badChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGET_UNDECLARED", result: "fail" }));
+      expect(JSON.parse(String(bad.stdout)).decision.status).toBe("failed");
+    } finally {
+      await rm(declared, { recursive: true, force: true });
+      await rm(escaped, { recursive: true, force: true });
+    }
+  });
+
+  it("audits a moved package on a unicode path without ffmpeg on PATH", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv validate moved "));
+    try {
+      const original = join(parent, "original");
+      await mkdir(original);
+      await makePackage(original, { "index.html": "<main>ready</main>", "runtime/app.js": "globalThis.__APP__=1;\n" });
+      const moved = join(parent, "移动 后 的 包");
+      await rename(original, moved);
+      const result = validate(moved, { env: { ...process.env, PATH: "/nonexistent" } });
+      expect(result.status).toBe(0);
+      const audit = JSON.parse(String(result.stdout));
+      expect(audit.checks.filter((check: { result: string }) => check.result === "fail")).toEqual([]);
+      expect(audit.dependencyAudit.status).toBe("pass");
+      expect(audit.decision).toMatchObject({ status: "complete", exitCode: 0 });
+      expect(JSON.parse(await readFile(join(moved, "reports", "release-summary.json"), "utf8")).release.status).toBe("complete");
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+});

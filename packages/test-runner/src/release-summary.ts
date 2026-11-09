@@ -120,9 +120,11 @@ function coverageReason(summary: CoverageSummary): string {
   return "reported coverage fields are inconsistent";
 }
 
+/** Priority is `fail` → `not-verified` → `pass`; an empty set is `not-verified`. */
 function summarizeCheckResult(checks: readonly AuditCheck[]): DependencyAuditReport["status"] {
+  if (checks.some((check) => check.result === "fail")) return "fail";
   if (checks.length === 0 || checks.some((check) => check.result === "not-verified")) return "not-verified";
-  return checks.some((check) => check.result === "fail") ? "fail" : "pass";
+  return "pass";
 }
 
 function toGap(check: AuditCheck & { result: "fail" | "not-verified" }): ReleaseGap {
