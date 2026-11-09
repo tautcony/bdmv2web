@@ -1,0 +1,53 @@
+openspec/changes/converge-contracts-and-distribution/assumptions.md
+  s_75bc1e7415dbad::t_94009c1555a030 1-11
+openspec/changes/converge-contracts-and-distribution/design.md
+  s_75bc1e7415dbad::t_0355ecc0011432 5,7,45,47-50,52,54,56-59,61,63-66,68,70,72,76,84,86,90-92
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  s_75bc1e7415dbad::t_4c0c6adb91b49b 5,10-11,13,17,28,31,49,51,55
+openspec/changes/converge-contracts-and-distribution/specs/distribution-budget/spec.md
+  s_75bc1e7415dbad::t_8d27981ef3d163 5
+openspec/changes/converge-contracts-and-distribution/specs/hdmv-navigation/spec.md
+  s_75bc1e7415dbad::t_cf7180067d9981 5,11
+openspec/changes/converge-contracts-and-distribution/specs/interactive-graphics-extraction/spec.md
+  s_75bc1e7415dbad::t_6607619aa99e2e 5
+openspec/changes/converge-contracts-and-distribution/specs/offline-menu-runtime/spec.md
+  s_75bc1e7415dbad::t_44e4f059140b2d 5
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_75bc1e7415dbad::t_9a1c2b304fce7a 7,9,51-52,56-57,62,64-65,67,77-79,82-83
+openspec/changes/export-playable-media/design.md
+  s_75bc1e7415dbad::t_904cb0d7329672 5,17,31
+openspec/changes/export-playable-media/proposal.md
+  s_75bc1e7415dbad::t_d7228b3ce893fd 5,23
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_75bc1e7415dbad::t_88698a196dc5ef 7,99,210
+openspec/changes/export-playable-media/tasks.md
+  s_75bc1e7415dbad::t_3efcb3a9174039 3,5,9,21,32,40,47,51-52,59,68-69,91,95
+openspec/changes/scope-changes.md
+  s_0cbfa0ee677442::t_da9a3a3756cd8c 22-23,38-61
+openspec/changes/task-disposition-index.md
+  s_0cbfa0ee677442::t_a557f851d4c3ac 14,65,122-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "553054e5056c9279a716ef29b13d53be72059071",
+  "prompts": {},
+  "sessions": {
+    "s_0cbfa0ee677442": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be5d-fa0d-7060-afab-36951d9e53f2",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_75bc1e7415dbad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be66-b9c2-7cd2-9523-d442ef3e4554",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
