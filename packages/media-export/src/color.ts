@@ -3,7 +3,7 @@
 export type VideoCodec = "h264" | "hevc";
 export type HdrMode = "tonemap" | "preserve";
 export type DynamicRange = "hdr10" | "hlg" | "dolby-vision" | "sdr" | "unknown";
-export type ColorFilterChain = "zscale-tonemap" | "libplacebo-tonemap" | "hdr-passthrough-fallback" | "passthrough";
+export type ColorFilterChain = "zscale-tonemap" | "hdr-passthrough-fallback" | "passthrough";
 
 export interface ColorProbeFields {
   pix_fmt?: string | null;
@@ -45,7 +45,6 @@ export interface ColorPlanOptions {
   policy: HdrMode;
   codec: VideoCodec;
   hasZscale: boolean;
-  hasLibplacebo: boolean;
 }
 
 /** Even-dimension guard applied to every encoded background. */
@@ -98,9 +97,9 @@ export function isHdrDynamicRange(dynamicRange: DynamicRange): boolean {
 /**
  * Decide the output colour tags, bit depth and filter chain.
  *
- * HDR sources use `tonemap` (SDR BT.709) by default. When neither zscale nor
- * libplacebo is available the export keeps HDR signalling and reports a warning
- * instead of failing the build.
+ * HDR sources use `tonemap` (SDR BT.709) by default. When zscale is unavailable
+ * the export keeps HDR signalling and reports a warning instead of failing the
+ * build.
  */
 export function planVideoColor(source: SourceColor, options: ColorPlanOptions): VideoColorPlan {
   const warnings: ColorWarning[] = [];
@@ -133,17 +132,10 @@ export function planVideoColor(source: SourceColor, options: ColorPlanOptions): 
       EVEN_DIMENSION_FILTER,
     ].join(","), "zscale-tonemap");
   }
-  if (options.hasLibplacebo) {
-    return hdrToSdr([
-      "libplacebo=tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:format=yuv420p",
-      EVEN_DIMENSION_FILTER,
-    ].join(","), "libplacebo-tonemap");
-  }
-
   const fallback = hdrOutput(source, "hdr-passthrough-fallback", warnings, options.codec, options.policy);
   fallback.warnings.push({
     code: "MEDIA_HDR_TONEMAP_UNAVAILABLE",
-    message: `HDR source (${source.dynamicRange}) cannot be tone mapped because this FFmpeg build provides neither the zscale (libzimg) nor the libplacebo filter. The menu media keeps BT.2020/PQ signalling and appears washed out on SDR displays; install an FFmpeg build with libzimg or libplacebo to convert it.`,
+    message: `HDR source (${source.dynamicRange}) cannot be tone mapped because this FFmpeg build has no zscale (libzimg) filter. The menu media keeps BT.2020/PQ signalling and appears washed out on SDR displays; install an FFmpeg build with libzimg to convert it.`,
   });
   return fallback;
 

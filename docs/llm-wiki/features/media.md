@@ -62,7 +62,7 @@ HEVC 产物带 `-tag:v hvc1`（Safari 只认可该品牌）。四类组合都可
 | HDR10 / HLG | 转 SDR BT.709，8-bit | 保留 BT.2020/PQ，10-bit |
 | SDR / 无标记 | 原标记透传，8-bit | 同左 |
 
-`tonemap` 依赖 `zscale`（libzimg）或 `libplacebo`。两者都不可用时导出继续：按 `preserve` 编码并写入 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告与 limitation，`media-plan.json` 的 `color.filterChain` 记为 `hdr-passthrough-fallback`。警告出现在 `manifest.json` 与 `report.json` 的 `diagnostics`（`severity: "warning"`），不改变交付状态。该产物在 SDR 显示器上对比度偏低。
+`tonemap` 依赖 `zscale`（libzimg）。缺该滤镜时导出继续：按 `preserve` 编码并写入 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告与 limitation，`media-plan.json` 的 `color.filterChain` 记为 `hdr-passthrough-fallback`。警告出现在 `manifest.json` 与 `report.json` 的 `diagnostics`（`severity: "warning"`），不改变交付状态。该产物在 SDR 显示器上对比度偏低。
 
 Dolby Vision 只解基础层，`HDR10+` 动态元数据丢弃，均记录为 limitation。色彩标记通过 `-x264-params` / `-x265-params` 的 `colorprim` / `transfer` / `colormatrix` / `range` 写入；ffmpeg 的 `-color_trc` / `-color_primaries` 不写入 libx264 VUI。
 
@@ -124,7 +124,7 @@ media-plan.json
 ## 排查顺序
 
 1. `ffmpeg`/`ffprobe` 是否在 `PATH`、是否带当前 `--codec` 对应的编码器（`libx265` 或 `libx264`）与 `aac`。
-2. HDR 源画面偏灰时看 `media-plan.json` 的 `encoding.video.color.filterChain`：`hdr-passthrough-fallback` 表示当前 ffmpeg 缺 `zscale`/`libplacebo`。装好滤镜后仍复用旧资产（计划匹配不看滤镜链），需删除输出目录后重建。
+2. HDR 源画面偏灰时看 `media-plan.json` 的 `encoding.video.color.filterChain`：`hdr-passthrough-fallback` 表示当前 ffmpeg 缺 `zscale`（libzimg）。装好滤镜后仍复用旧资产（计划匹配不看滤镜链），需删除输出目录后重建。
 3. `list` 能否看到目标 clip 与 PID。
 4. `media-plan.json` 的 `playlistId`、`clipId`、`inTime45k`/`outTime45k`、`audioTracks` 是否与预期一致。
 5. `--overwrite` 时是否复用了旧媒体（看计划里的编码参数与源区间）。

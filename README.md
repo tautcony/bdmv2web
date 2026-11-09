@@ -43,7 +43,7 @@ Inspect a Blu-ray BDMV disc and build an offline web menu package.
 | ffmpeg | Callable from `PATH`, with `libx265`, `libx264`, and `aac` | Encode menu background video and audio |
 | ffprobe | Callable from `PATH` | Read menu media metadata |
 
-Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; pass `--codec h264` to use H.264 (`crf` defaults to 18). HDR sources are tone mapped to SDR BT.709 by default, which requires FFmpeg built with `zscale` (libzimg) or `libplacebo`. Without either one the package is still produced, but the HDR tag is preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning is reported in diagnostics (the picture appears washed out on SDR displays).
+Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; pass `--codec h264` to use H.264 (`crf` defaults to 18). HDR sources are tone mapped to SDR BT.709 by default, which requires an FFmpeg build with the `zscale` filter (libzimg). Without it the package is still produced, but the HDR tag is preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning is reported in diagnostics (the picture appears washed out on SDR displays).
 
 ### From npm
 

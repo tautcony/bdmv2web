@@ -29,12 +29,12 @@
 
 ### Requirement: 色调映射转换为 SDR
 
-系统 SHALL 默认把 HDR 源转换为 SDR BT.709 8 位输出，使输出按 BT.709 解释并由 `ffprobe` 读出对应标记。转换 SHALL 使用 `zscale`（libzimg）链，缺该滤镜时使用 `libplacebo` 链。系统不得使用无法接受 `smpte2084` 的 `colorspace` 滤镜。
+系统 SHALL 默认把 HDR 源转换为 SDR BT.709 8 位输出，使输出按 BT.709 解释并由 `ffprobe` 读出对应标记。转换 SHALL 使用 `zscale`（libzimg）链；该滤镜不可用时按“HDR 保留与降级”要求处理，不引入第二条滤镜链。系统不得使用无法接受 `smpte2084` 的 `colorspace` 滤镜。
 
-#### Scenario: 可用滤镜的优先级
+#### Scenario: 使用 zscale 链
 
-- **WHEN** HDR 源进入编码且两个色调映射滤镜都可用
-- **THEN** 使用 `zscale` 链，`media-plan.json` 记录 `color.filterChain` 为 `zscale-tonemap`；只有 `libplacebo` 时记录 `libplacebo-tonemap`
+- **WHEN** HDR 源进入编码且 FFmpeg 提供 `zscale`
+- **THEN** 使用 `zscale` 链，`media-plan.json` 记录 `color.filterChain` 为 `zscale-tonemap`
 
 #### Scenario: SDR 源不受影响
 
@@ -43,11 +43,11 @@
 
 ### Requirement: HDR 保留与降级仅告警
 
-系统 SHALL 支持 `preserve` 策略保留源 HDR 标记与 10 位深度。当两个色调映射滤镜都不可用且策略为 `tonemap` 时，系统 SHALL 继续完成导出，按保留路径编码，并给出 warning 级 `MEDIA_HDR_TONEMAP_UNAVAILABLE`；不得因缺少滤镜判定构建失败。
+系统 SHALL 支持 `preserve` 策略保留源 HDR 标记与 10 位深度。当 `zscale` 不可用且策略为 `tonemap` 时，系统 SHALL 继续完成导出，按保留路径编码，并给出 warning 级 `MEDIA_HDR_TONEMAP_UNAVAILABLE`；不得因缺少滤镜判定构建失败。
 
 #### Scenario: 缺色调映射滤镜
 
-- **WHEN** HDR 源需要色调映射，但当前 FFmpeg 既无 `zscale` 也无 `libplacebo`
+- **WHEN** HDR 源需要色调映射，但当前 FFmpeg 无 `zscale`（libzimg）滤镜
 - **THEN** 产物保留 BT.2020/PQ 标记与 10 位深度，`color.filterChain` 记为 `hdr-passthrough-fallback`，诊断含 `MEDIA_HDR_TONEMAP_UNAVAILABLE`，交付状态不变
 
 #### Scenario: 显式保留

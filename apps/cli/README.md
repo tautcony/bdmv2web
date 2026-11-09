@@ -15,7 +15,7 @@ bdmv2web --version
 
 ### Dependencies
 
-Node.js `>=22` is required. `ffmpeg` and `ffprobe` must be callable from `PATH` for media work: `ffmpeg` needs `libx265`, `libx264`, and `aac`, and HDR tone mapping additionally needs `zscale` (libzimg) or `libplacebo`.
+Node.js `>=22` is required. `ffmpeg` and `ffprobe` must be callable from `PATH` for media work: `ffmpeg` needs `libx265`, `libx264`, and `aac`, and HDR tone mapping additionally needs the `zscale` filter (libzimg).
 
 ## Usage
 

@@ -148,7 +148,7 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
   const filterArgs = ["-hide_banner", "-filters"];
   const filterList = await invoke(ffmpeg, filterArgs);
   const filterText = `${filterList.stdout}\n${filterList.stderr}`;
-  const colorOptions = { policy: hdrMode, codec, hasZscale: hasFilter(filterText, "zscale"), hasLibplacebo: hasFilter(filterText, "libplacebo") };
+  const colorOptions = { policy: hdrMode, codec, hasZscale: hasFilter(filterText, "zscale") };
 
   const requirements = mediaPlan.requirements;
   const sourceProbes = new Map<string, Probe>();
@@ -303,7 +303,7 @@ function variantKey(track: PlannedTrack, audioCount: number): string | null {
   return audioCount === 1 ? "und" : null;
 }
 
-function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayItem[], audio: ProbeStream[], language: string, output: string, encoding: { codec: VideoCodec; crf: number; preset: string; colorOptions: { policy: HdrMode; codec: VideoCodec; hasZscale: boolean; hasLibplacebo: boolean } }, rates: MenuLoopBudgetRates): PendingAsset {
+function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayItem[], audio: ProbeStream[], language: string, output: string, encoding: { codec: VideoCodec; crf: number; preset: string; colorOptions: { policy: HdrMode; codec: VideoCodec; hasZscale: boolean } }, rates: MenuLoopBudgetRates): PendingAsset {
   const color = planVideoColor(readSourceColor(items[0]!.video), encoding.colorOptions);
   const inputPixelFormat = color.output.bitDepth === 10 ? "yuv420p10le" : "yuv420p";
   const total45k = items.reduce((sum, entry) => sum + BigInt(entry.item.sourceOut45k - entry.item.sourceIn45k), 0n);

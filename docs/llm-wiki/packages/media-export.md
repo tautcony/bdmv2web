@@ -70,7 +70,7 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 没有色彩管理的转码会把 BT.2020/PQ 的 10 位样本直接塞进 `yuv420p`，得到发灰的画面。现在颜色决策独立成一步：
 
 1. `readSourceColor(stream)` 按 `color_transfer`（`smpte2084`/`arib-std-b67`）、`color_primaries`（`bt2020`）+ `bits_per_raw_sample`、Dolby Vision side data 归类为 `hdr10` / `hlg` / `dolby-vision` / `sdr` / `unknown`。无标签的流按 `unknown` 处理，按 BT.709 SDR 编码。
-2. `planVideoColor(source, { policy, codec, hasZscale, hasLibplacebo })` 给出输出色彩标签、位深、滤镜链与警告。
+2. `planVideoColor(source, { policy, codec, hasZscale })` 给出输出色彩标签、位深、滤镜链与警告。
 3. `videoEncoderArgs(plan, codec, crf, preset)` 生成编码参数，色彩标签走编码器私有参数（`-x264-params` / `-x265-params`），HEVC 另加 `-tag:v hvc1`（Safari 必需）。
 4. 编码后 `assertEncodedColor(...)` 用 `ffprobe` 复核 `codec_name` 与三个色彩字段和位深，不符即 `MEDIA_OUTPUT_INVALID`。
 
@@ -80,12 +80,11 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 | --- | --- | --- |
 | `passthrough` | 源本身是 SDR，或 `hdrMode: "preserve"` | 仅 `scale=trunc(iw/2)*2:trunc(ih/2)*2` |
 | `zscale-tonemap` | HDR + 有 `zscale` | `zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p` |
-| `libplacebo-tonemap` | HDR + 无 `zscale`、有 `libplacebo` | `libplacebo=tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:format=yuv420p` |
-| `hdr-passthrough-fallback` | HDR 且两者都缺 | `format=yuv420p10le`，保留 BT.2020/PQ 标签 |
+| `hdr-passthrough-fallback` | HDR 且缺 `zscale` | `format=yuv420p10le`，保留 BT.2020/PQ 标签 |
 
 降级不中断出包，只回一条警告（`MenuLoopMediaResult.warnings` → `package-builder` 写入 `diagnostics`）：
 
-- `MEDIA_HDR_TONEMAP_UNAVAILABLE`：滤镜缺失，画面在 SDR 屏上仍会发灰，提示换带 libzimg/libplacebo 的 FFmpeg。
+- `MEDIA_HDR_TONEMAP_UNAVAILABLE`：滤镜缺失，画面在 SDR 屏上仍会发灰，提示换带 libzimg 的 FFmpeg。
 - `MEDIA_HDR_CODEC_UNSUPPORTED`：`codec: "h264"` + HDR，浏览器不会把 H.264 当 HDR 渲染（4:2:0 8 位无 HDR 载体）。
 
 `colorspace` 滤镜不能接受 `smpte2084`（`Undefined constant`），不要改回该滤镜。`-color_trc`/`-color_primaries` 也不进 libx264 VUI，实测产物为 `unknown`，色彩必须走 `-x264-params`/`-x265-params`。
@@ -129,7 +128,7 @@ resolveExternalPlayTarget(targets, request): ExternalPlayTarget
 | `MEDIA_ENCODER_UNAVAILABLE` | 缺所选视频编码器（`libx265`/`libx264`）或 `aac` |
 | `MEDIA_PROCESS_FAILED` / `MEDIA_JOB_TIMEOUT` / `MEDIA_JOB_CANCELLED` | 进程失败/超时/取消 |
 | `MEDIA_OUTPUT_INVALID` | 产物无法被 `ffprobe` 识别，或编码/色彩标签与计划不符 |
-| `MEDIA_HDR_TONEMAP_UNAVAILABLE` | 警告：无 `zscale`/`libplacebo`，HDR 只能原样透传 |
+| `MEDIA_HDR_TONEMAP_UNAVAILABLE` | 警告：无 `zscale`（libzimg），HDR 只能原样透传 |
 | `MEDIA_HDR_CODEC_UNSUPPORTED` | 警告：`h264` + HDR，浏览器不按 HDR 渲染 |
 | `MEDIA_ASSET_BUDGET_EXCEEDED` / `MEDIA_OUTPUT_BUDGET_EXCEEDED` | 估算超限，编码前终止 |
 | `MEDIA_STREAM_FILE_MISSING` / `MEDIA_PLAYLIST_MISSING` / `MEDIA_CLIP_INFO_MISSING` | 源结构缺失 |

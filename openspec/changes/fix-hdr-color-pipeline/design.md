@@ -46,7 +46,7 @@ BDMV 层信号（`Playlist`/`ClipInfo` 的 `dynamicRangeType`）已由解析层�
 
 ### D3 滤镜链、能力探测与降级
 
-tone map 需要 zimg 提供的 `zscale`：ffmpeg 的 `colorspace` 滤镜不接受 `smpte2084` 作为 `itrc`/`trc`（实测报 `Undefined constant or missing '(' in 'smpte2084'`），只能做矩阵与伽马区间内的转换。
+tone map 需要 zimg 提供的 `zscale`，也是唯一支持的滤镜链：ffmpeg 的 `colorspace` 滤镜不接受 `smpte2084` 作为 `itrc`/`trc`（实测报 `Undefined constant or missing '(' in 'smpte2084'`），只能做矩阵与伽马区间内的转换。不引入第二条链，避免留下无法在本项目环境内验证的分支。
 
 `ffmpeg -filters` 探测一次，按顺序选择：
 
@@ -56,13 +56,7 @@ tone map 需要 zimg 提供的 `zscale`：ffmpeg 的 `colorspace` 滤镜不接�
 -vf zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=<目标位深>,scale=trunc(iw/2)*2:trunc(ih/2)*2
 ```
 
-2. `libplacebo` 可用：
-
-```
--vf libplacebo=tonemapping=bt.2390:colorspace=bt709:color_primaries=bt709:color_trc=bt709:format=<目标位深>,scale=trunc(iw/2)*2:trunc(ih/2)*2
-```
-
-3. 两者都不可用：不中断构建。按 `preserve` 编码（10-bit + BT.2020/PQ 标记），并写入：
+2. `zscale` 不可用：不中断构建。按 `preserve` 编码（10-bit + BT.2020/PQ 标记），并写入：
 
    - 诊断 `MEDIA_HDR_TONEMAP_UNAVAILABLE`，严重级别 warning，消息列出缺失滤镜、当前 ffmpeg 能力以及对画面预期的影响
    - `media-plan.json` 的 `limitations` 增加一条说明当前包内 HDR 素材在 SDR 显示器上的呈现偏差
@@ -140,7 +134,7 @@ HEVC 输出加 `-tag:v hvc1`（Safari 只认可该品牌）。`crf` 默认按编
 
 `matchesReusablePlan` 比较 `codec`、`preset`、`crf` 与 `color.policy`。任一项变化即重新编码，避免改参数后复用旧资产。
 
-复用判定发生在任何 FFmpeg 调用之前（复用路径不探测源、不建工具），因此 `color.filterChain` 与 `source.dynamicRange` 无法参与比较——这两项要等探测后才知道。**已知缺口**：在缺 `zscale`/`libplacebo` 的机器上产出的 `hdr-passthrough-fallback` 资产，装好滤镜后仍会被 `--overwrite` 复用，需要删除输出目录后重建才能获得色调映射版本。保留该缺口是因为反向做法（把降级计划视为不可复用）会让常见环境（Homebrew ffmpeg 无 zimg）每次覆盖都重编 4K 菜单。`docs/llm-wiki/features/media.md` 的排查顺序记录了这条恢复路径。
+复用判定发生在任何 FFmpeg 调用之前（复用路径不探测源、不建工具），因此 `color.filterChain` 与 `source.dynamicRange` 无法参与比较——这两项要等探测后才知道。**已知缺口**：在缺 `zscale`（libzimg）的机器上产出的 `hdr-passthrough-fallback` 资产，装好滤镜后仍会被 `--overwrite` 复用，需要删除输出目录后重建才能获得色调映射版本。保留该缺口是因为反向做法（把降级计划视为不可复用）会让常见环境（Homebrew ffmpeg 无 zimg）每次覆盖都重编 4K 菜单。`docs/llm-wiki/features/media.md` 的排查顺序记录了这条恢复路径。
 
 `exportLinearMedia` 的计划字段同步，滤镜链由同一构造函数生成。
 
@@ -172,19 +166,19 @@ CLI `convert`：
 
 ### D9 文档
 
-更新 `docs/llm-wiki/features/media.md`（编码参数表、HDR 策略、HEVC 播放前提）、`docs/llm-wiki/packages/media-export.md`（滤镜链、降级行为、能力要求）、README（ffmpeg 需要 `libx265`、`aac`；`--codec h264` 时还需要 `libx264`；tone map 需要 zimg 或 libplacebo）。
+更新 `docs/llm-wiki/features/media.md`（编码参数表、HDR 策略、HEVC 播放前提）、`docs/llm-wiki/packages/media-export.md`（滤镜链、降级行为、能力要求）、README（ffmpeg 需要 `libx265`、`aac`；`--codec h264` 时还需要 `libx264`；tone map 需要 zimg 的 `zscale`）。
 
 ## Verification / Exit Criteria
 
 1. 参数矩阵：`tonemap` / `preserve` × `h264` / `hevc` 四组的 ffmpeg 参数数组与 `pix_fmt` 断言通过；`-tag:v hvc1` 只出现在 HEVC。
 2. 编码输出：合成 HDR10 与 SDR 样本经真实命令行编码后，`ffprobe` 的 `codec_name`、`profile`、`pix_fmt`、`color_primaries`、`color_transfer`、`color_space` 与计划一致；不一致报 `MEDIA_OUTPUT_INVALID`。
-3. 滤镜链：具备 `zscale` / `libplacebo` 的构建分别验证链选择与返回状态；不具备时该项记 `not-verified`。
+3. 滤镜链：在具备 `zscale` 的构建上验证链选择、返回状态与输出标记；不具备时该项记 `not-verified`。
 4. 复用判定：仅 `codec`、`crf`、`preset` 或色彩策略变化时判定为不可复用。
 5. 不在验收范围内：真实 UHD 素材的人工目视比对、任何浏览器或硬件的播放与解码记录。
 
 ## Evidence
 
-验证环境：macOS，Homebrew `ffmpeg 9.0.2`（configure 未含 libzimg、libplacebo）；`zscale` 链另取 macOS 静态构建 `9.0.2`（`--enable-libzimg`）执行。来源、SHA256 与命令见 [verification.md](./verification.md)。
+验证环境：macOS，Homebrew `ffmpeg 9.0.2`（configure 未含 libzimg）；`zscale` 链另取 macOS 静态构建 `9.0.2`（`--enable-libzimg`）执行。来源、SHA256 与命令见 [verification.md](./verification.md)。
 
 | 检查 | 结果 |
 | --- | --- |
@@ -205,7 +199,6 @@ CLI `convert`：
 | SDR 源 → BT.709 标记与帧亮度 | pass：`h264/yuv420p/bt709/bt709/bt709`，YAVG 71.74 → 71.75（容差 2） |
 | 无色调映射滤镜的 HDR10 源 | pass：输出 `bt2020nc/smpte2084/bt2020`、10-bit，warning `MEDIA_HDR_TONEMAP_UNAVAILABLE` |
 | 色调映射到 BT.709（`zscale` 链） | pass：静态 9.0.2（libzimg）输出 `h264/yuv420p/bt709/bt709/bt709`、8-bit，YAVG 61.12、YMIN 17、YMAX 252 |
-| 色调映射到 BT.709（`libplacebo` 链） | not-verified：本机可得构建均未启用 libplacebo；不使用容器执行 FFmpeg，缺真实执行证据 |
 
 缺少 ffmpeg 的环境跳过该文件整体，不阻断构建。
 

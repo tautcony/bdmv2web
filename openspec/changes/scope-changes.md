@@ -21,7 +21,7 @@
 | `export-playable-media` | 6.2 | 纯函数与模拟浏览器事件：路径编码、时间偏移、`requested`/`unavailable`/`unknown` 结果 |
 | `export-playable-media` | 7.3 | 模拟 DOM 与音频事件的菜单背景、音效、导航回归 |
 | `export-playable-media` | 9.2 | 模拟 `file://` 资源解析、静音与恢复回归 |
-| `fix-hdr-color-pipeline` | 7.5 | FFmpeg 滤镜链选择、返回状态、ffprobe 元数据与可计算帧数值 |
+| `fix-hdr-color-pipeline` | 7.5 | FFmpeg 滤镜链选择（仅 `zscale` 单链）、返回状态、ffprobe 元数据与可计算帧数值 |
 | `fix-hdr-color-pipeline` | 7.7 | SDR 编码输出的 BT.709 标记与帧级数值回归 |
 
 ### 新增任务
@@ -46,3 +46,16 @@
 调整前活动 change 的未勾选任务为 56 项。其中 4 项按本记录移除，6 项替换或重写验收内容，另新增 2 项（X-AUDIT、X-COMPARE）。实际未完成数在 `tasks.md` 勾选前以文件内容为准，不使用算术推导。
 
 逐项处置与当前状态见 [task-disposition-index.md](./task-disposition-index.md)。
+
+## 2026-11-09 色调映射链收敛
+
+`fix-hdr-color-pipeline` 原本实现 `zscale`（libzimg）与 `libplacebo` 两条色调映射链。`libplacebo` 分支在本项目可获得的 FFmpeg 构建上都不可执行，因此不再作为能力保留：
+
+| 项 | 处置 |
+| --- | --- |
+| `planVideoColor` 的 `hasLibplacebo` 选项与 `libplacebo-tonemap` 链 | 删除；`ColorFilterChain` 只保留 `zscale-tonemap` / `hdr-passthrough-fallback` / `passthrough` |
+| `ffmpeg -filters` 探测 | 只探测 `zscale` |
+| 降级路径 | 不变：缺 `zscale` 时按 `preserve` 编码并给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning |
+| 验收 | 7.5 只验证 `zscale` 链；原先“第二条链未验证”的缺口随实现删除而消失 |
+
+理由：只保留一条能在本项目环境内真实验证的 HDR 能力链，避免出现“文档不提、代码留着、又无执行证据”的分支。需求表述同步改为“使用 `zscale`（libzimg）链；不可用时降级”，见 `fix-hdr-color-pipeline/specs/offline-media-playback/spec.md`。

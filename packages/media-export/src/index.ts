@@ -314,7 +314,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     return { plan, packageBytes };
   };
   // Budget preflight runs before any media tool is invoked.
-  let estimatedPackageBytes = planEstimate({ codec, crf, preset, color: planVideoColor(readSourceColor({}), { policy: hdrMode, codec, hasZscale: false, hasLibplacebo: false }) }).packageBytes;
+  let estimatedPackageBytes = planEstimate({ codec, crf, preset, color: planVideoColor(readSourceColor({}), { policy: hdrMode, codec, hasZscale: false }) }).packageBytes;
   assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedPackageBytes, limitBytes: options.maxOutputBytes, message: "Estimated complete output directory exceeds maxOutputBytes before encoding." });
 
   const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"], timeoutMs)).stdout);
@@ -327,8 +327,8 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     code: "MEDIA_ENCODER_UNAVAILABLE", executable: ffmpeg, args: encoderArgs,
     message: `FFmpeg does not advertise required encoder${missingEncoders.length > 1 ? "s" : ""} ${missingEncoders.join(", ")}.`,
   });
-  // Tone mapping needs zscale (libzimg) or libplacebo; the export keeps HDR
-  // signalling and reports a warning when neither is compiled in.
+  // Tone mapping needs zscale (libzimg); the export keeps HDR signalling and
+  // reports a warning when the filter is not compiled in.
   const filterArgs = ["-hide_banner", "-filters"];
   const filterList = await invoke(ffmpeg, filterArgs, timeoutMs);
   const availableFilters = `${filterList.stdout}\n${filterList.stderr}`;
@@ -344,7 +344,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const colorPlan = planVideoColor(readSourceColor(videoStream), {
     policy: hdrMode, codec,
     hasZscale: hasFilter(availableFilters, "zscale"),
-    hasLibplacebo: hasFilter(availableFilters, "libplacebo"),
   });
   const encoding: MenuLoopEncoding = { codec, crf, preset, color: colorPlan };
   // The colour pipeline can change the serialized plan; re-run the preflight with

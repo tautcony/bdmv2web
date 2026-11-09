@@ -43,7 +43,7 @@
 | ffmpeg | 可从 `PATH` 调用，需含 `libx265`、`libx264`、`aac` | 编码菜单背景视频与音轨 |
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
 
-默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）或 `libplacebo`；两者都缺时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
+默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）；缺该滤镜时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
 
 ### 从 npm 安装
 

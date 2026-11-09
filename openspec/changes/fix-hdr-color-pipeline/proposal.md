@@ -11,7 +11,7 @@ UHD 菜单背景素材为 HDR10（BT.2020 + PQ，10-bit）。当前导出命令�
 - 转码前探测源的色彩参数（primaries / transfer / matrix / range / 位深），识别 HDR10、HLG、Dolby Vision 基础层与 SDR。
 - 新增 HDR 处理策略 `hdrMode`：`tonemap`（默认，PQ/HLG → SDR BT.709）与 `preserve`（保留 HDR，写 BT.2020/PQ 标记）。
 - 默认编码器改为 HEVC（`libx265`，`-tag:v hvc1`），`--codec h264` 可切回。`crf` 默认按编码器区分：HEVC 24、H.264 18。
-- `tonemap` 依赖 `zscale`（libzimg）或 `libplacebo`；两者都不可用时降级为 HDR 直通编码，写 warning 级诊断 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 与 limitation，构建继续执行。
+- `tonemap` 依赖 `zscale`（libzimg）；缺该滤镜时降级为 HDR 直通编码，写 warning 级诊断 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 与 limitation，构建继续执行。只保留这一条色调映射链。
 - 所有输出写入显式 VUI 色彩标记（`-x264-params` / `-x265-params` 的 `colorprim` / `transfer` / `colormatrix` / `range`）。
 - 编码后校验输出标记与生效策略一致，不一致按 `MEDIA_OUTPUT_INVALID` 失败。
 - `crf`、`preset`、`codec`、`hdrMode` 经 `package-builder` 与 CLI 暴露：`convert --crf`、`--preset`、`--codec`、`--hdr`。

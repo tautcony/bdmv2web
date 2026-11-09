@@ -12,7 +12,7 @@ import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, 
  * the exporter uses, then read the result back with `ffprobe`. They need an
  * FFmpeg build with libx264 and ffprobe; without one they are skipped instead
  * of failing the build. The tone-mapping branch additionally needs `zscale`
- * (libzimg) or `libplacebo` and is skipped when the build has neither.
+ * (libzimg) and is skipped when the build has no such filter.
  */
 
 const FFMPEG = process.env.BDMV2WEB_FFMPEG ?? "ffmpeg";
@@ -28,7 +28,6 @@ interface Capabilities {
   ffprobe: boolean;
   x264: boolean;
   zscale: boolean;
-  libplacebo: boolean;
 }
 
 function capture(executable: string, args: string[]): { ok: boolean; stdout: string } {
@@ -38,7 +37,7 @@ function capture(executable: string, args: string[]): { ok: boolean; stdout: str
 
 const capabilities: Capabilities = (() => {
   const version = capture(FFMPEG, ["-version"]);
-  if (!version.ok) return { ffmpeg: false, ffprobe: false, x264: false, zscale: false, libplacebo: false };
+  if (!version.ok) return { ffmpeg: false, ffprobe: false, x264: false, zscale: false };
   const filters = capture(FFMPEG, ["-hide_banner", "-filters"]).stdout;
   const encoders = capture(FFMPEG, ["-hide_banner", "-encoders"]).stdout;
   return {
@@ -46,12 +45,11 @@ const capabilities: Capabilities = (() => {
     ffprobe: capture(FFPROBE, ["-version"]).ok,
     x264: /\blibx264\b/.test(encoders),
     zscale: /\bzscale\b/.test(filters),
-    libplacebo: /\blibplacebo\b/.test(filters),
   };
 })();
 
 const hasEncoder = capabilities.ffmpeg && capabilities.ffprobe && capabilities.x264;
-const hasToneMapper = hasEncoder && (capabilities.zscale || capabilities.libplacebo);
+const hasToneMapper = hasEncoder && capabilities.zscale;
 
 function run(executable: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -138,7 +136,6 @@ describe.skipIf(!hasEncoder)("colour pipeline with a real FFmpeg", () => {
       policy: "tonemap",
       codec: "h264",
       hasZscale: capabilities.zscale,
-      hasLibplacebo: capabilities.libplacebo,
     });
     expect(plan.filterChain).toBe("passthrough");
     expect(plan.output).toEqual({ primaries: "bt709", transfer: "bt709", matrix: "bt709", range: "tv", bitDepth: 8 });
@@ -160,7 +157,7 @@ describe.skipIf(!hasEncoder)("colour pipeline with a real FFmpeg", () => {
   });
 
   it("keeps BT.2020/PQ signalling when no tone mapping filter exists", async () => {
-    if (capabilities.zscale || capabilities.libplacebo) return;
+    if (capabilities.zscale) return;
     const source = join(workdir, "hdr-source.mp4");
     const encoded = join(workdir, "hdr-fallback.mp4");
     await run(FFMPEG, [
@@ -180,7 +177,6 @@ describe.skipIf(!hasEncoder)("colour pipeline with a real FFmpeg", () => {
       policy: "tonemap",
       codec: "h264",
       hasZscale: false,
-      hasLibplacebo: false,
     });
     expect(plan.filterChain).toBe("hdr-passthrough-fallback");
     expect(plan.warnings.map((warning) => warning.code)).toContain("MEDIA_HDR_TONEMAP_UNAVAILABLE");
@@ -193,7 +189,7 @@ describe.skipIf(!hasEncoder)("colour pipeline with a real FFmpeg", () => {
     expect(probe.color_transfer).toBe("smpte2084");
   });
 
-  it.skipIf(!hasToneMapper)("tone maps HDR to BT.709 with measurable 8-bit output", async () => {
+  it.skipIf(!hasToneMapper)("tone maps HDR to BT.709 through zscale with measurable 8-bit output", async () => {
     const source = join(workdir, "hdr-tonemap-source.mp4");
     const encoded = join(workdir, "hdr-tonemapped.mp4");
     await run(FFMPEG, [
@@ -213,9 +209,8 @@ describe.skipIf(!hasEncoder)("colour pipeline with a real FFmpeg", () => {
       policy: "tonemap",
       codec: "h264",
       hasZscale: capabilities.zscale,
-      hasLibplacebo: capabilities.libplacebo,
     });
-    expect(plan.filterChain).toBe(capabilities.zscale ? "zscale-tonemap" : "libplacebo-tonemap");
+    expect(plan.filterChain).toBe("zscale-tonemap");
     expect(plan.output).toEqual({ primaries: "bt709", transfer: "bt709", matrix: "bt709", range: "tv", bitDepth: 8 });
 
     await encode(source, encoded, plan, "h264", 18);
