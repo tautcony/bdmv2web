@@ -1,0 +1,16 @@
+openspec/changes/scope-changes.md
+  h_3705811fa4502c 47-48
+openspec/changes/task-disposition-index.md
+  h_3705811fa4502c 1-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6bfef336f8fad7439e7f6ce40faa8ee05bc5424f",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
