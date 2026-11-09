@@ -69,4 +69,17 @@ describe("output transactions", () => {
     const failed = await beginOutputTransaction(join(parent, "failed-package")); await writeFile(join(failed.stagingPath, "invalid"), "bad");
     await failed.abort(); expect(await readFile(join(input, "source"), "utf8")).toBe(before);
   });
+
+  it("restores the existing package when committing the replacement fails", async () => {
+    const parent = await temp("bdmv tx restore ");
+    const target = join(parent, "package");
+    await mkdir(target);
+    await writeFile(join(target, "index.html"), "previous package");
+    const tx = await beginOutputTransaction(target, { overwrite: true });
+    await writeFile(join(tx.stagingPath, "index.html"), "replacement package");
+
+    await rm(tx.stagingPath, { recursive: true });
+    await expect(tx.commit()).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(join(target, "index.html"), "utf8")).toBe("previous package");
+  });
 });

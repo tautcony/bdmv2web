@@ -2,6 +2,7 @@ import { HdmvVm, type TraceEntry, type VmOptions, type VmProgram } from "@bdmv2w
 import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuButton, type MenuInputConfig, type MenuLoopMediaPackage, type MenuPage, type MenuScene, type PlaybackBridge } from "./index.js";
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
+import { format90kSeconds, requestExternalPlayback } from "./bdmv-url.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
 export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
@@ -179,37 +180,6 @@ function summarizeLabels(values: string[]): string {
   const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts].map(([value, count]) => count === 1 ? value : `${value} x${count}`).join(",");
-}
-
-function fileUrlFromBdmvPath(bdmvPath: string, streamPath: string): string {
-  const normalize = (path: string) => path.replace(/\\/g, "/").split("/").map((part, index) => index === 0 && /^[A-Za-z]:$/.test(part) ? part : encodeURIComponent(part)).join("/");
-  const base = bdmvPath.replace(/\\/g, "/");
-  let bdmvUrl: URL;
-  if (/^[A-Za-z]:\//.test(base)) bdmvUrl = new URL(`file:///${normalize(base)}/`);
-  else if (base.startsWith("/")) bdmvUrl = new URL(`file://${normalize(base)}/`);
-  else bdmvUrl = new URL(`${normalize(base.replace(/\/$/, ""))}/`, location.href);
-  return new URL(normalize(streamPath), bdmvUrl).href;
-}
-
-function format90kSeconds(ticks: string): string {
-  const value = BigInt(ticks);
-  if (value < 0n) throw new RangeError("Playback offset cannot be negative.");
-  const whole = value / 90_000n;
-  const fraction = ((value % 90_000n) * 1_000_000n / 90_000n).toString().padStart(6, "0").replace(/0+$/, "");
-  return fraction ? `${whole}.${fraction}` : whole.toString();
-}
-
-function openExternalVideo(bdmvPath: string, streamPath: string, seekTime90k: string | null): string {
-  const videoUrl = fileUrlFromBdmvPath(bdmvPath, streamPath);
-  const platform = navigator.userAgent;
-  if (/Macintosh|Mac OS X/i.test(platform)) {
-    if (seekTime90k === null) throw new Error("The selected chapter position is unavailable.");
-    // Always provide an explicit offset. IINA versions that apply mpv_start to
-    // a reused player core can otherwise carry the previous chapter position.
-    return `iina://open?url=${encodeURIComponent(videoUrl)}&mpv_start=${format90kSeconds(seekTime90k)}`;
-  }
-  if (/Windows/i.test(platform)) return `potplayer://${videoUrl}`;
-  throw new Error("External playback is available on macOS and Windows.");
 }
 
 async function boot(): Promise<void> {
@@ -449,18 +419,19 @@ async function boot(): Promise<void> {
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistHasMedia(action.payload.playlist))) {
           closePopup();
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
-          if (result.status === "unavailable") { report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} has no external target: ${result.message}`); showStatus(result.message, { persist: true }); vm.releaseExternalPlayback(action); continue; }
           const bdmvPath = globalThis.__BDMV_BDMV_PATH__;
-          if (!bdmvPath) { showStatus("The package is missing runtime/bdmv-config.js; set the BDMV path and reload.", { persist: true, error: true }); vm.releaseExternalPlayback(action); continue; }
-          try {
-            const protocolUrl = openExternalVideo(bdmvPath, result.item.streamPath, result.seekTime90k);
-            setMenuMuted(true);
-            report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} → external player ${result.item.streamPath}${typeof result.seekTime90k === "number" ? ` at ${format90kSeconds(String(result.seekTime90k))}s` : ""}`);
-            showStatus(`Requested ${result.item.streamPath} in the external player.`);
-            location.href = protocolUrl;
-          } catch (error) {
-            showStatus(error instanceof Error ? error.message : String(error), { persist: true, error: true });
+          const handoff = requestExternalPlayback({ target: result, bdmvPath, platform: navigator.userAgent, pageUrl: location.href, navigate: (url) => { location.href = url; } });
+          if (handoff.status !== "requested") {
+            const source = handoff.source ? ` (${handoff.source.path} @ ${handoff.source.offset})` : "";
+            const diagnostic = `${handoff.code}: ${handoff.message}${source}`;
+            report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} → external handoff ${handoff.status}: ${diagnostic}`);
+            showStatus(diagnostic, { persist: true, error: handoff.status === "unavailable" });
+            vm.releaseExternalPlayback(action);
+            continue;
           }
+          setMenuMuted(true);
+          report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} → ${handoff.status} ${handoff.target.item.streamPath}${handoff.target.seekTime90k !== null ? ` at ${format90kSeconds(handoff.target.seekTime90k)}s` : ""}`);
+          showStatus(`Requested ${handoff.target.item.streamPath} in the external player.`);
           vm.releaseExternalPlayback(action);
         } else {
           if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "TOP_MENU", "MENU_RETURN"].includes(action.type)) closePopup();

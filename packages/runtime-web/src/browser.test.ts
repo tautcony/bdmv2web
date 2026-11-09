@@ -22,6 +22,7 @@ function packageData(overrides: Record<string, unknown> = {}): Record<string, un
 function createHost(options: { data: Record<string, unknown>; assetBatches?: unknown[][]; imageFailure?: boolean; mediaPlayErrors?: string[] }) {
   const elements = new Map<string, ReturnType<typeof element>>();
   const audioUrls: string[] = [];
+  const audioElements: Array<{ url: string; muted: boolean }> = [];
   const mediaPlayCalls: string[] = [];
   const imageUrls: string[] = [];
   const mediaPlayErrors = [...(options.mediaPlayErrors ?? [])];
@@ -86,7 +87,9 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
     decode() { return options.imageFailure ? Promise.reject(new Error("fixture decode failure")) : Promise.resolve(); }
   }
   class FakeAudio {
-    constructor(url: string) { audioUrls.push(url); }
+    muted = false;
+    constructor(readonly url: string) { audioUrls.push(url); audioElements.push(this); }
+    addEventListener(_type: string, _listener: () => void) {}
     play() { return Promise.resolve(); }
   }
   vi.stubGlobal("document", document);
@@ -95,7 +98,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
   vi.stubGlobal("Audio", FakeAudio);
   vi.stubGlobal("__BDMV_MENU_DATA__", options.data);
   vi.stubGlobal("__BDMV_MENU_ASSETS__", options.assetBatches ?? []);
-  return { elements, audioUrls, imageUrls, mediaPlayCalls, fakeWindow };
+  return { elements, audioUrls, audioElements, imageUrls, mediaPlayCalls, fakeWindow };
 }
 
 async function launch(data: Record<string, unknown>, options: { assetBatches?: unknown[][]; imageFailure?: boolean; mediaPlayErrors?: string[] } = {}) {
@@ -242,6 +245,40 @@ describe("offline browser boot", () => {
     expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00006.m2ts&mpv_start=0");
     expect(host.elements.get("runtime-status")?.textContent).toContain("Requested STREAM/00006.m2ts in the external player.");
     expect(host.elements.get("menu-background")?.muted).toBe(true);
+
+    await host.fakeWindow.fire("keyup", { code: "Enter" });
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00006.m2ts&mpv_start=0");
+    expect(host.elements.get("runtime-status")?.textContent).toContain("Requested STREAM/00006.m2ts in the external player.");
+  });
+
+  it("rejects an external stream path that does not match its Clip and reports the source", async () => {
+    const location = { hash: "", href: "file:///menu/index.html" };
+    vi.stubGlobal("location", location);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh; Intel Mac OS X" });
+    vi.stubGlobal("__BDMV_BDMV_PATH__", "/fake/BDMV");
+    const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "12" };
+    const data = packageData({
+      vmPrograms: [{ id: 7, instructions: [] }, { id: 8, instructions: ["228000000000002a00000000"] }],
+      vmEntries: [{ id: "title:0", kind: "title", target: { objectType: "HDMV", playbackType: 0, target: 8, source }, source }],
+      externalTargets: { playlists: [{ id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00042.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
+      scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        commands: [{ bytes: "218100000000000100000000" }],
+      }] }] },
+    });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+
+    expect(location.href).toBe("file:///menu/index.html");
+    expect(host.elements.get("runtime-status")?.textContent).toBe("EXTERNAL_TARGET_UNDECLARED: External target for Clip '00006' must use STREAM/00006.m2ts; received 'STREAM/00042.m2ts'. (BDMV/PLAYLIST/00001.mpls @ 12)");
+
+    await host.fakeWindow.fire("keyup", { code: "Enter" });
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    expect(location.href).toBe("file:///menu/index.html");
+    expect(host.elements.get("runtime-status")?.textContent).toBe("EXTERNAL_TARGET_UNDECLARED: External target for Clip '00006' must use STREAM/00006.m2ts; received 'STREAM/00042.m2ts'. (BDMV/PLAYLIST/00001.mpls @ 12)");
   });
 
   it("replaces startup input listeners without leaking duplicates when the first actions switch scenes", async () => {
@@ -312,8 +349,8 @@ describe("offline browser boot", () => {
         { playlistId: 9, playItem: 1, scene: { width: 100, height: 60, clipId: "00003", pid: 0x1200, pages: [{ id: 0, defaultButtonId: 1, buttons: [menuButton("9")] }] } },
       ],
       externalTargets: { playlists: [
-        { id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00042.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] },
-        { id: "00043", items: [{ index: 0, stcId: 0, clipId: "00007", streamPath: "STREAM/00043.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] },
+        { id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00006.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] },
+        { id: "00043", items: [{ index: 0, stcId: 0, clipId: "00007", streamPath: "STREAM/00007.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] },
       ], complete: true, unknown: [] },
     });
     const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
@@ -321,7 +358,7 @@ describe("offline browser boot", () => {
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await new Promise((resolve) => setTimeout(resolve, 0));
     // Mark 1 maps to PlayItem 1, whose scene requests playlist 43.
-    expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00043.m2ts&mpv_start=0");
+    expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00007.m2ts&mpv_start=0");
   });
 
   it("plays packaged playlist media when the package has no primary menu media", async () => {
@@ -369,9 +406,10 @@ describe("offline browser boot", () => {
       vmPrograms: [{ id: 7, instructions: [] }, { id: 8, instructions: ["228000000000002a00000000"] }],
       vmEntries: [{ id: "title:0", kind: "title", target: { objectType: "HDMV", playbackType: 0, target: 8, source }, source }],
       externalTargets: { playlists: [{ id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00006.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
+      media: { playlist: 9, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/audio/menu.m4a" }] },
       scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
         id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
-        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" }, selected: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo", soundId: 4 } },
         commands: [{ bytes: "218100000000000100000000" }],
       }] }] },
     });
@@ -380,15 +418,31 @@ describe("offline browser boot", () => {
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(host.elements.get("menu-background")?.muted).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    expect(host.audioElements.at(-1)?.muted).toBe(true);
 
     await host.fakeWindow.fire("keydown", { code: "ArrowRight", preventDefault() {} });
     expect(host.elements.get("menu-background")?.muted).toBe(false);
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
+    expect(host.audioElements.every((audio) => !audio.muted)).toBe(true);
+
+    await host.fakeWindow.fire("keyup", { code: "Enter" });
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("menu-background")?.muted).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    await host.fakeWindow.fire("pointerdown", { target: null });
+    expect(host.elements.get("menu-background")?.muted).toBe(false);
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
 
     await host.elements.get("audio-mute-toggle")!.fire("click");
     expect(host.elements.get("menu-background")?.muted).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
     await host.fakeWindow.fire("keydown", { code: "ArrowLeft", preventDefault() {} });
     await host.fakeWindow.fire("pointerdown", { target: null });
     expect(host.elements.get("menu-background")?.muted).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    expect(host.audioElements.every((audio) => audio.muted)).toBe(true);
   });
 
   it("keeps a manual mute across an external handoff and later page input", async () => {
@@ -401,9 +455,10 @@ describe("offline browser boot", () => {
       vmPrograms: [{ id: 7, instructions: [] }, { id: 8, instructions: ["228000000000002a00000000"] }],
       vmEntries: [{ id: "title:0", kind: "title", target: { objectType: "HDMV", playbackType: 0, target: 8, source }, source }],
       externalTargets: { playlists: [{ id: "00042", items: [{ index: 0, stcId: 0, clipId: "00006", streamPath: "STREAM/00006.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source }], marks: [] }], complete: true, unknown: [] },
+      media: { playlist: 9, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/audio/menu.m4a" }] },
       scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [{
         id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
-        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" }, selected: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo", soundId: 4 } },
         commands: [{ bytes: "218100000000000100000000" }],
       }] }] },
     });
@@ -413,8 +468,12 @@ describe("offline browser boot", () => {
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(host.elements.get("menu-background")?.muted).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    expect(host.audioElements.at(-1)?.muted).toBe(true);
     await host.fakeWindow.fire("keydown", { code: "ArrowRight", preventDefault() {} });
     expect(host.elements.get("menu-background")?.muted).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    expect(host.audioElements.every((audio) => audio.muted)).toBe(true);
   });
 
   it("switches to packaged menu IGS data for a menu playlist", async () => {

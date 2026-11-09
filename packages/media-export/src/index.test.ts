@@ -13,6 +13,38 @@ const availableEncoders = " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 par
 const availableFilters = " TS zscale            V->V       Apply resizing, colorspace and dithering.\n .. tonemap           V->V       Conversion to/from different dynamic ranges.\n";
 const encodedVideo = (codec = "hevc", duration = "109.190") => ({ index: 0, id: "0x0", codec_type: "video", codec_name: codec, width: 1920, height: 1080, duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" });
 
+function mediaRunner(forInput: MenuLoopMediaInput, calls: Array<{ executable: string; args: string[] }> = []): MediaProcessRunner {
+  return async (executable, args) => {
+    calls.push({ executable, args });
+    if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
+    if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
+    if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
+    const path = args.at(-1)!;
+    if (args[0] === "-v") {
+      const duration = String(durationSeconds(forInput));
+      if (path === forInput.sourcePath) return { stdout: JSON.stringify({ streams: [
+        { index: 0, id: `0x${forInput.videoPid.toString(16)}`, codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration: "109.234" },
+        ...forInput.audioTracks.map((track, index) => ({ index: index + 1, id: `0x${track.pid.toString(16)}`, codec_type: "audio", codec_name: "dts", duration: "109.226" })),
+      ], format: { start_time: "11.650667", duration: "109.234" } }), stderr: "" };
+      const audio = path.endsWith(".m4a");
+      return { stdout: JSON.stringify({ streams: [audio
+        ? { index: 0, id: "0x0", codec_type: "audio", codec_name: "aac", duration }
+        : encodedVideo("hevc", duration),
+      ], format: { duration } }), stderr: "" };
+    }
+    await writeFile(path, "encoded media");
+    return { stdout: "", stderr: "" };
+  };
+}
+
+async function writeReusableMediaManifest(directory: string, result: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Promise<void> {
+  await writeFile(join(directory, "asset-manifest.json"), JSON.stringify({ media: {
+    plan: { playlistId: result.plan.playlistId, playItemIndex: result.plan.playItemIndex },
+    background: result.background,
+    audioTracks: result.audioTracks,
+  } }));
+}
+
 describe("menu-loop media export", () => {
   it("maps the first PlayItem range to seconds and selects streams by declared MPEG-TS PID", () => {
     expect(durationSeconds(input)).toBeCloseTo(109.2341111111, 8);
@@ -119,6 +151,42 @@ describe("menu-loop media export", () => {
         expect(Number(markedEncode.args[markedEncode.args.indexOf("-ss") + 1])).toBeCloseTo(1, 4);
       } finally { encodedDuration = 109.190; await rm(markedRoot, { recursive: true, force: true }); }
     } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("re-encodes when the existing media plan does not match the requested PlayItem", async () => {
+    const sourceDirectory = await mkdtemp(join(tmpdir(), "bdmv-media-reuse-plan-source-"));
+    const outputDirectory = await mkdtemp(join(tmpdir(), "bdmv-media-reuse-plan-output-"));
+    try {
+      const previous = await exportMenuLoopMedia(input, { outputDirectory: sourceDirectory, runProcess: mediaRunner(input) });
+      await writeReusableMediaManifest(sourceDirectory, previous);
+      const changedInput = { ...input, outTime45k: input.outTime45k - 45_000 };
+      const calls: Array<{ executable: string; args: string[] }> = [];
+      const result = await exportMenuLoopMedia(changedInput, { outputDirectory, reuseFromDirectory: sourceDirectory, runProcess: mediaRunner(changedInput, calls) });
+      expect(result.tools.ffmpeg).toBe("ffmpeg version test");
+      expect(result.tools.invocations).toEqual(calls);
+      expect(calls.some(({ executable, args }) => executable === "ffmpeg" && args.includes("-map"))).toBe(true);
+    } finally {
+      await rm(sourceDirectory, { recursive: true, force: true });
+      await rm(outputDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("re-encodes when a required asset in the previous package is missing", async () => {
+    const sourceDirectory = await mkdtemp(join(tmpdir(), "bdmv-media-reuse-asset-source-"));
+    const outputDirectory = await mkdtemp(join(tmpdir(), "bdmv-media-reuse-asset-output-"));
+    try {
+      const previous = await exportMenuLoopMedia(input, { outputDirectory: sourceDirectory, runProcess: mediaRunner(input) });
+      await writeReusableMediaManifest(sourceDirectory, previous);
+      await rm(previous.background.absolutePath);
+      const calls: Array<{ executable: string; args: string[] }> = [];
+      const result = await exportMenuLoopMedia(input, { outputDirectory, reuseFromDirectory: sourceDirectory, runProcess: mediaRunner(input, calls) });
+      expect(result.tools.ffmpeg).toBe("ffmpeg version test");
+      expect(result.tools.invocations).toEqual(calls);
+      expect(calls.some(({ executable, args }) => executable === "ffmpeg" && args.includes("-map"))).toBe(true);
+    } finally {
+      await rm(sourceDirectory, { recursive: true, force: true });
+      await rm(outputDirectory, { recursive: true, force: true });
+    }
   });
 
   it("fails before encoding when a declared PID is absent", async () => {

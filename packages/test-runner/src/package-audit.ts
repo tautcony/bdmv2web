@@ -33,8 +33,8 @@ function isPlayerProfile(value: unknown): value is Record<string, unknown> {
     && Array.isArray(value.audioProfiles) && value.audioProfiles.every((item) => typeof item === "string");
 }
 
-/** A declared target is exactly `STREAM/<clipId>.m2ts`; this rejects absolute paths, dot segments, backslashes and schemes. */
-const DECLARED_STREAM_PATH = /^STREAM\/([0-9]{5})\.m2ts$/i;
+/** A declared target is exactly `STREAM/<clipId>.m2ts`; encoded variants are invalid. */
+const DECLARED_STREAM_PATH = /^STREAM\/([0-9]{5})\.m2ts$/;
 
 /**
  * Check that every external playback target stays a declared BDMV STREAM clip.
@@ -64,11 +64,17 @@ function auditExternalTargets(checks: AuditCheck[], path: string, source: string
       const match = DECLARED_STREAM_PATH.exec(item.streamPath);
       if (!match || match[1]!.toLowerCase() !== item.clipId.toLowerCase()) {
         invalid = true;
-        add(checks, "EXTERNAL_TARGET_UNDECLARED", "fail", "External target must be STREAM/<clipId>.m2ts for its own clip; absolute paths, traversal, backslashes and schemes are rejected", location, { clipId: item.clipId, streamPath: item.streamPath });
+        add(checks, "EXTERNAL_TARGET_UNDECLARED", "fail", "External target must be STREAM/<clipId>.m2ts for its own clip; absolute paths, traversal, backslashes, schemes and encoded variants are rejected", location, { clipId: item.clipId, streamPath: item.streamPath });
       }
     }
   }
-  if (!invalid) add(checks, "EXTERNAL_TARGETS_DECLARED", "pass", "Every external target is a declared BDMV STREAM clip path", path, { playItems });
+  if (!invalid) {
+    add(checks, "EXTERNAL_TARGETS_DECLARED", "pass", "Every external target is a declared BDMV STREAM clip path", path, { playItems });
+    if (playItems > 0) {
+      add(checks, "EXTERNAL_SOURCE_UNVERIFIED", "not-verified", "External BDMV STREAM file availability is not verified by the package audit", path, { playItems });
+      add(checks, "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", "not-verified", "System URL Protocol association and player launch are not verified by the package audit", path);
+    }
+  }
 }
 
 function samePlayerProfile(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
@@ -404,7 +410,7 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
           if (encodedPath !== undefined) bdmvPath = JSON.parse(encodedPath);
         } catch { bdmvPath = undefined; }
         if (typeof bdmvPath !== "string" || !bdmvPath || bdmvPath.includes("\0")) add(checks, "EXTERNAL_CONFIG_INVALID", "fail", "BDMV path configuration is invalid", path);
-        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV path and URL Protocol playback must be verified in the current environment", path);
+        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV path must be verified in the current environment", path);
         continue;
       }
       if (path === "external-targets.json") {

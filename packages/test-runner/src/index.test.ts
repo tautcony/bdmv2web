@@ -62,15 +62,19 @@ describe("offline package audit", () => {
       "index.html": "<main>ready</main>",
       "external-targets.json": JSON.stringify({ playlists: [{ id: "00007", items: [{ clipId: "00002", streamPath: "STREAM/00002.m2ts" }] }] }),
     });
-    expect((await auditOutputPackage(valid)).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass" }));
+    const validChecks = (await auditOutputPackage(valid)).checks;
+    expect(validChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass", path: "external-targets.json" }));
+    expect(validChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_SOURCE_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
+    expect(validChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
+    expect(validChecks.some((check) => check.checkId === "PACKAGE_MISSING_ASSET" && check.path === "STREAM/00002.m2ts")).toBe(false);
 
-    for (const streamPath of ["/etc/passwd", "../STREAM/00002.m2ts", "STREAM\\00002.m2ts", "https://example.com/00002.m2ts", "STREAM/00003.m2ts"]) {
+    for (const streamPath of ["/etc/passwd", "../STREAM/00002.m2ts", "STREAM\\00002.m2ts", "https://example.com/00002.m2ts", "STREAM/00003.m2ts", "stream/00002.m2ts", "STREAM/%30%30%30%30%32.m2ts", "STREAM/%2e%2e/00002.m2ts", "STREAM/%252e%252e/00002.m2ts"]) {
       const root = await packageRoot({
         "index.html": "<main>ready</main>",
         "external-targets.json": JSON.stringify({ playlists: [{ id: "00007", items: [{ clipId: "00002", streamPath }] }] }),
       });
       const checks = (await auditOutputPackage(root)).checks;
-      expect(checks, streamPath).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGET_UNDECLARED", result: "fail", evidence: expect.objectContaining({ clipId: "00002", streamPath }) }));
+      expect(checks, streamPath).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGET_UNDECLARED", result: "fail", path: "external-targets.json/playlists/0/items/0", evidence: expect.objectContaining({ clipId: "00002", streamPath }) }));
     }
   });
 

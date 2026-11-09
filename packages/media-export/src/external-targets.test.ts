@@ -15,7 +15,16 @@ function fixture(): { disc: ParsedDisc; closure: MediaClosure } {
       marks: [{ index: 0, type: 1, playItemRef: 1, time45k: 112500, entryEsPid: 0, duration45k: 0, source }] }],
     graph: { nodes: [{ id: "clip:00004", type: "clip", state: "present", source }, { id: "clip:00005", type: "clip", state: "present", source }], edges: [] },
   } as unknown as ParsedDisc;
-  const closure: MediaClosure = { playlistIds: ["playlist:00001"], clipIds: [], streamIds: [], requiredNodeIds: [], routes: [], unknown: [], complete: true, explored: 1 };
+  const closure: MediaClosure = {
+    playlistIds: ["playlist:00001"], clipIds: [], streamIds: [], requiredNodeIds: [],
+    routes: [
+      { playlistId: "playlist:00001", origin: "entry", entryId: "firstPlay", entrySource: source, buttonProgramId: null,
+        navigationEdges: [{ from: "entry:first", to: "playlist:00001", kind: "play", condition: "branch A", source }] },
+      { playlistId: "playlist:00001", origin: "button-program", entryId: null, entrySource: null, buttonProgramId: 7,
+        navigationEdges: [{ from: "button:7", to: "playlist:00001", kind: "play", condition: "branch B", source }] },
+    ],
+    unknown: [{ code: "NAVIGATION_TARGET_UNKNOWN", message: "dynamic target", source }], complete: false, explored: 1,
+  };
   return { disc, closure };
 }
 
@@ -25,6 +34,18 @@ describe("external source playlist boundaries", () => {
     expect(map.playlists[0]?.items.map((item) => [item.clipId, item.sourceIn90k, item.sourceOut90k, item.playlistStart90k, item.playlistEnd90k])).toEqual([
       ["00004", "90000", "270000", "0", "180000"], ["00005", "180000", "450000", "180000", "450000"], ["00004", "540000", "630000", "450000", "540000"],
     ]);
+    expect(map).toMatchObject({
+      complete: false,
+      unknown: [{ code: "NAVIGATION_TARGET_UNKNOWN", message: "dynamic target", source }],
+      playlists: [{
+        id: "00001", source,
+        routes: [
+          { origin: "entry", navigationEdges: [{ condition: "branch A", source }] },
+          { origin: "button-program", navigationEdges: [{ condition: "branch B", source }] },
+        ],
+        items: [{ source }, { source }, { source }], marks: [{ source }],
+      }],
+    });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST", playlist: 1 })).toMatchObject({ status: "available", item: { index: 0 }, remainingItems: [{ index: 1 }, { index: 2 }] });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 2 })).toMatchObject({ status: "available", item: { clipId: "00004", index: 2 }, clipTime90k: "540000", seekTime90k: "540000", remainingItems: [] });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_MARK", playlist: 1, playMark: 0 })).toMatchObject({ status: "available", item: { index: 1 }, clipTime90k: "225000", seekTime90k: "225000" });
@@ -38,5 +59,15 @@ describe("external source playlist boundaries", () => {
     map.playlists[0]!.marks[0]!.sourceTime90k = "450000";
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_MARK", playlist: 1, playMark: 0 })).toMatchObject({ status: "unavailable", code: "EXTERNAL_TIME_INVALID" });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST", playlist: 2 })).toMatchObject({ status: "unavailable", code: "EXTERNAL_PLAYLIST_UNKNOWN" });
+  });
+  it("rejects stream paths that do not match the declared Clip at runtime", () => {
+    for (const streamPath of ["/etc/passwd", "../STREAM/00004.m2ts", "STREAM\\00004.m2ts", "https://example.com/00004.m2ts", "STREAM/00005.m2ts", "STREAM/%30%30%30%30%34.m2ts", "STREAM/%252e%252e/00004.m2ts"]) {
+      const { disc, closure } = fixture();
+      const map = createExternalMediaTargets(disc, closure);
+      map.playlists[0]!.items[0]!.streamPath = streamPath;
+      expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 0 }), streamPath).toMatchObject({
+        status: "unavailable", code: "EXTERNAL_TARGET_UNDECLARED", source,
+      });
+    }
   });
 });

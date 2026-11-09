@@ -736,6 +736,20 @@ describe("M3 HDMV fixtures", () => {
     vm.handleEvent({ type: "MEDIA_ENDED", generation: action.generation, responseTo: action.id });
     expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_DUPLICATE_EVENT");
   });
+  it("releases an external handoff without playback events and ignores later receipts", () => {
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
+    vm.runTurn();
+    const action = vm.snapshot().waiting!;
+
+    vm.releaseExternalPlayback(action);
+
+    expect(vm.snapshot()).toMatchObject({ status: "idle", waiting: null, playback: { status: "idle", pendingActionId: null } });
+    expect(vm.trace.filter((entry) => entry.event?.type === "MEDIA_STARTED" || entry.event?.type === "MEDIA_ENDED")).toEqual([]);
+    for (const type of ["MEDIA_STARTED", "MEDIA_ENDED"] as const) {
+      expect(vm.handleEvent({ type, generation: action.generation, responseTo: action.id })).toMatchObject({ status: "idle", waiting: null, playback: { status: "idle" } });
+      expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_DUPLICATE_EVENT");
+    }
+  });
   it("faults unknown opcodes with raw/source evidence and bounds loops", () => {
     const unknownVm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.unknown] }]);
     expect(unknownVm.runTurn().diagnostic?.code).toBe("HDMV_UNKNOWN_OPCODE");

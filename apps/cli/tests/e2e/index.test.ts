@@ -986,8 +986,8 @@ describe("offline validate CLI (M6)", () => {
       await rm(join(missingAsset, "assets", "menu.png"));
       const missing = validate(missingAsset);
       expect(missing.status).toBe(1);
-      const missingChecks = JSON.parse(String(missing.stdout)).checks as Array<{ checkId: string; result: string }>;
-      expect(missingChecks).toContainEqual(expect.objectContaining({ checkId: "PACKAGE_MISSING_ASSET", result: "fail" }));
+      const missingChecks = JSON.parse(String(missing.stdout)).checks as Array<{ checkId: string; result: string; path?: string }>;
+      expect(missingChecks).toContainEqual(expect.objectContaining({ checkId: "PACKAGE_MISSING_ASSET", result: "fail", path: "assets/menu.png" }));
 
       await makePackage(unlistedStartup, { "assets/menu.png": "png" });
       await writeFile(join(unlistedStartup, "index.html"), "<main>ready</main>");
@@ -1006,16 +1006,37 @@ describe("offline validate CLI (M6)", () => {
     const escaped = await mkdtemp(join(tmpdir(), "bdmv validate external escape "));
     const targets = (streamPath: string) => JSON.stringify({ playlists: [{ id: "00007", items: [{ clipId: "00002", streamPath }] }] });
     try {
-      await makePackage(declared, { "index.html": "<main>ready</main>", "external-targets.json": targets("STREAM/00002.m2ts") });
+      await makePackage(declared, {
+        "index.html": "<main>ready</main>",
+        "external-targets.json": targets("STREAM/00002.m2ts"),
+        "runtime/bdmv-config.js": 'globalThis.__BDMV_BDMV_PATH__="/fake/BDMV";\n',
+        "compatibility.json": JSON.stringify({ externalDependencies: ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] }),
+      });
+      const declaredManifestPath = join(declared, "manifest.json");
+      const declaredManifest = JSON.parse(await readFile(declaredManifestPath, "utf8"));
+      declaredManifest.files = declaredManifest.files.filter((file: { path: string }) => file.path !== "compatibility.json");
+      declaredManifest.files.find((file: { path: string }) => file.path === "runtime/bdmv-config.js").kind = "external-config";
+      await writeFile(declaredManifestPath, JSON.stringify(declaredManifest));
       const ok = validate(declared);
-      expect(ok.status).toBe(0);
-      expect(JSON.parse(String(ok.stdout)).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass" }));
+      expect(ok.status, ok.stdout).toBe(0);
+      const audit = JSON.parse(String(ok.stdout));
+      expect(audit.checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass", path: "external-targets.json" }));
+      expect(audit.checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_SOURCE_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
+      expect(audit.checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
+      expect(audit.checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified", path: "runtime/bdmv-config.js" }));
+      expect(audit.checks.some((check: { checkId: string; path?: string }) => check.checkId === "PACKAGE_MISSING_ASSET" && check.path === "STREAM/00002.m2ts")).toBe(false);
+      expect(audit.releaseSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_SOURCE_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
+      expect(audit.releaseSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified", path: "runtime/bdmv-config.js" }));
+      expect(audit.releaseSummary.compatibility.externalDependencies).toEqual(["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"]);
+      expect(audit.releaseSummary.compatibility.notVerified).toEqual(expect.arrayContaining(["EXTERNAL_SOURCE_UNVERIFIED", "EXTERNAL_CONFIG", "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED"]));
+      const savedSummary = JSON.parse(await readFile(join(declared, "reports", "release-summary.json"), "utf8"));
+      expect(savedSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
 
       await makePackage(escaped, { "index.html": "<main>ready</main>", "external-targets.json": targets("../../etc/passwd") });
       const bad = validate(escaped);
       expect(bad.status).toBe(1);
       const badChecks = JSON.parse(String(bad.stdout)).checks as Array<{ checkId: string; result: string }>;
-      expect(badChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGET_UNDECLARED", result: "fail" }));
+      expect(badChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGET_UNDECLARED", result: "fail", path: "external-targets.json/playlists/0/items/0" }));
       expect(JSON.parse(String(bad.stdout)).decision.status).toBe("failed");
     } finally {
       await rm(declared, { recursive: true, force: true });
