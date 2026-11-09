@@ -83,7 +83,7 @@
 - [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `内容摘要字段` 字段移除与源位置字段变真实）。
 - [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；M6 未验证项保持未勾选；活动 OpenSpec 中无实机播放、人工目视与跨浏览器解码验收条目。
 - [ ] H.5 范围守界：不实现浏览器内正片播放；影片使用系统 URL Protocol 交接；不新增未经计划的 CI workflow。
-- [ ] H.6 归档前按当前 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 主规格已存在，本 change 直接以 MODIFIED 应用；`offline-media-playback` 主规格缺失，由 `export-playable-media` → `fix-hdr-color-pipeline` 依次建立（ADDED → MODIFIED）。`offline-delivery-assurance` 的收敛要求已并入 `verify-offline-release` 的 ADDED 主规格，本 change 不持有该 delta，`openspec validate` 不再出现"目标主规格不存在"的归档提示。归档顺序为 `export-playable-media` → `fix-hdr-color-pipeline` → `verify-offline-release` → 本 change；不得对缺失主规格应用 MODIFIED-only delta。
+- [ ] H.6 归档前按当前 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 主规格已存在，本 change 直接以 MODIFIED 应用；`offline-media-playback` 主规格已由 `fix-hdr-color-pipeline` 于 2026-11-09 归档时建立（7 条色彩与编码要求），`export-playable-media` 以 ADDED 追加 8 条播放与交接要求，本 change 不持有该 delta。`offline-delivery-assurance` 的收敛要求已并入 `verify-offline-release` 的 ADDED 主规格。剩余归档顺序为 `export-playable-media` → `verify-offline-release` → 本 change；不得对缺失主规格应用 MODIFIED-only delta。
 
 ## I. 已移出范围
 

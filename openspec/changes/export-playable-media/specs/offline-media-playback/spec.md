@@ -4,7 +4,7 @@
 
 从离线菜单将实际 M2TS 交给操作系统的默认关联程序，并准确报告交接边界。
 
-主规格归属：本 change 以 ADDED 建立 `offline-media-playback`；`fix-hdr-color-pipeline` 的色彩与编码要求在同一 capability 内合并，归档时按 M5 → HDR 顺序写入同一份主规格。
+主规格归属：`offline-media-playback` 主规格已由 2026-11-09 归档的 `fix-hdr-color-pipeline` 建立（7 条色彩与编码要求）；本 change 以 ADDED 向同一 capability 追加下列 8 条播放与交接要求。
 
 ## ADDED Requirements
 

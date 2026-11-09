@@ -58,4 +58,4 @@
 | 降级路径 | 不变：缺 `zscale` 时按 `preserve` 编码并给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning |
 | 验收 | 7.5 只验证 `zscale` 链；原先“第二条链未验证”的缺口随实现删除而消失 |
 
-理由：只保留一条能在本项目环境内真实验证的 HDR 能力链，避免出现“文档不提、代码留着、又无执行证据”的分支。需求表述同步改为“使用 `zscale`（libzimg）链；不可用时降级”，见 `fix-hdr-color-pipeline/specs/offline-media-playback/spec.md`。
+理由：只保留一条能在本项目环境内真实验证的 HDR 能力链，避免出现“文档不提、代码留着、又无执行证据”的分支。需求表述同步改为“使用 `zscale`（libzimg）链；不可用时降级”，已写入主规格 `openspec/specs/offline-media-playback/spec.md`（`fix-hdr-color-pipeline` 于 2026-11-09 归档）。

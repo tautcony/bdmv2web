@@ -56,7 +56,7 @@
 
 内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回、菜单 VM/sound 集成、HDMV 默认 Limits 收敛与 `convert --limits` 接线已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
 
-主规格现状：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 已存在，本 change 的 delta 直接以 MODIFIED 应用；`offline-media-playback` 缺失，由 `export-playable-media` 与 `fix-hdr-color-pipeline` 依次建立；`offline-delivery-assurance` 的收敛要求已写入 `verify-offline-release` 的 ADDED delta，本 change 不再携带该 delta。apply 的第一步按 `openspec status` 的 `existingOutputPaths` 做 delta 对照（见 `tasks.md` H.6）。`restore-build-gate-and-delivery-status` 只有 `ADDED` delta，可随时归档。
+主规格现状：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 已存在，本 change 的 delta 直接以 MODIFIED 应用；`offline-media-playback` 已由 `fix-hdr-color-pipeline` 归档建立，`export-playable-media` 以 ADDED 追加；`offline-delivery-assurance` 的收敛要求已写入 `verify-offline-release` 的 ADDED delta，本 change 不再携带该 delta。apply 的第一步按 `openspec status` 的 `existingOutputPaths` 做 delta 对照（见 `tasks.md` H.6）。`restore-build-gate-and-delivery-status` 只有 `ADDED` delta，可随时归档。
 
 ## Related
 
