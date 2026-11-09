@@ -1,0 +1,44 @@
+README.md
+  h_3705811fa4502c 46
+README.zh-CN.md
+  h_3705811fa4502c 46
+apps/cli/README.md
+  h_3705811fa4502c 18
+docs/llm-wiki/features/media.md
+  h_3705811fa4502c 65,127
+docs/llm-wiki/packages/media-export.md
+  h_3705811fa4502c 73,83,87,131
+openspec/changes/fix-hdr-color-pipeline/design.md
+  h_3705811fa4502c 49,59,137,169,175,181
+openspec/changes/fix-hdr-color-pipeline/proposal.md
+  h_3705811fa4502c 14
+openspec/changes/fix-hdr-color-pipeline/specs/offline-media-playback/spec.md
+  h_3705811fa4502c 32,34,36-37,46,50
+openspec/changes/fix-hdr-color-pipeline/tasks.md
+  h_3705811fa4502c 25-26,67
+openspec/changes/fix-hdr-color-pipeline/verification.md
+  h_3705811fa4502c 9-10,12,14,19-20,22-25,27,47-48,50
+openspec/changes/scope-changes.md
+  h_3705811fa4502c 24,49-61
+packages/media-export/src/color-pipeline.ffmpeg.test.ts
+  h_3705811fa4502c 15,40,52,160,192,213
+packages/media-export/src/color.test.ts
+  h_3705811fa4502c 17,27,32,36,43,48,55,58,63
+packages/media-export/src/color.ts
+  h_3705811fa4502c 6,100-102,138
+packages/media-export/src/index.ts
+  h_3705811fa4502c 317,330-331
+packages/media-export/src/linear.ts
+  h_3705811fa4502c 151,306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "93dbaf5cfa847321ee9dd1ce7d267be89950655d",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
