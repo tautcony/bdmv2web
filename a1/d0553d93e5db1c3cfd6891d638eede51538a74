@@ -1,0 +1,57 @@
+apps/cli/src/cli/profile.ts
+  s_ed871e2efc1cc1::t_71100087561b62 18-19
+apps/cli/src/commands/build.ts
+  s_ed871e2efc1cc1::t_687bb626188c29 463-464
+apps/cli/src/commands/extract.ts
+  s_ed871e2efc1cc1::t_29c8579b1cf66f 85
+apps/cli/tests/e2e/index.test.ts
+  s_ed871e2efc1cc1::t_af4e463156fa7a 115,194,447
+docs/guides/development.md
+  s_ed871e2efc1cc1::t_df18481bd87132 23,31,45,151
+docs/guides/release.md
+  s_ed871e2efc1cc1::t_5e3568c4542b05 42,60,71,76,88
+docs/llm-wiki/packages/media-export.md
+  s_ed871e2efc1cc1::t_50784ced75b30e 22
+docs/support/hdmv-support.md
+  s_ed871e2efc1cc1::t_f4753a406ae78b 3,5,96,100,122
+docs/support/protocol-support.md
+  s_ed871e2efc1cc1::t_395ac373a43bfe 11,16,35
+packages/bdmv-parser/src/parser.ts
+  s_ed871e2efc1cc1::t_6f987ace83f2ce 99-101,353-354
+packages/igs/src/extract.ts
+  s_ed871e2efc1cc1::t_01cfaf7d3a197a 21-22,156
+packages/igs/src/transport.test.ts
+  s_ed871e2efc1cc1::t_2ae4150bfaaf25 17,24
+packages/media-export/src/closure.ts
+  s_ed871e2efc1cc1::t_0bbd798aa72beb 64
+packages/media-export/src/index.test.ts
+  s_ed871e2efc1cc1::t_af048dc806a346 124,323,439
+packages/package-builder/src/index.ts
+  s_ed871e2efc1cc1::t_83d2e1089034ff 235
+packages/runtime-web/src/browser.test.ts
+  s_ed871e2efc1cc1::t_f984568935e784 420,465,645
+packages/runtime-web/src/index.test.ts
+  s_ed871e2efc1cc1::t_764801e4fa0efd 808,1230
+packages/runtime-web/src/index.ts
+  s_ed871e2efc1cc1::t_0902a78fb60ed4 662
+packages/test-runner/src/decisions.ts
+  s_ed871e2efc1cc1::t_5672586462914b 105-107
+packages/test-runner/src/release-summary.ts
+  s_ed871e2efc1cc1::t_584be1e14947b1 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1d0553d93e5db1c3cfd6891d638eede51538a74",
+  "prompts": {},
+  "sessions": {
+    "s_ed871e2efc1cc1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be6a-4475-71c0-b1fd-502404aefb96",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
