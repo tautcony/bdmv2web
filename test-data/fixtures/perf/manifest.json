@@ -1,0 +1,524 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "caseId": "perf.index.small.parse",
+      "suite": "real",
+      "category": "bdmv",
+      "name": "BDMV index parse · small metadata sample",
+      "sample": "for-all-mankind-index",
+      "fixture": {
+        "id": "bdmv-index-small-v1",
+        "version": "1",
+        "parameters": {
+          "kind": "index"
+        }
+      },
+      "scope": "index-parse",
+      "kind": "bdmv.parseKind",
+      "parseKind": "index",
+      "input": {
+        "path": "index/For.All.Mankind_index.bdmv",
+        "virtualPath": "BDMV/index.bdmv"
+      },
+      "source": {
+        "type": "file",
+        "disc": "For All Mankind 1989 BluRay REMUX",
+        "path": "index.bdmv"
+      },
+      "expected": {
+        "details": {
+          "entries": 3,
+          "appInfo": true
+        }
+      }
+    },
+    {
+      "caseId": "perf.movieobject.heavy.parse",
+      "suite": "real",
+      "category": "bdmv",
+      "name": "MovieObject parse · instruction-heavy sample",
+      "sample": "tamako-movieobject",
+      "fixture": {
+        "id": "movieobject-heavy-tamako-v1",
+        "version": "1",
+        "parameters": {
+          "kind": "movieObject"
+        }
+      },
+      "scope": "movieObject-parse",
+      "kind": "bdmv.parseKind",
+      "parseKind": "movieObject",
+      "input": {
+        "path": "movie-object/TAMAKO_MovieObject.bdmv",
+        "virtualPath": "BDMV/MovieObject.bdmv"
+      },
+      "source": {
+        "type": "file",
+        "disc": "TAMAKO LOVE STORY BD",
+        "path": "MovieObject.bdmv"
+      },
+      "expected": {
+        "details": {
+          "objects": 17,
+          "instructions": 4969
+        }
+      }
+    },
+    {
+      "caseId": "perf.playlist.heavy.parse",
+      "suite": "real",
+      "category": "bdmv",
+      "name": "Playlist parse · 999 PlayItems",
+      "sample": "tamako-playlist-00003",
+      "fixture": {
+        "id": "playlist-heavy-tamako-00003-v1",
+        "version": "1",
+        "parameters": {
+          "kind": "playlist"
+        }
+      },
+      "scope": "playlist-parse",
+      "kind": "bdmv.parseKind",
+      "parseKind": "playlist",
+      "input": {
+        "path": "playlist/TAMAKO_00003.mpls",
+        "virtualPath": "BDMV/PLAYLIST/00003.mpls"
+      },
+      "source": {
+        "type": "file",
+        "disc": "TAMAKO LOVE STORY BD",
+        "path": "PLAYLIST/00003.mpls"
+      },
+      "expected": {
+        "details": {
+          "playItems": 999,
+          "marks": 999,
+          "subPaths": 1,
+          "id": "00003"
+        }
+      }
+    },
+    {
+      "caseId": "perf.clipinfo.cpi-heavy.parse",
+      "suite": "real",
+      "category": "bdmv",
+      "name": "ClipInfo parse · CPI-heavy sample",
+      "sample": "battle-royale-clipinfo-00004",
+      "fixture": {
+        "id": "clipinfo-cpi-heavy-battle-royale-v1",
+        "version": "1",
+        "parameters": {
+          "kind": "clipInfo"
+        }
+      },
+      "scope": "clipInfo-parse",
+      "kind": "bdmv.parseKind",
+      "parseKind": "clipInfo",
+      "input": {
+        "path": "clip-info/Battle.Royale_00004.clpi",
+        "virtualPath": "BDMV/CLIPINF/00004.clpi"
+      },
+      "source": {
+        "type": "file",
+        "disc": "Battle.Royale.2000.Director's.Cut.2160p.UHD.Blu-ray.HEVC.DTS-HD.MA.5.1-DiY@HDHome",
+        "path": "CLIPINF/00004.clpi"
+      },
+      "expected": {
+        "details": {
+          "atcs": 1,
+          "programs": 1,
+          "streams": 7,
+          "cpiEntries": 15322,
+          "id": "00004"
+        }
+      }
+    },
+    {
+      "caseId": "perf.graph.tamako.build",
+      "suite": "real",
+      "category": "graph",
+      "name": "Navigation graph build · Tamako metadata",
+      "sample": "tamako-graph",
+      "fixture": {
+        "id": "graph-heavy-tamako-v1",
+        "version": "1",
+        "parameters": {}
+      },
+      "scope": "graph-build",
+      "kind": "graph",
+      "input": {
+        "files": [
+          {
+            "path": "index/TAMAKO_index.bdmv",
+            "virtualPath": "BDMV/index.bdmv",
+            "sourcePath": "index.bdmv"
+          },
+          {
+            "path": "movie-object/TAMAKO_MovieObject.bdmv",
+            "virtualPath": "BDMV/MovieObject.bdmv",
+            "sourcePath": "MovieObject.bdmv"
+          },
+          {
+            "path": "playlist/TAMAKO_00001.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00001.mpls",
+            "sourcePath": "PLAYLIST/00001.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00002.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00002.mpls",
+            "sourcePath": "PLAYLIST/00002.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00003.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00003.mpls",
+            "sourcePath": "PLAYLIST/00003.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00004.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00004.mpls",
+            "sourcePath": "PLAYLIST/00004.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00015.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00015.mpls",
+            "sourcePath": "PLAYLIST/00015.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00016.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00016.mpls",
+            "sourcePath": "PLAYLIST/00016.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00017.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00017.mpls",
+            "sourcePath": "PLAYLIST/00017.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00018.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00018.mpls",
+            "sourcePath": "PLAYLIST/00018.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00024.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00024.mpls",
+            "sourcePath": "PLAYLIST/00024.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00025.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00025.mpls",
+            "sourcePath": "PLAYLIST/00025.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00026.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00026.mpls",
+            "sourcePath": "PLAYLIST/00026.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00027.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00027.mpls",
+            "sourcePath": "PLAYLIST/00027.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00042.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00042.mpls",
+            "sourcePath": "PLAYLIST/00042.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00057.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00057.mpls",
+            "sourcePath": "PLAYLIST/00057.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00058.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00058.mpls",
+            "sourcePath": "PLAYLIST/00058.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00059.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00059.mpls",
+            "sourcePath": "PLAYLIST/00059.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00060.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00060.mpls",
+            "sourcePath": "PLAYLIST/00060.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00061.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00061.mpls",
+            "sourcePath": "PLAYLIST/00061.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00062.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00062.mpls",
+            "sourcePath": "PLAYLIST/00062.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00063.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00063.mpls",
+            "sourcePath": "PLAYLIST/00063.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00064.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00064.mpls",
+            "sourcePath": "PLAYLIST/00064.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00065.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00065.mpls",
+            "sourcePath": "PLAYLIST/00065.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00066.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00066.mpls",
+            "sourcePath": "PLAYLIST/00066.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00067.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00067.mpls",
+            "sourcePath": "PLAYLIST/00067.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00068.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00068.mpls",
+            "sourcePath": "PLAYLIST/00068.mpls"
+          },
+          {
+            "path": "playlist/TAMAKO_00069.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00069.mpls",
+            "sourcePath": "PLAYLIST/00069.mpls"
+          },
+          {
+            "path": "clip-info/TAMAKO_00002.clpi",
+            "virtualPath": "BDMV/CLIPINF/00002.clpi",
+            "sourcePath": "CLIPINF/00002.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00003.clpi",
+            "virtualPath": "BDMV/CLIPINF/00003.clpi",
+            "sourcePath": "CLIPINF/00003.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00004.clpi",
+            "virtualPath": "BDMV/CLIPINF/00004.clpi",
+            "sourcePath": "CLIPINF/00004.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00006.clpi",
+            "virtualPath": "BDMV/CLIPINF/00006.clpi",
+            "sourcePath": "CLIPINF/00006.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00030.clpi",
+            "virtualPath": "BDMV/CLIPINF/00030.clpi",
+            "sourcePath": "CLIPINF/00030.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00032.clpi",
+            "virtualPath": "BDMV/CLIPINF/00032.clpi",
+            "sourcePath": "CLIPINF/00032.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00034.clpi",
+            "virtualPath": "BDMV/CLIPINF/00034.clpi",
+            "sourcePath": "CLIPINF/00034.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00036.clpi",
+            "virtualPath": "BDMV/CLIPINF/00036.clpi",
+            "sourcePath": "CLIPINF/00036.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00054.clpi",
+            "virtualPath": "BDMV/CLIPINF/00054.clpi",
+            "sourcePath": "CLIPINF/00054.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00055.clpi",
+            "virtualPath": "BDMV/CLIPINF/00055.clpi",
+            "sourcePath": "CLIPINF/00055.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00056.clpi",
+            "virtualPath": "BDMV/CLIPINF/00056.clpi",
+            "sourcePath": "CLIPINF/00056.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00057.clpi",
+            "virtualPath": "BDMV/CLIPINF/00057.clpi",
+            "sourcePath": "CLIPINF/00057.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00058.clpi",
+            "virtualPath": "BDMV/CLIPINF/00058.clpi",
+            "sourcePath": "CLIPINF/00058.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00059.clpi",
+            "virtualPath": "BDMV/CLIPINF/00059.clpi",
+            "sourcePath": "CLIPINF/00059.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00060.clpi",
+            "virtualPath": "BDMV/CLIPINF/00060.clpi",
+            "sourcePath": "CLIPINF/00060.clpi"
+          },
+          {
+            "path": "clip-info/TAMAKO_00061.clpi",
+            "virtualPath": "BDMV/CLIPINF/00061.clpi",
+            "sourcePath": "CLIPINF/00061.clpi"
+          }
+        ]
+      },
+      "source": {
+        "type": "file",
+        "disc": "TAMAKO LOVE STORY BD"
+      },
+      "expected": {
+        "details": {
+          "nodes": 1216,
+          "edges": 8110
+        }
+      }
+    },
+    {
+      "caseId": "perf.igs.battle-royale.parse",
+      "suite": "real",
+      "category": "mnu",
+      "name": "IGS scene parse · Battle Royale menu",
+      "sample": "battle-royale-00002",
+      "fixture": {
+        "id": "menu-battle-royale-igs-v1",
+        "version": "1",
+        "parameters": {
+          "clipId": "00002",
+          "pid": 5120,
+          "operation": "parse"
+        }
+      },
+      "scope": "igs-scene-parse",
+      "kind": "mnu",
+      "input": {
+        "path": "mnu/Battle.Royale_00002_pid-1400.mnu",
+        "packetPath": "ig-packets/Battle.Royale_00002_pid-1400.bin"
+      },
+      "source": {
+        "type": "file",
+        "disc": "Battle.Royale.2000.Director's.Cut.2160p.UHD.Blu-ray.HEVC.DTS-HD.MA.5.1-DiY@HDHome",
+        "path": "STREAM/00002.m2ts",
+        "packetPath": "ig-packets/Battle.Royale_00002_pid-1400.bin",
+        "clipId": "00002",
+        "pid": "0x1400",
+        "extraction": "complete filtered IG packet stream and prepared complete MNU payload"
+      },
+      "expected": {
+        "details": {
+          "status": "complete",
+          "scenes": 1,
+          "pages": 21,
+          "objects": 215,
+          "palettes": 21
+        }
+      }
+    },
+    {
+      "caseId": "perf.igs.battle-royale.render",
+      "suite": "real",
+      "category": "mnu",
+      "name": "IGS asset render · Battle Royale menu",
+      "sample": "battle-royale-00002",
+      "fixture": {
+        "id": "menu-battle-royale-igs-v1",
+        "version": "1",
+        "parameters": {
+          "clipId": "00002",
+          "pid": 5120,
+          "operation": "render"
+        }
+      },
+      "scope": "igs-asset-render",
+      "kind": "mnu",
+      "input": {
+        "path": "mnu/Battle.Royale_00002_pid-1400.mnu",
+        "packetPath": "ig-packets/Battle.Royale_00002_pid-1400.bin"
+      },
+      "source": {
+        "type": "file",
+        "disc": "Battle.Royale.2000.Director's.Cut.2160p.UHD.Blu-ray.HEVC.DTS-HD.MA.5.1-DiY@HDHome",
+        "path": "STREAM/00002.m2ts",
+        "packetPath": "ig-packets/Battle.Royale_00002_pid-1400.bin",
+        "clipId": "00002",
+        "pid": "0x1400",
+        "extraction": "complete filtered IG packet stream and prepared complete MNU payload"
+      },
+      "expected": {
+        "details": {
+          "assets": 215
+        }
+      }
+    },
+    {
+      "caseId": "perf.pgs.baja.parse",
+      "suite": "real",
+      "category": "pgs",
+      "name": "PGS display-set parse · Japanese SUP",
+      "sample": "baja-studio-jpn",
+      "fixture": {
+        "id": "media-baja-pgs-jpn-v1",
+        "version": "1",
+        "parameters": {
+          "operation": "parse",
+          "displaySet": "largest"
+        }
+      },
+      "scope": "pgs-display-set-parse",
+      "kind": "pgs",
+      "input": {
+        "path": "sup/Baja.Studio_jpn.sup"
+      },
+      "source": {
+        "type": "local-file",
+        "path": "sup/Baja.Studio_jpn.sup"
+      },
+      "expected": {
+        "details": {
+          "displaySets": 508,
+          "bitmaps": 254,
+          "decodedPixels": 14019858
+        }
+      }
+    },
+    {
+      "caseId": "perf.pgs.baja.compose",
+      "suite": "real",
+      "category": "pgs",
+      "name": "PGS display-set compose · Japanese SUP",
+      "sample": "baja-studio-jpn",
+      "fixture": {
+        "id": "media-baja-pgs-jpn-v1",
+        "version": "1",
+        "parameters": {
+          "operation": "compose",
+          "displaySet": "largest"
+        }
+      },
+      "scope": "pgs-compose-and-encode",
+      "kind": "pgs",
+      "input": {
+        "path": "sup/Baja.Studio_jpn.sup"
+      },
+      "source": {
+        "type": "local-file",
+        "path": "sup/Baja.Studio_jpn.sup"
+      },
+      "expected": {
+        "details": {
+          "visible": true,
+          "width": 1920,
+          "height": 1080
+        }
+      }
+    }
+  ]
+}

@@ -144,6 +144,10 @@ Lint resolves workspace imports through `dist`, typecheck resolves them through 
 
 `corepack pnpm` runs the pnpm version pinned by `packageManager` in `package.json`, and it ships with Node, so the gate needs no globally installed `pnpm`. Root scripts spell out `corepack pnpm` so the nested calls they make resolve through the same shim and `corepack pnpm build` works from a clean checkout. A global install remains usable: `PNPM=pnpm bash scripts/ci.sh`.
 
+## Performance benchmarks
+
+Use [the performance benchmark guide](performance.md) to list cases, run Tinybench component and scenario suites, capture CPU/heap/memory/browser records, compare fork medians, and generate reports. `test:all` runs `bench:test` after the package suites. Pull requests run the synthetic baseline/candidate comparison in `.github/workflows/performance.yml`; scheduled and manual runs execute the full available suite.
+
 Measured 2026-11-08 on an idle machine (Node 24.18.0 via corepack, pnpm 11.25.0, Apple Silicon): install 0s (lockfile already satisfied) → `generate:contracts` 1s → `build` 4s → lanes `lint` 5s, `typecheck` 5s, `test:all` 19s in parallel; total 24s, exit 0. `generate:contracts` is idempotent — rerunning it leaves `packages/core/src/disc-ir.generated.ts` byte-identical.
 
 `apps/cli`, `media-export`, and `runtime-web` set `testTimeout: 15000`; their cases take 5–6s on a busy machine, over the vitest default of 5s. Per-test budgets override it: `120_000` for the navigation corpus and Tamako headless cases in `runtime-web`, the two `igs` reference comparisons, and `60_000` for the `cli` libbluray navigation baseline. `hdmv` and `igs` set no global timeout.

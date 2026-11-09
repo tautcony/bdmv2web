@@ -1,6 +1,6 @@
 # M5 — 媒体导出与播放参考
 
-对应 change：[tasks.md](../../../openspec/changes/export-playable-media/tasks.md) / [design.md](../../../openspec/changes/export-playable-media/design.md)。
+对应归档 change：[tasks.md](../../../openspec/changes/archive/2026-11-09-export-playable-media/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-09-export-playable-media/design.md)。
 
 | 来源 | 任务 | 可用内容 | 使用边界 |
 | --- | --- | --- | --- |

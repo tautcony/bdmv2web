@@ -15,9 +15,11 @@
 ### 使用与开发
 
 - [开发指南](guides/development.md)：工具链、CLI、测试和构建流程。
+- [性能基准指南](guides/performance.md)：稳定 case、独立进程测量、run记录、比较/趋势报告和 CI 流程。
 - [发布指南](guides/release.md)：npm 包名、版本与 tag、发布工作流和一次性配置。
 - [llm-wiki](llm-wiki/README.md)：面向 LLM/agent 的工程知识索引——任务路由、包/功能/诊断/排查文档与机器可读 `index.json`。
 - [开发参考索引](references/README.md)：固定版本参考实现、规范入口、许可与 [M0–M6 阶段资料](references/stages/)。
+- [性能 fixture 手册](../test-data/fixtures/perf/README.md)：精选测量输入、来源、阶段与已验证结构计数。
 
 ### 能力与支持范围
 

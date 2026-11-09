@@ -1,0 +1,74 @@
+name: Performance
+
+on:
+  pull_request:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  performance:
+    name: Synthetic comparison and full run
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install candidate dependencies
+        run: corepack pnpm install --frozen-lockfile
+      - name: Build candidate
+        run: corepack pnpm build
+      - name: Check out pull request base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+      - name: Build pull request base
+        if: github.event_name == 'pull_request'
+        working-directory: baseline
+        run: |
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm build
+      - name: Run alternating synthetic baseline and candidate cases
+        if: github.event_name == 'pull_request'
+        run: |
+          node scripts/bench/ci.mjs \
+            --baseline-root baseline \
+            --candidate-root . \
+            --out "$RUNNER_TEMP/performance/pair" \
+            --case pgs.synthetic-32-128x72.parse \
+            --case scale.graph-1x.build \
+            --case cli.synthetic-package.validate \
+            --warmup-ms 50 --time-ms 200 --min-samples 5
+          cat "$RUNNER_TEMP/performance/pair/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Install Chromium for full suite
+        if: github.event_name != 'pull_request'
+        run: corepack pnpm exec playwright install chromium
+      - name: Run full available benchmark suite
+        if: github.event_name != 'pull_request'
+        run: |
+          corepack pnpm bench --mode benchmark --build-mode normal --suite all --forks 3 \
+            --warmup-ms 100 --time-ms 500 --min-samples 10 \
+            --out "$RUNNER_TEMP/performance/runs"
+          corepack pnpm bench:report "$RUNNER_TEMP/performance/runs" \
+            --format markdown --out "$RUNNER_TEMP/performance/trend.md"
+          corepack pnpm bench:report "$RUNNER_TEMP/performance/runs" \
+            --format html --out "$RUNNER_TEMP/performance/trend.html"
+          cat "$RUNNER_TEMP/performance/trend.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload run records and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ github.run_id }}
+          path: ${{ runner.temp }}/performance
+          if-no-files-found: warn
