@@ -198,6 +198,16 @@ CLI `convert`：
 
 合成素材：`smptebars` 生成 10-bit、标记 bt2020/smpte2084 的 1 秒 mp4，用于滤镜链与标记断言。
 
+自动化验收（2026-11-09，`packages/media-export/src/color-pipeline.ffmpeg.test.ts`）：
+
+| 用例 | 结果 |
+| --- | --- |
+| SDR 源 → BT.709 标记与帧亮度 | pass：`h264/yuv420p/bt709/bt709/bt709`，YAVG 71.74 → 71.75（容差 2） |
+| 无色调映射滤镜的 HDR10 源 | pass：输出 `bt2020nc/smpte2084/bt2020`、10-bit，warning `MEDIA_HDR_TONEMAP_UNAVAILABLE` |
+| 色调映射到 BT.709 | not-verified：本机 ffmpeg 9.0.2 无 `zscale`/`libplacebo`；具备该构建时同一用例执行断言 |
+
+缺少 ffmpeg 的环境跳过该文件整体，不阻断构建。
+
 ## Risks
 
 - 默认编码为 HEVC：缺少硬件解码或 HEVC Video Extensions 的 Windows 浏览器无法播放菜单媒体，需要 `--codec h264` 重建。该风险由默认值选择承担，文档写明症状与回退方式。
