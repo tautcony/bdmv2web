@@ -1,0 +1,14 @@
+packages/media-export/src/index.ts
+  h_3705811fa4502c 301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce3fcf64f375a374255d74ea15f87b16d54e0f0d",
+  "prompts": {},
+  "humans": {
+    "h_3705811fa4502c": {
+      "author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
