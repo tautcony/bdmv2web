@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { HdmvVm, m3Fixtures } from "./index.js";
 import type { OpcodeName } from "./decode.js";
 
-const source = m3Fixtures.move5.source;
-
 function rawCommand(opCount: number, group: number, subGroup: number, option: number, w1 = 0, w2 = 0, immediate1 = false, immediate2 = false): string {
   const w0 = (((opCount & 7) << 29) | ((group & 3) << 27) | ((subGroup & 7) << 24)
     | (Number(immediate1) << 23) | (Number(immediate2) << 22) | ((group === 0 ? option : 0) << 16)
