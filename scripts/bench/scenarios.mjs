@@ -46,36 +46,44 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     ]) {
       result.push({
         caseId: `cli.perf.metadata.${operation}`, suite: "scenario", category: "cli", name, sample: graphCase.sample,
-        fixture: graphCase.fixture, fixtureRoot, scope, options: { operation, files },
+        fixture: graphCase.fixture, fixtureRoot, scope, spawnsChild: true, options: { operation, files },
       });
     }
   }
   result.push({
     caseId: "cli.startup.version", suite: "scenario", category: "cli", name: "CLI process start and version",
     sample: "cli-runtime", fixture: { id: "cli-runtime", version: "1", parameters: {} },
-    scope: "cli-startup", options: { operation: "version" },
+    scope: "cli-startup", spawnsChild: true, options: { operation: "version" },
   });
   if (igsRenderCase) {
     result.push({
       caseId: "cli.perf.igs.render", suite: "scenario", category: "cli", name: "CLI MNU PNG render", sample: igsRenderCase.sample,
-      fixture: igsRenderCase.fixture, fixtureRoot, scope: "cli-mnu-png-render", options: { operation: "render", input: igsRenderCase.options.file },
+      fixture: igsRenderCase.fixture, fixtureRoot, scope: "cli-mnu-png-render", spawnsChild: true, options: { operation: "render", input: igsRenderCase.options.file },
     });
   }
   const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "buildMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
   result.push({
     caseId: "cli.synthetic-package.validate", suite: "scenario", category: "cli", name: "CLI synthetic package audit", sample: "synthetic-browser-menu",
-    fixture: browserFixture, scope: "cli-package-audit", options: { operation: "validate", packageBuilder: "buildMenuPackage" },
+    fixture: browserFixture, scope: "cli-package-audit", spawnsChild: true, options: { operation: "validate", packageBuilder: "buildMenuPackage" },
   });
   if (igsPacketCase) {
     const expected = igsPacketCase.expected?.details ?? {};
+    const packageInput = {
+      source: "ig-packets", file: perfFile(packetPath(igsPacketCase)),
+      clipId: igsPacketCase.options.clipId, pid: igsPacketCase.options.pid, chunkBytes: igsPacketCase.options.chunkBytes ?? 256 * 1024,
+      expected: Object.fromEntries(["scenes", "pages", "objects", "palettes", "assets"].filter((key) => expected[key] !== undefined).map((key) => [key, expected[key]])),
+    };
+    // The two rows split the same prepared input: scripts only, then scripts plus the
+    // filesystem writes, so a disk difference shows up in one row instead of both.
+    result.push({
+      caseId: "perf.package.igs-serialize", suite: "scenario", category: "package", name: "Package scripts from complete IGS scene", sample: igsPacketCase.sample,
+      fixture: { ...igsPacketCase.fixture, parameters: { ...igsPacketCase.fixture.parameters, operation: "package-serialize" } }, fixtureRoot,
+      scope: "igs-package-serialize", options: packageInput,
+    });
     result.push({
       caseId: "perf.package.igs-assembly", suite: "scenario", category: "package", name: "Package assembly from complete IGS scene", sample: igsPacketCase.sample,
       fixture: { ...igsPacketCase.fixture, parameters: { ...igsPacketCase.fixture.parameters, operation: "package-assembly" } }, fixtureRoot,
-      scope: "igs-package-assembly", options: {
-        source: "ig-packets", file: perfFile(packetPath(igsPacketCase)),
-        clipId: igsPacketCase.options.clipId, pid: igsPacketCase.options.pid, chunkBytes: igsPacketCase.options.chunkBytes ?? 256 * 1024,
-        expected: Object.fromEntries(["scenes", "pages", "objects", "palettes", "assets"].filter((key) => expected[key] !== undefined).map((key) => [key, expected[key]])),
-      },
+      scope: "igs-package-assembly", options: packageInput,
     });
   }
   result.push({
@@ -244,11 +252,22 @@ export async function prepareScenarioCase(caseDef, root) {
     try { return await prepareBrowserScenario(caseDef, root); }
     catch (error) { if (error?.code === "BENCH_SKIP") return { skip: error.message }; throw error; }
   }
-  if (category === "package" && caseDef.scope === "igs-package-assembly") {
-    const { prepareIgsInput, assembleIgsMenuPackage } = await import("./graphics.mjs");
+  if (category === "package" && (caseDef.scope === "igs-package-assembly" || caseDef.scope === "igs-package-serialize")) {
+    const { prepareIgsInput, assembleIgsMenuPackage, serializeIgsMenuPackage } = await import("./graphics.mjs");
     const prepared = await prepareIgsInput(root, options);
     for (const [key, value] of Object.entries(options.expected ?? {})) {
       if (prepared.expected[key] !== value) throw new Error(`IGS package fixture ${key}=${prepared.expected[key]}, expected ${value}`);
+    }
+    if (caseDef.scope === "igs-package-serialize") {
+      const run = () => serializeIgsMenuPackage(root, prepared);
+      const validate = (value) => {
+        if (!Number.isSafeInteger(value.assets) || value.assets !== prepared.graphics.length) throw new Error(`Package scripts covered ${value.assets} of ${prepared.graphics.length} IGS assets`);
+        return { batches: value.batches, assets: value.assets, scriptBytes: value.bytes };
+      };
+      return {
+        input: { ...prepared.input, ...prepared.expected }, fixture: caseDef.fixture, scope: caseDef.scope, run, validate,
+        describe: (value) => ({ summary: `Serialized ${value.batches} asset batches and the package scripts for ${value.assets} IGS PNG assets`, details: { ...prepared.expected, batches: value.batches, scriptBytes: value.bytes } }),
+      };
     }
     const temp = await mkdtemp(join(tmpdir(), "bdmv2web-bench-package-"));
     let sequence = 0;

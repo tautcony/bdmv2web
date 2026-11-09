@@ -1,6 +1,6 @@
 # Performance benchmarks
 
-The benchmark suite covers twelve BDMV, graph, MNU, and PGS component cases, synthetic scale cases, CLI process start, prepared-data CLI inspect/extract/render scenarios, package assembly from prepared scene and PNG inputs, and the generated offline menu opened in a browser through `file://`. Each case has a stable ID, a fixture ID and version, fixture parameters, and a timing scope.
+The benchmark suite covers eight BDMV, MNU, and PGS component cases, synthetic scale cases, CLI process start, prepared-data CLI inspect/extract/render scenarios, package assembly from prepared scene and PNG inputs, and the generated offline menu opened in a browser through `file://`. Each case has a stable ID, a fixture ID and version, fixture parameters, and a timing scope. Every input a case reads is committed to the repository: the runner refuses to start when one is missing, and records any input that git ignores, because a record built from a local-only file cannot be reproduced.
 
 ## Run component and scenario benchmarks
 
@@ -16,7 +16,7 @@ corepack pnpm bench --mode benchmark --build-mode normal --suite all --forks 3 -
 `--suite synthetic`, `--suite real`, and `--suite scenario` select fixture groups. `--case CASE_ID` selects exact cases and repeats. `--root DIR` runs the current harness against built artifacts and source data under another checkout.
 
 ```sh
-corepack pnpm bench --case mnu.battle-royale-00002.parse --case mnu.battle-royale-00002.render --forks 3 --out test-data/bench/runs
+corepack pnpm bench --case perf.igs.battle-royale.parse --case perf.igs.battle-royale.render --forks 3 --out test-data/bench/runs
 corepack pnpm bench --case scale.graph-1x.build --case scale.graph-2x.build --case scale.graph-4x.build --forks 3 --out test-data/bench/runs
 ```
 
@@ -32,15 +32,15 @@ Window drift compares the median of the first fifth of a fork's samples with the
 
 Operations faster than the 1 ms sample target are timed in batches: the worker warms the operation for the configured warmup duration, measures one call, times the estimated call count, and divides every sample by that count. Each recorded value stays milliseconds per call, and each measured interval is long enough for the timer to resolve. Rows record `callsPerSample`, one case uses the same count in every fork, and `--calls-per-sample N` fixes the count instead of calibrating. Batching changes sample resolution only; medians, percentiles, and throughputs remain per call.
 
-CLI cases run the built `apps/cli/dist/index.js` as a child process, so each sample covers process start, argument parsing, and the modules the selected command loads. `cli.startup.version` times only process start and argument parsing; a command case minus that baseline is the command's own cost. Command modules load on first use, so `--version` and `--help` do not load the commands they never run. `scale.pes-*x.extract` times transport scanning and IGS scene extraction; asset rendering is a separate case (`perf.igs.battle-royale.render`).
+CLI cases run the built `apps/cli/dist/index.js` as a child process, so each sample covers process start, argument parsing, and the modules the selected command loads. `cli.startup.version` times only process start and argument parsing; a command case minus that baseline is the command's own cost. Command modules load on first use, so `--version` and `--help` do not load the commands they never run. `scale.pes-*x.extract` times transport scanning and IGS scene extraction; asset rendering is a separate case (`perf.igs.battle-royale.render`). Packaging is split the same way: `perf.package.igs-serialize` times the batching and script serialization that every machine performs, and `perf.package.igs-assembly` additionally writes the package tree to a temporary directory, so the difference between the two rows is filesystem work rather than code.
 
 ## Capture profiles and memory
 
 CPU, heap, memory, and browser captures are separate modes. Each mode writes a schema version 1 record plus its artifacts under the output directory.
 
 ```sh
-corepack pnpm bench --mode cpu --case mnu.battle-royale-00002.render --duration-ms 5000 --out test-data/bench/profiles
-corepack pnpm bench --mode heap --case pgs.real-subtitle.compose --duration-ms 5000 --out test-data/bench/profiles
+corepack pnpm bench --mode cpu --case perf.igs.battle-royale.render --duration-ms 5000 --out test-data/bench/profiles
+corepack pnpm bench --mode heap --case perf.pgs.baja.compose --duration-ms 5000 --out test-data/bench/profiles
 corepack pnpm bench --mode memory --case cli.perf.metadata.inspect --duration-ms 5000 --out test-data/bench/profiles
 corepack pnpm bench --mode browser --case browser.synthetic-menu.file-navigation --out test-data/bench/profiles
 ```

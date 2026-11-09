@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePgsSup, PgsSubtitleTimeline } from "./pgs.js";
+import { parsePgsSup, PgsSubtitleTimeline, streamPgsSup } from "./pgs.js";
 
 describe("PGS SUP parsing", () => {
   it("assembles palette, fragmented object, PCS placement, pixels and 90 kHz timeline", () => {
@@ -71,6 +71,28 @@ describe("PGS SUP parsing", () => {
     expect(() => parsePgsSup(input)).toThrow(/RLE run exceeds bitmap bounds/);
   });
 
+  it("reuses a decoded bitmap across display sets but not after the object is redefined", () => {
+    const palette = segment(1, 0x14, [0, 0, 1, 235, 128, 128, 255, 2, 81, 128, 128, 255]);
+    // RLE: two opaque pixels of index 1, end of line, two transparent pixels, end of line.
+    const firstObject = segment(1, 0x15, [0, 7, 0, 0xc0, 0, 0, 13, 0, 2, 0, 2, 0, 0x82, 1, 0, 0, 0, 0x02, 0, 0]);
+    const secondObject = segment(2, 0x15, [0, 7, 0, 0xc0, 0, 0, 13, 0, 2, 0, 2, 0, 0x82, 2, 0, 0, 0, 0x02, 0, 0]);
+    const composition = (pts: number) => segment(pts, 0x16, [0, 2, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0, 7, 0, 0, 0, 0, 0, 0]);
+    const sets = parsePgsSup(join(
+      palette, firstObject, composition(1), segment(1, 0x80, []),
+      composition(2), segment(2, 0x80, []),
+      secondObject, composition(3), segment(3, 0x80, []),
+      composition(4), segment(4, 0x80, []),
+    ));
+    expect(sets).toHaveLength(4);
+    expect([...sets[0]!.bitmaps.get(7)!.pixels]).toEqual([255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0]);
+    // Same palette and object data: the repeated display set shares the first bitmap.
+    expect(sets[1]!.bitmaps.get(7)).toBe(sets[0]!.bitmaps.get(7));
+    // A redefined ODS keeps the object ID but must decode to the new colour.
+    expect([...sets[2]!.bitmaps.get(7)!.pixels]).toEqual([76, 76, 76, 255, 76, 76, 76, 255, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(sets[2]!.bitmaps.get(7)).not.toBe(sets[1]!.bitmaps.get(7));
+    expect(sets[3]!.bitmaps.get(7)).toBe(sets[2]!.bitmaps.get(7));
+  });
+
   it("bounds decoded RGBA allocation and rejects trailing RLE bytes", () => {
     const rle = [1, 0, 1, 0, 0, 0, 1, 2, 0, 0];
     const object = segment(1, 0x15, [0, 7, 0, 0xc0, 0, 0, 14, 0, 2, 0, 2, ...rle]);
@@ -80,6 +102,21 @@ describe("PGS SUP parsing", () => {
 
     const extraData = segment(2, 0x15, [0, 7, 0, 0xc0, 0, 0, 15, 0, 2, 0, 2, ...rle, 0]);
     expect(() => parsePgsSup(join(extraData, composition, segment(2, 0x80, [])))).toThrow(/trailing RLE data/);
+  });
+
+  it("streams the same display sets one at a time", () => {
+    const palette = segment(1, 0x14, [0, 0, 1, 235, 128, 128, 255, 2, 81, 128, 128, 255]);
+    const object = segment(1, 0x15, [0, 7, 0, 0xc0, 0, 0, 13, 0, 2, 0, 2, 0, 0x82, 1, 0, 0, 0, 0x02, 0, 0]);
+    const composition = (pts: number) => segment(pts, 0x16, [0, 2, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0, 7, 0, 0, 0, 0, 0, 0]);
+    const stream = join(palette, object, composition(1), segment(1, 0x80, []), composition(2), segment(2, 0x80, []), composition(3), segment(3, 0x80, []));
+    const parsed = parsePgsSup(stream);
+    const streamed = [...streamPgsSup(stream)];
+    expect(streamed.map((set) => set.pts90k)).toEqual(parsed.map((set) => set.pts90k));
+    // A streaming caller gets the same decoded pixels, but no bitmap is shared with a
+    // later set, so dropping a set releases its RGBA.
+    expect([...streamed[2]!.bitmaps.get(7)!.pixels]).toEqual([...parsed[2]!.bitmaps.get(7)!.pixels]);
+    expect(streamed[2]!.bitmaps.get(7)).not.toBe(streamed[1]!.bitmaps.get(7));
+    expect(parsed[2]!.bitmaps.get(7)).toBe(parsed[0]!.bitmaps.get(7));
   });
 });
 

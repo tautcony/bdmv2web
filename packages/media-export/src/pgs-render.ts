@@ -48,6 +48,9 @@ export function pgsSeconds90k(time90k: number, origin90k = 0): number | null {
 /** Render a complete PCS canvas and report whether it contains any visible pixel. */
 export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0): RenderedPgsDisplaySet {
   const rgba = new Uint8Array(display.width * display.height * 4);
+  // Only sourceAlpha > 0 writes, and such a write always leaves a non-zero output
+  // alpha, so the painted flag replaces a full-canvas visibility scan.
+  let painted = false;
   for (const placement of display.placements) {
     const bitmap = display.bitmaps.get(placement.objectId);
     if (!bitmap) continue;
@@ -58,8 +61,17 @@ export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: nu
       if (dx < 0 || dy < 0 || dx >= display.width || dy >= display.height || sourceX >= bitmap.width || sourceY >= bitmap.height) continue;
       const sourceOffset = (sourceY * bitmap.width + sourceX) * 4;
       const targetOffset = (dy * display.width + dx) * 4;
+      if (bitmap.pixels[sourceOffset + 3] === 0) continue;
+      painted = true;
+      // Opaque sprites are the common case: copy instead of running the blend.
+      if (bitmap.pixels[sourceOffset + 3] === 255 && rgba[targetOffset + 3] === 0) {
+        rgba[targetOffset] = bitmap.pixels[sourceOffset]!;
+        rgba[targetOffset + 1] = bitmap.pixels[sourceOffset + 1]!;
+        rgba[targetOffset + 2] = bitmap.pixels[sourceOffset + 2]!;
+        rgba[targetOffset + 3] = 255;
+        continue;
+      }
       const sourceAlpha = bitmap.pixels[sourceOffset + 3]! / 255;
-      if (sourceAlpha === 0) continue;
       const targetAlpha = rgba[targetOffset + 3]! / 255;
       const outputAlpha = sourceAlpha + targetAlpha * (1 - sourceAlpha);
       for (let channel = 0; channel < 3; channel++) {
@@ -68,7 +80,7 @@ export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: nu
       rgba[targetOffset + 3] = Math.round(outputAlpha * 255);
     }
   }
-  const visible = hasVisiblePixel(rgba);
+  const visible = painted;
   const startSeconds = pgsSeconds90k(display.pts90k, origin90k);
   const rawEndSeconds = endTime90k === null ? null : pgsSeconds90k(endTime90k, origin90k);
   return {
@@ -82,9 +94,4 @@ export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: nu
     visible,
     pngBytes: visible ? encodeRgbaPng(display.width, display.height, rgba) : new Uint8Array(),
   };
-}
-
-function hasVisiblePixel(rgba: Uint8Array): boolean {
-  for (let offset = 3; offset < rgba.length; offset += 4) if (rgba[offset] !== 0) return true;
-  return false;
 }

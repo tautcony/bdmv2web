@@ -8,11 +8,7 @@ const legacy = [
   ["bdmv.playlist-tamako.parse", "real", "bdmv", "BDMV playlist parse", "playlist-tamako", { kind: "playlist", file: "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV/PLAYLIST/00003.mpls" }],
   ["bdmv.clipinfo-uhd.parse", "real", "bdmv", "BDMV clipInfo parse", "clipInfo-uhd", { kind: "clipInfo", file: "test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/CLIPINF/00004.clpi" }],
   ["bdmv.sound-synthetic.parse", "synthetic", "bdmv", "BDMV sound parse", "sound-synthetic", { kind: "sound", file: "test-data/fixtures/synthetic-all-features/BDMV/AUXDATA/sound.bdmv", maxReadBytes: 8 * 1024 * 1024 }],
-  ["graph.tamako.build", "real", "graph", "BDMV graph build", "tamako-graph", { bdmvDir: "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV" }],
-  ["mnu.battle-royale-00002.parse", "real", "mnu", "MNU parse", "battle-royale-00002", { source: "ig-packets", file: "test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/STREAM/00002.m2ts_ig-packets.bin", clipId: "00002", pid: 0x1400, chunkBytes: 4093, operation: "parse" }],
-  ["mnu.battle-royale-00002.render", "real", "mnu", "MNU render assets", "battle-royale-00002", { source: "ig-packets", file: "test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/STREAM/00002.m2ts_ig-packets.bin", clipId: "00002", pid: 0x1400, chunkBytes: 4093, operation: "render" }],
-  ["pgs.real-subtitle.parse", "real", "pgs", "PGS parse and bitmap decode", "real-subtitle", { source: "file", file: "test-data/output/baja-studio-pgs/assets/subtitles/subtitle-00001-jpn.sup", displaySet: "largest", optional: true, operation: "parse" }],
-  ["pgs.real-subtitle.compose", "real", "pgs", "PGS compose and PNG encode", "real-subtitle", { source: "file", file: "test-data/output/baja-studio-pgs/assets/subtitles/subtitle-00001-jpn.sup", displaySet: "largest", optional: true, operation: "compose" }],
+  ["mnu.battle-royale-00002.parse-4k-chunks", "real", "mnu", "MNU parse over 4 KiB packet chunks", "battle-royale-00002", { source: "ig-packets", file: "test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/STREAM/00002.m2ts_ig-packets.bin", clipId: "00002", pid: 0x1400, chunkBytes: 4093, operation: "parse" }],
   ["pgs.synthetic-32-128x72.parse", "synthetic", "pgs", "PGS parse and bitmap decode", "synthetic-32-128x72", { source: "synthetic", displaySetCount: 32, width: 128, height: 72, canvasWidth: 1920, canvasHeight: 1080, displaySet: "largest", operation: "parse" }],
   ["pgs.synthetic-32-128x72.compose", "synthetic", "pgs", "PGS compose and PNG encode", "synthetic-32-128x72", { source: "synthetic", displaySetCount: 32, width: 128, height: 72, canvasWidth: 1920, canvasHeight: 1080, displaySet: "largest", operation: "compose" }],
 ].map(([caseId, suite, category, name, sample, options]) => ({
@@ -55,7 +51,7 @@ async function loadManifestCases(fixtureRoot) {
       const rawPid = definition.source?.pid ?? parameters.pid;
       const pid = typeof rawPid === "string" && /^0x[\da-f]+$/i.test(rawPid) ? Number.parseInt(rawPid.slice(2), 16) : rawPid;
       options = { ...parameters, source: effectiveSource, file: inputPath, clipId: definition.source?.clipId ?? parameters.clipId, pid, operation, expected: operation === "render" ? undefined : expectedDetails, expectedRender: operation === "render" ? expectedDetails : undefined };
-    } else if (definition.category === "pgs") options = { ...parameters, source: sourceType, file: inputPath, operation, displaySet: parameters.displaySet ?? "largest", optional: definition.optional === true, expected: operation === "compose" ? undefined : expectedDetails, expectedCompose: operation === "compose" ? expectedDetails : undefined };
+    } else if (definition.category === "pgs") options = { ...parameters, source: sourceType, file: inputPath, operation, displaySet: parameters.displaySet ?? "largest", expected: operation === "compose" ? undefined : expectedDetails, expectedCompose: operation === "compose" ? expectedDetails : undefined };
     else options = { ...parameters, file: inputPath, operation, source: effectiveSource, expected: expectedDetails };
     return { ...definition, options, fixtureRoot: resolve(fixtureRoot), ...(inputPath === null ? {} : { resolvedInputPath: inputPath }) };
   });

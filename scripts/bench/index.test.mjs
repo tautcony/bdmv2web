@@ -7,16 +7,16 @@ import { getCaseDefinitions } from "./cases.mjs";
 import { parseBenchArguments, summarizeSamples } from "./index.mjs";
 import { driftPercent } from "./stats.mjs";
 
-test("legacy benchmark definitions retain twelve stable cases", async () => {
+test("legacy benchmark definitions retain the stable non-duplicate cases", async () => {
   const definitions = await getCaseDefinitions({ root: process.cwd() });
   const legacyIds = [
     "bdmv.index-uhd.parse", "bdmv.movieobject-tamako.parse", "bdmv.playlist-tamako.parse", "bdmv.clipinfo-uhd.parse", "bdmv.sound-synthetic.parse",
-    "graph.tamako.build", "mnu.battle-royale-00002.parse", "mnu.battle-royale-00002.render", "pgs.real-subtitle.parse", "pgs.real-subtitle.compose",
+    "mnu.battle-royale-00002.parse-4k-chunks",
     "pgs.synthetic-32-128x72.parse", "pgs.synthetic-32-128x72.compose",
   ];
   const legacy = definitions.filter((item) => legacyIds.includes(item.caseId));
-  assert.equal(legacy.length, 12);
-  assert.equal(new Set(legacy.map((item) => item.caseId)).size, 12);
+  assert.equal(legacy.length, 8);
+  assert.equal(new Set(legacy.map((item) => item.caseId)).size, 8);
   assert.ok(legacy.every((item) => item.fixture.id && item.fixture.version && item.category && item.sample));
   assert.deepEqual(legacy.map((item) => item.caseId), legacyIds);
 });

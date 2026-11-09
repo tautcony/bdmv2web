@@ -48,6 +48,24 @@ export async function prepareIgsInput(root, options) {
   return { scene: adapted.scene, graphics, expected, input: { file: toPortablePath(root, file), clipId: options.clipId, pid: options.pid, bytes: (await stat(file)).size, chunkBytes: options.chunkBytes }, extraction };
 }
 
+/**
+ * The CPU side of packaging: batch the prepared PNGs and serialize every script the
+ * package ships. `buildMenuPackage` adds roughly 40% of filesystem work on top of
+ * this, so the two are measured separately: this row compares across machines, and
+ * the assembly row states what writing the package costs here.
+ */
+export async function serializeIgsMenuPackage(root, prepared) {
+  const { makePngBatches, createAssetBatchScript, createDataScript, createMenuIndexHtml, createCompatibility } = await moduleAt(root, "packages/package-builder/dist/index.js");
+  const metadata = { schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Prepared IGS performance menu", status: "partial", diagnostics: [] };
+  const batches = makePngBatches(prepared.graphics);
+  const scripts = batches.map((batch) => createAssetBatchScript(batch));
+  const index = createMenuIndexHtml(metadata.title, batches.length, undefined, false);
+  const data = createDataScript({ schemaVersion: "1.0", entries: [], programs: [], menus: [], playlists: [], mediaAssets: [], diagnostics: [] });
+  const compatibility = createCompatibility(metadata, false);
+  const bytes = scripts.reduce((sum, script) => sum + script.length, index.length + data.length) + JSON.stringify(compatibility).length;
+  return { batches: batches.length, assets: batches.reduce((sum, batch) => sum + batch.assets.length, 0), bytes };
+}
+
 export async function assembleIgsMenuPackage(root, outputDirectory, prepared, packageOptions = {}) {
   const { buildMenuPackage } = await moduleAt(root, "packages/package-builder/dist/index.js");
   const result = await buildMenuPackage({

@@ -106,6 +106,7 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 ## PGS 字幕
 
 - `parsePgsSup(data, options)`：解析 SUP 的 PCS/WDS/PDS/ODS/END，得到 `PgsDisplaySet[]`（尺寸、调色板、位图、叠加位置）。CRC/长度异常按诊断返回，不猜。
+- `streamPgsSup(data, options)`：同样的解码，但逐个显示集产出。5 MB 的 SUP 解出约 53 MB RGBA，一次性持有全部显示集只适合元数据场景；逐集渲染（`render` 命令）用流式版本，只保留当前帧的位图。两者对同一字节流给出相同的时间轴、位置和像素。
 - `PgsSubtitleTimeline`：按语言注册并选择显示集；跨 33 位 PTS 回绕时延续时间轴。
 - CLI `list` / `export` 用 `extractPgsTrack(sourcePath, pid, outputPath, { maxBytes, timestampOffset90k })` 写出 `.sup`；`--decode png` 与 `render` 使用 `pgs-render.ts` 导出非全透明显示集 PNG。
 - `pgs-render.ts` 的 `renderPgsDisplaySet(display, n, endTime90k, origin90k)` 同时返回 `startTime90k`/`endTime90k`（90 kHz）和 `startSeconds`/`endSeconds`（秒，相对 `origin90k`：轨道起点，独立 SUP 为首个显示集）。`pgsSeconds90k` 对负数与无符号回绕返回 `null`。

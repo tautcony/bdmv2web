@@ -24,3 +24,4 @@
 - The graph fixture maps 44 files to canonical `BDMV/` virtual paths and records each `sourcePath` relative to the Tamako `BDMV` root. The runner copies them into a temporary BDMV tree.
 - CLI scenarios run inspect, extract, and render on prepared supported inputs. Package assembly consumes a prepared scene and PNG assets.
 - Fixture validation checks file existence and parser or renderer output counts.
+- Every file a case reads is committed. A fixture that cannot be committed does not justify a skippable case: either derive a synthetic input, or drop the case.

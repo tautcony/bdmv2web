@@ -197,12 +197,21 @@ async function main() {
     ? async () => { let value; for (let index = 0; index < callsPerSample; index += 1) value = await prepared.run(); return value; }
     : () => { let value; for (let index = 0; index < callsPerSample; index += 1) value = prepared.run(); return value; };
   const memorySamples = [], gc = observeGc();
+  // A synchronous benchmark blocks the event loop, so an interval timer never fires
+  // and the record kept only the first and last snapshot. Sampled iterations run
+  // outside the timed window and give the peak columns a real series. Sampling every
+  // iteration matters most for slow cases: a 30 ms operation only fits a dozen
+  // iterations into the window, so skipping seven of every eight left four points.
+  const sampleMemory = () => {
+    if (memorySamples.length >= 256) return;
+    memorySamples.push(process.memoryUsage());
+  };
   const cpuStart = process.cpuUsage(), wallStart = process.hrtime.bigint();
   memorySamples.push(process.memoryUsage());
   const timer = setInterval(() => memorySamples.push(process.memoryUsage()), 50);
   let last = validationValue;
   const bench = new Bench({ time: timeMs, iterations: minSamples, warmup: true, warmupTime: warmupMs, warmupIterations: 1, retainSamples: true, throws: true });
-  bench.add(caseId, () => { last = runSample(); return last; }, { async: asyncOperation });
+  bench.add(caseId, () => { last = runSample(); return last; }, { async: asyncOperation, beforeEach: sampleMemory });
   let cpuUsage, wallMs;
   try {
     await bench.run();
@@ -226,7 +235,10 @@ async function main() {
   const result = {
     caseId, scope: prepared.scope, input: prepared.input, fixture: prepared.fixture, output: prepared.describe(last),
     callsPerSample, iterations: samples.length, rawMsPerCall,
-    cpuUsage: { ...cpuUsage, unit: "microseconds", scope: "process CPU time over the Tinybench warmup and measured interval" },
+    // `process.cpuUsage` only sees this process. Cases that spawn a CLI child
+    // report that scope explicitly instead of implying the number covers the work.
+    cpuUsage: { ...cpuUsage, unit: "microseconds", coversSpawnedProcess: def.spawnsChild !== true,
+      scope: def.spawnsChild === true ? "parent process CPU time only: the measured work runs in a spawned CLI process" : "process CPU time over the Tinybench warmup and measured interval" },
     wallMs,
     runtime: { execArgv: process.execArgv, nodeOptions: process.env.NODE_OPTIONS ?? null },
     memory: {
@@ -234,7 +246,7 @@ async function main() {
       heapUsedBytes: peak((sample) => sample.heapUsed), externalBytes: peak((sample) => sample.external), arrayBuffersBytes: peak((sample) => sample.arrayBuffers),
       sampleCount: memorySamples.length,
       samples: memorySamples.map((sample) => ({ rss: sample.rss, heapUsed: sample.heapUsed, external: sample.external, arrayBuffers: sample.arrayBuffers })),
-      scope: "process memory snapshots over the Tinybench warmup and measured interval; maxRSSBytes is the process-lifetime peak",
+      scope: "process memory sampled at every iteration plus a 50 ms timer for async cases, with a start and end snapshot, capped at 256 points; maxRSSBytes is the process-lifetime peak",
     },
     gc: { available: gc.available, unavailableReason: gc.reason ?? null, events: gc.events, scope: "GC events during the Tinybench warmup and measured interval" },
   };

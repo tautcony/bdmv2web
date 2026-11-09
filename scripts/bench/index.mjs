@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Option } from "commander";
 import { BUILD_MODES, readBuildMode } from "./build-mode.mjs";
 import { getCaseDefinitions } from "./cases.mjs";
+import { assertFixturesPresent, auditFixtures } from "./fixture-audit.mjs";
 import { appendArgument, createProgram, exitWithError, integerArgument, numberArgument, parseOptions, splitList } from "./cli.mjs";
 import { writeSampleStore } from "./sample-store.mjs";
 import { summarizeForks, summarizeSamples } from "./stats.mjs";
@@ -88,6 +89,16 @@ async function main() {
   if (cli.only) { const categories = new Set(definitions.map((item) => item.category)); for (const category of cli.only) if (!categories.has(category)) throw new Error(`Unknown benchmark category: ${category}`); }
   if (!selected.length && !cli.list) throw new Error("No benchmark cases match the selected filters");
   if (cli.list) { process.stdout.write(`Repository root: ${root}\n`); for (const item of selected) process.stdout.write(`${item.caseId.padEnd(48)} ${item.suite.padEnd(10)} ${item.category.padEnd(8)} ${item.sample.padEnd(28)} ${item.fixture.id}@${item.fixture.version}\n`); return; }
+  // A case is worth keeping only when its input ships with the repository: a missing
+  // fixture makes the case fail, and an ignored one makes the record unreproducible.
+  const audit = cli.mode === "benchmark" ? auditFixtures({ root, definitions: selected }) : null;
+  if (audit) {
+    assertFixturesPresent(audit);
+    if (audit.untracked.length) {
+      const lines = audit.untracked.map((item) => `  ${item.caseId}: ${item.path}`);
+      process.stderr.write(`warning: these fixtures are not in git, so nobody else can reproduce the record:\n${lines.join("\n")}\nAdd them, or drop the case that needs them.\n`);
+    }
+  }
   if (cli.mode !== "benchmark") {
     const file = cli.mode === "browser" ? "browser.mjs" : cli.mode === "memory" ? "memory.mjs" : "profile.mjs";
     const caseId = cli.cases[0];
@@ -104,6 +115,9 @@ async function main() {
     await new Promise((resolvePromise, reject) => { child.once("error", reject); child.once("close", (code) => code === 0 ? resolvePromise() : reject(new Error(`${file} exited ${code}`))); }); return;
   }
   const runId = `${new Date().toISOString().replaceAll(":", "").replaceAll(".", "-")}-${randomUUID().slice(0, 8)}`;
+  // A preloaded module runs inside every fork and lands in the measurement; the
+  // record keeps the value, and comparison already treats it as a different setup.
+  if (process.env.NODE_OPTIONS) process.stderr.write(`warning: NODE_OPTIONS is set (${process.env.NODE_OPTIONS}); preloaded code is charged to every case and the record will not compare against a clean run.\n`);
   const outputRoot = isAbsolute(cli.out) ? cli.out : resolve(workspace, cli.out);
   const runDir = join(outputRoot, runId);
   if (cli.json) { await mkdir(outputRoot, { recursive: true }); await mkdir(runDir, { recursive: false }); }
@@ -119,7 +133,6 @@ async function main() {
         callsPerSample ??= result.callsPerSample;
         forkResults.push({ index, callsPerSample: result.callsPerSample, iterations: result.iterations, rawMsPerCall: result.rawMsPerCall, stats: summarizeSamples(result.rawMsPerCall), memory: result.memory, cpuUsage: result.cpuUsage, wallMs: result.wallMs, gc: result.gc, runtime: result.runtime, input: result.input, output: result.output, scope: result.scope, stdout: result.stdout, stderr: result.stderr });
       } catch (error) {
-        if (def.options?.optional && /ENOENT|ENOTDIR/.test(error.message)) { skipped.push({ caseId: def.caseId, reason: error.message }); skip = true; break; }
         failures.push({ caseId: def.caseId, fork: index, reason: error.stack ?? String(error) }); break;
       }
     }
@@ -129,7 +142,7 @@ async function main() {
   const revision = git(root, ["rev-parse", "HEAD"]), dirty = Boolean(git(root, ["status", "--porcelain"]));
   const buildMode = await readBuildMode(root, cli.buildMode);
   const workerRuntime = rows[0]?.forks[0]?.runtime;
-  const report = { schemaVersion: 1, mode: "benchmark", runId, createdAt: new Date().toISOString(), environment: { repositoryRoot: root, revision, dirty, node: process.version, v8: process.versions.v8, platform: platform(), release: release(), architecture: arch(), cpuModel: cpus()[0]?.model ?? null, cpuCount: cpus().length, totalMemoryBytes: totalmem(), execArgv: workerRuntime?.execArgv ?? [...process.execArgv.filter((arg) => supportedNodeFlag.test(arg)), ...cli.nodeArgs], nodeOptions: workerRuntime?.nodeOptions ?? process.env.NODE_OPTIONS ?? null, ...buildMode }, configuration: { suite: cli.suite, caseIds: selected.map((item) => item.caseId), forks: cli.forks, warmupMs: cli.warmupMs, timeMs: cli.timeMs, minSamples: cli.minSamples, callsPerSample: cli.callsPerSample ?? null, nodeArgs: cli.nodeArgs, profile: false, ...buildMode, engine: "tinybench", engineVersion: "6.2.3" }, rows, skipped, failures };
+  const report = { schemaVersion: 1, mode: "benchmark", runId, createdAt: new Date().toISOString(), environment: { repositoryRoot: root, revision, dirty, node: process.version, v8: process.versions.v8, platform: platform(), release: release(), architecture: arch(), cpuModel: cpus()[0]?.model ?? null, cpuCount: cpus().length, totalMemoryBytes: totalmem(), execArgv: workerRuntime?.execArgv ?? [...process.execArgv.filter((arg) => supportedNodeFlag.test(arg)), ...cli.nodeArgs], nodeOptions: workerRuntime?.nodeOptions ?? process.env.NODE_OPTIONS ?? null, ...buildMode }, configuration: { suite: cli.suite, caseIds: selected.map((item) => item.caseId), forks: cli.forks, warmupMs: cli.warmupMs, timeMs: cli.timeMs, minSamples: cli.minSamples, callsPerSample: cli.callsPerSample ?? null, nodeArgs: cli.nodeArgs, profile: false, ...buildMode, engine: "tinybench", engineVersion: "6.2.3" }, rows, skipped, failures, ...(audit?.untracked.length ? { untrackedFixtures: audit.untracked } : {}) };
   if (cli.json) {
     const store = await writeSampleStore(runDir, rows);
     if (store) report.samples = store;

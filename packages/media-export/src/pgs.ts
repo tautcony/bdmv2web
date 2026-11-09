@@ -42,17 +42,49 @@ interface Composition { pts: number; width: number; height: number; number: numb
 
 const MAX_DIMENSION = 16_384;
 const MAX_OBJECT_BYTES = 64 * 1024 * 1024;
+const TRANSPARENT: PgsRgba = [0, 0, 0, 0];
+const LITTLE_ENDIAN = new Uint8Array(Uint32Array.of(1).buffer)[0] === 1;
 
 /** Parse a Blu-ray SUP byte stream into complete PGS display sets. */
 export function parsePgsSup(data: Uint8Array, options: PgsParseOptions = {}): PgsDisplaySet[] {
+  return [...readDisplaySets(data, parseLimits(options), true)];
+}
+
+/**
+ * The same decode as `parsePgsSup`, one display set at a time. A 5 MB SUP decodes
+ * into 53 MB of RGBA, so a caller that renders and drops each set keeps one bitmap
+ * set alive instead of the whole stream. The cross-set bitmap cache is dropped:
+ * a set is only decoded from object data that the stream has already delivered.
+ */
+export function* streamPgsSup(data: Uint8Array, options: PgsParseOptions = {}): Generator<PgsDisplaySet> {
+  yield* readDisplaySets(data, parseLimits(options), false);
+}
+
+function parseLimits(options: PgsParseOptions): { maxDimension: number; maxObjectBytes: number } {
   const maxDimension = options.maxDimension ?? MAX_DIMENSION;
   const maxObjectBytes = options.maxObjectBytes ?? MAX_OBJECT_BYTES;
   if (!Number.isSafeInteger(maxDimension) || maxDimension <= 0 || !Number.isSafeInteger(maxObjectBytes) || maxObjectBytes <= 0) throw new RangeError("PGS allocation limits must be positive safe integers.");
+  return { maxDimension, maxObjectBytes };
+}
+
+function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxObjectBytes: number }, retainBitmaps: boolean): Generator<PgsDisplaySet> {
+  const { maxDimension, maxObjectBytes } = limits;
   const segments = readSegments(data);
   const palettes = new Map<number, Map<number, PgsRgba>>();
   const objects = new Map<number, ObjectData>();
+  // Presentation compositions reuse the same object across display sets; decoding
+  // per display set turned a re-displayed bitmap into a fresh allocation every time.
+  // The entry keeps the object data it was decoded from, because an ODS may legally
+  // redefine an object ID later in the stream. A streaming caller drops the cache so
+  // that the bitmaps of a rendered set become collectable.
+  const decodedByPalette = retainBitmaps ? new WeakMap<Map<number, PgsRgba>, Map<number, { source: ObjectData; bitmap: PgsBitmap }>>() : null;
+  const cacheFor = (palette: Map<number, PgsRgba>): Map<number, { source: ObjectData; bitmap: PgsBitmap }> => {
+    if (!decodedByPalette) return new Map();
+    let cache = decodedByPalette.get(palette);
+    if (!cache) { cache = new Map(); decodedByPalette.set(palette, cache); }
+    return cache;
+  };
   const pending = new Map<number, { width: number; height: number; expected: number; chunks: Uint8Array[]; received: number }>();
-  const result: PgsDisplaySet[] = [];
   let composition: Composition | undefined;
 
   for (const segment of segments) {
@@ -103,12 +135,18 @@ export function parsePgsSup(data: Uint8Array, options: PgsParseOptions = {}): Pg
       case 0x80: { // END completes the current display set
         if (!composition) break;
         const palette = palettes.get(composition.paletteId) ?? new Map<number, PgsRgba>();
+        const decoded = cacheFor(palette);
         const used = new Map<number, PgsBitmap>();
         for (const placement of composition.placements) {
           const object = objects.get(placement.objectId);
-          if (object) used.set(placement.objectId, decodeObject(placement.objectId, object, palette, maxObjectBytes));
+          if (!object) continue;
+          const cached = decoded.get(placement.objectId);
+          if (cached && cached.source === object) { used.set(placement.objectId, cached.bitmap); continue; }
+          const bitmap = decodeObject(placement.objectId, object, palette, maxObjectBytes);
+          decoded.set(placement.objectId, { source: object, bitmap });
+          used.set(placement.objectId, bitmap);
         }
-        result.push({ pts90k: composition.pts, width: composition.width, height: composition.height, compositionNumber: composition.number, compositionState: composition.state, paletteId: composition.paletteId, palette: new Map(palette), bitmaps: used, placements: composition.placements.map((item) => ({ ...item, ...(item.crop ? { crop: { ...item.crop } } : {}) })) });
+        yield { pts90k: composition.pts, width: composition.width, height: composition.height, compositionNumber: composition.number, compositionState: composition.state, paletteId: composition.paletteId, palette, bitmaps: used, placements: composition.placements.map((item) => ({ ...item, ...(item.crop ? { crop: { ...item.crop } } : {}) })) };
         composition = undefined;
         break;
       }
@@ -117,7 +155,6 @@ export function parsePgsSup(data: Uint8Array, options: PgsParseOptions = {}): Pg
     }
   }
   if (pending.size) throw new TypeError("PGS stream ended with incomplete fragmented object data.");
-  return result;
 }
 
 /** Select/off and seek over parsed display sets without conflating PG with IG state. */
@@ -191,6 +228,10 @@ function decodeObject(id: number, object: ObjectData, palette: ReadonlyMap<numbe
   const pixelBytes = object.width * object.height * 4;
   if (!Number.isSafeInteger(pixelBytes) || pixelBytes > maxObjectBytes) throw new RangeError(`PGS object ${id} decoded bitmap exceeds configured byte limit.`);
   const pixels = new Uint8Array(pixelBytes);
+  // RLE runs repeat one colour over a few pixels at a time; packing each palette
+  // entry into a 32-bit word once turns the inner loop into one store per pixel.
+  const words = LITTLE_ENDIAN ? new Uint32Array(pixels.buffer) : null;
+  const packed = words ? packPalette(palette) : null;
   let x = 0; let y = 0; let offset = 0;
   while (offset < object.encoded.length && y < object.height) {
     const value = object.encoded[offset++]!;
@@ -214,10 +255,26 @@ function decodeObject(id: number, object: ObjectData, palette: ReadonlyMap<numbe
   function takeColor(): number { if (offset >= object.encoded.length) throw new TypeError(`PGS object ${id} has a truncated RLE color run.`); return object.encoded[offset++]!; }
   function put(index: number, count: number): void {
     if (y >= object.height || x + count > object.width) throw new TypeError(`PGS object ${id} RLE run exceeds bitmap bounds.`);
-    const rgba = palette.get(index) ?? [0, 0, 0, 0];
-    for (let n = 0; n < count; n++) pixels.set(rgba, (y * object.width + x + n) * 4);
+    const start = y * object.width + x;
+    if (words && packed) {
+      const word = packed[index]!;
+      // `TypedArray#fill` costs more than a store loop for the short runs that
+      // anti-aliased subtitles produce; it only pays off for long solid runs.
+      if (count >= 16) words.fill(word, start, start + count);
+      else for (let n = 0; n < count; n++) words[start + n] = word;
+    } else {
+      const value = palette.get(index) ?? TRANSPARENT;
+      for (let n = 0; n < count; n++) pixels.set(value, (start + n) * 4);
+    }
     x += count;
   }
+}
+
+/** Pack every palette entry into one little-endian RGBA word per index. */
+function packPalette(palette: ReadonlyMap<number, PgsRgba>): Uint32Array {
+  const packed = new Uint32Array(256);
+  for (const [index, rgba] of palette) if (index >= 0 && index < 256) packed[index] = (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (rgba[3] << 24)) >>> 0;
+  return packed;
 }
 
 function yCrCbToRgba(y: number, cr: number, cb: number, alpha: number): PgsRgba {

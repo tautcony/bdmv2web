@@ -89,6 +89,11 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({ status: "skipped", mode, caseId, reason: prepared.skip })}\n`);
     return;
   }
+  // A spawned CLI child is not instrumented by the parent's inspector session, so a
+  // cpu/heap profile of such a case only describes process startup and spawn cost.
+  if (caseDef.spawnsChild === true) {
+    process.stderr.write(`warning: ${caseId} runs its work in a spawned CLI process; this ${mode} profile covers only the parent process. Profile the CLI entry point directly for case-level attribution.\n`);
+  }
   const startedAt = new Date().toISOString();
   try {
     await prepared.validate?.(await prepared.run());
@@ -112,7 +117,7 @@ async function main(argv) {
       caseId, fixture: caseDef.fixture, category: caseDef.category, name: caseDef.name, sample: caseDef.sample, scope: prepared.scope,
       artifacts: [artifact.relativePath], forks: [{ index: 0, iterations, requestedDurationMs: durationMs, actualDurationMs, profilePath: artifact.relativePath, output: outputSummary }],
     };
-    const config = { caseId, mode, requestedDurationMs: durationMs, warmupMs, warmupRuns: actualWarmupRuns, iterations, format };
+    const config = { caseId, mode, requestedDurationMs: durationMs, warmupMs, warmupRuns: actualWarmupRuns, iterations, format, profileScope: caseDef.spawnsChild === true ? "parent-only" : "whole-case" };
     await writeProfileRun({ root, outputRoot, mode, definition: caseDef, configuration: config, row, buildMode, runDir, runId });
     process.stdout.write(`${JSON.stringify({ status: "complete", mode, caseId, runId, runDirectory: runDir, record: join(runDir, "run.json"), artifact: artifact.target, startedAt, requestedDurationMs: durationMs, actualDurationMs, warmupMs, warmupRuns: actualWarmupRuns, iterations, output: outputSummary, format })}\n`);
   } finally {

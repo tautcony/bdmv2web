@@ -7,7 +7,7 @@ import { assertDisjointRoots, beginOutputTransaction } from "@bdmv2web/bdmv-io";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { ContractError } from "@bdmv2web/core";
 import { extractIgsScenes, parseIgsMnu } from "@bdmv2web/igs";
-import { parsePgsSup, pgsDisplaySetEnd90k, renderPgsDisplaySet } from "@bdmv2web/media-export";
+import { pgsDisplaySetEnd90k, renderPgsDisplaySet, streamPgsSup } from "@bdmv2web/media-export";
 import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -77,26 +77,33 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
       }
       continue;
     }
-    let displaySets;
-    try { displaySets = parsePgsSup(bytes); }
-    catch (error) { throw new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${error instanceof Error ? error.message : String(error)}`); }
-    if (displaySets.length === 0) throw new ContractError("RENDER_INVALID_SUP", source.path, "SUP contains no complete display set.");
+    // Display sets are rendered one at a time. A feature-length SUP decodes into
+    // hundreds of megabytes of bitmaps, so only the frame being rendered stays alive.
+    const parseFailure = (error: unknown) => new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
+    const iterator = streamPgsSup(bytes)[Symbol.iterator]();
+    const step = () => { try { return iterator.next(); } catch (error) { throw parseFailure(error); } };
+    let current = step();
+    if (current.done) throw new ContractError("RENDER_INVALID_SUP", source.path, "SUP contains no complete display set.");
     // A standalone SUP carries no track interval, so the first display set is
     // the origin: exported seconds stay usable even when the file starts at an
     // arbitrary PTS.
-    const origin90k = displaySets[0]?.pts90k ?? 0;
-    for (const [index, displaySet] of displaySets.entries()) {
-      const endTime90k = pgsDisplaySetEnd90k(displaySets, index);
+    const origin90k = current.value.pts90k;
+    let next = step();
+    for (let index = 0; !current.done; index++) {
+      const displaySet = current.value;
+      const endTime90k = pgsDisplaySetEnd90k(next.done ? [displaySet] : [displaySet, next.value], 0);
       const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, origin90k);
-      if (!rendered.visible) continue;
-      const path = `assets/subtitles/${stem}-display-${String(index + 1).padStart(5, "0")}.png`;
-      pending.push({ path, bytes: rendered.pngBytes });
-      files.push({
-        type: "sup-png", path, byteLength: rendered.pngBytes.byteLength,
-        ...(language === undefined ? {} : { language }),
-        displaySet: rendered.displaySetNumber, startSeconds: rendered.startSeconds, endSeconds: rendered.endSeconds,
-        width: rendered.width, height: rendered.height,
-      });
+      if (rendered.visible) {
+        const path = `assets/subtitles/${stem}-display-${String(index + 1).padStart(5, "0")}.png`;
+        pending.push({ path, bytes: rendered.pngBytes });
+        files.push({
+          type: "sup-png", path, byteLength: rendered.pngBytes.byteLength,
+          ...(language === undefined ? {} : { language }),
+          displaySet: rendered.displaySetNumber, startSeconds: rendered.startSeconds, endSeconds: rendered.endSeconds,
+          width: rendered.width, height: rendered.height,
+        });
+      }
+      current = next; next = step();
     }
   }
   await commitRenderedAssets(out, files, pending, partial, strictDefault());
