@@ -1,0 +1,177 @@
+.gitignore
+  s_393e923bd501c9::t_145c62bee7d79d 11
+README.md
+  s_13d9fd9d247de5::t_9051e0fa85ddd3 84-87
+apps/cli/src/commands/build.test.ts
+  s_7312a8a7c80ff9::t_d8c2f13725cd2b 1-44
+apps/cli/src/commands/build.ts
+  s_393e923bd501c9::t_3e5a59a6b7a461 12,74-77,81,86,427,521
+apps/cli/src/commands/extract.test.ts
+  s_7312a8a7c80ff9::t_28038de9448151 1-82
+apps/cli/src/commands/extract.ts
+  s_7312a8a7c80ff9::t_5fe525cff44a9e 8,47-48,51,65,90-100,106-151
+apps/cli/tests/e2e/index.test.ts
+  s_7312a8a7c80ff9::t_53b978e2976a3f 395,406,417-419,442,445-446,470-475,482-504
+docs/llm-wiki/contracts.md
+  s_393e923bd501c9::t_4d58968ced6a80 96
+docs/llm-wiki/diagnostics.md
+  s_393e923bd501c9::t_c479326ab53014 137
+docs/llm-wiki/features/media.md
+  s_393e923bd501c9::t_2a0fad88f55871 36
+docs/llm-wiki/packages/hdmv.md
+  s_7312a8a7c80ff9::t_cc065f4dce75ad 91-147,181,185-187
+docs/llm-wiki/packages/media-export.md
+  s_393e923bd501c9::t_67d1fc029b523f 18,29,52,57,62,102,134
+docs/references/stages/M6-release-verification.md
+  s_7312a8a7c80ff9::t_6cb51621ec2e44 15-20
+docs/support/hdmv-support.md
+  s_1043347e11fe75::t_da180bd856744f 11-14
+docs/support/protocol-support.md
+  s_1043347e11fe75::t_2b2c1cd536fa64 37-40
+openspec/changes/archive/2026-11-09-converge-contracts-and-distribution/benchmark.md
+  s_7312a8a7c80ff9::t_4bfd043d47a6c7 1-121
+openspec/changes/archive/2026-11-09-converge-contracts-and-distribution/design.md
+  s_7312a8a7c80ff9::t_d215451fefcb79 76,81-85,87-89,93-94,102-104
+openspec/changes/archive/2026-11-09-converge-contracts-and-distribution/specs/offline-media-playback/spec.md
+  s_393e923bd501c9::t_bc1423b243e091 1-22
+openspec/changes/scope-changes.md
+  s_7312a8a7c80ff9::t_f33304470d20f1 86-91
+openspec/changes/task-disposition-index.md
+  s_7312a8a7c80ff9::t_a4bf1293acec14 23
+packages/bdmv-io/src/index.test.ts
+  s_393e923bd501c9::t_316e8a6229578d 1,8-19,59-76
+packages/bdmv-io/src/index.ts
+  s_393e923bd501c9::t_685da0e042a08f 34-37,106
+packages/bdmv-parser/src/model.ts
+  s_7312a8a7c80ff9::t_554f6053f4c765 1
+packages/bdmv-parser/src/parser.test.ts
+  s_7312a8a7c80ff9::t_4117b0f7733238 20,31,84-95,106,116,143,149,155,161,167,173,179,217-219,232,244,250,256,262,276,284,298,304,310,352,370,398,406,433,456,491,500,507,531,557,578
+packages/bdmv-parser/src/parser.ts
+  s_393e923bd501c9::t_f6a0fdcd3535ee 10-14,42,50,54,64,182,415,439,457-458,467-468,485-486,491
+packages/core/src/contracts.test.ts
+  s_7312a8a7c80ff9::t_08bd53e72784c5 4-6,9,12,18-31
+packages/core/src/index.ts
+  s_13d9fd9d247de5::t_bdfbc2768ca4c0 47,57-65
+packages/hdmv/src/graph.test.ts
+  s_8f61ab83aa5f65::t_bc7b63e98d95e2 1-64
+packages/hdmv/src/graph.ts
+  s_8f61ab83aa5f65::t_c654a809f6a4d1 2,6,8,11-16,20,61,71
+packages/hdmv/src/opcode-reference.test.ts
+  s_8f61ab83aa5f65::t_dcd414fba2b93f 1-107
+packages/hdmv/src/vm.ts
+  s_8f61ab83aa5f65::t_39a172eea86c64 406-410
+packages/igs/src/extract.ts
+  s_7312a8a7c80ff9::t_e902639cdbb3ea 31,43-45,49,55,60,155,157,163,175,187,189-200,224-227
+packages/igs/src/mnu.ts
+  s_7312a8a7c80ff9::t_73ee9fe36b696b 73
+packages/igs/src/transport.ts
+  s_393e923bd501c9::t_5560fcc90b47fc 214-221,223,233,247-248,254,257-258,267,271-279,283,289,292,302,306-307,314-315,351,371
+packages/igs/src/types.ts
+  s_7312a8a7c80ff9::t_50633c3a90ad1c 12-14,17-33,38,40
+packages/igs/tests/integration/extraction.test.ts
+  s_7312a8a7c80ff9::t_13a81a745c9a78 422-424
+packages/igs/tests/integration/m1-m2-m3.integration.test.ts
+  s_7312a8a7c80ff9::t_e6dae6d902dd8f 27,33-34,38
+packages/media-export/src/budget.ts
+  s_393e923bd501c9::t_e43f7e7156497e 15,23-24,54-60,62,65,67
+packages/media-export/src/closure.test.ts
+  s_8f61ab83aa5f65::t_e6ec5e4ff8b48a 111-121
+packages/media-export/src/directory-bytes.ts
+  s_393e923bd501c9::t_4cb19a82462535 1-20
+packages/media-export/src/index.test.ts
+  s_393e923bd501c9::t_14d0b2765716dc 174-184,417-418,421-424,426,457,522-523,526-530,533-536,538-539
+packages/media-export/src/index.ts
+  s_393e923bd501c9::t_469aa7e584974c 2,6,191,197,343,371,387,390-391,393,462,472-473,475,478-482,668,687,698,704-711,715-716,718-720
+packages/media-export/src/linear.test.ts
+  s_393e923bd501c9::t_f3798a5abc9de3 99-100
+packages/media-export/src/linear.ts
+  s_393e923bd501c9::t_ed9bfcf080feb1 64,70-75,83,186-187,200,206,210-212,331,340,352,355,358-369,379
+packages/package-builder/package.json
+  s_33888f14ad8e1e::t_5d4b4b3d54ca61 6,9
+packages/package-builder/scripts/copy-templates.mjs
+  s_8f61ab83aa5f65::t_5c4e2e2cb8cd23 1-11
+packages/package-builder/src/index.test.ts
+  s_7312a8a7c80ff9::t_26baaa8d6c8892 2,5,7,18,150-220,248-249,289-292,295,298-299
+packages/package-builder/src/index.ts
+  s_7312a8a7c80ff9::t_9bdcee2bd4fbf5 10,12,14-16,153,155-156,187-190,192-193,195-202,206,208,210-212,214-222,224-226,243,273,408,414-446
+packages/runtime-web/src/browser.test.ts
+  s_283dc937367996::t_b7c4f3da7c33b4 112-137
+packages/runtime-web/src/browser.ts
+  s_283dc937367996::t_a2b12b8715e990 531
+packages/runtime-web/src/index.test.ts
+  s_283dc937367996::t_700ecf65c32a79 367,382,384-400,402,952-956,1169,1172-1194,1322-1337
+packages/runtime-web/src/index.ts
+  s_283dc937367996::t_2fa2706ad8d693 47-68,483,682,723,748,750-763,767-771,775,780-785,806,812,817,820,849,873,881-882,890-894,919,932-933,939,946,1023-1024
+packages/runtime-web/tests/integration/tamako-headless-navigation.test.ts
+  s_7312a8a7c80ff9::t_866568d2320e9e 40
+scripts/bench/index.mjs
+  s_393e923bd501c9::t_d460b895b48244 1-259
+scripts/generate-libbluray-baselines.py
+  s_7312a8a7c80ff9::t_2bfd1c45f45121 362-363
+test-data/baselines/libbluray-1.5.0-navigation-baseline.json
+  s_393e923bd501c9::t_1d45a7b0f47953 11-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "851ae9aab4d3f9230dc04e1dc040900eb4166409",
+  "prompts": {},
+  "sessions": {
+    "s_1043347e11fe75": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1becd-fac5-7143-a699-01beff885683",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_13d9fd9d247de5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1bed7-62f8-7552-94be-3acf84b0a50a",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_283dc937367996": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1bed0-ad45-7d10-873c-543f3c221bc9",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_33888f14ad8e1e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1becf-1944-7db3-846a-71e4e2ced22b",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_393e923bd501c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1becf-7243-7b60-9c4a-9dfa16af3744",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_7312a8a7c80ff9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be97-552f-7bd0-83b0-38d8438de65d",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    },
+    "s_8f61ab83aa5f65": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1becf-2af8-7d03-9f6f-05650cf3db94",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
