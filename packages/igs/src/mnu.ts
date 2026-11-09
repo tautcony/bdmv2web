@@ -70,7 +70,7 @@ export function parseIgsMnu(data: Uint8Array, options: IgsMnuOptions = {}): IgsE
   } else diagnostics.push(...validateIgsSceneAssets(scenes));
   const errors = diagnostics.some((item) => item.severity === "error");
   const warnings = diagnostics.some((item) => item.severity === "warning");
-  if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [] });
+  if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [], stage: "igs" });
   return {
     scenes,
     assets,

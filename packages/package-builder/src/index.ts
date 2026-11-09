@@ -7,12 +7,13 @@ import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MenuLoopMediaInput, type PgsDisplaySet, type VideoCodec } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec } from "@bdmv2web/media-export";
 
+const templateDirectory = existsSync(new URL("./templates/index.html", import.meta.url)) ? "./templates/" : "../templates/";
 const PACKAGE_TEMPLATES = {
-  menuIndex: readFileSync(new URL("../templates/index.html", import.meta.url), "utf8"),
-  style: readFileSync(new URL("../templates/style.css", import.meta.url), "utf8"),
-  readme: readFileSync(new URL("../templates/README.md", import.meta.url), "utf8"),
+  menuIndex: readFileSync(new URL(`${templateDirectory}index.html`, import.meta.url), "utf8"),
+  style: readFileSync(new URL(`${templateDirectory}style.css`, import.meta.url), "utf8"),
+  readme: readFileSync(new URL(`${templateDirectory}README.md`, import.meta.url), "utf8"),
 };
 
 function renderTemplate(template: string, values: Record<string, string>, sections: Record<string, boolean> = {}): string {
@@ -149,8 +150,10 @@ export interface MenuPackageInput {
   diagnostics?: MenuPackageMetadata["diagnostics"];
   /** Top Menu background/audio export. */
   menuLoopMedia?: MenuLoopMediaInput;
-  /** Menu media encoder settings: codec, quality, and HDR policy. Defaults to HEVC / CRF 24 / veryfast / tonemap. */
+  /** Menu media encoder settings. Defaults to HEVC / CRF 24 / veryfast / tonemap. */
   mediaEncoding?: MenuMediaEncoding;
+  /** Process runner forwarded to menu-media encoding. */
+  mediaProcessRunner?: MediaProcessRunner;
   /** Local media for always-on menu playlists other than Top Menu. */
   additionalMenuMedia?: MenuLoopMediaInput[];
   onMediaProgress?: (progress: MediaAssetProgress) => void;
@@ -181,31 +184,46 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   await mkdir(runtimeDirectory, { recursive: true });
   input.onPhase?.("media");
   const mediaEncoding = input.mediaEncoding ?? {};
-  const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
-  const additionalMedia: Array<{ result: Awaited<ReturnType<typeof exportMenuLoopMedia>>; sanitizedId: string }> = [];
+  const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
+  const mediaByKey = new Map<string, { result: MenuLoopMediaResult; planPath: string }>();
+  if (input.menuLoopMedia && exportedMedia) mediaByKey.set(menuMediaReuseKey(input.menuLoopMedia, mediaEncoding), { result: exportedMedia, planPath: "media-plan.json" });
+  const additionalMedia: Array<{ input: MenuLoopMediaInput; result: MenuLoopMediaResult; planPath: string }> = [];
   for (const media of input.additionalMenuMedia ?? []) {
-    // A menu playlist can own several PlayItems (sub-menus reached with LinkPI),
-    // so the asset directory and plan must carry the PlayItem or they overwrite
-    // each other. Paths use the sanitized id; the manifest must reference the
-    // same sanitized paths that were written.
+    // Each PlayItem keeps its own runtime address. Equivalent items share one
+    // encoded asset set and its source-traceable plan.
     const sanitizedId = `${media.playlistId}-pi${media.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
-    additionalMedia.push({ sanitizedId, result: await exportMenuLoopMedia(media, {
+    const key = menuMediaReuseKey(media, mediaEncoding);
+    const existing = mediaByKey.get(key);
+    if (existing) {
+      additionalMedia.push({ input: media, result: referenceMenuMediaResult(existing.result, media), planPath: existing.planPath });
+      continue;
+    }
+    const planPath = `media-plans/playlist-${sanitizedId}.json`;
+    const result = await exportMenuLoopMedia(media, {
       outputDirectory: output,
       ...mediaEncoding,
       assetDirectory: `assets/media/playlist-${sanitizedId}`,
-      planPath: `media-plans/playlist-${sanitizedId}.json`,
+      planPath,
       ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}),
+      ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}),
       ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}),
-    }) });
+    });
+    additionalMedia.push({ input: media, result, planPath });
+    mediaByKey.set(key, { result, planPath });
   }
-  // Colour-pipeline warnings describe a complete export; record them once in the
-  // manifest so the report shows why HDR media keeps non-SDR signalling.
-  for (const warning of [exportedMedia?.warnings ?? [], ...additionalMedia.map(({ result }) => result.warnings)].flat()) {
-    if (!diagnostics.some((entry) => entry.code === warning.code)) diagnostics.push({ code: warning.code, message: warning.message, severity: "warning" });
+  // Append shared colour warnings once.
+  const mediaResults = [
+    ...(exportedMedia ? [exportedMedia] : []),
+    ...additionalMedia.map(({ result }) => result),
+  ];
+  for (const result of mediaResults) for (const warning of result.warnings) {
+    if (!diagnostics.some((entry) => entry.code === warning.code)) {
+      diagnostics.push({ code: warning.code, message: warning.message, severity: "warning" });
+    }
   }
-  const runtimeMenuMedia = additionalMedia.map(({ result }) => ({
-    playlist: Number(result.plan.playlistId),
-    playItem: result.plan.playItemIndex,
+  const runtimeMenuMedia = additionalMedia.map(({ input: media, result }) => ({
+    playlist: Number(media.playlistId),
+    playItem: media.playItemIndex,
     background: { path: result.background.path, durationSeconds: result.background.durationSeconds, loop: result.background.loop },
     audioTracks: result.audioTracks.map(runtimeAudioTrackMetadata),
   }));
@@ -222,8 +240,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...(exportedMedia?.files.map((file) => ({ path: file.path, kind: "media", required: true })) ?? []),
     ...additionalMedia.flatMap(({ result }) => result.files.map((file) => ({ path: file.path, kind: "media", required: true }))),
     ...[...new Set((input.pgsTracks ?? []).map((track) => track.path))].map((path) => ({ path, kind: "subtitle", required: true })),
-    ...(exportedMedia ? [{ path: "media-plan.json", kind: "media-plan", required: true }] : []),
-    ...additionalMedia.map(({ sanitizedId }) => ({ path: `media-plans/playlist-${sanitizedId}.json`, kind: "media-plan", required: true })),
+    ...[...new Set([...(exportedMedia ? ["media-plan.json"] : []), ...additionalMedia.map(({ planPath }) => planPath)])].map((path) => ({ path, kind: "media-plan", required: true })),
     ...(input.externalTargets ? [{ path: "runtime/bdmv-config.js", kind: "external-config", required: true }, { path: "external-targets.json", kind: "runtime", required: true }] : []),
   ];
   input.onPhase?.("assets");
@@ -253,8 +270,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
   const manifest = { schemaVersion: "1.0", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  // Media warnings are only known after encoding, so the caller gets them back
-  // instead of the status, which stays decided by pre-packaging facts.
+  // Return post-encoding media warnings in diagnostics. The caller supplies package status.
   return { diagnostics: metadata.diagnostics };
 }
 
@@ -389,8 +405,42 @@ function pngCrc32(data: Buffer): number {
 export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Record<string, unknown> {
   return {
     plan: media.plan,
+    outputSize: media.outputSize,
     background: { path: media.background.path, byteLength: media.background.byteLength, codec: media.background.codec, pid: media.background.pid, width: media.background.width, height: media.background.height, durationSeconds: media.background.durationSeconds, loop: media.background.loop },
     audioTracks: media.audioTracks.map((track) => ({ ...runtimeAudioTrackMetadata(track), byteLength: track.byteLength, codec: track.codec, pid: track.pid, durationSeconds: track.durationSeconds })),
+  };
+}
+
+function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncoding): string {
+  const codec = encoding.codec ?? "hevc";
+  return JSON.stringify({
+    sourcePath: resolve(media.sourcePath),
+    sourceFile: media.sourceFile,
+    playlistId: media.playlistId,
+    clipId: media.clipId,
+    inTime45k: media.inTime45k,
+    loopStart45k: media.loopStart45k ?? null,
+    outTime45k: media.outTime45k,
+    stillMode: media.stillMode,
+    repeatCount: media.repeatCount,
+    loopBackground: media.loopBackground ?? (media.stillMode !== 2 && media.repeatCount > 1),
+    videoPid: media.videoPid,
+    audioTracks: media.audioTracks.map(({ streamNumber, pid, language }) => [streamNumber, pid, language]),
+    encoding: {
+      codec,
+      crf: encoding.crf ?? (codec === "hevc" ? 24 : 18),
+      preset: encoding.preset ?? "veryfast",
+      hdrMode: encoding.hdrMode ?? "tonemap",
+    },
+  });
+}
+
+function referenceMenuMediaResult(media: MenuLoopMediaResult, input: MenuLoopMediaInput): MenuLoopMediaResult {
+  return {
+    ...media,
+    plan: { ...media.plan, playlistId: input.playlistId, playItemIndex: input.playItemIndex },
+    tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
+    files: [],
   };
 }
 

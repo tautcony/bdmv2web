@@ -15,7 +15,7 @@
 | `src/timeline.ts` | `MediaTimelineMap`、`normalizeSourceTime` | 库/测试 |
 | `src/seek.ts` | `seekTimeline`、`MEDIA_HAVE_METADATA`/`MEDIA_HAVE_CURRENT_DATA` | 库/测试 |
 | `src/external-targets.ts` | `createExternalMediaTargets`、`resolveExternalPlayTarget` | CLI、`runtime-web` |
-| `src/budget.ts` | `estimateMenuLoopBudget`、`assertEstimateWithinLimit`、`assertActualWithinLimit` | `index.ts` |
+| `src/budget.ts` | `estimateMenuLoopBudget`、资产大小限制 | `index.ts`、`linear.ts` |
 
 ## 错误类型
 
@@ -26,7 +26,7 @@
 | `MediaToolError` | `MEDIA_TOOL_UNAVAILABLE`、`MEDIA_TOOL_COMMAND_FAILED`、`MEDIA_ENCODER_UNAVAILABLE`，另带 `executable`/`args` |
 | `MediaJobError` | `MEDIA_JOB_CANCELLED`、`MEDIA_JOB_TIMEOUT`、`MEDIA_PROCESS_FAILED`、`MEDIA_OUTPUT_INVALID`，另带可选 `executable`/`args` |
 
-预算类失败（`MEDIA_ASSET_BUDGET_EXCEEDED` / `MEDIA_OUTPUT_BUDGET_EXCEEDED`）抛 `MediaBudgetError`，带 `scope`、`phase`、估算与实际字节数。
+单个媒体资产超过 `maxAssetBytes` 时抛 `MediaBudgetError`，诊断码为 `MEDIA_ASSET_BUDGET_EXCEEDED`。菜单和线性媒体导出结果报告输出目录开始与结束大小。
 
 ## 媒体闭包
 
@@ -49,17 +49,17 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 
 输入要点：`sourcePath`（M2TS）、`playlistId`、`playItemIndex`、`clipId`、`inTime45k`、`loopStart45k?`、`outTime45k`、`videoPid`、`audioTracks[{streamNumber,pid,language}]`、`stillMode`、`repeatCount`、`loopBackground`。
 
-编码选项：`codec`（`h264`/`hevc`，默认 `hevc`）、`hdrMode`（`tonemap`/`preserve`，默认 `tonemap`）、`crf`（缺省按编码器：HEVC 24、H.264 18）、`preset`（默认 `veryfast`）、`timeoutMs`、`reuseFromDirectory`、`assetDirectory`、`planPath`、`maxAssetBytes`/`maxOutputBytes`。四个编码参数互相独立，可任意组合。
+编码选项：`codec`（`h264`/`hevc`，默认 `hevc`）、`hdrMode`（`tonemap`/`preserve`，默认 `tonemap`）、`crf`（缺省按编码器：HEVC 24、H.264 18）、`preset`（默认 `veryfast`）、`timeoutMs`、`reuseFromDirectory`、`assetDirectory`、`planPath`、`maxAssetBytes`。
 
 流程：
 
 1. 校验输入与时间区间；`loopStart45k` 缺省时从 `inTime45k` 起。
-2. 预算：按配置码率估算视频/音频/包大小；超过 `maxAssetBytes`/`maxOutputBytes` 在编码前失败（`MEDIA_ASSET_BUDGET_EXCEEDED` / `MEDIA_OUTPUT_BUDGET_EXCEEDED`）。
+2. 大小记录：开始时统计现有输出目录大小，并按配置码率估算视频与音频大小；单个资产估算超过 `maxAssetBytes` 时编码前失败。
 3. `overwrite` 时先尝试复用：只有旧 `media-plan.json` 与本次播放列表、clip、区间、流、编码参数一致才复用，否则重编码。
 4. 检查工具：`ffmpeg -version`、`ffprobe -version`、`ffmpeg -filters`；`ffmpeg -encoders` 必须含所选视频编码器（`codec: "hevc"` → `libx265`，`"h264"` → `libx264`）与 `aac`（缺 → `MEDIA_ENCODER_UNAVAILABLE`）；工具不存在 → `MEDIA_TOOL_UNAVAILABLE`。
 5. `ffprobe` 读取源时间线与流；`codec` 只接受 `h264` / `hevc`；按 PID 找视频与音频流。视频流的色彩字段（`pix_fmt`、`color_*`、`bits_per_raw_sample`、`side_data_list`）交由 `readSourceColor` 归类动态范围。
 6. 由 `planVideoColor` 定下输出色彩标签、位深与滤镜链（见下节「HDR 与色彩管线」）。
-7. 输出 `assets/media/background.mp4`（默认 HEVC）与 `assets/media/audio-<pid>-<lang>.m4a`（AAC），另写 `media-plan.json`；`warnings` 一并回到调用方。
+7. 输出 `assets/media/background.mp4`（默认 HEVC）与 `assets/media/audio-<pid>-<lang>.m4a`（AAC），另写 `media-plan.json`；结束时统计输出目录大小。结果的 `outputSize` 含 `beforeBytes`、`afterBytes`；`package-builder` 将它写入 `manifest.json` 和 `asset-manifest.json`。`warnings` 一并回到调用方。编码过程中不扫描整包目录。
 8. 编码后 `ffprobe` 校验产物的 `codec_name`、`color_primaries`/`color_transfer`/`color_space` 与位深必须与计划一致，否则 `MEDIA_OUTPUT_INVALID`。
 9. 超时默认 20 分钟；取消/超时 → `MEDIA_JOB_CANCELLED` / `MEDIA_JOB_TIMEOUT`；进程失败 → `MEDIA_PROCESS_FAILED`；输出不可探测 → `MEDIA_OUTPUT_INVALID`。
 
@@ -99,6 +99,7 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 - 缺少某语言音轨 → `MEDIA_AUDIO_VARIANT_INCOMPLETE`。
 - 角度/SubPath 等能力未支持：计划里标 `unsupported`，`MediaCapabilityReport` 记录 `inspectedStages: ["M1"]`、`strictUpgradeAllowed: false`。
 - 与菜单循环共用同一套色彩决策：`codec`/`hdrMode`/`crf`/`preset` 同样可传；`concat` 之后接 `color.videoFilter` 统一做色调映射，结果写进 `LinearMediaPlan.encoding.color`。
+- 返回 `outputSize.beforeBytes` 和 `outputSize.afterBytes`。
 
 `MediaTimelineMap` 负责 45k/90k 与包内媒体时间的双向映射；同一播放列表的映射区间不得重叠，`mappingId` 不得重复。`seekTimeline` 把播放列表时间换算成媒体元素的 seek 目标与等待条件。
 
@@ -130,7 +131,7 @@ resolveExternalPlayTarget(targets, request): ExternalPlayTarget
 | `MEDIA_OUTPUT_INVALID` | 产物无法被 `ffprobe` 识别，或编码/色彩标签与计划不符 |
 | `MEDIA_HDR_TONEMAP_UNAVAILABLE` | 警告：无 `zscale`（libzimg），HDR 只能原样透传 |
 | `MEDIA_HDR_CODEC_UNSUPPORTED` | 警告：`h264` + HDR，浏览器不按 HDR 渲染 |
-| `MEDIA_ASSET_BUDGET_EXCEEDED` / `MEDIA_OUTPUT_BUDGET_EXCEEDED` | 估算超限，编码前终止 |
+| `MEDIA_ASSET_BUDGET_EXCEEDED` | 单个资产估算或实测超过 `maxAssetBytes`，导出失败 |
 | `MEDIA_STREAM_FILE_MISSING` / `MEDIA_PLAYLIST_MISSING` / `MEDIA_CLIP_INFO_MISSING` | 源结构缺失 |
 | `MEDIA_VIDEO_PID_UNRESOLVED` / `MEDIA_PID_UNRESOLVED` / `MEDIA_AUDIO_STREAM_UNVERIFIED` | PID 无法唯一确定 |
 | `MEDIA_SUBPATH_UNSUPPORTED` / `MEDIA_ANGLE_UNSUPPORTED` / `MEDIA_SUBTITLE_UNSUPPORTED` | 可达但未支持的能力 |

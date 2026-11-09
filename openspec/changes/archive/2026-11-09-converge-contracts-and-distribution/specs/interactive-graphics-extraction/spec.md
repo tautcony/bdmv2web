@@ -23,8 +23,7 @@
 #### Scenario: 效果引用不可解析
 
 - **WHEN** 可达场景的进入/退出效果引用没有可渲染定义的对象或调色板
-- **THEN** 提取输出 UNRESOLVED_OBJECT 或 UNRESOLVED_PALETTE 诊断并把场景标记为不完整，不宣称画面完整
-- **THEN** 运行时对缺少渲染资产的效果对象输出 IGS_UNRESOLVED_EFFECT_ASSET，效果序列按已解码的 duration90k/paletteId/crop 数据呈现
+- **THEN** 提取输出 UNRESOLVED_OBJECT 或 UNRESOLVED_PALETTE 诊断并把场景标记为不完整；运行时对缺少渲染资产的效果对象输出 IGS_UNRESOLVED_EFFECT_ASSET，并按已解码的 duration90k/paletteId/crop 数据呈现效果序列
 
 #### Scenario: 结构诊断的来源
 

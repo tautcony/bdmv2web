@@ -109,7 +109,32 @@ async function launch(data: Record<string, unknown>, options: { assetBatches?: u
   return host;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it("runs the initial VM turn and keeps menu input active when the package has no media", async () => {
+  const trace = vi.spyOn(console, "info").mockImplementation(() => {});
+  const data = packageData({
+    vmPrograms: [{ id: 7, instructions: [m3Fixtures.move5.bytes] }],
+    scene: { width: 100, height: 60, pages: [{ id: 0, defaultButtonId: 1, buttons: [
+      { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 2, left: 1, right: 1 }, states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo" } }, commands: [] },
+      { id: 2, bog: 0, enabled: true, neighbors: { up: 1, down: 2, left: 2, right: 2 }, states: { normal: { bounds: { x: 40, y: 10, width: 20, height: 20 }, assetId: "logo" } }, commands: [{ bytes: m3Fixtures.move5.bytes }] },
+    ] }] },
+  });
+  const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+
+  await host.elements.get("start-menu")!.fire("click");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(host.elements.get("runtime-status")?.textContent).toContain("Menu preview ready");
+  expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
+  expect(trace.mock.calls.flat().join(" ")).toContain("7:0 MOVE gpr[0],#5");
+  expect(trace.mock.calls.flat().join(" ")).toContain("status=idle");
+
+  await host.fakeWindow.fire("keydown", { code: "ArrowDown", preventDefault() {} });
+  await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(trace.mock.calls.flat().join(" ")).toContain("button 2");
+});
 
 describe("offline browser boot", () => {
   it("opens a matching popup IGS overlay on POPUP_MENU and closes it on POPUP_OFF", async () => {

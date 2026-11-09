@@ -171,6 +171,17 @@ describe("menu-loop media export", () => {
     }
   });
 
+  it("reports the output directory size around a successful encode", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bdmv-media-output-size-success-"));
+    try {
+      const result = await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: mediaRunner(input) });
+      expect(result.files).toHaveLength(3);
+      expect(result.outputSize.beforeBytes).toBe("0");
+      expect(BigInt(result.outputSize.afterBytes)).toBeGreaterThan(0n);
+      expect(result.warnings).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("re-encodes when a required asset in the previous package is missing", async () => {
     const sourceDirectory = await mkdtemp(join(tmpdir(), "bdmv-media-reuse-asset-source-"));
     const outputDirectory = await mkdtemp(join(tmpdir(), "bdmv-media-reuse-asset-output-"));
@@ -403,21 +414,16 @@ describe("menu-loop media export", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
-  it("rejects an over-budget package estimate before creating assets and preserves its diagnostic", async () => {
-    const root = await mkdtemp(join(tmpdir(), "bdmv-media-budget-preflight-"));
+  it("reports the output directory size before and after export", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bdmv-media-output-size-threshold-"));
     await writeFile(join(root, "existing.txt"), "keep");
-    let calls = 0;
-    const run: MediaProcessRunner = async () => { calls++; return { stdout: "", stderr: "" }; };
     try {
-      let caught: unknown;
-      try {
-        await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, maxOutputBytes: 1 });
-      } catch (error) { caught = error; }
-      expect(caught).toBeInstanceOf(MediaBudgetError);
-      expect((caught as MediaBudgetError).diagnostic).toMatchObject({ code: "MEDIA_OUTPUT_BUDGET_EXCEEDED", scope: "package", phase: "preflight-estimate", limitBytes: "1" });
-      expect(calls).toBe(0);
+      const result = await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: mediaRunner(input) });
+      expect(result.outputSize.beforeBytes).toBe("4");
+      expect(BigInt(result.outputSize.afterBytes)).toBeGreaterThan(4n);
+      expect(result.warnings).toEqual([]);
       expect(await readFile(join(root, "existing.txt"), "utf8")).toBe("keep");
-      await expect(readFile(join(root, "assets/media/background.mp4"))).rejects.toMatchObject({ code: "ENOENT" });
+      expect(result.plan.budget.existingOutputBytes).toBe("4");
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
@@ -448,7 +454,7 @@ describe("menu-loop media export", () => {
     };
     try {
       let caught: unknown;
-      try { await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, maxAssetBytes: 1024, maxOutputBytes: 10_000, estimatedVideoBitsPerSecond: 1, estimatedAudioBitsPerSecond: 1, containerOverheadPercent: 0 }); }
+      try { await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, maxAssetBytes: 1024, estimatedVideoBitsPerSecond: 1, estimatedAudioBitsPerSecond: 1, containerOverheadPercent: 0 }); }
       catch (error) { caught = error; }
       expect(caught).toBeInstanceOf(MediaBudgetError);
       expect((caught as MediaBudgetError).diagnostic).toMatchObject({ code: "MEDIA_ASSET_BUDGET_EXCEEDED", scope: "asset", phase: "write-monitor", actualBytes: "2048", limitBytes: "1024" });
@@ -513,39 +519,24 @@ describe("menu-loop media export", () => {
     }
   });
 
-  it("enforces maxOutputBytes across existing package files plus assets, independently of maxAssetBytes", async () => {
-    const root = await mkdtemp(join(tmpdir(), "bdmv-media-package-budget-write-"));
+  it("reports the measured package size after encoding", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bdmv-media-output-size-after-"));
     const preserved = join(root, "keep.txt");
     await writeFile(preserved, Buffer.alloc(64));
-    const run: MediaProcessRunner = async (executable, args, _timeoutMs, signal) => {
-      if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
-      if (args.includes("-encoders")) return { stdout: availableEncoders, stderr: "" };
-      if (args.includes("-filters")) return { stdout: availableFilters, stderr: "" };
-      const path = args.at(-1)!;
-      if (args[0] === "-v") return { stdout: JSON.stringify({ streams: [
-        { index: 0, id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: "109.234" },
-        { index: 1, id: "0x1100", codec_type: "audio", codec_name: "dts", duration: "109.226" },
-        { index: 2, id: "0x1101", codec_type: "audio", codec_name: "dts", duration: "109.226" },
-      ], format: { start_time: "11.650667", duration: "109.234" } }), stderr: "" };
-      if (executable === "ffmpeg") {
-        await writeFile(path, Buffer.alloc(9_000));
-        await new Promise<void>((resolve) => {
-          if (signal?.aborted) { resolve(); return; }
-          signal?.addEventListener("abort", () => resolve(), { once: true });
-        });
-      }
-      return { stdout: "", stderr: "" };
+    const baseRun = mediaRunner(input);
+    const run: MediaProcessRunner = async (executable, args, timeoutMs, signal, onProgress) => {
+      const result = await baseRun(executable, args, timeoutMs, signal, onProgress);
+      if (executable === "ffmpeg" && args.includes("-map")) await writeFile(args.at(-1)!, Buffer.alloc(9_000));
+      return result;
     };
     try {
-      let caught: unknown;
-      try { await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, maxAssetBytes: 10_000, maxOutputBytes: 8_192, estimatedVideoBitsPerSecond: 1, estimatedAudioBitsPerSecond: 1, containerOverheadPercent: 0 }); }
-      catch (error) { caught = error; }
-      expect(caught).toBeInstanceOf(MediaBudgetError);
-      expect((caught as MediaBudgetError).diagnostic).toMatchObject({ code: "MEDIA_OUTPUT_BUDGET_EXCEEDED", scope: "package", phase: "write-monitor", limitBytes: "8192" });
-      expect(BigInt((caught as MediaBudgetError).diagnostic.actualBytes!)).toBeGreaterThan(8_192n);
+      const result = await exportMenuLoopMedia(input, { outputDirectory: root, runProcess: run, maxAssetBytes: 10_000, estimatedVideoBitsPerSecond: 1, estimatedAudioBitsPerSecond: 1, containerOverheadPercent: 0 });
+      expect(result.outputSize.beforeBytes).toBe("64");
+      expect(BigInt(result.outputSize.afterBytes)).toBeGreaterThan(64n);
+      expect(result.warnings).toEqual([]);
       expect(await readFile(preserved)).toHaveLength(64);
-      await expect(readFile(join(root, "assets/media/background.mp4"))).rejects.toMatchObject({ code: "ENOENT" });
-      await expect(readFile(join(root, "media-plan.json"))).rejects.toMatchObject({ code: "ENOENT" });
+      expect(await readFile(join(root, "assets/media/audio-1100-eng.m4a"))).toHaveLength(9_000);
+      expect(result.plan.budget.existingOutputBytes).toBe("64");
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 });

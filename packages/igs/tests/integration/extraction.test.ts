@@ -419,6 +419,9 @@ describe("synthetic IGS extraction", () => {
       const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
       expect(result.scenes).toHaveLength(1);
       expect(result.scenes[0]?.clipId).toBe("00005");
+      expect(result.scenes[0]?.source).toMatchObject({ path: "STREAM/00005.m2ts", origin: "primary", stage: "transport" });
+      expect(result.scenes[0]?.objects[0]?.source).toMatchObject({ path: "STREAM/00005.m2ts", origin: "primary" });
+      expect(result.assets[0]?.source).toMatchObject({ path: "STREAM/00005.m2ts", origin: "primary" });
       expect(result.diagnostics.map((item) => item.code)).not.toContain("BDMV_MISSING_STREAM");
       expect(result.diagnostics.map((item) => item.code)).not.toContain("IGS_PID_CONFLICT");
     } finally { await rm(root, { recursive: true, force: true }); }

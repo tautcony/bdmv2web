@@ -81,6 +81,10 @@ Validate the generated menu package:
 bdmv2web validate ./BDMV-menu --offline
 ```
 
+### Runtime and validation boundaries
+
+`validate --offline` checks package structure, references, paths, and dependencies. It does not check byte-level file integrity. Playback state from the external system player does not return to the menu runtime. A background item with `loop=false` does not expose an independent final-frame state.
+
 ### CLI
 
 `<BDMV>` may point to a BDMV directory or to a parent directory that contains `BDMV/`.

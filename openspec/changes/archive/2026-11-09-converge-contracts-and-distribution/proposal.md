@@ -28,11 +28,11 @@
 - `hdmv-navigation`：`CALL_TITLE` 的标题选择与恢复契约；导航边的上下文判定与被忽略指令的诊断。
 - `offline-menu-runtime`：初始 VM 不依赖媒体；媒体桥生命周期回执；PSR1 音轨写回；命中几何一致。
 - `interactive-graphics-extraction`：IGS 结构诊断携带原始 `SourceLocation`。
-- `offline-delivery-assurance`：记录结构审计与未验证的文件完整性；该主规格由 `verify-offline-release` 以 ADDED 建立，收敛要求已并入其 delta，本 change 不持有该主规格的 delta。
+- `offline-media-playback`：菜单与线性媒体导出报告开始和结束时的输出目录大小，并按 `maxAssetBytes` 检查单个资产。
 
 ## Impact
 
-`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/specs/offline-delivery-assurance/spec.md`（由已归档的 `verify-offline-release` 建立）、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
+`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/specs/distribution-budget/spec.md`、`openspec/specs/offline-media-playback/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
 
 ## Acceptance Boundary
 
@@ -44,11 +44,11 @@
 
 `distribution-budget` 的基准须在提交中给出机器/版本/样本与前后对比，否则视为未验证。
 
-## 当前实现与归档状态（2026-11-06）
+## 当前实现与验收（2026-11-09）
 
-媒体 `ended` 回执、PSR1 音轨写回、菜单 VM/sound 集成、HDMV 默认 Limits 收敛与 `convert --limits` 接线已实现。影片动作采用外部 URL Protocol 交接。无菜单媒体时的初始 VM 和 normal-only 按钮命中仍待完成。验收状态见 `tasks.md`。
+本 change 的 43 个跟踪任务全部完成。验收证据见 `tasks.md`，性能测量和 Tamako 重复 PlayItem 导出结果见 `benchmark.md`。
 
-`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 和 `offline-menu-runtime` 主规格由本 change 的 MODIFIED delta 更新。`offline-media-playback` 的播放与交接要求由 `export-playable-media` 追加。`offline-delivery-assurance` 的收敛要求由 `verify-offline-release` 维护。
+本 change 更新 `disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 与 `offline-media-playback` 主规格，并新增 `distribution-budget` 主规格。`offline-delivery-assurance` 由 `verify-offline-release` 维护。
 
 ## Related
 

@@ -364,7 +364,7 @@ describe("offline menu primitives", () => {
     menu.setButtonEnabled(2, false);
     expect(menu.hit(15, 15)).toBeNull();
   });
-  it("hits only selected-state geometry and resolves overlaps by BOG order", () => {
+  it("uses normal bounds when selected geometry is unavailable and resolves overlaps by BOG order", () => {
     const overlap = bounds(10);
     const button = (id: number, bog: number, selected: boolean) => ({
       id, bog, enabled: true, neighbors: { up: id, down: id, left: id, right: id },
@@ -379,9 +379,27 @@ describe("offline menu primitives", () => {
     expect(menu.hit(15, 15)).toBe(1);
 
     testScene.pages[0]!.buttons[1]!.states = { normal: { bounds: overlap } };
-    expect(menu.hit(15, 15)).toBe(2);
+    expect(menu.hit(15, 15)).toBe(1);
     testScene.pages[0]!.buttons[0]!.states = { normal: { bounds: overlap } };
+    expect(menu.hit(15, 15)).toBe(1);
+  });
+  it("hits an enabled button that only defines normal geometry", () => {
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 5, defaultButtonId: 3, buttons: [{ id: 3, bog: 0, enabled: true, neighbors: { up: 3, down: 3, left: 3, right: 3 }, states: { normal: { bounds: bounds(10) } }, commands: [] }],
+    }] };
+    const menu = new MenuController(testScene, { handleEvent: vi.fn() });
+    expect(menu.hit(15, 15)).toBe(3);
+  });
+  it("uses selected geometry when it differs from normal geometry", () => {
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 5, defaultButtonId: 3, buttons: [{
+        id: 3, bog: 0, enabled: true, neighbors: { up: 3, down: 3, left: 3, right: 3 },
+        states: { normal: { bounds: bounds(10) }, selected: { bounds: bounds(40) } }, commands: [],
+      }],
+    }] };
+    const menu = new MenuController(testScene, { handleEvent: vi.fn() });
     expect(menu.hit(15, 15)).toBeNull();
+    expect(menu.hit(45, 15)).toBe(3);
   });
   it("activates an autoAction selected by SET_BUTTON_PAGE", () => {
     const vm = new HdmvVm([{ id: 0, instructions: [] }]);
@@ -931,6 +949,11 @@ describe("offline menu primitives", () => {
     expect(audio.src).toBe("assets/media/audio-1100-eng.m4a"); expect(audio.currentTime).toBe(17.25);
     expect(vm.registers.read({ kind: "psr", index: 1 })).toBe(1); expect(bridge.selectedPrimaryAudioStream).toBe(1);
     expect(changed).toEqual([]); expect(reports.join(" ")).toContain("Japanese variant play failed");
+
+    const menuScene = scene();
+    menuScene.pages[0]!.buttons[0]!.commands = [{ bytes: "500000010000000080000001" }, m3Fixtures.break];
+    new MenuController(menuScene, vm).handle("activate");
+    expect(vm.snapshot().registers.gpr[0]).toBe(1);
   });
   it("waits for target metadata and seeked before confirming a playing audio variant", async () => {
     const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
@@ -1143,8 +1166,31 @@ describe("offline menu primitives", () => {
     expect(vm.snapshot()).toMatchObject({ status: "suspended", waiting: { id: action.id } });
 
     mediaEnded!();
-    expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED")).toBe(true);
+    expect(vm.trace.some((record) => record.event?.type === "MEDIA_ENDED" && record.event.responseTo === action.id && record.event.generation === action.generation)).toBe(true);
     expect(vm.snapshot().status).toBe("idle");
+  });
+  it.each(["error", "abort"] as const)("correlates menu video %s with the waiting playlist action", async (eventType) => {
+    const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
+    vm.reset(9); vm.runTurn(); const action = vm.drainActions()[0]!;
+    const listeners = new Map<string, Array<() => void>>();
+    const video = {
+      loop: false, src: "", paused: true,
+      play: vi.fn(async function(this: { paused: boolean }) { this.paused = false; }),
+      addEventListener: (type: string, listener: () => void) => { const bucket = listeners.get(type) ?? []; bucket.push(listener); listeners.set(type, bucket); },
+    } as unknown as HTMLVideoElement;
+    const audio = { loop: false, src: "", paused: true, play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLAudioElement;
+    const reports: string[] = [];
+    const bridge = new MenuLoopPlaybackBridge(vm, video, audio, { playlist: 3, background: { path: "assets/media/background.mp4", loop: false, durationSeconds: 109.234 }, audioTracks: [{ streamNumber: 0, path: "assets/media/audio-1100-eng.m4a", language: "eng" }] }, (message) => reports.push(message));
+
+    await bridge.dispatch(action);
+    expect(vm.snapshot()).toMatchObject({ status: "suspended", waiting: { id: action.id, generation: action.generation } });
+
+    for (const listener of listeners.get(eventType) ?? []) listener();
+
+    const response = vm.trace.find((record) => record.event?.type === "MEDIA_ERROR");
+    expect(response?.event).toMatchObject({ type: "MEDIA_ERROR", generation: action.generation, responseTo: action.id, payload: { message: expect.any(String) } });
+    expect(vm.snapshot()).toMatchObject({ status: "stopped", waiting: null, diagnostic: { code: "HDMV_MEDIA_ERROR" } });
+    expect(reports.join(" ")).toMatch(eventType === "abort" ? /loading was aborted/ : /reported a playback error/);
   });
   it("offers the retry gesture when an autoplay block interrupts an already-started media resume", async () => {
     const vm = new HdmvVm([{ id: 9, instructions: ["228000000000000300000000"] }]);
@@ -1272,5 +1318,21 @@ describe("offline menu primitives", () => {
     player.play(4, 7); await Promise.resolve(); await Promise.resolve(); player.play(9, 7);
     expect(reports.some((message) => message.startsWith("unsupported:") && /does not support packaged sound/.test(message))).toBe(true);
     expect(reports.some((message) => message.startsWith("asset:"))).toBe(true); expect(retry).not.toHaveBeenCalled();
+  });
+  it("records discarded VM responses without changing VM state when a bridge has no matching wait", async () => {
+    const previewVm = new HdmvVm([]); const previewBefore = previewVm.snapshot();
+    const preview = new PreviewPlaybackBridge(previewVm, () => {});
+    preview.dispatch({ id: "preview-action", generation: 1, type: "PLAY_PLAYLIST", payload: { playlist: 3 }, waitFor: "ended" });
+    expect(previewVm.snapshot()).toEqual(previewBefore);
+    expect(previewVm.trace.at(-1)).toMatchObject({ decoded: "DISCARDED_EVENT", diagnostic: { code: "HDMV_EVENT_DISCARDED", message: expect.stringContaining("No continuation is waiting") }, event: { type: "MEDIA_UNAVAILABLE", responseTo: "preview-action" } });
+
+    const menuVm = new HdmvVm([]); const menuBefore = menuVm.snapshot();
+    const video = { loop: false, src: "", play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLVideoElement;
+    const audio = { loop: false, src: "", play: vi.fn().mockResolvedValue(undefined) } as unknown as HTMLAudioElement;
+    const menu = new MenuLoopPlaybackBridge(menuVm, video, audio, { playlist: 3, background: { path: "background.mp4", loop: true, durationSeconds: 30 }, audioTracks: [] }, () => {});
+    await menu.dispatch({ id: "menu-action", generation: 1, type: "PLAY_PLAYLIST", payload: { playlist: 3 }, waitFor: "ended" });
+    expect(menuVm.snapshot()).toEqual(menuBefore);
+    expect(menuVm.trace.at(-1)).toMatchObject({ decoded: "DISCARDED_EVENT", diagnostic: { code: "HDMV_EVENT_DISCARDED", message: expect.stringContaining("No continuation is waiting") }, event: { type: "MEDIA_STARTED", responseTo: "menu-action" } });
+    expect(video.play).toHaveBeenCalledOnce(); expect(audio.play).not.toHaveBeenCalled();
   });
 });

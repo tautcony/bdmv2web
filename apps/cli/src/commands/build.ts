@@ -9,7 +9,7 @@ import { readJsonObject } from "../cli/output.js";
 import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { parseDiscIR } from "@bdmv2web/core";
-import { HdmvVm } from "@bdmv2web/hdmv";
+import { HdmvVm, type VmProgram } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { createExternalMediaTargets, resolveMenuLoopStart45k } from "@bdmv2web/media-export";
 import { buildMenuPackage, type MenuMediaEncoding } from "@bdmv2web/package-builder";
@@ -71,15 +71,19 @@ export function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"
   return { status: "ambiguous" as const, scenes: unique };
 }
 
+export function createVmPrograms(disc: ParsedDisc): VmProgram[] {
+  return disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }));
+}
+
 export function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; clipId: string }>, exportsMenuMedia: boolean): DiscIR {
   const diagnostics: DiscIR["diagnostics"] = disc.diagnostics.map((item) => ({
     severity: item.severity === "fatal" ? "fatal" : item.severity === "error" ? "error" : item.severity === "warning" ? "warning" : "info",
-    code: item.code, message: safeDiagnosticMessage(item.message, disc.root), sourcePath: null, offset: null,
+    code: item.code, message: safeDiagnosticMessage(item.message, disc.root), sourcePath: item.sourcePath, offset: item.offset,
     entityId: null, action: null, recoverable: item.recoverable, stage: "structural", affectedEntryIds: [],
   }));
   const entries: DiscIR["entries"] = [];
   for (const entry of disc.entries) {
-    const source = { path: "source/structural", origin: "primary" as const, byteOffset: "0" };
+    const source = { path: entry.source.path, origin: entry.source.origin, byteOffset: entry.source.offset };
     if (entry.target.objectType === "HDMV" && typeof entry.target.target === "number") entries.push({ id: entry.id, navigation: { type: "HDMV", movieObjectId: entry.target.target }, source });
     else if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") entries.push({ id: entry.id, navigation: { type: "BDJ", bdjoId: entry.target.target, status: "unsupported" }, source });
     else diagnostics.push({ severity: "warning", code: "M4_ENTRY_NOT_PROJECTED", message: `Entry ${entry.id} has no supported navigation target and was omitted.`, sourcePath: null, offset: null, entityId: null, action: null, recoverable: true, stage: "structural", affectedEntryIds: [] });
@@ -420,11 +424,7 @@ export async function build(): Promise<void> {
     }
     const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
     const popupScenes = popupAdaptations.map((result) => result.scene);
-    const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({
-      id,
-      instructions: instructions.map(({ words, bytes, source }) => ({ words, bytes, source: { path: "<MovieObject>", origin: source.origin, offset: source.offset } })),
-      resumeIntention, menuCallMask, titleSearchMask,
-    }));
+    const vmPrograms = createVmPrograms(disc);
     const menuEntry = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number")
       ?? disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
     const vmInitialProgramId = typeof menuEntry?.target.target === "number" ? menuEntry.target.target : undefined;
@@ -518,8 +518,7 @@ export async function build(): Promise<void> {
       },
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
-    // Media colour-pipeline warnings are known only after encoding. They never
-    // change the delivery status, so they join the report without re-deciding it.
+    // Append post-export colour warnings to the final report diagnostics.
     for (const { code, message, severity } of packaged.diagnostics) {
       if (severity !== "warning" || decisionFacts.some((fact) => fact.code === code)) continue;
       decisionFacts.push({ severity, code, message: safeDiagnosticMessage(message, roots.input) });

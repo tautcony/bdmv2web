@@ -211,8 +211,16 @@ export interface PesPacket {
   timeDomain: number;
 }
 
+interface PendingPes {
+  bytes: Uint8Array;
+  length: number;
+  start: bigint;
+  pesOffset: bigint;
+  corrupt: boolean;
+}
+
 export class PesAssembler {
-  private readonly pending = new Map<number, { bytes: Uint8Array; start: bigint; pesOffset: bigint; corrupt: boolean }>();
+  private readonly pending = new Map<number, PendingPes>();
   private readonly clocks = new Map<number, { lastRaw: bigint; epoch: bigint; domain: number; explicitDiscontinuity: boolean }>();
   private activeBytes = 0;
   readonly diagnostics: IgsDiagnostic[] = [];
@@ -222,7 +230,7 @@ export class PesAssembler {
     if (packet.discontinuity) {
       const pending = this.pending.get(packet.pid);
       if (pending) {
-        this.activeBytes -= pending.bytes.length;
+        this.activeBytes -= pending.length;
         this.pending.delete(packet.pid);
         this.diagnostics.push({ severity: "error", code: "PES_INVALIDATED", message: `PID ${packet.pid} discontinuity invalidated the pending PES`, source: source(this.clipId, packet.pid, packet.packetOffset), affectedSceneIds: [] });
       }
@@ -236,17 +244,18 @@ export class PesAssembler {
     if (packet.payloadUnitStart) {
       const old = this.pending.get(packet.pid);
       if (old) {
-        const declared = old.bytes.length >= 6 ? ((old.bytes[4]! << 8) | old.bytes[5]!) : 0;
-        if (declared && old.bytes.length < declared + 6) {
+        const declared = old.length >= 6 ? ((old.bytes[4]! << 8) | old.bytes[5]!) : 0;
+        if (declared && old.length < declared + 6) {
           this.diagnostics.push({ severity: "error", code: "PES_INVALIDATED", message: `PID ${packet.pid} new PUSI arrived before prior PES declared length ${declared + 6} was reached`, source: source(this.clipId, packet.pid, old.start), affectedSceneIds: [] });
         } else {
           const complete = this.finish(packet.pid, old, declared ? declared + 6 : undefined);
           if (complete) out.push(complete);
         }
-        this.activeBytes -= old.bytes.length;
+        this.activeBytes -= old.length;
       }
       if (!packet.hasPayload || packet.payload.length < 6) return out;
-      this.pending.set(packet.pid, { bytes: packet.payload.slice(), start: packet.packetOffset, pesOffset: packet.packetOffset + 4n + BigInt(packet.payloadOffset), corrupt: false });
+      const bytes = packet.payload.slice();
+      this.pending.set(packet.pid, { bytes, length: bytes.length, start: packet.packetOffset, pesOffset: packet.packetOffset + 4n + BigInt(packet.payloadOffset), corrupt: false });
       this.activeBytes += packet.payload.length;
       if (this.activeBytes > this.limits.maxReassemblyBytes || packet.payload.length > this.limits.maxSegmentBytes) {
         this.drop(packet.pid, packet.packetOffset, "LIMIT_EXCEEDED", "PES start exceeds configured reassembly byte limit");
@@ -255,25 +264,32 @@ export class PesAssembler {
     } else {
       const current = this.pending.get(packet.pid);
       if (!current || !packet.hasPayload) return out;
-      if (current.bytes.length + packet.payload.length > this.limits.maxSegmentBytes || this.activeBytes + packet.payload.length > this.limits.maxReassemblyBytes) {
+      if (current.length + packet.payload.length > this.limits.maxSegmentBytes || this.activeBytes + packet.payload.length > this.limits.maxReassemblyBytes) {
         this.drop(packet.pid, packet.packetOffset, "LIMIT_EXCEEDED", "PES reassembly exceeded configured byte limit");
         return out;
       }
-      const next = append(current.bytes, packet.payload);
+      const nextLength = current.length + packet.payload.length;
+      if (nextLength > current.bytes.length) {
+        const capacity = Math.max(nextLength, Math.min(this.limits.maxSegmentBytes, current.bytes.length * 2));
+        const expanded = new Uint8Array(capacity);
+        expanded.set(current.bytes.subarray(0, current.length));
+        current.bytes = expanded;
+      }
+      current.bytes.set(packet.payload, current.length);
+      current.length = nextLength;
       this.activeBytes += packet.payload.length;
-      current.bytes = next;
     }
     const current = this.pending.get(packet.pid);
-    if (current && current.bytes.length >= 6) {
+    if (current && current.length >= 6) {
       const declared = (current.bytes[4]! << 8) | current.bytes[5]!;
       if (declared > this.limits.maxSegmentBytes - 6) {
         this.drop(packet.pid, packet.packetOffset, "LIMIT_EXCEEDED", `PES declared length ${declared + 6} exceeds maxSegmentBytes ${this.limits.maxSegmentBytes}`);
         return out;
       }
-      if (declared > 0 && current.bytes.length >= declared + 6) {
+      if (declared > 0 && current.length >= declared + 6) {
         const complete = this.finish(packet.pid, current, declared + 6);
         if (complete) out.push(complete);
-        this.activeBytes -= current.bytes.length;
+        this.activeBytes -= current.length;
         this.pending.delete(packet.pid);
       }
     }
@@ -283,20 +299,20 @@ export class PesAssembler {
   end(): PesPacket[] {
     const completed: PesPacket[] = [];
     for (const [pid, current] of this.pending) {
-      const declared = current.bytes.length >= 6 ? (current.bytes[4]! << 8) | current.bytes[5]! : 0;
+      const declared = current.length >= 6 ? (current.bytes[4]! << 8) | current.bytes[5]! : 0;
       if (declared === 0) {
         const packet = this.finish(pid, current);
         if (packet) completed.push(packet);
-      } else if (current.bytes.length < declared + 6) {
-        this.diagnostics.push({ severity: "warning", code: "PES_TRUNCATED_EOF", message: `PID ${pid} has ${current.bytes.length} pending PES bytes at EOF`, source: source(this.clipId, pid, current.start), affectedSceneIds: [] });
+      } else if (current.length < declared + 6) {
+        this.diagnostics.push({ severity: "warning", code: "PES_TRUNCATED_EOF", message: `PID ${pid} has ${current.length} pending PES bytes at EOF`, source: source(this.clipId, pid, current.start), affectedSceneIds: [] });
       }
     }
     this.pending.clear(); this.activeBytes = 0;
     return completed;
   }
 
-  private finish(pid: number, current: { bytes: Uint8Array; start: bigint; pesOffset: bigint; corrupt: boolean }, declaredTotal?: number): PesPacket | null {
-    const bytes = declaredTotal ? current.bytes.subarray(0, declaredTotal) : current.bytes;
+  private finish(pid: number, current: PendingPes, declaredTotal?: number): PesPacket | null {
+    const bytes = current.bytes.subarray(0, declaredTotal ?? current.length);
     if (bytes.length < 9 || bytes[0] !== 0 || bytes[1] !== 0 || bytes[2] !== 1) {
       this.diagnostics.push({ severity: "error", code: "PES_INVALID_HEADER", message: `PID ${pid} PES start code/header is invalid`, source: source(this.clipId, pid, current.start), affectedSceneIds: [] });
       return null;
@@ -332,7 +348,7 @@ export class PesAssembler {
 
   private drop(pid: number, offset: bigint, code: string, message: string): void {
     const old = this.pending.get(pid);
-    if (old) this.activeBytes -= old.bytes.length;
+    if (old) this.activeBytes -= old.length;
     this.pending.delete(pid);
     this.diagnostics.push({ severity: "error", code, message: `PID ${pid}: ${message}`, source: source(this.clipId, pid, offset), affectedSceneIds: [] });
   }
@@ -352,7 +368,7 @@ export function source(clipId: string, pid: number, packetOffset: bigint, pesOff
 }
 
 function diag(code: string, message: string, offset?: bigint, pid?: number, severity: IgsDiagnostic["severity"] = "error"): IgsDiagnostic {
-  return { severity, code, message, source: offset === undefined || pid === undefined ? null : source("", pid, offset), affectedSceneIds: [] };
+  return { severity, code, message, source: offset === undefined || pid === undefined ? null : source("", pid, offset), affectedSceneIds: [], stage: "transport" };
 }
 function append(a: Uint8Array, b: Uint8Array): Uint8Array { const out = new Uint8Array(a.length + b.length); out.set(a); out.set(b, a.length); return out; }
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean { return a.length === b.length && a.every((v, i) => v === b[i]); }

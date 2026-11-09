@@ -33,7 +33,7 @@
 
 | 阶段 | 行为 | 失败码 |
 | --- | --- | --- |
-| 预算 | 估算资产与整包大小 | `MEDIA_ASSET_BUDGET_EXCEEDED` / `MEDIA_OUTPUT_BUDGET_EXCEEDED` |
+| 大小 | 单个资产估算与实测由 `maxAssetBytes` 限制；整包在开始与结束时统计 | `MEDIA_ASSET_BUDGET_EXCEEDED` |
 | 复用 | `overwrite` 且旧计划完全匹配 → 复用 | — |
 | 工具 | `ffmpeg -version`、`ffprobe -version`、`ffmpeg -encoders`、`ffmpeg -filters` | `MEDIA_TOOL_UNAVAILABLE` / `MEDIA_ENCODER_UNAVAILABLE` |
 | 探测 | `ffprobe` 源时间线、视频/音频 PID、色彩参数 | `MEDIA_VIDEO_PID_UNRESOLVED` / `MEDIA_PID_UNRESOLVED` |

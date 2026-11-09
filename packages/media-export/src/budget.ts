@@ -12,16 +12,15 @@ export interface MenuLoopBudgetRates {
   containerOverheadPercent: number;
 }
 
-export interface MediaBudgetDiagnostic {
+interface MediaBudgetDiagnosticBase {
   severity: "error";
-  code: string;
   message: string;
-  scope: "asset" | "package";
-  phase: "preflight-estimate" | "write-monitor" | "finalize";
   estimatedBytes?: string;
   actualBytes?: string;
   limitBytes: string;
 }
+
+export type MediaBudgetDiagnostic = MediaBudgetDiagnosticBase & { code: "MEDIA_ASSET_BUDGET_EXCEEDED"; scope: "asset"; phase: "preflight-estimate" | "write-monitor" | "finalize" };
 
 export class MediaBudgetError extends Error {
   constructor(readonly diagnostic: MediaBudgetDiagnostic) {
@@ -52,16 +51,20 @@ export function estimateMenuLoopBudget(duration45k: number, audioTrackCount: num
   return { duration90k: duration90k.toString(), videoBytes, audioBytes, totalMediaBytes, estimateBasis: "configured-target-bitrate-assumption" };
 }
 
-export function assertEstimateWithinLimit(args: { scope: "asset" | "package"; estimateBytes: bigint; limitBytes: number | null | undefined; phase?: "preflight-estimate" | "finalize"; message: string }): void {
+type EstimateLimitArgs = { scope: "asset"; phase?: "preflight-estimate" } & {
+  estimateBytes: bigint;
+  limitBytes: number | null | undefined;
+  message: string;
+};
+
+export function assertEstimateWithinLimit(args: EstimateLimitArgs): void {
   if (args.limitBytes === undefined || args.limitBytes === null || args.estimateBytes <= BigInt(args.limitBytes)) return;
-  const scopeName = args.scope === "asset" ? "MEDIA_ASSET_BUDGET_EXCEEDED" : "MEDIA_OUTPUT_BUDGET_EXCEEDED";
-  throw new MediaBudgetError({ severity: "error", code: scopeName, message: args.message, scope: args.scope, phase: args.phase ?? "preflight-estimate", estimatedBytes: args.estimateBytes.toString(), limitBytes: String(args.limitBytes) });
+  throw new MediaBudgetError({ severity: "error", code: "MEDIA_ASSET_BUDGET_EXCEEDED", message: args.message, scope: "asset", phase: args.phase ?? "preflight-estimate", estimatedBytes: args.estimateBytes.toString(), limitBytes: String(args.limitBytes) });
 }
 
-export function assertActualWithinLimit(args: { scope: "asset" | "package"; actualBytes: number | bigint; limitBytes: number | null | undefined; message: string }): void {
+export function assertActualWithinLimit(args: { scope: "asset"; actualBytes: number | bigint; limitBytes: number | null | undefined; message: string }): void {
   if (args.limitBytes === undefined || args.limitBytes === null || BigInt(args.actualBytes) <= BigInt(args.limitBytes)) return;
-  const scopeName = args.scope === "asset" ? "MEDIA_ASSET_BUDGET_EXCEEDED" : "MEDIA_OUTPUT_BUDGET_EXCEEDED";
-  throw new MediaBudgetError({ severity: "error", code: scopeName, message: args.message, scope: args.scope, phase: "write-monitor", actualBytes: String(args.actualBytes), limitBytes: String(args.limitBytes) });
+  throw new MediaBudgetError({ severity: "error", code: "MEDIA_ASSET_BUDGET_EXCEEDED", message: args.message, scope: "asset", phase: "write-monitor", actualBytes: String(args.actualBytes), limitBytes: String(args.limitBytes) });
 }
 
 function estimateBytes(duration90k: bigint, rateBitsPerSecond: number, overheadPercent: number): string {

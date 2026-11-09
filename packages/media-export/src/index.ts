@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
-import { access, copyFile, mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { M2tsPacketReader, PesAssembler } from "@bdmv2web/igs";
+import { directoryBytesExcluding } from "./directory-bytes.js";
 import { parsePgsSup } from "./pgs.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates } from "./budget.js";
 import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type ColorWarning, type ColorFilterChain, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color.js";
@@ -157,8 +158,6 @@ export interface MenuLoopMediaOptions {
   hdrMode?: HdrMode;
   /** Maximum bytes for one encoded media asset. Null disables the per-asset cap. */
   maxAssetBytes?: number | null;
-  /** Maximum bytes in the complete output directory, including existing package files and media-plan.json. */
-  maxOutputBytes?: number | null;
   estimatedVideoBitsPerSecond?: number;
   estimatedAudioBitsPerSecond?: number;
   containerOverheadPercent?: number;
@@ -189,12 +188,13 @@ export interface MediaPlan {
     audio: { codec: "aac"; bitrate: "192k" };
     container: { video: "mp4"; audio: "m4a"; faststart: true };
   };
-  budget: MenuLoopBudgetEstimate & { existingOutputBytes: string; plannedPackageBytes: string; maxAssetBytes: number | null; maxOutputBytes: number | null };
+  budget: MenuLoopBudgetEstimate & { existingOutputBytes: string; maxAssetBytes: number | null };
   limitations: string[];
 }
 export interface ExportedMediaAsset { path: string; absolutePath: string; byteLength: number; codec: VideoCodec | "aac"; pid: number; streamNumber?: number; language?: string; }
 export interface MenuLoopMediaResult {
   plan: MediaPlan;
+  outputSize: { beforeBytes: string; afterBytes: string };
   tools: { ffmpeg: string; ffprobe: string; invocations: MediaToolInvocation[] };
   background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: boolean };
   audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number }>;
@@ -283,7 +283,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   }
 
   validateOptionalByteLimit("maxAssetBytes", options.maxAssetBytes);
-  validateOptionalByteLimit("maxOutputBytes", options.maxOutputBytes);
   const rates: MenuLoopBudgetRates = {
     estimatedVideoBitsPerSecond: options.estimatedVideoBitsPerSecond ?? 8_000_000,
     estimatedAudioBitsPerSecond: options.estimatedAudioBitsPerSecond ?? 192_000,
@@ -300,22 +299,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
 
   const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
   const maxAssetBytes = options.maxAssetBytes ?? null;
-  const maxOutputBytes = options.maxOutputBytes ?? null;
-  const planEstimate = (planned: MenuLoopEncoding): { plan: MediaPlan; packageBytes: bigint } => {
-    const mediaBytes = existingOutputBytes + BigInt(estimate.totalMediaBytes);
-    let packageBytes = mediaBytes;
-    let plan = makePlan(input, estimate, existingOutputBytes, packageBytes, maxAssetBytes, maxOutputBytes, planned);
-    for (let pass = 0; pass < 4; pass++) {
-      const next = mediaBytes + BigInt(Buffer.byteLength(`${JSON.stringify(plan, null, 2)}\n`));
-      if (next === packageBytes) break;
-      packageBytes = next;
-      plan = makePlan(input, estimate, existingOutputBytes, packageBytes, maxAssetBytes, maxOutputBytes, planned);
-    }
-    return { plan, packageBytes };
-  };
-  // Budget preflight runs before any media tool is invoked.
-  let estimatedPackageBytes = planEstimate({ codec, crf, preset, color: planVideoColor(readSourceColor({}), { policy: hdrMode, codec, hasZscale: false }) }).packageBytes;
-  assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedPackageBytes, limitBytes: options.maxOutputBytes, message: "Estimated complete output directory exceeds maxOutputBytes before encoding." });
 
   const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"], timeoutMs)).stdout);
   const ffprobeVersion = firstLine((await invoke(ffprobe, ["-version"], timeoutMs)).stdout);
@@ -346,11 +329,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     hasZscale: hasFilter(availableFilters, "zscale"),
   });
   const encoding: MenuLoopEncoding = { codec, crf, preset, color: colorPlan };
-  // The colour pipeline can change the serialized plan; re-run the preflight with
-  // the probed colour block before encoding starts.
-  estimatedPackageBytes = planEstimate(encoding).packageBytes;
-  assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedPackageBytes, limitBytes: options.maxOutputBytes, message: "Estimated complete output directory exceeds maxOutputBytes before encoding." });
-
   await mkdir(mediaDirectory, { recursive: true });
 
   const backgroundAbsolute = resolve(output, backgroundPath);
@@ -362,7 +340,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(durationSeconds(input)),
       "-vf", colorPlan.videoFilter, ...videoEncoderArgs(colorPlan, codec, crf, preset), "-aspect", aspectRatio, "-fps_mode", "passthrough",
       "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
-    ], timeoutMs, output, resolve(input.sourcePath), backgroundAbsolute, options.maxAssetBytes, options.maxOutputBytes, invoke, options.signal,
+    ], timeoutMs, backgroundAbsolute, options.maxAssetBytes, invoke, options.signal,
     (progress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: durationSeconds(input), source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid } }));
     const backgroundProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
     let outputVideo: ProbeStream;
@@ -390,7 +368,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
         "-ss", String(seekSeconds), "-map", pidSpecifier(track.pid), "-vn", "-sn", "-dn", "-t", String(expectedDuration),
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
         "-metadata:s:a:0", `language=${safeLanguage(track.language)}`, "-f", "ipod", absolutePath,
-      ], timeoutMs, output, resolve(input.sourcePath), absolutePath, options.maxAssetBytes, options.maxOutputBytes, invoke, options.signal,
+      ], timeoutMs, absolutePath, options.maxAssetBytes, invoke, options.signal,
       (progress) => options.onProgress?.({ ...progress, assetPath: relativePath, durationSeconds: expectedDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "audio", pid: track.pid, language: track.language } }));
       const audioProbe = await probeEncodedOutput(ffprobe, absolutePath, timeoutMs, invoke);
       let audioDuration: number;
@@ -406,15 +384,13 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       audioTracks.push({ ...asset, codec: "aac", pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: audioDuration });
     }
 
-    const plan = makePlan(input, estimate, existingOutputBytes, estimatedPackageBytes, options.maxAssetBytes ?? null, options.maxOutputBytes ?? null, encoding);
-    const finalPlanBytes = Buffer.byteLength(`${JSON.stringify(plan, null, 2)}\n`);
-    const finalPackageBytes = await directoryBytesExcluding(output, resolve(input.sourcePath)) + BigInt(finalPlanBytes);
-    assertActualWithinLimit({ scope: "package", actualBytes: finalPackageBytes, limitBytes: options.maxOutputBytes, message: "Complete output directory exceeds maxOutputBytes before media-plan.json is published." });
+    const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, encoding);
     created.push(planAbsolute);
     await writeFile(planAbsolute, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
-    assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Complete output directory exceeded maxOutputBytes while publishing media-plan.json." });
+    const actualOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
+    const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return {
-      plan, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
+      plan, outputSize, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
       background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec, pid: input.videoPid, width: outputVideo.width, height: outputVideo.height, durationSeconds: videoDuration, loop: loopBackground(input) },
       audioTracks, files, warnings: colorPlan.warnings,
     };
@@ -465,7 +441,6 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
   } catch { return null; }
 
   validateOptionalByteLimit("maxAssetBytes", options.maxAssetBytes);
-  validateOptionalByteLimit("maxOutputBytes", options.maxOutputBytes);
   const rates: MenuLoopBudgetRates = {
     estimatedVideoBitsPerSecond: options.estimatedVideoBitsPerSecond ?? 8_000_000,
     estimatedAudioBitsPerSecond: options.estimatedAudioBitsPerSecond ?? 192_000,
@@ -484,16 +459,7 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
       await copyFile(resolve(sourceDirectory, path), destination);
       copied.push(destination);
     }
-    const estimatedMediaBytes = BigInt(estimate.totalMediaBytes);
-    let estimatedPackageBytes = existingOutputBytes + estimatedMediaBytes;
-    let plan = makePlan(input, estimate, existingOutputBytes, estimatedPackageBytes, options.maxAssetBytes ?? null, options.maxOutputBytes ?? null, reusableEncoding, true);
-    for (let pass = 0; pass < 4; pass++) {
-      const next = existingOutputBytes + estimatedMediaBytes + BigInt(Buffer.byteLength(`${JSON.stringify(plan, null, 2)}\n`));
-      if (next === estimatedPackageBytes) break;
-      estimatedPackageBytes = next;
-      plan = makePlan(input, estimate, existingOutputBytes, estimatedPackageBytes, options.maxAssetBytes ?? null, options.maxOutputBytes ?? null, reusableEncoding, true);
-    }
-    assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedPackageBytes, limitBytes: options.maxOutputBytes, message: "Estimated reused media package exceeds maxOutputBytes." });
+    const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, reusableEncoding, true);
     const files = sourceFiles.map((path) => ({ path, absolutePath: resolve(output, path), byteLength: sourceSizes.get(path)! }));
     const backgroundFile = files[0]!;
     const audioTracks = audioRecords.map((record, index) => {
@@ -503,14 +469,17 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     const planAbsolute = resolve(output, planPath);
     await writeFile(planAbsolute, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
     copied.push(planAbsolute);
-    assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, resolve(input.sourcePath)), limitBytes: options.maxOutputBytes, message: "Reused media package exceeds maxOutputBytes." });
+    const actualOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
+    const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return {
-      plan, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
+      plan, outputSize, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
       background: { ...backgroundFile, codec: encoding.codec, pid: input.videoPid, width: priorBackground.width, height: priorBackground.height, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input) },
       audioTracks, files,
-      warnings: priorPlan.encoding.video.color.filterChain === "hdr-passthrough-fallback"
-        ? [{ code: "MEDIA_HDR_TONEMAP_UNAVAILABLE", message: "Reused menu media keeps BT.2020/PQ signalling; the originating package was exported without a tone mapping filter." }]
-        : [],
+      warnings: [
+        ...(priorPlan.encoding.video.color.filterChain === "hdr-passthrough-fallback"
+          ? [{ code: "MEDIA_HDR_TONEMAP_UNAVAILABLE" as const, message: "Reused menu media keeps BT.2020/PQ signalling; the originating package was exported without a tone mapping filter." }]
+          : []),
+      ],
     };
   } catch (error) {
     await Promise.all(copied.map((path) => unlink(path).catch(() => undefined)));
@@ -696,7 +665,7 @@ function normalizePackagePath(value: string): string {
   return normalized;
 }
 
-function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, plannedPackageBytes: bigint, maxAssetBytes: number | null, maxOutputBytes: number | null, encoding: MenuLoopEncoding, reused = false): MediaPlan {
+function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, maxAssetBytes: number | null, encoding: MenuLoopEncoding, reused = false): MediaPlan {
   const fallback = encoding.color.filterChain === "hdr-passthrough-fallback";
   const hdrWithoutHevc = encoding.codec === "h264" && encoding.color.output.bitDepth === 10;
   return {
@@ -715,7 +684,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
       audio: { codec: "aac", bitrate: "192k" },
       container: { video: "mp4", audio: "m4a", faststart: true },
     },
-    budget: { ...estimate, existingOutputBytes: existingOutputBytes.toString(), plannedPackageBytes: plannedPackageBytes.toString(), maxAssetBytes, maxOutputBytes },
+    budget: { ...estimate, existingOutputBytes: existingOutputBytes.toString(), maxAssetBytes },
     limitations: [
       input.stillMode === 2 ? "This output covers the single infinite-still PlayItem and its declared audio tracks." : loopBackground(input) ? "This output covers the repeated menu background clip and its declared audio tracks." : "This output covers one non-repeating PlayItem and its declared audio tracks.",
       "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.",
@@ -726,29 +695,29 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
   };
 }
 
-async function runWithBudget(executable: string, args: string[], timeoutMs: number, output: string, sourcePath: string, assetPath: string, maxAssetBytes: number | null | undefined, maxOutputBytes: number | null | undefined, run: MediaProcessRunner, externalSignal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
+async function runWithBudget(executable: string, args: string[], timeoutMs: number, assetPath: string, maxAssetBytes: number | null | undefined, run: MediaProcessRunner, externalSignal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
   const controller = new AbortController();
   let stopMonitor: (() => void) | undefined;
   let externalAbortHandler: (() => void) | undefined;
   const processPromise = run(executable, args, timeoutMs, controller.signal, onProgress);
   const monitorPromise = new Promise<never>((_resolve, reject) => {
-    let checking = false;
-    const check = async () => {
-      if (checking) return;
-      checking = true;
+    let checkingAsset = false;
+    const fail = (error: unknown) => {
+      controller.abort();
+      reject(error instanceof Error ? error : new Error("Media asset monitoring failed.", { cause: error }));
+    };
+    const checkAsset = async () => {
+      if (checkingAsset) return;
+      checkingAsset = true;
       try {
         const assetBytes = await pathBytes(assetPath);
         assertActualWithinLimit({ scope: "asset", actualBytes: assetBytes, limitBytes: maxAssetBytes, message: `Encoded media asset '${assetPath}' exceeded maxAssetBytes during encoding.` });
-        const packageBytes = await directoryBytesExcluding(output, sourcePath);
-        assertActualWithinLimit({ scope: "package", actualBytes: packageBytes, limitBytes: maxOutputBytes, message: `Output directory exceeded maxOutputBytes while encoding '${assetPath}'.` });
-      } catch (error) {
-        controller.abort();
-        reject(error instanceof Error ? error : new Error("Media output monitoring failed.", { cause: error }));
-      } finally { checking = false; }
+      } catch (error) { fail(error); }
+      finally { checkingAsset = false; }
     };
-    const timer = setInterval(() => { void check(); }, 10);
-    stopMonitor = () => clearInterval(timer);
-    void check();
+    const assetTimer = setInterval(() => { void checkAsset(); }, 10);
+    stopMonitor = () => { clearInterval(assetTimer); };
+    void checkAsset();
   });
   const externalAbortPromise = new Promise<never>((_resolve, reject) => {
     externalAbortHandler = () => {
@@ -761,7 +730,6 @@ async function runWithBudget(executable: string, args: string[], timeoutMs: numb
   try {
     const result = await Promise.race([processPromise, monitorPromise, externalAbortPromise]);
     assertActualWithinLimit({ scope: "asset", actualBytes: await pathBytes(assetPath), limitBytes: maxAssetBytes, message: `Encoded media asset '${assetPath}' exceeded maxAssetBytes at process completion.` });
-    assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytesExcluding(output, sourcePath), limitBytes: maxOutputBytes, message: `Output directory exceeded maxOutputBytes at process completion for '${assetPath}'.` });
     return result;
   } catch (error) {
     controller.abort();
@@ -776,22 +744,4 @@ async function runWithBudget(executable: string, args: string[], timeoutMs: numb
 async function pathBytes(path: string): Promise<bigint> {
   try { return BigInt((await stat(path)).size); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0n; throw error; }
-}
-
-async function directoryBytesExcluding(root: string, excludedPath: string): Promise<bigint> {
-  let total = 0n;
-  const visit = async (directory: string): Promise<void> => {
-    let entries;
-    try { entries = await readdir(directory, { withFileTypes: true }); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
-    for (const entry of entries) {
-      const path = resolve(directory, entry.name);
-      if (path === excludedPath) continue;
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) await visit(path);
-      else if (entry.isFile()) total += BigInt((await stat(path)).size);
-    }
-  };
-  await visit(root);
-  return total;
 }

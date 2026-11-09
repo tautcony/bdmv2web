@@ -73,30 +73,35 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 ### 7. 基准先行，修复按数据排序（D5=B）
 
-基准覆盖以下五项：
+基准覆盖合成输入、真实 BDMV 样本和参考工具命令：
 
 - `packages/bdmv-parser`：`buildGraph` 用 N = 200 / 1000 / 5000 个 PlayItem 的合成 disc；
 - `packages/igs`：`PesAssembler.append` 用 184 B × {1000, 10000, 50000} 个 TS 包拼 1 MB / 8 MB PES；
 - `packages/bdmv-parser`：`choose()` 的主/备比较用 8 MB 缓冲；
-- `packages/media-export`：`directoryBytesExcluding` 在 10k 文件目录上单次耗时（决定轮询间隔）；
-- `packages/bdmv-io`：`buildInputFileTable` 在 1000 文件上相对"一次性 root 解析"的耗时差。
+- `packages/bdmv-io`：`buildInputFileTable` 在 1000 文件上相对"一次性 root 解析"的耗时差；
+- `packages/bdmv-parser`：对 `hdmv-navigation/disc-data` 中 MyGO、Battle Royale、Kyoani OVA、Tamako 四个 BDMV 元数据目录调用 `parseBdmv`；
+- `packages/igs`：读取七个真实碟片的过滤 TS 包样本，抽取 IGS 场景并写出 MNU；Battle Royale 00005 与 Tamako 00005 额外渲染并写出 PNG；
+- `packages/bdmv-parser` + `packages/igs`：对 `synthetic-all-features` 完整执行 BDMV parse、IGS 抽取、MNU/PNG 输出；
+- libbluray：分别计时 `bd_info` 和 `bd_list_titles -a` 在四个真实 BDMV 样本上的独立进程调用。
 
-每项输出 `{ case, n, ms, rss }` 到 `test-data/bench/<git-sha>.json`（不入库，路径加入 `.gitignore`）。修复针对实测呈超线性或占比显著的项，每项记录前后对比；其他项的测量结论写入 `benchmark.md`。
+每项连续测量三次，输出 `{ case, n, ms, rss }` 到 `test-data/bench/<git-sha>.json`（不入库，路径加入 `.gitignore`）。真实碟片导出使用现有过滤 IGS 包样本；完整 M2TS 不在该真实碟片样本集中。`bd_info` 与 `bd_list_titles -a` 分别记录自身进程时间，RSS 字段记录基准 Node 进程读数；参考命令单独报告。
+
+比较参考行为时运行 `scripts/generate-libbluray-baselines.py` 的工具生成逻辑并将结果与已提交基线比较。IGS 参考图像脚本 `scripts/compare-igstools-reference.py` 需要 igstools 和 pypng；环境缺少依赖时记录不可运行状态。基准文档记录参考工具可用性、比较范围及每项测量波动。修复针对实测呈超线性或占比显著的项，每项记录前后对比；其他项的测量结论写入 `benchmark.md`。
 
 基准记录重复测量的波动范围；同一 case 相对记录基线退化超过 20% 时记录原因。
 
+菜单媒体导出按相同 BDMV 输入路径、Playlist、source 时间区间、循环参数、视频 PID、音轨映射和编码设置归组。每组只编码和存储一套背景视频与音轨；每个 PlayItem 保留独立的运行时映射并引用该组的文件路径。不同时间区间、流映射或编码设置分别生成媒体组。
+
 ## Risks / Trade-offs
 
-- 历史包的未知清单字段由读取侧忽略；历史包兼容性需独立验证。
 - `SourceRef` 逐条记录 path 和 offset；输出体积可通过实测评估。
 - 系统交接记录目标和请求结果类别；外部程序执行和播放状态记为未验证。
 
 ## Migration Plan
 
-1. **产物兼容**：旧包中的未知清单字段由读取侧忽略；重新生成的报告使用当前格式。
-2. **IR schema**：`SourceRef` 的 `path` 约定从"两种写法混用"收敛为"相对 BDMV 根"。旧 IR（`source/structural`、`<MovieObject>`）在 `parseDiscIR` 时以 `SCHEMA_SOURCE_PLACEHOLDER` 警告拒绝，不静默接受——旧的空跑 IR 必须重新 `extract`。
-3. **`dist` 布局**：`runtime-web` 的 `build` 顺序变为 `tsc → build:browser`；`package-builder` 的构建依赖前者，`pnpm -r build` 的拓扑顺序由 workspace 依赖保证（两者已有依赖关系）。
-4. **测试夹具**：`IgsButton` 的 `numericSelectValue` 已在第 1 批补；本 change 若调整 `SourceRef` 形状，需同步 `packages/test-fixtures` 的 golden。
+1. **IR schema**：`SourceRef` 的 `path` 约定从"两种写法混用"收敛为"相对 BDMV 根"。旧 IR（`source/structural`、`<MovieObject>`）在 `parseDiscIR` 时以 `SCHEMA_SOURCE_PLACEHOLDER` 警告拒绝，不静默接受——旧的空跑 IR 必须重新 `extract`。
+2. **`dist` 布局**：`runtime-web` 的 `build` 顺序变为 `tsc → build:browser`；`package-builder` 的构建依赖前者，`pnpm -r build` 的拓扑顺序由 workspace 依赖保证（两者已有依赖关系）。
+3. **测试夹具**：`IgsButton` 的 `numericSelectValue` 已在第 1 批补；本 change 若调整 `SourceRef` 形状，需同步 `packages/test-fixtures` 的 golden。
 
 ## Verification / Exit Criteria
 

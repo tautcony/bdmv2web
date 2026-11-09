@@ -1,9 +1,21 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertByteLimit, assertDisjointRoots, beginOutputTransaction, buildInputFileTable, readFileChunks, resolveFileReference, resolveInputFile } from "./index.js";
 import { selectBdmvChild } from "./bdmv-candidate.js";
+
+const rootRealpathCounter = vi.hoisted(() => ({ root: undefined as string | undefined, canonicalRoot: undefined as string | undefined, count: 0 }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    realpath: async (...args: Parameters<typeof actual.realpath>) => {
+      if (String(args[0]) === rootRealpathCounter.root || String(args[0]) === rootRealpathCounter.canonicalRoot) rootRealpathCounter.count += 1;
+      return actual.realpath(...args);
+    },
+  };
+});
 
 const roots: string[] = [];
 async function temp(name: string) { const path = await mkdtemp(join(tmpdir(), name)); roots.push(path); return path; }
@@ -42,6 +54,24 @@ describe("bounded stream I/O and path isolation", () => {
     await expect(buildInputFileTable(root, ["../secret.bin"])).rejects.toThrow(/PATH_ESCAPE/);
     await expect(resolveInputFile(root, "../outside/secret.bin")).rejects.toThrow(/PATH_ESCAPE/);
     await expect(resolveInputFile(root, "escape.bin")).rejects.toThrow(/PATH_ESCAPE/);
+  });
+
+  it("canonicalizes the file table root once for 1000 files", async () => {
+    const root = await temp("bdmv input table root ");
+    const paths = Array.from({ length: 1000 }, (_, index) => `file-${index}.bin`);
+    await Promise.all(paths.map((path) => writeFile(join(root, path), "x")));
+    const canonicalRoot = await realpath(root);
+    rootRealpathCounter.root = root;
+    rootRealpathCounter.canonicalRoot = canonicalRoot;
+    rootRealpathCounter.count = 0;
+    try {
+      const table = await buildInputFileTable(root, paths);
+      expect(table.files.size).toBe(1000);
+      expect(rootRealpathCounter.count).toBe(1);
+    } finally {
+      rootRealpathCounter.root = undefined;
+      rootRealpathCounter.canonicalRoot = undefined;
+    }
   });
 
   it("rejects output nested inside or containing input", async () => {

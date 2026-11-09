@@ -1,18 +1,34 @@
 import { describe, expect, it } from "vitest";
 import { allocateBoundedBytes, assertWithinLimit, BinaryCursor, checkedObjectPixels, ContractError, DEFAULT_LIMITS, DEFAULT_PLAYER_PROFILE, from45k, parseDiscIR, parseOffset, parseTime90k, serializeOffset, serializeTime90k, validateLimits } from "./index.js";
 
-const source = { path: "BDMV/index.bdmv", origin: "primary", byteOffset: "0" } as const;
+const source = { path: "index.bdmv", origin: "primary", byteOffset: "0" } as const;
+const structuralSourcePlaceholder = ["source", "structural"].join("/");
+const movieObjectSourcePlaceholder = ["<Movie", "Object>"].join("");
 const valid = {
   schemaVersion: "1.0",
-  entries: [{ id: "entry-0", navigation: { type: "HDMV", movieObjectId: 0 }, source }, { id: "entry-bdj", navigation: { type: "BDJ", bdjoId: "00001", status: "unsupported" }, source }],
+  entries: [{ id: "entry-0", navigation: { type: "HDMV", movieObjectId: 0 }, source: { ...source } }, { id: "entry-bdj", navigation: { type: "BDJ", bdjoId: "00001", status: "unsupported" }, source: { ...source } }],
   programs: [{ id: "program-0", title: "Title" }], menus: [{ id: "menu-0" }],
   playlists: [{ id: "playlist-0", programIds: ["program-0"], menuIds: ["menu-0"], duration90k: "9007199254740993" }],
-  mediaAssets: [{ id: "asset-0", kind: "video", relativePath: "assets/电影 #1.mp4", mime: "video/mp4", byteLength: "3", sources: [source] }],
+  mediaAssets: [{ id: "asset-0", kind: "video", relativePath: "assets/电影 #1.mp4", mime: "video/mp4", byteLength: "3", sources: [{ ...source }] }],
   diagnostics: [],
 };
 
 describe("DiscIR schema and semantic checks", () => {
   it("accepts minimal HDMV and mixed BD-J entries", () => { expect(parseDiscIR(valid).entries).toHaveLength(2); });
+  it("accepts source paths relative to the BDMV root", () => {
+    const current = structuredClone(valid);
+    (current.entries[0]!.source as unknown as Record<string, unknown>).path = "PLAYLIST/00001.mpls";
+    expect(parseDiscIR(current).entries[0]!.source.path).toBe("PLAYLIST/00001.mpls");
+  });
+  it("rejects historical placeholder paths in every SourceRef collection", () => {
+    const structuralPlaceholder = structuredClone(valid);
+    Object.assign(structuralPlaceholder.entries[0]!.source, { path: structuralSourcePlaceholder });
+    expect(() => parseDiscIR(structuralPlaceholder)).toThrow("SCHEMA_SOURCE_PLACEHOLDER at /entries/0/source/path");
+
+    const movieObjectPlaceholder = structuredClone(valid);
+    Object.assign(movieObjectPlaceholder.mediaAssets[0]!.sources[0]!, { path: movieObjectSourcePlaceholder });
+    expect(() => parseDiscIR(movieObjectPlaceholder)).toThrow("SCHEMA_SOURCE_PLACEHOLDER at /mediaAssets/0/sources/0/path");
+  });
   it("locates mixed navigation fields", () => {
     const bad = structuredClone(valid); (bad.entries[0]!.navigation as Record<string, unknown>).bdjoId = "x";
     expect(() => parseDiscIR(bad)).toThrow(ContractError);

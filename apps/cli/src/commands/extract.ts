@@ -5,7 +5,7 @@ import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { buildExternalTargets } from "../shared/media.js";
 import { extractReachablePgsTracks } from "../shared/pgs.js";
 import { assertDisjointRoots, beginOutputTransaction } from "@bdmv2web/bdmv-io";
-import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
 import { lstat, mkdir, stat, unlink, writeFile } from "node:fs/promises";
@@ -44,9 +44,11 @@ export async function extract(): Promise<void> {
     const raw = `${JSON.stringify(commandTable, null, 2)}\n`;
     const rawPath = resolve(transaction.stagingPath, "hdmv/commands.json");
     await writeFile(rawPath, raw, { flag: "wx" });
+    const sourceMapPath = "hdmv/source-map.json";
+    await writeFile(resolve(transaction.stagingPath, sourceMapPath), `${JSON.stringify(createHdmvSourceMap(disc), null, 2)}\n`, { flag: "wx" });
     const parsedPath = "hdmv/parsed-disc.json";
     await writeFile(resolve(transaction.stagingPath, parsedPath), `${JSON.stringify(disc, null, 2)}\n`, { flag: "wx" });
-    generatedFiles.push(await generatedFileRecord(transaction.stagingPath, parsedPath, "parsed-disc"), await generatedFileRecord(transaction.stagingPath, "hdmv/commands.json", "hdmv-command-table"));
+    generatedFiles.push(await generatedFileRecord(transaction.stagingPath, parsedPath, "parsed-disc"), await generatedFileRecord(transaction.stagingPath, "hdmv/commands.json", "hdmv-command-table"), await generatedFileRecord(transaction.stagingPath, sourceMapPath, "hdmv-source-map"));
     if (all) {
       const externalPath = "hdmv/external-media-targets.json";
       await writeFile(resolve(transaction.stagingPath, externalPath), `${JSON.stringify(buildExternalTargets(disc, igs.scenes), null, 2)}\n`, { flag: "wx" });
@@ -60,12 +62,7 @@ export async function extract(): Promise<void> {
     const sceneJson = `${JSON.stringify({ schemaVersion: "1.1", status: igs.status, support: igs.support, scenes: sceneRecords }, null, 2)}\n`;
     const diagnosticRecords = igs.diagnostics.map((item) => ({ ...item, message: safeDiagnosticMessage(item.message, roots.input) }));
     const diagnosticsJson = `${JSON.stringify({ schemaVersion: "1.0", status: igs.status, diagnostics: diagnosticRecords }, null, 2)}\n`;
-    const sourceMap = {
-      schemaVersion: "1.0",
-      scenes: igs.scenes.map((scene) => ({ sceneId: scene.id, composition: mapIgsSource(scene.source), pages: scene.pages.map((page) => ({ pageId: page.id, buttons: page.buttons.map((button) => ({ buttonId: button.id, commands: button.commands.map((command) => ({ recordIndex: command.recordIndex, sourceOffset: command.sourceOffset, source: mapIgsSource(scene.source) })) })) })), objects: scene.objects.map((object) => ({ objectId: object.id, version: object.version, source: mapIgsSource(object.source) })), palettes: scene.palettes.map((palette) => ({ paletteId: palette.id, version: palette.version, source: mapIgsSource(palette.source) })) })),
-      assets: igs.assets.map((asset) => ({ assetId: asset.id, path: asset.relativePath, objectId: asset.objectId, objectVersion: asset.objectVersion, paletteId: asset.paletteId, paletteVersion: asset.paletteVersion, source: mapIgsSource(asset.source), colorConversion: asset.colorConversion })),
-      diagnostics: igs.diagnostics.map((diagnostic, index) => ({ index, source: diagnostic.source ? mapIgsSource(diagnostic.source) : null, affectedSceneIds: diagnostic.affectedSceneIds })),
-    };
+    const sourceMap = createIgsSourceMap(igs);
     const sourceMapJson = `${JSON.stringify(sourceMap, null, 2)}\n`;
     await mkdir(resolve(transaction.stagingPath, "igs"), { recursive: true });
     await writeFile(resolve(transaction.stagingPath, "igs/scenes.json"), sceneJson, { flag: "wx" });
@@ -90,13 +87,68 @@ export async function extract(): Promise<void> {
   } catch (error) { await transaction.abort(); throw error; }
 }
 
+export function createHdmvSourceMap(disc: Pick<ParsedDisc, "movieObjects">) {
+  return {
+    schemaVersion: "1.0",
+    instructions: disc.movieObjects.flatMap((object) => object.instructions.map((instruction) => ({
+      movieObjectId: object.id,
+      instructionIndex: instruction.source.instructionIndex,
+      source: { path: instruction.source.path, origin: instruction.source.origin, byteOffset: instruction.source.offset, instructionIndex: instruction.source.instructionIndex },
+    }))),
+  };
+}
+
 export async function generatedFileRecord(root: string, path: string, kind: string): Promise<{ path: string; kind: string; byteLength: string }> {
   const result = await stat(resolve(root, path));
   return { path, kind, byteLength: String(result.size) };
 }
 
-export function mapIgsSource(source: { clipId: string; pid: number; packetOffset: string; pesOffset: string; segmentOffset: string; segmentFileOffset: string; pts90k: string | null; timeDomain: number }): Record<string, string | number | null> {
-  return { path: `BDMV/STREAM/${source.clipId}.m2ts`, pid: source.pid, packetOffset: source.packetOffset, pesOffset: source.pesOffset, segmentOffset: source.segmentOffset, byteOffset: source.segmentFileOffset, pts90k: source.pts90k, timeDomain: source.timeDomain };
+type IgsSourceMapInput = {
+  clipId: string | null;
+  pid: number | null;
+  path?: string | null;
+  origin?: "primary" | "backup" | null;
+  sourceOffset?: string | null;
+  packetOffset: string | null;
+  pesOffset: string | null;
+  segmentOffset: string | null;
+  segmentFileOffset: string | null;
+  pts90k: string | null;
+  timeDomain: number | null;
+  stage?: "structural" | "transport";
+};
+
+export function mapIgsSource(source: IgsSourceMapInput): Record<string, string | number | null> {
+  const stage = source.stage ?? "transport";
+  return {
+    path: source.path ?? null, clipId: source.clipId, pid: source.pid, origin: source.origin ?? null, stage,
+    byteOffset: stage === "structural" ? source.sourceOffset ?? null : source.segmentFileOffset,
+    sourceOffset: source.sourceOffset ?? null,
+    packetOffset: source.packetOffset, pesOffset: source.pesOffset, segmentOffset: source.segmentOffset,
+    segmentFileOffset: source.segmentFileOffset, pts90k: source.pts90k, timeDomain: source.timeDomain,
+  };
+}
+
+export function mapIgsDiagnosticSource(diagnostic: { code: string; source: IgsSourceMapInput | null; stage?: "structural" | "transport" | "pes" | "igs" | "render" }) {
+  const stage = diagnostic.stage ?? diagnosticStage(diagnostic.code);
+  return { source: diagnostic.source ? mapIgsSource(diagnostic.source) : null, stage };
+}
+
+export function createIgsSourceMap(igs: Pick<Awaited<ReturnType<typeof extractIgsScenes>>, "scenes" | "assets" | "diagnostics">) {
+  return {
+    schemaVersion: "1.0",
+    scenes: igs.scenes.map((scene) => ({ sceneId: scene.id, composition: mapIgsSource(scene.source), pages: scene.pages.map((page) => ({ pageId: page.id, buttons: page.buttons.map((button) => ({ buttonId: button.id, commands: button.commands.map((command) => ({ recordIndex: command.recordIndex, sourceOffset: command.sourceOffset, source: mapIgsSource(scene.source) })) })) })), objects: scene.objects.map((object) => ({ objectId: object.id, version: object.version, source: mapIgsSource(object.source) })), palettes: scene.palettes.map((palette) => ({ paletteId: palette.id, version: palette.version, source: mapIgsSource(palette.source) })) })),
+    assets: igs.assets.map((asset) => ({ assetId: asset.id, path: asset.relativePath, objectId: asset.objectId, objectVersion: asset.objectVersion, paletteId: asset.paletteId, paletteVersion: asset.paletteVersion, source: mapIgsSource(asset.source), colorConversion: asset.colorConversion })),
+    diagnostics: igs.diagnostics.map((diagnostic, index) => ({ index, ...mapIgsDiagnosticSource(diagnostic), affectedSceneIds: diagnostic.affectedSceneIds })),
+  };
+}
+
+function diagnosticStage(code: string): "structural" | "transport" | "pes" | "igs" | "render" {
+  if (code.startsWith("BDMV_")) return "structural";
+  if (code.startsWith("TS_") || code.startsWith("PSI_") || code === "IGS_PID_UNRESOLVED" || code === "LIMIT_EXCEEDED") return "transport";
+  if (code.startsWith("PES_") || code.startsWith("PTS_")) return "pes";
+  if (code.startsWith("UNRESOLVED_") || code.startsWith("RENDER_")) return "render";
+  return "igs";
 }
 
 export function serializeIgsScene(scene: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"][number]): Record<string, unknown> {

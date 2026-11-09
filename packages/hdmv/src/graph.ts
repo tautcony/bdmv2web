@@ -1,16 +1,23 @@
 import type { MovieObject, ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
-import { decodeInstruction } from "./decode.js";
+import { decodeInstruction, type OpcodeName } from "./decode.js";
 import type { VmProgram } from "./vm.js";
 
 export interface NavigationGraphNode { id: string; kind: "object" | "command"; objectId: number; commandIndex?: number; source: SourceLocation | null; status: "known" | "unknown"; }
-export interface NavigationGraphEdge { from: string; to: string | null; kind: "sequence" | "conditional" | "jump" | "call" | "resume" | "play" | "unknown"; condition: string | null; source: SourceLocation; resolution: "resolved" | "unresolved"; }
+export interface NavigationGraphEdge { from: string; to: string | null; kind: "sequence" | "conditional" | "jump" | "call" | "resume" | "play" | "unknown"; condition: string | null; source: SourceLocation; resolution: "resolved" | "unresolved"; origin?: string; }
 export interface NavigationGraph { nodes: NavigationGraphNode[]; edges: NavigationGraphEdge[]; explored: number; complete: boolean; diagnostics: string[]; }
-export interface GraphOptions { maxStates?: number; entries?: ParsedDisc["entries"]; }
+export interface GraphOptions { maxStates?: number; entries?: ParsedDisc["entries"]; context?: "object" | "playlist"; }
 const UNKNOWN_SOURCE: SourceLocation = { path: "<unknown-command>", origin: "primary", offset: "0" };
+
+function terminatesFlow(opcode: OpcodeName | null | undefined, context: "object" | "playlist"): boolean {
+  if (opcode === "JUMP_TITLE") return true;
+  if (["LINK_PI", "LINK_MK", "TERMINATE_PL"].includes(opcode ?? "")) return context === "playlist";
+  return ["GOTO", "BREAK", "JUMP_OBJECT", "CALL_OBJECT", "CALL_TITLE", "RESUME", "PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"].includes(opcode ?? "");
+}
 
 export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, appendedPrograms: VmProgram[] = [], options: GraphOptions = {}): NavigationGraph {
   const all: Array<MovieObject | VmProgram> = [...objects, ...appendedPrograms]; const nodes: NavigationGraphNode[] = []; const edges: NavigationGraphEdge[] = []; const diagnostics: string[] = [];
   const byId = new Map<number, MovieObject | VmProgram>(); for (const p of all) byId.set(p.id, p);
+  const context = options.context ?? "object";
   const maxStates = Math.max(0, options.maxStates ?? 50_000); let explored = 0; let complete = true;
   for (const p of all) {
     const program = p; const objectSource = "source" in program ? program.source : null;
@@ -51,6 +58,7 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
             : title !== null && title > 0 ? entries?.filter((item) => item.kind === "title")[title - 1] : undefined;
         const target = entry?.target.objectType === "HDMV" && typeof entry.target.target === "number" && byId.has(entry.target.target) ? entry.target.target : null;
         edges.push({ from: id, to: target === null ? null : `object:${target}`, kind: d.opcode === "CALL_TITLE" ? "call" : "jump", condition: null, source, resolution: target === null ? "unresolved" : "resolved" });
+        if (d.opcode === "JUMP_TITLE" && target !== null) edges.push({ from: id, to: `object:${target}`, kind: "sequence", condition: null, source, resolution: "resolved", origin: "jump-title" });
         if (d.opcode === "CALL_TITLE" && index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: "after title resumes", source, resolution: "resolved" });
       } else if (["LINK_PI", "LINK_MK"].includes(d?.opcode ?? "")) {
         edges.push({ from: id, to: null, kind: "play", condition: null, source, resolution: "unresolved" });
@@ -60,8 +68,7 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
         edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "conditional", condition: `${d?.opcode} predicate true; next command`, source, resolution: "unresolved" });
         edges.push({ from: id, to: `command:${p.id}:${index + 2}`, kind: "conditional", condition: `${d?.opcode} predicate false; skip next command`, source, resolution: "unresolved" });
       }
-      const terminatesFlow = ["GOTO", "BREAK", "JUMP_OBJECT", "JUMP_TITLE", "CALL_OBJECT", "CALL_TITLE", "RESUME", "PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM", "LINK_PI", "LINK_MK", "TERMINATE_PL"].includes(d?.opcode ?? "");
-      if (!terminatesFlow && index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: null, source, resolution: "resolved" });
+      if (!terminatesFlow(d?.opcode, context) && index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: null, source, resolution: "resolved" });
       if (!d?.opcode) edges.push({ from: id, to: null, kind: "unknown", condition: "unknown encoding; execution faults", source, resolution: "unresolved" });
     }
     if (!complete) break;

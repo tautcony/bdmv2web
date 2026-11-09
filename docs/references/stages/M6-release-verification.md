@@ -12,6 +12,12 @@
 | `LIBBLURAY-1.5.0`, `IGSTOOLS-2019`, `LIBHDMV-2026-03` | 3.1–3.3 | M1/M2/M3 固定版本的实现源码可用于交叉比较。 | 不同语言或仓库不代表来源独立；应检查算法/代码沿袭，使用另外建立的 expected 数据，并记录来源版本和许可。 |
 | `BDA-BDMV-SPECS` / `BDA-PUBLIC-WHITEPAPERS` | 2.1–2.3 | 规范书访问状态和历史公开白皮书的背景来源，分别见 [`sources.json`](../sources.json)。 | 白皮书不作规范性依据；未取得授权书籍不是发布验证前置。按固定实现、独立 golden、真实环境验证及其具体缺口作结论。 |
 
+## Compatibility and audit report fields
+
+`compatibility.json` records status, checks, coverage, reasons and validation evidence. `dependency-audit.json` records status, external references and checks. Neither report records the producing tool name or version, or provides a separate structured diagnostics list with source path, byte offset and stage. Compatibility checks carry `checkId`, `result`, `message` and optional `path`, `entityId` and `evidence`.
+
+The package manifest carries conversion diagnostics with severity, code and message. The offline package audit retains severity, code, acknowledgement and completion-blocking fields when it reads those diagnostics; it does not retain their message, source path, byte offset or stage. Release results therefore identify check failures and missing evidence, while tool-version provenance and source-located diagnostic detail remain unrecorded.
+
 ## Task 3.4 安全回归证据
 
 以下 focused suites 均通过；这些 fixtures 覆盖输入边界和预算行为。

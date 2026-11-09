@@ -34,6 +34,10 @@ Fixtures in `packages/test-fixtures` are project-authored binary byte builders a
 
 The parser's version gate accepts only the candidate tags shown above; `0240` is the 3D/MVC profile and the shared gate accepts it for every metadata file, as the reference readers do. Unknown primary versions are rejected before a format is returned; `packages/bdmv-parser/src/parser.test.ts` checks this for INDX, MOBJ, MPLS, CLPI and sound, and checks that an older backup does not mask an unknown primary INDX version. Positive structural expectations are hand-authored byte fixtures in `packages/test-fixtures/src/bdmv.ts`; malformed/truncated and unknown-version cases are separate parser inputs. This provides reproducible implementation tests, not full validation of every candidate-version field layout, so the status stays `unverified`.
 
+## Sources
+
+`SourceLocation.path` is relative to the BDMV root and omits the `BDMV/` prefix. For example, a playlist source uses `PLAYLIST/00001.mpls`; a root metadata source uses `index.bdmv`. `origin` records `primary` or `backup`, and `offset` is the decimal byte offset within that file.
+
 ## Evidence and fixture gaps
 
 - BDA specification books are agreement-gated; the public whitepapers listed in `.reference-cache/specs/SOURCE.md` cover architecture and format background.

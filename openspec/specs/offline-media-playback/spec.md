@@ -306,3 +306,22 @@
 
 - **WHEN** 指定的输出目录与 BDMV 重叠，或者输出目录已存在且未指定 `--overwrite`
 - **THEN** 明确拒绝并说明原因，不覆盖源目录或既有产物
+
+### Requirement: Media output size reporting
+
+The system SHALL measure and report the output directory size before and after each menu-loop or linear media export. The system SHALL monitor individual `maxAssetBytes` limits during encoding.
+
+#### Scenario: Menu-loop export reports output size
+
+- **WHEN** a menu-loop media export completes
+- **THEN** its result reports the output directory size before and after the export
+
+#### Scenario: Linear export reports output size
+
+- **WHEN** a linear media export completes
+- **THEN** its result reports the output directory size before and after the export
+
+#### Scenario: Asset exceeds its limit
+
+- **WHEN** one encoded asset exceeds `maxAssetBytes`
+- **THEN** that media job stops with `MEDIA_ASSET_BUDGET_EXCEEDED`

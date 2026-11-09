@@ -17,7 +17,7 @@ async function skeleton(parent: string, index = buildM1Index()): Promise<string>
 describe("M1 BDMV discovery and structure", () => {
   it("traverses resolved graph cycles once and reports unresolved and missing targets", () => {
     const node = (id: string, state: GraphNode["state"] = "present"): GraphNode => ({ id, type: "entry", state, source: null });
-    const edge = (from: string, to: string, resolution: GraphEdge["resolution"]): GraphEdge => ({ from, to, kind: "reference", resolution, source: { path: "BDMV/index.bdmv", origin: "primary", offset: "0" } });
+    const edge = (from: string, to: string, resolution: GraphEdge["resolution"]): GraphEdge => ({ from, to, kind: "reference", resolution, source: { path: "index.bdmv", origin: "primary", offset: "0" } });
     const result = traverseGraph({ nodes: [node("a"), node("b"), node("missingNode", "missing")], edges: [edge("a", "b", "resolved"), edge("b", "a", "resolved"), edge("b", "command:0:0", "unresolved"), edge("b", "missing", "resolved"), edge("b", "missingNode", "missing")] }, ["a"]);
     expect(result.visited).toEqual(["a", "b"]);
     expect(result.unresolvedEdges.map((item) => item.to)).toEqual(["command:0:0", "missing", "missingNode"]);
@@ -28,7 +28,7 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("stops at the node budget and returns an explicit unvisited frontier", () => {
     const node = (id: string): GraphNode => ({ id, type: "entry", state: "present", source: null });
-    const source = { path: "BDMV/index.bdmv", origin: "primary" as const, offset: "0" };
+    const source = { path: "index.bdmv", origin: "primary" as const, offset: "0" };
     const result = traverseGraph({ nodes: [node("a"), node("b"), node("c")], edges: [
       { from: "a", to: "b", kind: "reference", resolution: "resolved", source },
       { from: "b", to: "c", kind: "reference", resolution: "resolved", source },
@@ -81,6 +81,18 @@ describe("M1 BDMV discovery and structure", () => {
     expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_STN_CLPI_PID_CONFLICT" && diagnostic.sourcePath === cue.source.path && diagnostic.offset === cue.source.offset)).toBe(false);
   });
 
+  it("stores entry, playlist, and clip sources relative to the BDMV root", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1EmptyPlaylist());
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1EmptyClipInfo());
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.entries[0]?.source).toMatchObject({ path: "index.bdmv", origin: "primary" });
+      expect(disc.playlists[0]?.source.path).toBe("PLAYLIST/00001.mpls");
+      expect(disc.clips[0]?.source.path).toBe("CLIPINF/00001.clpi");
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("retains mixed HDMV and BD-J title declarations and exact MOBJ bytes and offsets", async () => {
     const parent = await temp(); const root = await skeleton(parent, buildM1Index({ bdjTitle: "00042", titleAccess: 2 }));
     try {
@@ -91,6 +103,7 @@ describe("M1 BDMV discovery and structure", () => {
       expect(disc.movieObjects[0]).toMatchObject({ resumeIntention: false, menuCallMask: false, titleSearchMask: false });
       expect(disc.movieObjects[0]?.instructions.map((i) => i.bytes)).toEqual(m1MovieObjectExpected.instructionBytes);
       expect(disc.movieObjects[0]?.instructions.map((i) => i.source.offset)).toEqual(m1MovieObjectExpected.instructionOffsets);
+      expect(disc.movieObjects[0]?.instructions.map((i) => i.source.instructionIndex)).toEqual([0, 1]);
       expect(disc.graph.edges.filter((e) => e.kind === "raw-command").every((e) => e.resolution === "unresolved")).toBe(true);
       expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "bdjo:00042", type: "bdjo", state: "missing" }));
       expect(disc.graph.edges).toContainEqual(expect.objectContaining({ to: "bdjo:00042", kind: "bdj-target", resolution: "missing" }));
@@ -100,7 +113,7 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("resolves BD-J targets when the matching BDJO declaration exists", async () => {
     const parent = await temp(); const root = await skeleton(parent, buildM1Index({ bdjTitle: "00042" })); await mkdir(join(root, "BDJO"), { recursive: true }); await writeFile(join(root, "BDJO", "00042.bdjo"), new Uint8Array());
-    try { const disc = await parseBdmv(root); expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "bdjo:00042", type: "bdjo", state: "present", source: expect.objectContaining({ path: "BDMV/BDJO/00042.bdjo" }) })); expect(disc.graph.edges).toContainEqual(expect.objectContaining({ to: "bdjo:00042", kind: "bdj-target", resolution: "resolved" })); }
+    try { const disc = await parseBdmv(root); expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "bdjo:00042", type: "bdjo", state: "present", source: expect.objectContaining({ path: "BDJO/00042.bdjo" }) })); expect(disc.graph.edges).toContainEqual(expect.objectContaining({ to: "bdjo:00042", kind: "bdj-target", resolution: "resolved" })); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -127,43 +140,43 @@ describe("M1 BDMV discovery and structure", () => {
   it("uses a matching backup when the primary index is absent and records its source", async () => {
     const parent = await temp(); const root = await skeleton(parent); await rm(join(root, "index.bdmv"));
     await mkdir(join(root, "BACKUP"), { recursive: true }); await writeFile(join(root, "BACKUP", "index.bdmv"), buildM1Index());
-    try { const disc = await parseBdmv(root); expect(disc.entries[0]?.source).toMatchObject({ path: "BDMV/BACKUP/index.bdmv", origin: "backup" }); expect(disc.diagnostics.some((d) => d.code === "BDMV_BACKUP_FALLBACK" && d.sourcePath === "BDMV/BACKUP/index.bdmv")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries[0]?.source).toMatchObject({ path: "BACKUP/index.bdmv", origin: "backup" }); expect(disc.diagnostics.some((d) => d.code === "BDMV_BACKUP_FALLBACK" && d.sourcePath === "BACKUP/index.bdmv")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("recovers from a structurally damaged index as one whole backup file", async () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "index.bdmv"), new Uint8Array([0, 1, 2])); await mkdir(join(root, "BACKUP"), { recursive: true }); await writeFile(join(root, "BACKUP", "index.bdmv"), buildM1Index({ top: 9 }));
-    try { const disc = await parseBdmv(root); expect(disc.entries[1]?.target.target).toBe(9); expect(disc.entries.every((e) => e.source.path === "BDMV/BACKUP/index.bdmv" && e.source.origin === "backup")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries[1]?.target.target).toBe(9); expect(disc.entries.every((e) => e.source.path === "BACKUP/index.bdmv" && e.source.origin === "backup")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("keeps a valid primary when both primary and backup are valid but differ", async () => {
     const parent = await temp(); const root = await skeleton(parent); await mkdir(join(root, "BACKUP"), { recursive: true }); await writeFile(join(root, "BACKUP", "index.bdmv"), buildM1Index({ top: 7 }));
-    try { const disc = await parseBdmv(root); expect(disc.entries[1]?.target.target).toBe(1); expect(disc.entries[1]?.source).toMatchObject({ path: "BDMV/index.bdmv", origin: "primary" }); expect(disc.diagnostics.some((d) => d.code === "BDMV_BACKUP_DIFFERS" && d.sourcePath === "BDMV/index.bdmv")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries[1]?.target.target).toBe(1); expect(disc.entries[1]?.source).toMatchObject({ path: "index.bdmv", origin: "primary" }); expect(disc.diagnostics.some((d) => d.code === "BDMV_BACKUP_DIFFERS" && d.sourcePath === "index.bdmv")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("reports both invalid index copies without inventing entries", async () => {
     const parent = await temp(); const root = await skeleton(parent, new Uint8Array([1, 2, 3])); await mkdir(join(root, "BACKUP"), { recursive: true }); await writeFile(join(root, "BACKUP", "index.bdmv"), new Uint8Array([4, 5, 6]));
-    try { const disc = await parseBdmv(root); expect(disc.entries).toHaveLength(0); expect(disc.diagnostics.filter((d) => d.severity === "error").map((d) => d.sourcePath).sort()).toEqual(["BDMV/BACKUP/index.bdmv", "BDMV/index.bdmv"]); expect(disc.diagnostics.some((d) => d.code === "BDMV_REQUIRED_FILE_MISSING")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries).toHaveLength(0); expect(disc.diagnostics.filter((d) => d.severity === "error").map((d) => d.sourcePath).sort()).toEqual(["BACKUP/index.bdmv", "index.bdmv"]); expect(disc.diagnostics.some((d) => d.code === "BDMV_REQUIRED_FILE_MISSING")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("reports a three-byte truncated magic as truncated input", async () => {
     const parent = await temp(); const root = await skeleton(parent, Uint8Array.from([0x49, 0x4e, 0x44]));
-    try { const disc = await parseBdmv(root); expect(disc.entries).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "TRUNCATED_INPUT" && d.sourcePath === "BDMV/index.bdmv")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "TRUNCATED_INPUT" && d.sourcePath === "index.bdmv")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("rejects an index section too short for the fixed entries and title count", async () => {
     const parent = await temp(); const bytes = buildM1Index(); bytes[88] = 0; bytes[89] = 0; bytes[90] = 0; bytes[91] = 25; const root = await skeleton(parent, bytes);
-    try { const disc = await parseBdmv(root); expect(disc.entries).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/index.bdmv")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "index.bdmv")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("keeps a valid primary when its backup has an unsupported version", async () => {
     const parent = await temp(); const root = await skeleton(parent); await mkdir(join(root, "BACKUP"), { recursive: true }); await writeFile(join(root, "BACKUP", "index.bdmv"), buildM1Index({ version: "9999" }));
-    try { const disc = await parseBdmv(root); expect(disc.entries[0]?.source).toMatchObject({ path: "BDMV/index.bdmv", origin: "primary" }); expect(disc.diagnostics.some((d) => d.code === "BDMV_UNSUPPORTED_VERSION" && d.sourcePath === "BDMV/BACKUP/index.bdmv")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.entries[0]?.source).toMatchObject({ path: "index.bdmv", origin: "primary" }); expect(disc.diagnostics.some((d) => d.code === "BDMV_UNSUPPORTED_VERSION" && d.sourcePath === "BACKUP/index.bdmv")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -201,9 +214,9 @@ describe("M1 BDMV discovery and structure", () => {
     await writeFile(join(root, "CLIPINF", "00001.clpi"), Uint8Array.from([1, 2, 3])); await writeFile(join(backup, "CLIPINF", "00001.clpi"), buildM1ClipInfoProgramAndCpi());
     try {
       const disc = await parseBdmv(root);
-      expect(disc.movieObjects[0]?.source.path).toBe("BDMV/BACKUP/MovieObject.bdmv");
-      expect(disc.playlists[0]?.source.path).toBe("BDMV/BACKUP/PLAYLIST/00001.mpls");
-      expect(disc.clips[0]?.source.path).toBe("BDMV/BACKUP/CLIPINF/00001.clpi");
+      expect(disc.movieObjects[0]?.source.path).toBe("BACKUP/MovieObject.bdmv");
+      expect(disc.playlists[0]?.source.path).toBe("BACKUP/PLAYLIST/00001.mpls");
+      expect(disc.clips[0]?.source.path).toBe("BACKUP/CLIPINF/00001.clpi");
       expect(disc.diagnostics.filter((d) => d.code === "BDMV_BACKUP_FALLBACK")).toHaveLength(3);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
@@ -216,7 +229,7 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("preserves a nonempty SubPlayItem and its timing/source mapping", async () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithSubPlayItem());
-    try { const disc = await parseBdmv(root); expect(disc.playlists[0]?.subPaths[0]?.items[0]).toMatchObject({ clipId: "00009", connectionCondition: 1, stcId: 7, multiClip: false, clips: [{ clipId: "00009", codecId: "M2TS", stcId: 7 }], inTime45k: 90_000, outTime45k: 180_000, syncPlayItemId: 1, syncPts45k: 45_000, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "214" } }); }
+    try { const disc = await parseBdmv(root); expect(disc.playlists[0]?.subPaths[0]?.items[0]).toMatchObject({ clipId: "00009", connectionCondition: 1, stcId: 7, multiClip: false, clips: [{ clipId: "00009", codecId: "M2TS", stcId: 7 }], inTime45k: 90_000, outTime45k: 180_000, syncPlayItemId: 1, syncPts45k: 45_000, source: { path: "PLAYLIST/00001.mpls", offset: "214" } }); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -228,25 +241,25 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("rejects an STN section that crosses its enclosing PlayItem while remaining inside the file", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1PlaylistGolden(); bytes[136] = 0; bytes[137] = 40; await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "PLAYLIST/00001.mpls")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("rejects a SubPlayItem that crosses its enclosing SubPath while remaining inside the file", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1PlaylistWithSubPlayItem(); bytes[212] = 0; bytes[213] = 50; await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "PLAYLIST/00001.mpls")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("rejects a SubPlayItem shorter than its fixed bit fields", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1PlaylistWithSubPlayItem(); bytes[212] = 0; bytes[213] = 27; await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.playlists).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "PLAYLIST/00001.mpls")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("reports an invalid chapter Mark without normalizing it into a playable reference", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1PlaylistGolden(); bytes[234] = 0; bytes[235] = 9; await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_REFERENCE" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls" && d.offset === "232")).toBe(true); expect(disc.playlists[0]?.marks[1]?.playItemRef).toBe(9); }
+    try { const disc = await parseBdmv(root); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_REFERENCE" && d.sourcePath === "PLAYLIST/00001.mpls" && d.offset === "232")).toBe(true); expect(disc.playlists[0]?.marks[1]?.playItemRef).toBe(9); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -260,7 +273,7 @@ describe("M1 BDMV discovery and structure", () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithHevcVideo());
     try {
       const stream = (await parseBdmv(root)).playlists[0]?.playItems[0]?.streams[0];
-      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1011, dynamicRangeType: 1, colorSpace: 2, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "140" } });
+      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1011, dynamicRangeType: 1, colorSpace: 2, source: { path: "PLAYLIST/00001.mpls", offset: "140" } });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -268,7 +281,7 @@ describe("M1 BDMV discovery and structure", () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithHevcVideo(0, 0));
     try {
       const stream = (await parseBdmv(root)).clips[0]?.programs[0]?.streams[0];
-      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1100, dynamicRangeType: 0, colorSpace: 0, source: { path: "BDMV/CLIPINF/00001.clpi", offset: "74" } });
+      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1100, dynamicRangeType: 0, colorSpace: 0, source: { path: "CLIPINF/00001.clpi", offset: "74" } });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -282,19 +295,19 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("bounds-checks nonempty CLPI CPI sections", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1ClipInfoProgramAndCpi(); bytes[89] = 0xff; await writeFile(join(root, "CLIPINF", "00001.clpi"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "CLIPINF/00001.clpi")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("bounds ProgramInfo records by their declared CLPI section", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1ClipInfoProgramAndCpi(); bytes[60] = 0; bytes[61] = 0; bytes[62] = 0; bytes[63] = 8; await writeFile(join(root, "CLIPINF", "00001.clpi"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_COUNT" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_COUNT" && d.sourcePath === "CLIPINF/00001.clpi")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("rejects CPI entry blocks beyond the declared CPI section while file bytes remain", async () => {
     const parent = await temp(); const root = await skeleton(parent); const original = buildM1ClipInfoProgramAndCpi(); const bytes = new Uint8Array(160); bytes.set(original); bytes[100] = 0; bytes[101] = 0; bytes[102] = 0; bytes[103] = 30; await writeFile(join(root, "CLIPINF", "00001.clpi"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.clips).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "CLIPINF/00001.clpi")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -336,7 +349,7 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("rejects MOBJ commands beyond the declared data section even when file bytes remain", async () => {
     const parent = await temp(); const root = await skeleton(parent); const bytes = buildM1MovieObject(); bytes[40] = 0; bytes[41] = 0; bytes[42] = 0; bytes[43] = 10; await writeFile(join(root, "MovieObject.bdmv"), bytes);
-    try { const disc = await parseBdmv(root); expect(disc.movieObjects).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "TRUNCATED_INPUT" && d.sourcePath === "BDMV/MovieObject.bdmv")).toBe(true); }
+    try { const disc = await parseBdmv(root); expect(disc.movieObjects).toHaveLength(0); expect(disc.diagnostics.some((d) => d.code === "TRUNCATED_INPUT" && d.sourcePath === "MovieObject.bdmv")).toBe(true); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -354,7 +367,7 @@ describe("M1 BDMV discovery and structure", () => {
     const root = await skeleton(parent, index);
     try {
       const disc = await parseBdmv(root);
-      expect(disc.discInfo.appInfo).toMatchObject({ initialOutputModePreference: true, contentExistFlag: true, initialDynamicRangeType: 2, videoFormat: 6, frameRate: 4, userDataBytes: 32, source: { path: "BDMV/index.bdmv", origin: "primary", offset: "40" } });
+      expect(disc.discInfo.appInfo).toMatchObject({ initialOutputModePreference: true, contentExistFlag: true, initialDynamicRangeType: 2, videoFormat: 6, frameRate: 4, userDataBytes: 32, source: { path: "index.bdmv", origin: "primary", offset: "40" } });
       expect(disc.discInfo.uhd).toMatchObject({ discType: 5, exists4k: true, hdrFlags: 3, hdr10Plus: false, dolbyVision: true });
       expect(disc.entries).toHaveLength(2);
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -382,7 +395,7 @@ describe("M1 BDMV discovery and structure", () => {
       await writeFile(path, truncated);
       const truncatedDisc = await parseBdmv(root);
       expect(truncatedDisc.entries).toHaveLength(2);
-      expect(truncatedDisc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning", sourcePath: "BDMV/index.bdmv" }));
+      expect(truncatedDisc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning", sourcePath: "index.bdmv" }));
 
       // An entry whose bounds leave the file is dropped with a warning; navigation survives.
       const outOfRange = buildM1Index({ uhd: { discType: 5 } }); outOfRange[134] = 0x02;
@@ -390,7 +403,7 @@ describe("M1 BDMV discovery and structure", () => {
       const outOfRangeDisc = await parseBdmv(root);
       expect(outOfRangeDisc.entries).toHaveLength(2);
       expect(outOfRangeDisc.discInfo.uhd).toBeNull();
-      expect(outOfRangeDisc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", severity: "warning", sourcePath: "BDMV/index.bdmv" }));
+      expect(outOfRangeDisc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", severity: "warning", sourcePath: "index.bdmv" }));
 
       // A truncated UHD payload is also optional.
       const payload = buildM1Index({ uhd: { discType: 5 } }); payload[145] = 0xff;
@@ -417,7 +430,7 @@ describe("M1 BDMV discovery and structure", () => {
       const disc = await parseBdmv(root);
       expect(disc.entries).toHaveLength(2);
       expect(disc.discInfo.appInfo).toBeNull();
-      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", severity: "warning", sourcePath: "BDMV/index.bdmv" }));
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", severity: "warning", sourcePath: "index.bdmv" }));
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -440,7 +453,7 @@ describe("M1 BDMV discovery and structure", () => {
     await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithAppInfo({ playbackType: 3, playbackCount: 7, flags: 0xf8 }));
     try {
       const appInfo = (await parseBdmv(root)).playlists[0]?.appInfo;
-      expect(appInfo).toMatchObject({ playbackType: 3, playbackCount: 7, uoMask: "4604204941312", randomAccessFlag: true, audioMixFlag: true, losslessBypassFlag: true, mvcBaseViewRFlag: true, sdrConversionNotificationFlag: true, source: { path: "BDMV/PLAYLIST/00001.mpls", offset: "40" } });
+      expect(appInfo).toMatchObject({ playbackType: 3, playbackCount: 7, uoMask: "4604204941312", randomAccessFlag: true, audioMixFlag: true, losslessBypassFlag: true, mvcBaseViewRFlag: true, sdrConversionNotificationFlag: true, source: { path: "PLAYLIST/00001.mpls", offset: "40" } });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -475,7 +488,7 @@ describe("M1 BDMV discovery and structure", () => {
     try {
       const disc = await parseBdmv(root);
       expect(disc.playlists).toHaveLength(0);
-      expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "BDMV/PLAYLIST/00001.mpls")).toBe(true);
+      expect(disc.diagnostics.some((d) => d.code === "BDMV_INVALID_SECTION" && d.sourcePath === "PLAYLIST/00001.mpls")).toBe(true);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -484,14 +497,14 @@ describe("M1 BDMV discovery and structure", () => {
     await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithSequence());
     try {
       const clip = (await parseBdmv(root)).clips[0]!;
-      expect(clip.header).toMatchObject({ streamType: 1, applicationType: 1, tsRecordingRate: 48_000_000, sourcePacketCount: 12_000, atcDelta: true, tsTypeId: "HDMV", source: { path: "BDMV/CLIPINF/00001.clpi", offset: "40" } });
+      expect(clip.header).toMatchObject({ streamType: 1, applicationType: 1, tsRecordingRate: 48_000_000, sourcePacketCount: 12_000, atcDelta: true, tsTypeId: "HDMV", source: { path: "CLIPINF/00001.clpi", offset: "40" } });
       expect(clip.sequence).toMatchObject([{
         spnAtcStart: 32, offsetStcId: 0,
         stcs: [
           { pcrPid: 0x1001, spnStcStart: 32, presentationStartPts: 0, presentationEndPts: 4_500_000 },
           { pcrPid: 0x1011, spnStcStart: 8_000, presentationStartPts: 4_500_000, presentationEndPts: 9_000_000 },
         ],
-        source: { path: "BDMV/CLIPINF/00001.clpi", offset: "201" },
+        source: { path: "CLIPINF/00001.clpi", offset: "201" },
       }]);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
@@ -515,7 +528,7 @@ describe("M1 BDMV discovery and structure", () => {
       const disc = await parseBdmv(root);
       expect(disc.clips).toHaveLength(1);
       expect(disc.clips[0]?.header).toMatchObject({ tsTypeId: null });
-      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning", sourcePath: "BDMV/CLIPINF/00001.clpi" }));
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_DECLARED_LENGTH_MISMATCH", severity: "warning", sourcePath: "CLIPINF/00001.clpi" }));
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -541,7 +554,7 @@ describe("M1 BDMV discovery and structure", () => {
     try {
       const badAtc = await parseBdmv(root);
       expect(badAtc.clips).toHaveLength(0);
-      expect(badAtc.diagnostics.some((d) => d.code === "BDMV_INVALID_COUNT" && d.sourcePath === "BDMV/CLIPINF/00001.clpi")).toBe(true);
+      expect(badAtc.diagnostics.some((d) => d.code === "BDMV_INVALID_COUNT" && d.sourcePath === "CLIPINF/00001.clpi")).toBe(true);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -562,7 +575,7 @@ describe("M1 BDMV discovery and structure", () => {
     try {
       const disc = await parseBdmv(root);
       expect(disc.entries).toHaveLength(0);
-      expect(disc.diagnostics.some((d) => d.code === "BDMV_UNKNOWN_OBJECT_TYPE" && d.sourcePath === "BDMV/index.bdmv")).toBe(true);
+      expect(disc.diagnostics.some((d) => d.code === "BDMV_UNKNOWN_OBJECT_TYPE" && d.sourcePath === "index.bdmv")).toBe(true);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

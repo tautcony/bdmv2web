@@ -88,6 +88,63 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 - 算术：ADD/MUL 饱和到 `0xffffffff`；SUB 到 0 饱和；DIV/MOD 除零返回 `0xffffffff`；移位/位操作计数必须 0–31，否则 fault。
 - `RND`：固定种子的 64 位 LCG，取高字模 N + 1；`RND(0)` 返回 1 并报 `HDMV_RND_ZERO_RANGE`。
 
+### Opcode implementation audit
+
+状态与逐项回归按 `.reference-cache/libbluray-1.5.0/src/libbluray/hdmv/hdmv_vm.c` 的 `_hdmv_step()`、操作 helper 和 `decode.ts` 的 47 个 opcode 核对。`implemented` 表示本地 VM 覆盖参考执行路径；`reference-limited` 表示参考实现本身不执行完整行为；`reference-ambiguous` 表示参考源码将该行为标记为猜测。
+
+| Opcode | 上下文、PC 与状态 | Action、wait 与诊断 | 状态与直接回归 |
+| --- | --- | --- | --- |
+| `NOP` | `object`、`ig_object` 均保持寄存器，PC+1。 | 不发 action，不等待，无诊断。 | implemented；`opcode-reference.test.ts`：NOP 与 BREAK 执行。 |
+| `GOTO` | 两种上下文均设置 PC 为目标；目标达到指令数时自然结束对象。 | 不发 action，不等待，无诊断。 | implemented；`control-flow.test.ts`：GOTO 目标 PC 与对象结束。 |
+| `BREAK` | 两种上下文均将 PC 置于对象末尾。 | 不发 action，不等待，无诊断。 | implemented；`opcode-reference.test.ts`：NOP 与 BREAK 执行。 |
+| `JUMP_OBJECT` | 两种上下文转到目标对象 PC 0；IG 上下文有播放等待时先发 `PLAY_STOP`。缺失目标保留当前位置并记录 `HDMV_INVALID_TARGET`。 | 可能发 `PLAY_STOP`；不建立等待。 | implemented；`control-flow.test.ts`：JUMP_OBJECT 与 RESUME 调用路径；`index.test.ts`：IG 跳转释放播放等待。 |
+| `JUMP_TITLE` | 两种上下文校验 title 后进入标题转换状态；未执行下一条指令。 | 发 `TITLE_SEARCH`，不设 VM wait；`selectTitle()` 完成转换或记录诊断。 | implemented；`control-flow.test.ts`：JUMP_TITLE 停止当前程序；`index.test.ts`：M1 entry 标题解析。 |
+| `CALL_OBJECT` | 两种上下文保存一帧调用者与 PSR4–8、PSR10–12，再转到目标 PC 0；`maxCallDepth: 0` fault。缺失目标记录 `HDMV_INVALID_TARGET` 并继续。 | IG 播放等待会停放并发 `PLAY_STOP`；不设调用事件等待。 | implemented；`control-flow.test.ts`：嵌套调用与缺失目标；`index.test.ts`：调用与恢复。 |
+| `CALL_TITLE` | 保存一帧调用者与备份 PSR；HDMV entry 目标选定后从调用后 PC 继续。缺失 entry 记录 `HDMV_INVALID_TARGET`；BD-J 记录 `HDMV_UNVERIFIED_OPCODE`。 | 发 `TITLE_SEARCH`，不设 `responseTo` wait；`selectTitle()` 选择或释放失败状态。 | implemented for HDMV targets；`control-flow.test.ts`：标题调用恢复；`index.test.ts`：CALL_TITLE selection 与恢复。 |
+| `RESUME` | 弹出一帧并恢复调用者 PC 与备份 PSR；有停放的播放等待时重发播放 action。 | 没有调用帧且没有停放播放时记录 `HDMV_RESUME_WITHOUT_CALL`。 | implemented；`control-flow.test.ts`：RESUME 有无调用帧；`reference-golden.test.ts`：调用恢复检查点。 |
+| `PLAY_PL` | 仅 `object` 执行；PC 保存为 action 后一条。其他上下文继续执行并记录 `HDMV_OPCODE_CONTEXT_SKIPPED`。 | 发 `PLAY_PLAYLIST`，等待 `ended`。 | implemented；`index.test.ts`：Playlist 命令等待与 IG 上下文。 |
+| `PLAY_PL_PI` | 仅 `object` 执行；保留 playlist 与 PlayItem 操作数。其他上下文记录上下文诊断并继续。 | 发 `PLAY_PLAYLIST_ITEM`，等待 `ended`。 | implemented；`index.test.ts`：Playlist 命令等待与 IG 上下文。 |
+| `PLAY_PL_PM` | 仅 `object` 执行；保留 playlist 与 PlayMark 操作数。其他上下文记录上下文诊断并继续。 | 发 `PLAY_PLAYLIST_MARK`，等待 `ended`。 | implemented；`index.test.ts`：Playlist 命令等待；章节按钮 PlayMark 解析。 |
+| `TERMINATE_PL` | 仅 `ig_object` 执行；终止按钮序列，恢复停放的 MovieObject continuation。其他上下文记录上下文诊断并继续。 | 有 continuation 时发 `PLAY_STOP`；无 continuation 时发 `PLAY_STOP` action；不等待。 | implemented；`index.test.ts`：IG TERMINATE_PL 恢复 MovieObject。 |
+| `LINK_PI` | 仅 `ig_object` 执行并继续按钮序列；其他上下文记录上下文诊断并继续。 | 发 `LINK_PLAY_ITEM`，不等待。 | implemented；`index.test.ts`：IG LINK action 与 MovieObject 忽略行为。 |
+| `LINK_MK` | 仅 `ig_object` 执行并继续按钮序列；其他上下文记录上下文诊断并继续。 | 发 `LINK_PLAY_MARK`，不等待。 | implemented；`control-flow.test.ts`：最大 mark 操作数。 |
+| `BC` | 两种上下文按 `(a & ~b) != 0` 决定是否跳过下一条；PC 按一条或两条推进。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `EQ` | 两种上下文在 `a != b` 时跳过下一条。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `NE` | 两种上下文在 `a == b` 时跳过下一条。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `GE` | 两种上下文在 `a < b` 时跳过下一条。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `GT` | 两种上下文在 `a <= b` 时跳过下一条。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `LE` | 两种上下文在 `a > b` 时跳过下一条。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `LT` | 两种上下文在 `a >= b` 时跳过下一条。 | 不写寄存器，不发 action，不诊断。 | implemented；`index.test.ts`：七种 unsigned compare 分支。 |
+| `MOVE` | 两种上下文将源值写入目标寄存器。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 与寄存器增量。 |
+| `SWAP` | 两种上下文交换两个目标寄存器。 | 不发 action，不等待，无诊断。 | implemented；`opcode-reference.test.ts`：双寄存器值与 trace 增量。 |
+| `ADD` | 两种上下文相加并饱和到 `0xffffffff`。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 边界。 |
+| `SUB` | 两种上下文相减并饱和到 0。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 边界。 |
+| `MUL` | 两种上下文相乘并饱和到 `0xffffffff`。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 边界。 |
+| `DIV` | 两种上下文执行无符号除法；除数为 0 时写入 `0xffffffff`。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 与除零。 |
+| `MOD` | 两种上下文执行无符号余数；除数为 0 时写入 `0xffffffff`。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 与除零。 |
+| `RND` | 两种上下文用 checkpoint 可恢复的 64 位 LCG 写入 1 到 N 的值。 | N 为 0 时写入 1 并记录 `HDMV_RND_ZERO_RANGE`。 | implemented；`index.test.ts`：固定 seed、checkpoint 与零范围。 |
+| `AND` | 两种上下文按位 AND 后写入目标寄存器。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `OR` | 两种上下文按位 OR 后写入目标寄存器。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `XOR` | 两种上下文按位 XOR 后写入目标寄存器。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `BITSET` | 两种上下文设置目标寄存器的指定 bit；bit index 0–31 可用。 | index 大于 31 时 fault `HDMV_ILLEGAL_OPERAND`。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `BITCLR` | 两种上下文清除目标寄存器的指定 bit；bit index 0–31 可用。 | index 大于 31 时 fault `HDMV_ILLEGAL_OPERAND`。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `SHL` | 两种上下文按 32 位左移写入目标寄存器；shift 0–31 可用。 | shift 大于 31 时 fault `HDMV_ILLEGAL_OPERAND`。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `SHR` | 两种上下文逻辑右移写入目标寄存器；shift 0–31 可用。 | shift 大于 31 时 fault `HDMV_ILLEGAL_OPERAND`。 | implemented；`index.test.ts`：uint32 arithmetic 与 bit 边界。 |
+| `SET_STREAM` | 两种上下文按 operand flags 更新 PSR0/1/2/3。 | 发 `SET_STREAM` 选择 action，不等待。 | implemented；`index.test.ts`：PSR 更新、GPR selectors 与 action payload。 |
+| `SET_NV_TIMER` | 两种上下文清除或写入 PSR9；timeout 为 1–300 且对象存在时记录值。无效对象或 timeout 不改 PSR9。 | 不发 action，不等待；libbluray 记录 timer expiry 未实现。 | reference-limited；`index.test.ts`：libbluray timer 行为。 |
+| `SET_BUTTON_PAGE` | `object` 按 flags 更新 PSR10/11；`ig_object` 组装 packed action 并终止按钮序列。 | `ig_object` 发 `SET_BUTTON_PAGE`，不等待。 | implemented；`index.test.ts`：立即数、GPR 与 IG packed page。 |
+| `ENABLE_BUTTON` | 仅 `ig_object` 发启用 action；其他上下文记录上下文诊断并继续。 | 发 `ENABLE_BUTTON`，不等待。 | implemented；`index.test.ts`：IG page、button、popup 与 still action。 |
+| `DISABLE_BUTTON` | 仅 `ig_object` 发禁用 action；其他上下文记录上下文诊断并继续。 | 发 `DISABLE_BUTTON`，不等待。 | implemented；`index.test.ts`：IG page、button、popup 与 still action。 |
+| `SET_SEC_STREAM` | 两种上下文按 flags 更新 PSR14 与 PSR2。 | 发 `SET_SECONDARY_STREAM` action，不等待。 | implemented；`index.test.ts`：PSR14/2 与编码 GPR operands。 |
+| `POPUP_OFF` | 仅 `ig_object` 执行；其他上下文记录上下文诊断并继续。 | 发 `POPUP_OFF`，不等待。 | implemented；`index.test.ts`：IG page、button、popup 与 still action。 |
+| `STILL_ON` | 仅 `ig_object` 执行；其他上下文记录上下文诊断并继续。 | 发 `STILL_ON`，不等待。 | implemented；`index.test.ts`：IG page、button、popup 与 still action。 |
+| `STILL_OFF` | 仅 `ig_object` 执行；其他上下文记录上下文诊断并继续。 | 发 `STILL_OFF`，不等待。 | implemented；`index.test.ts`：IG page、button、popup 与 still action。 |
+| `SET_OUTPUT_MODE` | profile capability mask 满足 `0x00130240` 时切换 PSR22 bit 0；不满足时保持状态。 | 不发 action，不等待，无诊断。 | implemented；`index.test.ts`：timer、output-mode 与 3D subtitle 行为。 |
+| `SET_STREAM_SS` | PSR22 为 2D 时保持状态；3D 对齐行为在 pinned libbluray 中未实现。 | 3D 时记录 `HDMV_3D_SUBTITLE_ALIGNMENT_UNIMPLEMENTED`。 | reference-limited；`index.test.ts`：timer、output-mode 与 3D subtitle 行为。 |
+| `SETSYSTEM_0x10` | 两种上下文将第一操作数写入 PSR103；pinned helper 将该映射注释为猜测。 | 不发 action，不等待，无诊断。 | reference-ambiguous；`index.test.ts`：pinned libbluray private PSR。 |
+
+`opcode-reference.test.ts` 为 `OpcodeName` 的每个成员运行 option-field 解码回归；类型检查要求该列表覆盖完整 union。该文件还直接核对 NOP、BREAK 与 SWAP 的 PC、寄存器和 trace 行为。其他执行回归按表中测试名列出。
+
 ### 异步与等待
 
 | 动作 | 等待 |
@@ -121,11 +178,13 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 ## 导航图
 
 ```ts
-buildNavigationGraph(objects, appendedPrograms?, { maxStates?, entries? }): NavigationGraph
+buildNavigationGraph(objects, appendedPrograms?, { maxStates?, entries?, context?: "object" | "playlist" }): NavigationGraph
 ```
 
 - 节点：`object:<id>`、`command:<objectId>:<index>`；`status: known | unknown`。
-- 边：`sequence`、`conditional`、`jump`、`call`、`resume`、`play`、`unknown`；`resolution` 为 `resolved | unresolved`。
+- 边：`sequence`、`conditional`、`jump`、`call`、`resume`、`play`、`unknown`；`resolution` 为 `resolved | unresolved`。可选 `origin` 描述边来源；读取方忽略未识别值。
+- `JUMP_TITLE` 同时生成指向目标 entry object 的 `jump` 边和 `origin: "jump-title"` 的 `sequence` 边；原程序下一条指令不会因此成为可达。
+- `context` 默认是 `object`；`LINK_PI` / `LINK_MK` 在 object context 不终止指令流，在 playlist context 终止。`TERMINATE_PL` 只在 playlist context 终止。
 - 立即数目标可解析就建 resolved 边；寄存器目标、缺失目标、编码非法、预算耗尽保留 `unresolved` 并写 `diagnostics`。不把未解析路径标成不可达。
 - `findStaticNavigationLoops(graph)` 用 DFS 回边，返回 `{ backEdge, cycle, movieObjects, commandLocations }`。`scripts/visualize-hdmv-vm-flow.mjs` 用它生成 Markdown 流程图。
 

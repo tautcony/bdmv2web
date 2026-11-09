@@ -22,7 +22,7 @@
 
 ### Requirement: 版本化数据与精确时间
 
-系统 SHALL 为 DiscIR、资产、来源、诊断和事件提供版本化可校验契约；90k 时间使用规范十进制字符串持久化并显式还原 bigint。
+系统 SHALL 为 DiscIR、资产、来源、诊断和事件提供版本化可校验契约；90k 时间使用规范十进制字符串持久化并显式还原 bigint；`SourceRef` 的 `path` 一律为相对 BDMV 根的 POSIX 路径（不带 `BDMV/` 前缀）。`DiscIR` 中 required 的 `SourceRef` 不得为 `null`；无法取得真实位置时使用显式声明的合成来源并区分其来源类别，不得伪造 `byteOffset: "0"`。诊断的位置字段允许为 `null`。
 
 #### Scenario: 大数往返
 
@@ -38,6 +38,21 @@
 
 - **WHEN** 通过 JSON 语法校验的 IR 含重复全局 ID 或悬空必需引用
 - **THEN** 引用校验仍失败，并定位实体和字段
+
+#### Scenario: 来源不得为占位值
+
+- **WHEN** 生成交付 IR、指令 trace 或 IGS 结构诊断
+- **THEN** 对应实际文件位置的来源保留真实的相对 BDMV 根路径、origin 与文件字节偏移；`DiscIR` 中 required 的 `SourceRef` 使用真实来源或显式声明并区分类别的合成来源，不写 `source/structural`、`<MovieObject>` 一类占位串，也不以零偏移冒充真实位置
+
+#### Scenario: 诊断位置可空
+
+- **WHEN** 一条 Diagnostic 对应不到具体文件位置
+- **THEN** 该诊断的 `sourcePath` 与 `offset` 为 `null`，并携带 `stage`；同一对象的 required `SourceRef` 不因此变成 `null`
+
+#### Scenario: 旧占位来源被拒绝
+
+- **WHEN** 装载含占位来源路径的历史 IR
+- **THEN** 校验以 `SCHEMA_SOURCE_PLACEHOLDER` 拒绝并指出字段，要求重新提取，而不是静默接受后当作可追溯
 
 ### Requirement: 导航类型与扩展
 
@@ -55,7 +70,7 @@
 
 ### Requirement: 安全读取与诊断
 
-系统 SHALL 在读取/分配前检查长度、偏移、计数乘积及 Limits；失败保留源相对路径、无损偏移和稳定错误码。
+系统 SHALL 在读取/分配前检查长度、偏移、计数乘积及 Limits；默认 Limits 只有 `core` 一个导出源，任何消费方必须引用或派生该值，不得自建同名常量；失败保留源相对路径、无损偏移和稳定错误码。
 
 #### Scenario: 截断与超大声明
 
@@ -66,6 +81,16 @@
 
 - **WHEN** 从文件偏移100的窗口创建长度8的 subview，再在子窗口偏移2读取
 - **THEN** 父游标成功推进8，子游标从0起，诊断源偏移可还原为102
+
+#### Scenario: 默认预算无第二份
+
+- **WHEN** 在仓库内检索 `maxCallDepth` / `maxQueueDepth` 的默认值定义
+- **THEN** 只有 `core` 的 `DEFAULT_LIMITS` 一处定义；VM 等消费方以引用或派生方式取得，数值与 `DEFAULT_LIMITS` 一致
+
+#### Scenario: 消费方接收 Limits
+
+- **WHEN** 调用方传入自定义 `Limits` 给虚拟机
+- **THEN** 预算按该对象生效；若同时传入等价的零散预算字段，以 `Limits` 为准并记录一条可观察的诊断，不静默择一
 
 ### Requirement: 只读输入与事务输出
 

@@ -96,6 +96,8 @@ describe("linear playlist media export", () => {
     const { run, calls } = fakeRunner();
     try {
       const result = await exportLinearMedia(plan, { sourceRoot, outputDirectory: output, runProcess: run, crf: 21, preset: "fast" });
+      expect(result.outputSize.beforeBytes).toBe(String("independent looping menu background".length));
+      expect(BigInt(result.outputSize.afterBytes)).toBeGreaterThan(BigInt(result.outputSize.beforeBytes));
       expect(result.assets.map((asset) => asset.path)).toEqual([
         "assets/media/playlist-00001-audio-eng.mp4", "assets/media/playlist-00002-audio-eng.mp4",
       ]);

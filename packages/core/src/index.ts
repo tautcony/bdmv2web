@@ -44,6 +44,7 @@ export interface PlayerProfile {
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validateDiscIR = ajv.compile(schema);
+const sourcePathPlaceholders = new Set([["source", "structural"].join("/"), ["<Movie", "Object>"].join("")]);
 
 export function parseDiscIR(input: unknown): DiscIR {
   if (!validateDiscIR(input)) {
@@ -53,6 +54,15 @@ export function parseDiscIR(input: unknown): DiscIR {
     throw new ContractError(code, path, issue?.message ?? "Invalid DiscIR");
   }
   const ir = input as unknown as DiscIR;
+  const sourceRefs = [
+    ...ir.entries.map((entry, index) => ({ path: entry.source.path, pointer: `/entries/${index}/source/path` })),
+    ...ir.mediaAssets.flatMap((asset, index) => asset.sources.map((source, sourceIndex) => ({ path: source.path, pointer: `/mediaAssets/${index}/sources/${sourceIndex}/path` }))),
+  ];
+  for (const source of sourceRefs) {
+    if (sourcePathPlaceholders.has(source.path)) {
+      throw new ContractError("SCHEMA_SOURCE_PLACEHOLDER", source.pointer, `Source path '${source.path}' is a placeholder`);
+    }
+  }
   const ids = new Map<string, string>();
   const add = (id: string, path: string) => {
     if (ids.has(id)) throw new ContractError("DUPLICATE_ID", path, `ID '${id}' duplicates ${ids.get(id)}`);

@@ -20,7 +20,6 @@ export interface LinearMediaExportOptions {
   codec?: VideoCodec;
   hdrMode?: HdrMode;
   maxAssetBytes?: number | null;
-  maxOutputBytes?: number | null;
   estimatedVideoBitsPerSecond?: number;
   estimatedAudioBitsPerSecond?: number;
   containerOverheadPercent?: number;
@@ -62,13 +61,18 @@ export interface LinearMediaPlan {
     videoCodec: VideoCodec; audioCodec: "aac"; preset: string; crf: number; pixelFormat: string; frameRate: "passthrough"; faststart: true; aspectRatio: "preserve-per-playlist";
     color: { policy: HdrMode; source: SourceColor; output: OutputColor; filterChain: VideoColorPlan["filterChain"] };
   };
-  budget: { rates: MenuLoopBudgetRates; estimateBasis: "configured-target-bitrate-assumption"; existingOutputBytes: string; estimatedOutputBytes: string; maxAssetBytes: number | null; maxOutputBytes: number | null };
+  budget: { rates: MenuLoopBudgetRates; estimateBasis: "configured-target-bitrate-assumption"; existingOutputBytes: string; maxAssetBytes: number | null };
   assets: LinearAssetPlan[];
   diagnostics: LinearDiagnostic[];
   limitations: string[];
 }
 export interface LinearExportedAsset extends LinearAssetPlan { absolutePath: string; byteLength: number; durationSeconds: number; }
-export interface LinearMediaExportResult { plan: LinearMediaPlan; assets: LinearExportedAsset[]; tools: { ffmpeg: string; ffprobe: string; invocations: Array<{ executable: string; args: string[] }> }; }
+export interface LinearMediaExportResult {
+  plan: LinearMediaPlan;
+  assets: LinearExportedAsset[];
+  outputSize: { beforeBytes: string; afterBytes: string };
+  tools: { ffmpeg: string; ffprobe: string; invocations: Array<{ executable: string; args: string[] }> };
+}
 
 interface ProbeStream extends ColorProbeFields { index?: number; id?: string; codec_type?: string; codec_name?: string; width?: number; height?: number; display_aspect_ratio?: string; sample_rate?: string; channels?: number; duration?: string; }
 interface Probe { streams?: ProbeStream[]; format?: { start_time?: string; duration?: string }; }
@@ -76,7 +80,7 @@ interface ResolvedPlayItem { item: MediaPlanRequirement["playItems"][number]; so
 interface PendingAsset { plan: LinearAssetPlan; args: string[]; width: number; height: number; durationSeconds: number; codec: VideoCodec; color: VideoColorPlan; }
 
 export class LinearMediaExportError extends Error {
-  constructor(readonly diagnostic: { code: "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID" | "MEDIA_ASSET_BUDGET_EXCEEDED" | "MEDIA_OUTPUT_BUDGET_EXCEEDED"; message: string; executable?: string; args?: string[]; limitBytes?: string; actualBytes?: string }, options?: ErrorOptions) {
+  constructor(readonly diagnostic: { code: "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID" | "MEDIA_ASSET_BUDGET_EXCEEDED"; message: string; executable?: string; args?: string[]; limitBytes?: string; actualBytes?: string }, options?: ErrorOptions) {
     super(diagnostic.message, options);
     this.name = "LinearMediaExportError";
   }
@@ -179,23 +183,11 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
     }
   }
 
-  const existingOutputBytes = await directoryBytes(output, new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path)))));
+  const excludedSources = new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path))));
+  const existingOutputBytes = await directoryBytes(output, excludedSources);
   const planColor = pendingAssets[0]?.color ?? planVideoColor(readSourceColor({}), colorOptions);
   const linearEncoding = { codec, crf, preset, color: planColor };
   for (const asset of pendingAssets) assertEstimateWithinLimit({ scope: "asset", estimateBytes: BigInt(asset.plan.estimatedBytes), limitBytes: options.maxAssetBytes, message: `Estimated linear asset '${asset.plan.path}' exceeds maxAssetBytes.` });
-  const estimatedAssetBytes = pendingAssets.reduce((sum, asset) => sum + BigInt(asset.plan.estimatedBytes), 0n);
-  let estimatedOutputBytes = existingOutputBytes + estimatedAssetBytes;
-  let provisional: LinearMediaPlan;
-  for (let pass = 0; pass < 4; pass++) {
-    provisional = makeLinearPlan(mediaPlan, pendingAssets.map((item) => item.plan), diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, linearEncoding);
-    const planBytes = BigInt(Buffer.byteLength(`${JSON.stringify(provisional, null, 2)}\n`));
-    const next = existingOutputBytes + estimatedAssetBytes + planBytes;
-    if (next === estimatedOutputBytes) break;
-    estimatedOutputBytes = next;
-  }
-  provisional = makeLinearPlan(mediaPlan, pendingAssets.map((item) => item.plan), diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, linearEncoding);
-  estimatedOutputBytes = existingOutputBytes + estimatedAssetBytes + BigInt(Buffer.byteLength(`${JSON.stringify(provisional, null, 2)}\n`));
-  assertEstimateWithinLimit({ scope: "package", estimateBytes: estimatedOutputBytes, limitBytes: options.maxOutputBytes, message: "Estimated linear media package exceeds maxOutputBytes before encoding." });
   await mkdir(resolve(output, "assets/media"), { recursive: true });
 
   const created: string[] = [];
@@ -205,20 +197,19 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
       const absolutePath = resolve(output, asset.plan.path);
       await ensureAbsent(absolutePath);
       created.push(absolutePath);
-      await runWithBudget(ffmpeg, asset.args, output, asset.plan.path, absolutePath, options, invoke, new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path)))));
+      await runWithBudget(ffmpeg, asset.args, asset.plan.path, absolutePath, options, invoke);
       const outputProbe = await probeOutput(ffprobe, absolutePath, timeoutMs, invoke);
       const measured = validateOutput(outputProbe, asset);
       const bytes = (await stat(absolutePath)).size;
       exported.push({ ...asset.plan, absolutePath, byteLength: bytes, ...measured });
     }
-    const plan = makeLinearPlan(mediaPlan, exported, diagnostics, rates, existingOutputBytes, estimatedOutputBytes, options, linearEncoding);
+    const plan = makeLinearPlan(mediaPlan, exported, diagnostics, rates, existingOutputBytes, options, linearEncoding);
     const manifest = `${JSON.stringify(plan, null, 2)}\n`;
-    const finalBytes = await directoryBytes(output, new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path)))));
-    assertActualWithinLimit({ scope: "package", actualBytes: finalBytes + BigInt(Buffer.byteLength(manifest)), limitBytes: options.maxOutputBytes, message: "Completed linear package would exceed maxOutputBytes before plan publication." });
     created.push(planPath);
     await writeFile(planPath, manifest, { flag: "wx" });
-    assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytes(output, new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path))))), limitBytes: options.maxOutputBytes, message: "Linear package exceeded maxOutputBytes during plan publication." });
-    return { plan, assets: exported, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations } };
+    const actualOutputBytes = await directoryBytes(output, excludedSources);
+    const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
+    return { plan, assets: exported, outputSize, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations } };
   } catch (error) {
     await Promise.all(created.map((path) => unlink(path).catch(() => undefined)));
     throw error;
@@ -233,7 +224,6 @@ function validateOptions(options: LinearMediaExportOptions): void {
   const crf = options.crf ?? 18;
   if (!Number.isInteger(crf) || crf < 0 || crf > 51) throw new RangeError("crf must be from 0 through 51");
   validateOptionalByteLimit("maxAssetBytes", options.maxAssetBytes);
-  validateOptionalByteLimit("maxOutputBytes", options.maxOutputBytes);
 }
 
 async function resolvePlayItems(requirement: MediaPlanRequirement, sourceRoot: string, ffprobe: string, timeoutMs: number, invoke: (executable: string, args: string[]) => Promise<LinearProcessResult>, cache: Map<string, Probe>, diagnostics: LinearDiagnostic[]): Promise<ResolvedPlayItem[]> {
@@ -338,7 +328,7 @@ function makeLinearAsset(requirement: MediaPlanRequirement, items: ResolvedPlayI
   return { plan, args, width: items[0]!.video.width!, height: items[0]!.video.height!, durationSeconds: Number(timelineStart) / 45_000, codec: encoding.codec, color };
 }
 
-function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPlan[], diagnostics: LinearDiagnostic[], rates: MenuLoopBudgetRates, existingOutputBytes: bigint, estimatedOutputBytes: bigint, options: LinearMediaExportOptions, encoding: { codec: VideoCodec; crf: number; preset: string; color: VideoColorPlan }): LinearMediaPlan {
+function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPlan[], diagnostics: LinearDiagnostic[], rates: MenuLoopBudgetRates, existingOutputBytes: bigint, options: LinearMediaExportOptions, encoding: { codec: VideoCodec; crf: number; preset: string; color: VideoColorPlan }): LinearMediaPlan {
   const plan: LinearMediaPlan = {
     schemaVersion: "1.0", status: "partial",
     strategy: { branches: "one-linear-asset-per-playlist-and-audio-language", menuBackground: "separate-looping-asset", menuBackgroundPath: "assets/media/background.mp4", sourceStreamsPackaged: false },
@@ -347,7 +337,7 @@ function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPla
       pixelFormat: `yuv420p${encoding.color.output.bitDepth === 10 ? "10le" : ""}`, frameRate: "passthrough", faststart: true, aspectRatio: "preserve-per-playlist",
       color: { policy: encoding.color.policy, source: encoding.color.source, output: encoding.color.output, filterChain: encoding.color.filterChain },
     },
-    budget: { rates, estimateBasis: "configured-target-bitrate-assumption", existingOutputBytes: existingOutputBytes.toString(), estimatedOutputBytes: estimatedOutputBytes.toString(), maxAssetBytes: options.maxAssetBytes ?? null, maxOutputBytes: options.maxOutputBytes ?? null },
+    budget: { rates, estimateBasis: "configured-target-bitrate-assumption", existingOutputBytes: existingOutputBytes.toString(), maxAssetBytes: options.maxAssetBytes ?? null },
     assets: assets.map(({ assetId, path, playlistId, routes, audioLanguage, codec, repeat, aspectRatio, width, height, mappings, duration45k, estimatedBytes }) => ({ assetId, path, playlistId, routes, audioLanguage, codec, repeat, aspectRatio, width, height, mappings, duration45k, estimatedBytes })), diagnostics: [...diagnostics],
     limitations: [
       "Each reachable Playlist is encoded as its own asset.",
@@ -359,35 +349,34 @@ function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPla
   return plan;
 }
 
-async function runWithBudget(ffmpeg: string, args: string[], output: string, relativePath: string, assetPath: string, options: LinearMediaExportOptions, invoke: (executable: string, args: string[], signal?: AbortSignal) => Promise<LinearProcessResult>, excluded: Set<string>): Promise<void> {
+async function runWithBudget(ffmpeg: string, args: string[], relativePath: string, assetPath: string, options: LinearMediaExportOptions, invoke: (executable: string, args: string[], signal?: AbortSignal) => Promise<LinearProcessResult>): Promise<void> {
   const controller = new AbortController();
   const process = invoke(ffmpeg, args, controller.signal);
-  let checking = false;
+  let checkingAsset = false;
   let rejectBudget: ((error: Error) => void) | undefined;
   const budget = new Promise<never>((_resolve, reject) => { rejectBudget = reject; });
-  const timer = setInterval(() => {
-    if (checking) return;
-    checking = true;
-    void (async () => {
-      try {
-        const assetBytes = await fileBytes(assetPath);
-        assertActualWithinLimit({ scope: "asset", actualBytes: assetBytes, limitBytes: options.maxAssetBytes, message: `Linear asset '${relativePath}' exceeded maxAssetBytes while encoding.` });
-        assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytes(output, excluded), limitBytes: options.maxOutputBytes, message: `Output directory exceeded maxOutputBytes while encoding '${relativePath}'.` });
-      } catch (error) { controller.abort(); rejectBudget?.(error instanceof Error ? error : new Error(String(error))); }
-      finally { checking = false; }
-    })();
-  }, 10);
+  const failBudget = (error: unknown) => { controller.abort(); rejectBudget?.(error instanceof Error ? error : new Error(String(error))); };
+  const checkAsset = async () => {
+    if (checkingAsset) return;
+    checkingAsset = true;
+    try {
+      const assetBytes = await fileBytes(assetPath);
+      assertActualWithinLimit({ scope: "asset", actualBytes: assetBytes, limitBytes: options.maxAssetBytes, message: `Linear asset '${relativePath}' exceeded maxAssetBytes while encoding.` });
+    } catch (error) { failBudget(error); }
+    finally { checkingAsset = false; }
+  };
+  const assetTimer = setInterval(() => { void checkAsset(); }, 10);
+  void checkAsset();
   try {
     await Promise.race([process, budget]);
     assertActualWithinLimit({ scope: "asset", actualBytes: await fileBytes(assetPath), limitBytes: options.maxAssetBytes, message: `Linear asset '${relativePath}' exceeded maxAssetBytes at process completion.` });
-    assertActualWithinLimit({ scope: "package", actualBytes: await directoryBytes(output, excluded), limitBytes: options.maxOutputBytes, message: `Output directory exceeded maxOutputBytes at process completion.` });
   } catch (error) {
     controller.abort();
     await process.catch(() => undefined);
     if (error instanceof Error && "diagnostic" in error) throw error;
     if (error instanceof Error) throw error;
     throw new Error(String(error), { cause: error });
-  } finally { clearInterval(timer); }
+  } finally { clearInterval(assetTimer); }
 }
 
 async function probeOutput(ffprobe: string, path: string, timeoutMs: number, invoke: (executable: string, args: string[]) => Promise<LinearProcessResult>): Promise<Probe> {

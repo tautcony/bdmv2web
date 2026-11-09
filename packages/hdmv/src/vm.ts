@@ -403,6 +403,11 @@ export class HdmvVm {
     this.status = "idle";
     this.record({ source: action.source, raw: null, decoded: "EXTERNAL_PLAYER_HANDOFF", registerDelta: EMPTY_DELTA, status: this.status });
   }
+  /** Record a playback response discarded by a bridge without changing VM state. */
+  recordDiscardedEvent(event: VmEvent, message: string, source: SourceLocation | null = null): void {
+    const diagnostic = { code: "HDMV_EVENT_DISCARDED", message, source };
+    this.record({ source, raw: null, decoded: "DISCARDED_EVENT", input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic });
+  }
   enqueueEvent(event: VmEvent): void {
     if (this.eventQueue.length >= this.opts.maxQueueDepth) { this.fail("VM_QUEUE_LIMIT", `Event queue exceeds ${this.opts.maxQueueDepth}`, null); return; }
     this.eventQueue.push(event);

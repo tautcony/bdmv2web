@@ -31,6 +31,10 @@ export async function assertDisjointRoots(inputPath: string, outputPath: string,
 
 export async function resolveInputFile(root: string, relativePath: string): Promise<string> {
   const canonicalRoot = await canonicalDirectory(root);
+  return resolveInputFileAtCanonicalRoot(canonicalRoot, relativePath);
+}
+
+async function resolveInputFileAtCanonicalRoot(canonicalRoot: string, relativePath: string): Promise<string> {
   if (isAbsolute(relativePath)) throw new ContractError("PATH_ESCAPE", relativePath, "Absolute paths are not allowed");
   const normalized = resolve(canonicalRoot, relativePath);
   if (!within(canonicalRoot, normalized)) throw new ContractError("PATH_ESCAPE", relativePath, "Path escapes the input root");
@@ -99,7 +103,7 @@ export async function buildInputFileTable(rootPath: string, relativePaths: strin
       throw new ContractError("PATH_ESCAPE", relativePath, "File table paths must be normalized relative POSIX paths");
     }
     if (files.has(relativePath)) throw new ContractError("DUPLICATE_FILE_PATH", relativePath, "File path is already in the input table");
-    files.set(relativePath, await resolveInputFile(root, relativePath));
+    files.set(relativePath, await resolveInputFileAtCanonicalRoot(root, relativePath));
   }
   return { root, files };
 }

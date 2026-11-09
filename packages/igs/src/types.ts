@@ -9,14 +9,35 @@ export interface IgsSource {
   segmentFileOffset: string;
   pts90k: string | null;
   timeDomain: number;
+  path?: string | null;
+  origin?: "primary" | "backup" | null;
+  stage?: "transport";
 }
+
+export interface IgsStructuralSource {
+  clipId: string | null;
+  pid: number | null;
+  path: string | null;
+  origin: "primary" | "backup" | null;
+  sourceOffset: string | null;
+  packetOffset: null;
+  pesOffset: null;
+  segmentOffset: null;
+  segmentFileOffset: null;
+  pts90k: null;
+  timeDomain: null;
+  stage: "structural";
+}
+
+export type IgsDiagnosticStage = "structural" | "transport" | "pes" | "igs" | "render";
 
 export interface IgsDiagnostic {
   severity: "info" | "warning" | "error";
   code: string;
   message: string;
-  source: IgsSource | null;
+  source: IgsSource | IgsStructuralSource | null;
   affectedSceneIds: string[];
+  stage?: IgsDiagnosticStage;
   details?: Record<string, number | string | boolean | null>;
 }
 

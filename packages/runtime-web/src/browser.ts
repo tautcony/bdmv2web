@@ -528,7 +528,7 @@ async function boot(): Promise<void> {
       inputStarted = true; start.disabled = true; start.hidden = true;
       let menuMediaStarted: boolean | undefined;
       let pending = { menuPlaylistRequested: false, completion: Promise.resolve() };
-      if (data.vmInitialProgramId !== undefined && (data.media || data.menuMedia?.length) && video && audio) {
+      if (data.vmInitialProgramId !== undefined) {
         if (data.vmFirstPlayProgramId !== undefined && data.vmEntries?.some((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV")) {
           vm.reset(data.vmFirstPlayProgramId);
           const initial = vm.runTurn();

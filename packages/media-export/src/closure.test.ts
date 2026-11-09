@@ -108,6 +108,17 @@ describe("conservative M1/M3 media closure", () => {
   });
 });
 
+describe("navigation edge origin compatibility", () => {
+  it("keeps media closure for an unrecognized edge origin", () => {
+    const graph = navigationGraph({
+      nodes: [{ id: "object:0", kind: "object", objectId: 0, source, status: "known" }],
+      edges: [{ from: "object:0", to: "playlist:00001", kind: "play", condition: null, source, resolution: "resolved", origin: "future-origin" }],
+    });
+
+    expect(computeMediaClosure(discFixture(), graph).playlistIds).toContain("playlist:00001");
+  });
+});
+
 function playlistFixture(id: string, items: Array<{ index: number; clipId: string; inTime45k: number; outTime45k: number; multiAngle?: boolean; angleCount?: number; streamPid?: number | null; codingType?: number | null }>, withSubPath = false): ParsedDisc["playlists"][number] {
   const stream = (codingType: number | null, pid: number | null, language: string | null) => ({ streamType: 1, pid, subPathId: null, subClipId: null, codingType, language, dynamicRangeType: null, colorSpace: null, source });
   return {

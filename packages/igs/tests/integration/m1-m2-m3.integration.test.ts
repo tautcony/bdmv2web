@@ -24,18 +24,18 @@ describe("M1 to M2/M3 consumer handoff", () => {
       const disc = await parseBdmv(root);
       const entry = disc.entries.find((item) => item.kind === "firstPlay")!;
       expect(entry.target).toMatchObject({ objectType: "HDMV", target: 0 });
-      expect(entry.source).toMatchObject({ path: "BDMV/index.bdmv", origin: "primary", offset: "92" });
+      expect(entry.source).toMatchObject({ path: "index.bdmv", origin: "primary", offset: "92" });
       expect(disc.graph.edges).toContainEqual({ from: "entry:firstPlay:0", to: "movieObject:0", kind: "entry-target", resolution: "resolved", source: entry.source });
 
       const playlist = disc.playlists.find((item) => item.id === "00001")!;
       const declaredTrack = playlist.playItems[0]!.streams.find((stream) => stream.pid === 0x1100)!;
       const clipTrack = disc.clips.find((clip) => clip.id === "00001")!.programs[0]!.streams.find((stream) => stream.pid === declaredTrack.pid)!;
-      expect(declaredTrack).toMatchObject({ codingType: 0x80, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "140" } });
-      expect(clipTrack).toMatchObject({ pid: declaredTrack.pid, codingType: declaredTrack.codingType, source: { path: "BDMV/CLIPINF/00001.clpi", origin: "primary", offset: "74" } });
+      expect(declaredTrack).toMatchObject({ codingType: 0x80, source: { path: "PLAYLIST/00001.mpls", origin: "primary", offset: "140" } });
+      expect(clipTrack).toMatchObject({ pid: declaredTrack.pid, codingType: declaredTrack.codingType, source: { path: "CLIPINF/00001.clpi", origin: "primary", offset: "74" } });
       expect(disc.diagnostics.some((item) => item.code === "BDMV_STN_CLPI_PID_CONFLICT" || item.code === "BDMV_STN_CLPI_CODING_CONFLICT")).toBe(false);
 
       const instruction = disc.movieObjects[0]!.instructions[0]!;
-      expect(instruction.source).toMatchObject({ path: "BDMV/MovieObject.bdmv", origin: "primary", offset: "54" });
+      expect(instruction.source).toMatchObject({ path: "MovieObject.bdmv", origin: "primary", offset: "54" });
       const navigation = buildNavigationGraph(disc.movieObjects);
       expect(navigation.nodes.find((node) => node.id === "command:0:0")?.source).toEqual(instruction.source);
       expect(instruction.bytes).toBe("0102030405060708090a0b0c");

@@ -93,7 +93,7 @@ interface PlayerProfile {
 | `maxQueueDepth` | 1,024 | VM 待处理事件/动作队列 |
 | `maxCallDepth` | 128 | 当前是 CALL 开关：`< 1` 拒绝 `CALL_OBJECT`/`CALL_TITLE`，正数不限制嵌套深度 |
 | `maxExplorationStates` | 100,000 | 导航图/媒体闭包探索上限 |
-| `maxOutputBytes` | `null` | 媒体与包总大小上限，`null` 表示不限 |
+| `maxOutputBytes` | `null` | `allocateBoundedBytes` 的输出缓冲区限制，`null` 表示不限制 |
 
 `validateLimits(value)` 拒绝未知键（`INVALID_LIMIT`）；`maxCallDepth`/`maxQueueDepth` 允许 0，其余必须为正安全整数。分配前用 `allocateBoundedBytes` / `checkedObjectPixels` / `assertWithinLimit`；超限报 `LIMIT_EXCEEDED`，非法长度报 `INVALID_LENGTH`。
 

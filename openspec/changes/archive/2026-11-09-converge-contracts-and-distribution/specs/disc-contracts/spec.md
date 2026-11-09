@@ -52,7 +52,7 @@
 #### Scenario: 来源不得为占位值
 
 - **WHEN** 生成交付 IR、指令 trace 或 IGS 结构诊断
-- **THEN** 每条来源都含真实的相对 BDMV 根路径、origin 与文件字节偏移；`DiscIR` 中 required 的 `SourceRef` 使用真实来源或显式声明的合成来源，不写 `source/structural`、`<MovieObject>` 一类占位串，也不以零偏移冒充真实位置
+- **THEN** 对应实际文件位置的来源保留真实的相对 BDMV 根路径、origin 与文件字节偏移；`DiscIR` 中 required 的 `SourceRef` 使用真实来源或显式声明并区分类别的合成来源，不写 `source/structural`、`<MovieObject>` 一类占位串，也不以零偏移冒充真实位置
 
 #### Scenario: 诊断位置可空
 

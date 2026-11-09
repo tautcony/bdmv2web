@@ -8,6 +8,10 @@ The rows below describe the current implementation. The audit record in [`docs/a
 
 The parser-facing input is M1 `MovieInstruction`: three big endian uint32 `words`, 24 hex characters in `bytes`, and `SourceLocation { path, origin, offset }`. The decoder validates that the words reproduce the raw bytes. Button command streams use the same `RawCommand` interface and decoder.
 
+## Sources
+
+`SourceLocation.path` is relative to the BDMV root and omits the `BDMV/` prefix. A MovieObject instruction can use `MovieObject.bdmv`; `origin` records `primary` or `backup`, and `offset` is the decimal byte offset within that file.
+
 The field layout below is the layout implemented by the pinned `libbluray` MOBJ reader. It is implementation evidence only:
 
 | Word 0 bits | Field | Notes |

@@ -28,7 +28,7 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
         const subPath = stream.subPathId === null ? undefined : playlist.subPaths[stream.subPathId];
         const subClip = stream.subClipId === null ? undefined : subPath?.items[stream.subClipId];
         if (!subClip) {
-          diagnostics.push({ severity: "error", code: "BDMV_MISSING_STREAM", message: `Clip ${item.clipId} has an IGS stream reference to missing subpath ${stream.subPathId ?? "?"} subclip ${stream.subClipId ?? "?"}`, source: toIgsSource(stream.source), affectedSceneIds: [] });
+          diagnostics.push({ severity: "error", code: "BDMV_MISSING_STREAM", message: `Clip ${item.clipId} has an IGS stream reference to missing subpath ${stream.subPathId ?? "?"} subclip ${stream.subClipId ?? "?"}`, source: toIgsSource(stream.source, { path: stream.source.path, clipId: item.clipId, pid: stream.pid, origin: stream.source.origin }), affectedSceneIds: [], stage: "structural" });
           continue;
         }
         const existing = targets.find((target) => sameId(target.clipId, subClip.clipId));
@@ -40,21 +40,24 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
         if (seen.has(target.clipId)) continue;
         seen.add(target.clipId);
         const clipInfo = disc.clips.find((clip) => sameId(clip.id, target.clipId));
+        const declaredIgsPid = target.mplsStreams.find((stream) => stream.pid !== null)?.pid
+          ?? clipInfo?.programs.flatMap((program) => program.streams).find((stream) => stream.codingType === 0x91)?.pid
+          ?? null;
         const streamNode = disc.graph.nodes.find((node) => node.id === `clip:${target.clipId}` && node.type === "clip");
         const streamPath = streamNode?.source?.path;
         if (streamNode?.state !== "present" || !streamPath || !isStreamPath(streamPath, target.clipId)) {
-          diagnostics.push({ severity: "error", code: "BDMV_MISSING_STREAM", message: `Clip ${target.clipId} has no registered STREAM path in ParsedDisc`, source: toIgsSource(item.source), affectedSceneIds: [] });
+          diagnostics.push({ severity: "error", code: "BDMV_MISSING_STREAM", message: `Clip ${target.clipId} has no registered STREAM path in ParsedDisc`, source: toIgsSource(item.source, { path: item.source.path, clipId: target.clipId, pid: declaredIgsPid, origin: item.source.origin }), affectedSceneIds: [], stage: "structural" });
           continue;
         }
         let path: string;
         try { path = resolveDiscFileReference(table, streamPath); }
         catch (e) {
-          diagnostics.push({ severity: "error", code: "BDMV_MISSING_STREAM", message: e instanceof Error ? e.message : String(e), source: toIgsSource(item.source), affectedSceneIds: [] });
+          diagnostics.push({ severity: "error", code: "BDMV_MISSING_STREAM", message: e instanceof Error ? e.message : String(e), source: toIgsSource(item.source, { path: item.source.path, clipId: target.clipId, pid: declaredIgsPid, origin: item.source.origin }), affectedSceneIds: [], stage: "structural" });
           continue;
         }
         const clpiStreams = clipInfo?.programs.flatMap((program) => program.streams.filter((stream) => stream.codingType === 0x91).map((stream) => ({ pid: stream.pid, source: stream.source }))) ?? [];
         const expected = [...target.mplsStreams, ...clpiStreams].filter((cue): cue is { pid: number; source: SourceLocation } => cue.pid !== null);
-        const result = await extractClip(target.clipId, path, expected, { ...options, limits });
+        const result = await extractClip(target.clipId, path, expected, { path: relativeBdmvPath(streamPath), origin: streamNode.source?.origin ?? null }, { ...options, limits });
         diagnostics.push(...result.diagnostics);
         scenes.push(...result.scenes);
         assets.push(...result.assets);
@@ -149,14 +152,15 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     diagnostics.push({
       severity: "error", code: "IGS_PID_CONFLICT",
       message: `MPLS/CLPI IG PID cue(s) [${structuralDescription || cuePids.join(", ")}] disagree with PMT IG PID(s) [${pmtDescription || streamPids.join(", ")}]`,
-      source: expectedPidCues[0] ? toIgsSource(expectedPidCues[0].source) : pmtIgsCues[0]?.source ?? null,
+      source: expectedPidCues[0] ? toIgsSource(expectedPidCues[0].source, { path: expectedPidCues[0].source.path, clipId, pid: expectedPidCues[0].pid, origin: expectedPidCues[0].source.origin }) : pmtIgsCues[0]?.source ?? null,
       affectedSceneIds: [],
+      stage: expectedPidCues.length ? "structural" : "transport",
       details: { mplsClpiPids: cuePids.join(","), pmtPids: streamPids.join(","), mplsClpiSources: JSON.stringify(structuralEvidence), pmtSources: JSON.stringify(pmtEvidence) },
     });
     for (const scene of state.scenes) diagnostics.push({ severity: "error", code: "IGS_PID_CONFLICT", message: `Scene ${scene.id} was discarded; its PID conflicts with structure cues`, source: scene.source, affectedSceneIds: [scene.id] });
     state.scenes.length = 0;
   }
-  if (!expectedPidCues.length && !streamPids.length) diagnostics.push({ severity: "warning", code: "IGS_PID_UNRESOLVED", message: "No IG PID could be established from MPLS/CLPI/PMT", source: null, affectedSceneIds: [] });
+  if (!expectedPidCues.length && !streamPids.length) diagnostics.push({ severity: "warning", code: "IGS_PID_UNRESOLVED", message: "No IG PID could be established from MPLS/CLPI/PMT", source: null, affectedSceneIds: [], stage: "transport" });
   diagnostics.push(...reader.diagnostics, ...pes.diagnostics, ...psiDiagnostics);
   diagnostics.push(...state.diagnostics);
   const scenes = state.scenes;
@@ -168,7 +172,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   } else diagnostics.push(...validateIgsSceneAssets(scenes));
   const errors = diagnostics.some((d) => d.severity === "error");
   const warnings = diagnostics.some((d) => d.severity === "warning");
-  if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [] });
+  if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [], stage: "igs" });
   const streams = [...streamByteLengths].map(([pid, byteLength]) => ({ clipId, pid, byteLength, ...(options.captureStreams ? { bytes: concatChunks(streamChunks.get(pid) ?? []) } : {}) }));
   return { scenes, assets, streams, diagnostics, status: errors ? (scenes.length ? "partial" : "failed") : (warnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
 }
@@ -180,9 +184,20 @@ function concatChunks(chunks: readonly Uint8Array[]): Uint8Array {
   return result;
 }
 
-async function extractClip(clipId: string, path: string, expected: Array<StreamDeclaration | { pid: number; source: SourceLocation }>, options: IgsOptions): Promise<IgsExtraction> {
+async function extractClip(clipId: string, path: string, expected: Array<StreamDeclaration | { pid: number; source: SourceLocation }>, streamSource: { path: string; origin: "primary" | "backup" | null }, options: IgsOptions): Promise<IgsExtraction> {
   const chunks = readFileChunks(path, options.limits ?? DEFAULT_LIMITS, options.chunkSize ?? (options.limits ?? DEFAULT_LIMITS).maxReadWindowBytes);
-  return extractIgsFromChunks(clipId, chunks, expected.flatMap((cue) => cue.pid === null ? [] : [{ pid: cue.pid, source: cue.source }]), options);
+  const extraction = await extractIgsFromChunks(clipId, chunks, expected.flatMap((cue) => cue.pid === null ? [] : [{ pid: cue.pid, source: cue.source }]), options);
+  const withStreamSource = (sourceValue: IgsScene["source"]): IgsScene["source"] => ({ ...sourceValue, path: streamSource.path, origin: streamSource.origin, stage: "transport" });
+  for (const scene of extraction.scenes) {
+    scene.source = withStreamSource(scene.source);
+    for (const object of scene.objects) object.source = withStreamSource(object.source);
+    for (const palette of scene.palettes) palette.source = withStreamSource(palette.source);
+  }
+  for (const asset of extraction.assets) asset.source = withStreamSource(asset.source);
+  for (const diagnostic of extraction.diagnostics) {
+    if (diagnostic.source && diagnostic.source.stage !== "structural") diagnostic.source = withStreamSource(diagnostic.source);
+  }
+  return extraction;
 }
 
 function isIgStream(stream: StreamDeclaration): boolean { return stream.codingType === 0x91 && stream.pid !== null; }
@@ -206,4 +221,7 @@ function resolveDiscFileReference(table: InputFileTable, virtualPath: string): s
 }
 function uniquePids(cues: Array<{ pid: number | null; source: SourceLocation }> | Array<{ pid: number; source: SourceLocation }>): number[] { return [...new Set(cues.flatMap((cue) => cue.pid === null ? [] : [cue.pid]))]; }
 function sameId(a: string, b: string): boolean { return a.toLocaleLowerCase("en-US") === b.toLocaleLowerCase("en-US"); }
-function toIgsSource(sourceRef: SourceLocation) { return { clipId: "", pid: 0, packetOffset: sourceRef.offset, pesOffset: sourceRef.offset, segmentOffset: sourceRef.offset, segmentFileOffset: sourceRef.offset, pts90k: null, timeDomain: 0 }; }
+function relativeBdmvPath(path: string): string { return path.replace(/^BDMV\//i, ""); }
+function toIgsSource(sourceRef: SourceLocation, location: { path: string | null; clipId: string | null; pid: number | null; origin: "primary" | "backup" | null }) {
+  return { clipId: location.clipId, pid: location.pid, path: location.path, origin: location.origin, sourceOffset: sourceRef.offset, packetOffset: null, pesOffset: null, segmentOffset: null, segmentFileOffset: null, pts90k: null, timeDomain: null, stage: "structural" as const };
+}

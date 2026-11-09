@@ -392,7 +392,7 @@ describe("M1 structural CLI", () => {
   });
   it("extracts only structural artifacts through the output transaction and preserves source bytes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv extract ")); const root = await makeDisc(parent); const target = join(parent, "out");
-    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "extract", root, "--type", "hdmv", "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).stageStatus).toBe("complete"); const disc = JSON.parse(await readFile(join(target, "hdmv/parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); const commands = JSON.parse(await readFile(join(target, "hdmv/commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "BDMV/MovieObject.bdmv", offset: "54" }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.stageStatus).toBe("complete"); expect(manifest.selectedTypes).toEqual(["hdmv"]); expect(manifest.files.find((file: { path: string }) => file.path === "hdmv/commands.json")).toMatchObject({ kind: "hdmv-command-table" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
+    try { const beforeIndex = await readFile(join(root, "index.bdmv")); const beforeMobj = await readFile(join(root, "MovieObject.bdmv")); const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "extract", root, "--type", "hdmv", "--out", target]); expect(result.status).toBe(0); expect(JSON.parse(result.stdout.toString()).stageStatus).toBe("complete"); const disc = JSON.parse(await readFile(join(target, "hdmv/parsed-disc.json"), "utf8")); expect(disc.analysisStage).toBe("structural"); const commands = JSON.parse(await readFile(join(target, "hdmv/commands.json"), "utf8")); expect(commands).toHaveLength(2); expect(commands[0].source).toMatchObject({ path: "MovieObject.bdmv", offset: "54", instructionIndex: 0 }); const sourceMap = JSON.parse(await readFile(join(target, "hdmv/source-map.json"), "utf8")); expect(sourceMap.instructions[0]).toMatchObject({ instructionIndex: 0, source: { path: "MovieObject.bdmv", byteOffset: "54", instructionIndex: 0 } }); const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8")); expect(manifest.stageStatus).toBe("complete"); expect(manifest.selectedTypes).toEqual(["hdmv"]); expect(manifest.files.find((file: { path: string }) => file.path === "hdmv/commands.json")).toMatchObject({ kind: "hdmv-command-table" }); expect(await readFile(join(root, "index.bdmv"))).toEqual(beforeIndex); expect(await readFile(join(root, "MovieObject.bdmv"))).toEqual(beforeMobj); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("does not overwrite an existing inspect output target", async () => {
@@ -403,7 +403,7 @@ describe("M1 structural CLI", () => {
 });
 
 describe("IGS extract CLI", () => {
-  async function makeIgsDisc(parent: string, clip: Uint8Array): Promise<string> {
+  async function makeIgsDisc(parent: string, clip: Uint8Array, options: { structuralPid?: number } = {}): Promise<string> {
     const root = await (async () => {
       const path = join(parent, "BDMV");
       await mkdir(join(path, "PLAYLIST"), { recursive: true });
@@ -414,7 +414,9 @@ describe("IGS extract CLI", () => {
       return path;
     })();
     await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithAudioPid());
-    await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithIgsCue());
+    const clipInfo = buildM1ClipInfoWithIgsCue();
+    if (options.structuralPid !== undefined) { clipInfo[82] = options.structuralPid >>> 8; clipInfo[83] = options.structuralPid & 0xff; }
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), clipInfo);
     await writeFile(join(root, "STREAM", "00001.m2ts"), clip);
     return root;
   }
@@ -437,11 +439,11 @@ describe("IGS extract CLI", () => {
       const scenesDoc = JSON.parse(await readFile(join(target, "igs/scenes.json"), "utf8"));
       expect(scenesDoc.scenes).toHaveLength(1);
       expect(scenesDoc).toMatchObject({ schemaVersion: "1.1", status: "complete" });
-      expect(scenesDoc.scenes[0].raw).toMatchObject({ clipId: "00001", pid: 0x120, complete: true, width: 1, height: 1, source: { path: "BDMV/STREAM/00001.m2ts", pid: 0x120 } });
+      expect(scenesDoc.scenes[0].raw).toMatchObject({ clipId: "00001", pid: 0x120, complete: true, width: 1, height: 1, source: { path: "STREAM/00001.m2ts", pid: 0x120, origin: "primary" } });
       expect(scenesDoc.scenes[0].raw.pages[0].buttons[0].commands[0].bytes).toHaveLength(12);
       const mappings = JSON.parse(await readFile(join(target, "igs/source-map.json"), "utf8"));
-      expect(mappings.scenes[0].composition.path).toBe("BDMV/STREAM/00001.m2ts");
-      expect(mappings.scenes[0].objects[0]).toMatchObject({ objectId: 5, source: { path: "BDMV/STREAM/00001.m2ts", byteOffset: expect.any(String) } });
+      expect(mappings.scenes[0].composition).toMatchObject({ path: "STREAM/00001.m2ts", origin: "primary", stage: "transport" });
+      expect(mappings.scenes[0].objects[0]).toMatchObject({ objectId: 5, source: { path: "STREAM/00001.m2ts", origin: "primary", byteOffset: expect.any(String) } });
       const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8"));
       expect(manifest).toMatchObject({ stageStatus: "complete", igs: { support: { status: "unverified" } } });
       expect(manifest.limitations).toContain("IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only");
@@ -465,10 +467,39 @@ describe("IGS extract CLI", () => {
       expect(scenesDoc.status).toBe("partial");
       const diagnostics = JSON.parse(await readFile(join(target, "igs/diagnostics.json"), "utf8"));
       expect(diagnostics.diagnostics.some((item: any) => item.code === "UNRESOLVED_OBJECT")).toBe(true);
+      const sourceMap = JSON.parse(await readFile(join(target, "igs/source-map.json"), "utf8"));
+      const unresolvedIndex = diagnostics.diagnostics.findIndex((item: any) => item.code === "UNRESOLVED_OBJECT");
+      expect(sourceMap.diagnostics[unresolvedIndex]).toMatchObject({
+        stage: "render",
+        source: { path: "STREAM/00001.m2ts", origin: "primary", clipId: "00001", pid: 0x120 },
+      });
       const manifest = JSON.parse(await readFile(join(target, "manifest.json"), "utf8"));
       expect(manifest.files.some((file: any) => file.path.startsWith("assets/graphics/"))).toBe(false);
       await expect(access(join(target, "assets", "graphics"))).rejects.toThrow();
       await expectSourceSnapshot(rootPath, before);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("writes structural and unknown positions with source-map diagnostic stages", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv extract igs source map "));
+    const clip = buildSyntheticClip();
+    clip[4] = 0; // The packet reader recovers at the next 192-byte M2TS boundary.
+    const rootPath = await makeIgsDisc(parent, clip, { structuralPid: 0x121 });
+    const target = join(parent, "out");
+    try {
+      const result = spawnSync(process.execPath, [resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js"), "extract", rootPath, "--type", "igs", "--no-strict", "--out", target]);
+      expect(result.status).toBe(0);
+      const diagnostics = JSON.parse(await readFile(join(target, "igs/diagnostics.json"), "utf8"));
+      const sourceMap = JSON.parse(await readFile(join(target, "igs/source-map.json"), "utf8"));
+      const conflictIndex = diagnostics.diagnostics.findIndex((item: any) => item.code === "IGS_PID_CONFLICT");
+      const syncLossIndex = diagnostics.diagnostics.findIndex((item: any) => item.code === "TS_SYNC_LOST");
+      expect(conflictIndex).toBeGreaterThanOrEqual(0);
+      expect(sourceMap.diagnostics[conflictIndex]).toMatchObject({
+        stage: "structural",
+        source: { path: "CLIPINF/00001.clpi", origin: "primary", clipId: "00001", pid: 0x121, byteOffset: expect.any(String), packetOffset: null },
+      });
+      expect(syncLossIndex).toBeGreaterThanOrEqual(0);
+      expect(sourceMap.diagnostics[syncLossIndex]).toMatchObject({ source: null, stage: "transport" });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

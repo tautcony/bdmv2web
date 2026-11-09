@@ -359,6 +359,8 @@ def derive_graph(objects: list[dict], index: dict) -> list[list]:
                 add(frm, f"object:{target}" if target is not None else None,
                     "call" if opcode == "CALL_TITLE" else "jump",
                     "resolved" if target is not None else "unresolved")
+                if opcode == "JUMP_TITLE" and target is not None:
+                    add(frm, f"object:{target}", "sequence", "resolved")
                 if opcode == "CALL_TITLE" and pc + 1 < length:
                     add(frm, f"command:{oid}:{pc + 1}", "sequence", "resolved")
             elif opcode in ("LINK_PI", "LINK_MK"):

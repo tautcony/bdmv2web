@@ -1,4 +1,4 @@
-export interface SourceLocation { path: string; origin: "primary" | "backup"; offset: string; }
+export interface SourceLocation { path: string; origin: "primary" | "backup"; offset: string; instructionIndex?: number; }
 export interface ParseDiagnostic {
   severity: "info" | "warning" | "error" | "fatal";
   code: string;

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
+import type { MediaProcessRunner } from "@bdmv2web/media-export";
 import { m3Fixtures } from "@bdmv2web/hdmv";
 
 const ir = {
@@ -14,6 +15,7 @@ const ir = {
 };
 const scene = { width: 1920, height: 1080, pages: [{ id: 0, defaultButtonId: 1, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1" }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1" } }, commands: [] as Array<{ bytes: string; sourceOffset: string; source: { path: string; origin: "primary"; offset: string } }> }] }] };
 const png1x1 = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=", "base64"));
+function compactCss(css: string): string { return css.replace(/\s*([{}:;,])\s*/g, "$1").trim(); }
 
 describe("menu package primitives", () => {
   it("describes looped and infinite-still menu backgrounds accurately", () => {
@@ -145,6 +147,77 @@ describe("menu package primitives", () => {
       expect(manifest.profile).toEqual(playerProfile);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
+  it("encodes and stores one media set for 999 equivalent menu PlayItems", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv-menu-media-dedup-"));
+    const outputDirectory = resolve(parent, "menu package");
+    const sourcePath = resolve(parent, "00004.m2ts");
+    await writeFile(sourcePath, new Uint8Array([0x47]));
+    const encodeOutputs: string[] = [];
+    const durations = new Map<string, string>();
+    const mediaProcessRunner: MediaProcessRunner = async (executable, args) => {
+      if (args[0] === "-version") return { stdout: `${executable} version test`, stderr: "" };
+      if (args.includes("-encoders")) return { stdout: " V....D libx264\n V....D libx265\n A....D aac\n", stderr: "" };
+      if (args.includes("-filters")) return { stdout: "", stderr: "" };
+      if (executable === "ffmpeg") {
+        const outputPath = args.at(-1)!;
+        const durationIndex = args.indexOf("-t");
+        if (durationIndex >= 0) durations.set(outputPath, args[durationIndex + 1]!);
+        encodeOutputs.push(outputPath);
+        await mkdir(dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, new Uint8Array([0x42, 0x44, 0x4d, 0x56]));
+        return { stdout: "", stderr: "" };
+      }
+      const outputPath = args.at(-1)!;
+      const duration = durations.get(outputPath) ?? "109.2341111111111";
+      if (outputPath.endsWith(".m2ts")) {
+        return {
+          stdout: JSON.stringify({ format: { start_time: "0", duration }, streams: [
+            { index: 0, id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration, color_range: "tv", color_space: "bt709", color_transfer: "bt709", color_primaries: "bt709", bits_per_raw_sample: "8", pix_fmt: "yuv420p" },
+            { index: 1, id: "0x1100", codec_type: "audio", codec_name: "aac", duration },
+            { index: 2, id: "0x1101", codec_type: "audio", codec_name: "aac", duration },
+          ] }),
+          stderr: "",
+        };
+      }
+      if (outputPath.endsWith(".mp4")) {
+        return { stdout: JSON.stringify({ format: { duration }, streams: [{ index: 0, id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration, color_range: "tv", color_space: "bt709", color_transfer: "bt709", color_primaries: "bt709", bits_per_raw_sample: "8", pix_fmt: "yuv420p" }] }), stderr: "" };
+      }
+      const pid = outputPath.includes("1100-eng") ? "0x1100" : "0x1101";
+      return { stdout: JSON.stringify({ format: { duration }, streams: [{ index: 0, id: pid, codec_type: "audio", codec_name: "aac", duration }] }), stderr: "" };
+    };
+    const equivalentMedia = Array.from({ length: 999 }, (_, playItemIndex) => ({
+      sourcePath, sourceFile: "BDMV/STREAM/00004.m2ts", playlistId: "00003", playItemIndex, clipId: "00004",
+      inTime45k: 524_280, outTime45k: 5_439_815, stillMode: 0, repeatCount: 999, loopBackground: true, videoPid: 0x1011,
+      audioTracks: [{ streamNumber: 0, pid: 0x1100, language: "eng" }, { streamNumber: 1, pid: 0x1101, language: "jpn" }],
+    }));
+    const mediaWithDistinctSegment = [...equivalentMedia, { ...equivalentMedia[0]!, playItemIndex: 999, inTime45k: 569_280, outTime45k: 5_484_815 }];
+    try {
+      await buildMenuPackage({ outputDirectory, title: "Repeated menu", ir, scene, graphics: [], additionalMenuMedia: mediaWithDistinctSegment, mediaEncoding: { codec: "h264" }, mediaProcessRunner });
+      const assetManifest = JSON.parse(await readFile(resolve(outputDirectory, "asset-manifest.json"), "utf8")) as {
+        menuMedia: Array<{ plan: { playlistId: string; playItemIndex: number }; background: { path: string }; audioTracks: Array<{ path: string }> }>;
+      };
+      const runtime: { __BDMV_MENU_DATA__?: { menuMedia?: Array<{ playlist: number; playItem: number; background: { path: string }; audioTracks: Array<{ path: string }> }> } } = {};
+      runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), runtime);
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string }> };
+      const physicalMediaFiles = manifest.files.filter((file) => file.kind === "media");
+      expect(encodeOutputs).toHaveLength(6);
+      expect(encodeOutputs.filter((path) => path.endsWith(".mp4"))).toHaveLength(2);
+      expect(encodeOutputs.filter((path) => path.endsWith(".m4a"))).toHaveLength(4);
+      expect(physicalMediaFiles).toHaveLength(6);
+      expect(new Set(physicalMediaFiles.map((file) => file.path)).size).toBe(6);
+      expect(manifest.files.filter((file) => file.kind === "media-plan")).toHaveLength(2);
+      expect(assetManifest.menuMedia).toHaveLength(1000);
+      expect(assetManifest.menuMedia.map((item) => item.plan.playItemIndex)).toEqual(mediaWithDistinctSegment.map((item) => item.playItemIndex));
+      expect(new Set(assetManifest.menuMedia.slice(0, 999).map((item) => item.background.path)).size).toBe(1);
+      expect(assetManifest.menuMedia[999]!.background.path).not.toBe(assetManifest.menuMedia[0]!.background.path);
+      expect(new Set(assetManifest.menuMedia.slice(0, 999).flatMap((item) => item.audioTracks.map((track) => track.path))).size).toBe(2);
+      expect(assetManifest.menuMedia[999]!.audioTracks.map((track) => track.path)).not.toEqual(assetManifest.menuMedia[0]!.audioTracks.map((track) => track.path));
+      expect(runtime.__BDMV_MENU_DATA__?.menuMedia).toHaveLength(1000);
+      expect(runtime.__BDMV_MENU_DATA__?.menuMedia?.map((item) => item.playItem)).toEqual(mediaWithDistinctSegment.map((item) => item.playItemIndex));
+      expect(new Set(runtime.__BDMV_MENU_DATA__?.menuMedia?.slice(0, 999).map((item) => item.background.path)).size).toBe(1);
+      expect(runtime.__BDMV_MENU_DATA__?.menuMedia?.[999]?.background.path).not.toBe(runtime.__BDMV_MENU_DATA__?.menuMedia?.[0]?.background.path);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
   it("embeds the configured HDMV limits in runtime data", async () => {
     const parent = await mkdtemp(resolve(tmpdir(), "bdmv-menu-limits-"));
     const outputDirectory = resolve(parent, "limits preview");
@@ -172,7 +245,8 @@ describe("menu package primitives", () => {
       const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");
       expect(html.indexOf('<video id="menu-background"')).toBeLessThan(html.indexOf('<canvas id="menu-canvas"'));
       const style = await readFile(resolve(outputDirectory, "runtime/style.css"), "utf8");
-      expect(style).toMatch(/#menu-background\{z-index:0\}/); expect(style).toMatch(/#menu-canvas\{z-index:1;background:transparent;touch-action:manipulation\}/);
+      const compactStyle = compactCss(style);
+      expect(compactStyle).toMatch(/#menu-background\{z-index:0;?\}/); expect(compactStyle).toMatch(/#menu-canvas\{z-index:1;background:transparent;touch-action:manipulation;?\}/);
       const localPaths = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!);
       expect(localPaths.length).toBeGreaterThan(0);
       for (const path of localPaths) expect((await stat(resolve(outputDirectory, path))).isFile()).toBe(true);
@@ -212,17 +286,17 @@ describe("menu package primitives", () => {
       expect(html).toContain('<p id="runtime-status" role="status" aria-live="polite"');
       expect(html).toContain('<span id="runtime-status-message">');
       expect(html).toContain('id="runtime-status-copy" type="button"');
-      expect(style).toMatch(/#menu-stage\{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;/);
-      expect(style).toContain("object-fit:contain");
-      expect(style).toMatch(/#runtime-status\{[^}]*position:fixed[^}]*opacity:0/);
-      expect(style).toMatch(/#runtime-status\.is-visible\{opacity:1/);
+      expect(compactStyle).toMatch(/#menu-stage\{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;/);
+      expect(compactStyle).toContain("object-fit:contain");
+      expect(compactStyle).toMatch(/#runtime-status\{[^}]*position:fixed[^}]*opacity:0/);
+      expect(compactStyle).toMatch(/#runtime-status\.is-visible\{opacity:1/);
       // A persistent notice is the only text a user may need to copy (a file path or
       // a manual command), so it must accept the pointer again (P3-P2-1).
-      expect(style).toMatch(/#runtime-status\.is-persistent\{[^}]*pointer-events:auto[^}]*user-select:text/);
+      expect(compactStyle).toMatch(/#runtime-status\.is-persistent\{[^}]*pointer-events:auto[^}]*user-select:text/);
       // The copy button takes the pointer while the toast is visible; the rest of the
       // toast keeps passing clicks through to the menu beneath it.
-      expect(style).toMatch(/#runtime-status\.is-visible #runtime-status-copy\{display:grid/);
-      expect(style).toMatch(/#runtime-status-copy\{[^}]*pointer-events:auto/);
+      expect(compactStyle).toMatch(/#runtime-status\.is-visible #runtime-status-copy\{display:grid/);
+      expect(compactStyle).toMatch(/#runtime-status-copy\{[^}]*pointer-events:auto/);
     } finally { if (!preserveOutput) await rm(parent, { recursive: true, force: true }); }
   });
 });
