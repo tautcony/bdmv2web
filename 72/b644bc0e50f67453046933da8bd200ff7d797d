@@ -1,0 +1,25 @@
+openspec/changes/converge-contracts-and-distribution/proposal.md
+  s_c99302e3c919c9::t_a5955b88da1dc5 59
+openspec/changes/converge-contracts-and-distribution/tasks.md
+  s_c99302e3c919c9::t_23703a19764d64 86
+openspec/changes/export-playable-media/specs/offline-media-playback/spec.md
+  s_c99302e3c919c9::t_926ab62e5023be 7
+openspec/changes/scope-changes.md
+  s_c99302e3c919c9::t_7bc1bc69ebc410 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72b644bc0e50f67453046933da8bd200ff7d797d",
+  "prompts": {},
+  "sessions": {
+    "s_c99302e3c919c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be58-9a67-70c0-9c07-182848e206a4",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
