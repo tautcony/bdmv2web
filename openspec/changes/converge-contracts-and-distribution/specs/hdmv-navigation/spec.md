@@ -2,13 +2,13 @@
 
 ## Purpose
 
-修正导航图与虚拟机的上下文判定：`JUMP_TITLE` 有后继、`LINK`/`TERMINATE` 按上下文生效、`CALL_TITLE` 有可关联的等待与回执，被忽略的指令必须留痕。
+定义导航图与虚拟机的上下文判定、标题调用恢复和指令诊断。
 
 ## MODIFIED Requirements
 
 ### Requirement: 异步动作与执行边界
 
-系统 SHALL 以相关动作/代次和显式等待条件挂起恢复；限制每轮指令、栈和队列预算；跨对象调用（`CALL_TITLE`）必须建立可被回执解除的等待，不得进入无法恢复的挂起状态。
+系统 SHALL 以相关动作/代次和显式等待条件挂起恢复；限制每轮指令、栈和队列预算；标题调用（`CALL_TITLE`）通过 `TITLE_SEARCH` 与 `selectTitle()` 恢复，目标不可用时解除等待并记录诊断。
 
 #### Scenario: 媒体成功反馈
 

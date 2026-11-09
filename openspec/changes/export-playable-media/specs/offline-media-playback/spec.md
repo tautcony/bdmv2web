@@ -4,7 +4,7 @@
 
 从离线菜单将实际 M2TS 交给操作系统的默认关联程序，并准确报告交接边界。
 
-主规格归属：`offline-media-playback` 主规格已由 2026-11-09 归档的 `fix-hdr-color-pipeline` 建立（7 条色彩与编码要求）；本 change 以 ADDED 向同一 capability 追加下列 8 条播放与交接要求。
+本 delta 向 `offline-media-playback` 追加播放与交接要求。
 
 ## ADDED Requirements
 
@@ -96,7 +96,7 @@
 
 ### Requirement: 菜单场景与影片播放角色
 
-系统 SHALL 按 IGS 场景的 uiModel 区分常驻菜单与内容弹出菜单。`uiModel=0` 的 IGS 场景作为菜单画面；`uiModel=1` 的场景只作为标题播放期间的弹出菜单，不得替换 Top Menu 场景。带 `uiModel=1` 场景的 Playlist 是影片播放，交给外部播放器，不进入包内媒体。系统 SHALL 为可本地表示的菜单 Playlist 生成独立媒体计划；无法本地表示的菜单 Playlist 保留已有背景和诊断。
+系统 SHALL 按 IGS 场景的 uiModel 区分常驻菜单与内容弹出菜单。`uiModel=0` 的 IGS 场景作为菜单画面；标题播放期间的 `uiModel=1` 场景作为弹出菜单。带弹出 IGS 的标题 Playlist 交给外部播放器。解析出的 Top Menu Playlist 的选中构图作为菜单场景，包括选中构图为 `uiModel=1` 的情况。系统 SHALL 为可本地表示的菜单 Playlist 生成独立媒体计划；无法本地表示的菜单 Playlist 保留已有背景和诊断。
 
 #### Scenario: 弹出 IGS 不接管菜单
 
@@ -207,5 +207,5 @@
 
 #### Scenario: 输出冲突
 
-- **WHEN** 指定的输出目录与 BDMV 重叠，或者输出目录已存在
+- **WHEN** 指定的输出目录与 BDMV 重叠，或者输出目录已存在且未指定 `--overwrite`
 - **THEN** 明确拒绝并说明原因，不覆盖源目录或既有产物

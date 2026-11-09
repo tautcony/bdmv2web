@@ -4,9 +4,9 @@
 
 前置：第 1 批 [`restore-build-gate-and-delivery-status`](../restore-build-gate-and-delivery-status/tasks.md) 完成——本 change 的验收依赖 `build` / `typecheck` / `test:all` 可跑，且 `dist` 不再含测试产物。共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。决策与证据来源见 [`docs/archive/reviews/review-2026-11-04/index.md`](../../../docs/archive/reviews/review-2026-11-04/index.md)。
 
-## 当前实现复核（2026-11-06）
+## 当前实现复核（2026-11-09）
 
-内容摘要计算与字段已删除。媒体 `ended` 回执、主音轨 PSR1 写回、菜单 VM/sound 连接、HDMV 默认 Limits 收敛与 `convert --limits` 接线均已实现；这些项仍需按任务回归要求确认，不作为代码缺口重复实现。无菜单媒体启动、normal-only 按钮命中、来源路径保真、上下文导航图、builder 发布布局和性能基准仍未完成。`CALL_TITLE` 当前由 `TITLE_SEARCH` 动作触发浏览器侧 `selectTitle()`，任务按此实际调用方式定义。
+内容摘要计算与字段已删除。媒体 `ended` 回执、主音轨 PSR1 写回、菜单 VM/sound 连接、HDMV 默认 Limits 收敛与 `convert --limits` 接线均已实现，回归验收状态见下列任务。无菜单媒体启动、normal-only 按钮命中、来源路径保真、上下文导航图和性能基准仍未完成。浏览器 bundle 构建与 package-builder 对 bundle 的消费代码已存在；隔离安装验收仍未确认。`CALL_TITLE` 由 `TITLE_SEARCH` 动作触发浏览器侧 `selectTitle()`。
 
 ## A. 契约常量收敛（D3）
 
@@ -48,28 +48,23 @@
 ## E. 运行时生命周期（D13）
 
 - [ ] E.1 `packages/runtime-web/src/browser.ts` 的初始 `runTurn()` / First Play 与媒体存在性解耦：无条件执行初始 turns，媒体播放作为其产生的 action 处理。验收：构造无 `media` 与 `menuMedia` 字段的包，打开后 VM 有初始动作（trace 非空、`status` 进入预期状态），按钮可导航。
-- [ ] E.2 回归已实现的菜单媒体 `ended`/`error`/`abort` 回执：按 action/responseTo 关联，非循环背景结束发 `MEDIA_ENDED`，错误解除等待并保留诊断。实现已存在；本项只在相关回归证据确认后勾选。
-- [ ] E.3 回归已实现的音轨 PSR1 写回：成功选择和失败回滚均经 `systemWrite(1, streamNumber)` 更新系统寄存器；验证按钮程序读取所选值。实现已存在；本项只在相关回归证据确认后勾选。
+- [ ] E.2 回归已实现的菜单媒体 `ended`/`error`/`abort` 回执：按 action/responseTo 关联，非循环背景结束发 `MEDIA_ENDED`，错误解除等待并保留诊断。回归证据确认后勾选。
+- [ ] E.3 回归已实现的音轨 PSR1 写回：成功选择和失败回滚均经 `systemWrite(1, streamNumber)` 更新系统寄存器；验证按钮程序读取所选值。回归证据确认后勾选。
 - [ ] E.4 命中几何统一：`MenuController.hit()` 按可用性决定命中集（可用即 `selected ?? normal` 的 bounds）。验收：只有 `normal` 视觉的启用按钮可被点击命中；单测覆盖"仅 normal""selected 与 normal 不同几何"两种情况。
-- [ ] E.6 回归：`corepack pnpm --filter @bdmv2web/runtime-web test` 全绿；`tamako-headless-navigation.test.ts` 仍通过（该用例 50s，若因此变慢需在本 change 记录耗时）。
-
 ## F. 发布布局可构建（D7）
 
-- [ ] F.1 固化 `packages/runtime-web` 的浏览器发布布局：构建先由 `tsc` 生成 dist，再由 esbuild 打包 `src/browser.ts` → `dist/browser.bundle.js`（IIFE / ES2020），并通过 `package.json` 的 `"./browser-bundle"` 导出。验收：`corepack pnpm --filter @bdmv2web/runtime-web build` 后该文件存在，为浏览器可直接运行的 classic script，不引用 workspace `src/*.ts` 或未注入的 Node 内建模块，且可由独立安装包解析。
-- [ ] F.2 `packages/package-builder` 仅通过 `@bdmv2web/runtime-web/browser-bundle` 读取运行时发布产物，不使用工作区相对源码路径。验收：`grep -rn "runtime-web/src\|hdmv/src" packages/package-builder/src` 无命中；隔离安装后的最小菜单包构建通过，未安装 `src` 目录时仍可运行。
-- [ ] F.3 防回归单测：拦截 `node:fs` 读取 `**/src/*.ts`（用 `vi.mock` 或 `module.register`），断言 `buildMenuPackage` 执行期间不发生此类读取。验收：测试通过；把实现改回相对路径时测试失败（验证后还原）。
-- [ ] F.4 补齐 `@bdmv2web/package-builder` 的 `files: ["dist"]`；`@bdmv2web/runtime-web` 已有该白名单，本项只复核。验收：两包 `npm pack --dry-run` 清单不含 `src/`、不含 `*.test.*`；`corepack pnpm -r build` 全通过。
-- [ ] F.5 端到端：`convert` 一个现有样本，产物结构与此前一致。验收：`find <out> -type f | sort` 与改动前快照一致（除时间戳/版本字段）；`validate --offline` 结果不变。
+- [ ] F.1–F.2 验收现有发布布局：`runtime-web` 构建产出 `dist/browser.bundle.js` 并导出 `./browser-bundle`；`package-builder` 通过该导出消费 bundle。以隔离安装的最小菜单包构建验证两个包可在不安装 workspace `src/` 的情况下运行；确认 bundle 是可直接加载的 classic script，不依赖未注入的 Node 内建模块。隔离安装验收记录行为证据。
+- [ ] F.4 补齐 `@bdmv2web/package-builder` 的 `files: ["dist"]`；`@bdmv2web/runtime-web` 已有该白名单，本项只复核。验收：两包 `npm pack --dry-run` 清单不含 `src/`、不含 `*.test.*`。
 
 ## G. 性能基准与修复（D5=B）
 
 - [ ] G.1 建立基准入口 `scripts/bench/`（Node 脚本，不引入新依赖）：五项 case 见 `design.md` §7，输出 `{ case, n, ms, rss }` 到 `test-data/bench/<git-sha>.json`；该路径加入 `.gitignore`。验收：`corepack pnpm exec node scripts/bench/index.mjs` 跑完全部 case 并写出文件。
-- [ ] G.2 记录基线到 `openspec/changes/converge-contracts-and-distribution/benchmark.md`：机器型号、Node/pnpm 版本、样本生成方式、每项 ms/rss。验收：他人按文档可复现（同一机器重复 3 次，波动 < 10% 视为可复现）。
+- [ ] G.2 记录基线到 `openspec/changes/converge-contracts-and-distribution/benchmark.md`：机器型号、Node/pnpm 版本、样本生成方式、每项测量结果及重复测量的波动范围。验收：记录足以在相同环境重跑并解释测量波动；不设统一波动百分比门槛。
 - [ ] G.3 判定：按数据把五项分为"呈超线性 / 常数浪费 / 可接受"三类并写入 `benchmark.md`。验收：每项有数据支撑的归类理由，无"凭印象"结论。
-- [ ] G.4 只修被数据判为超线性的项，逐项独立提交并附前后对比。候选与预期（需数据确认）：`PesAssembler.append` 改"TS 切片数组 + 末尾拼接"、`buildGraph` 预建 `Map`/`Set` 索引、`choose()` 逐字节比较替代 `hex()` 全量字符串。验收：修复项基准改善 ≥ 2× 或复杂度下降（如 n 翻倍时耗时不再 4 倍），且相关用例全通过。
-- [ ] G.5 `directoryBytesExcluding` 轮询间隔从 10ms 调整为 400ms（常数浪费，改前需记录单次耗时）。验收：一次 20 分钟量级编码的调用次数下降 ≥ 90%（用缩短时长的模拟编码验证计数）；字节预算仍能在超限时中止（正反例各一条）。
+- [ ] G.4 只修被数据判为超线性或占比显著的项，并记录修复前后测量结果。候选项为 `PesAssembler.append`、`buildGraph`、`choose()`；不要求采用指定实现或固定倍数阈值。验收：数据支持修复有效，相关用例通过。
+- [ ] G.5 根据 `directoryBytesExcluding` 的测量结果选择轮询间隔，记录目录扫描开销与超限中止的实测延迟。验收：短时模拟覆盖预算内完成与超限中止，字节预算在超限时仍会中止任务。
 - [ ] G.6 `buildInputFileTable` 的 root 只解析一次后透传（重复 `realpath`）。验收：1000 文件输入的 `canonicalDirectory` 调用次数从 1000 降到 1（用计数器断言）。
-- [ ] G.7 未修的项写入 `benchmark.md` 的"已知未优化"，说明原因与触发条件。验收：无"顺手重构"未记录项；`git log` 中每项性能提交都有对应数据。
+- [ ] G.7 未优化的基准项写入 `benchmark.md`，记录测量结论；数据支持后续触发处理的项写明触发条件。
 
 ## H. 整体验收
 
@@ -79,11 +74,12 @@
   3. `内容摘要字段` 口径：`grep -rn "内容摘要字段" packages apps --include=*.ts` **无命中**；`test-data` 内仅 `BDMV-menu.backup-2026-11-04`（B.7 的旧包夹具）保留；`docs` / `openspec` 中只作为历史与迁移说明出现，不出现"已校验/可检测篡改"的表述。
   
   验收：三条命令的输出与上述口径逐字一致；第 3 条若在代码内有命中，说明 B.1 漏删，不得以"仅剩迁移说明"放过。
-- [ ] H.2 行为回归：`corepack pnpm build && corepack pnpm typecheck && corepack pnpm test:all` 全绿。
-- [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `内容摘要字段` 字段移除与源位置字段变真实）。
-- [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；M6 未验证项保持未勾选；活动 OpenSpec 中无实机播放、人工目视与跨浏览器解码验收条目。
-- [ ] H.5 范围守界：不实现浏览器内正片播放；影片使用系统 URL Protocol 交接；不新增未经计划的 CI workflow。
+- [ ] H.2 全量验证：`corepack pnpm build && corepack pnpm typecheck && corepack pnpm test:all` 全绿；该结果同时覆盖 E.6 的 runtime-web 与 headless 导航回归。
+- [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除内容摘要字段移除与源位置字段变真实）；该结果同时覆盖 F.5。
+- [ ] H.4 文档与范围核对：README 说明未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；M6 未验证项保持未勾选。活动 OpenSpec 与实现符合本 change 的边界：正片通过系统 URL Protocol 交接，不增加浏览器内正片播放或未计划的 CI workflow；不保留实机播放、人工目视和跨浏览器解码验收条目。
 - [ ] H.6 归档前按当前 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 主规格已存在，本 change 直接以 MODIFIED 应用；`offline-media-playback` 主规格已由 `fix-hdr-color-pipeline` 于 2026-11-09 归档时建立（7 条色彩与编码要求），`export-playable-media` 以 ADDED 追加 8 条播放与交接要求，本 change 不持有该 delta。`offline-delivery-assurance` 的收敛要求已并入 `verify-offline-release` 的 ADDED 主规格。剩余归档顺序为 `export-playable-media` → `verify-offline-release` → 本 change；不得对缺失主规格应用 MODIFIED-only delta。
+
+本节合并记录：F.3 并入 F.1–F.2；E.6 并入 H.2；F.5 并入 H.3；H.5 并入 H.4。合并项不代表已验证。
 
 ## I. 已移出范围
 

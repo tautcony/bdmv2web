@@ -2,7 +2,7 @@
 
 ## Why
 
-菜单仍在离线网页中交互；用户选择影片后，应打开实际 M2TS 文件，由操作系统关联的默认程序播放。完整影片播放不在浏览器中实现。
+离线网页提供菜单交互，并在用户选择影片时请求系统关联程序打开实际 M2TS 文件。
 
 ## What Changes
 
@@ -20,7 +20,7 @@
 
 ### Modified Capabilities
 
-无已发布主规格；同步调整 M4 和 M6 的 active delta。
+`offline-media-playback`：追加影片映射、菜单媒体和外部播放器交接要求。
 
 ## Impact
 

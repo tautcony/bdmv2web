@@ -2,25 +2,9 @@
 
 ## Context
 
-本 change 处理 7 项评审决策，它们共享同一个根因：**同一事实存在两个来源，且较弱的那个被当真**。
+本 change 定义默认预算、导航、来源位置、媒体生命周期、发布布局和性能基准的契约。共享约定见 [实施基线](../IMPLEMENTATION_BASELINE.md) §2、§4 和 §5。
 
-| 事实 | 强来源 | 弱来源（当前被当真） |
-| --- | --- | --- |
-| 仿真预算 | `core.DEFAULT_LIMITS`（导出的公开契约） | `hdmv` 私有 `DEFAULTS`（64/256） |
-| 完整性 | 设计文档声称"字节篡改会失败" | `auditOutputPackage` 恒返回 `null` 指纹 |
-| 导航语义 | pinned libbluray 行为 | `graph.ts` 的"遇到这些 opcode 就终止" |
-| 源位置 | parser 实际产出的 `SourceRef` | 交付层的占位常量 |
-| 媒体生命周期 | 事件信封的 `responseTo` 契约 | 桥只处理 `started`，其余丢弃 |
-| 构建输入 | 包产物（`dist`） | 相对路径指向 `src/*.ts` |
-| 性能判断 | 无 | 静态阅读得出的优先级 |
-
-基线见 [IMPLEMENTATION_BASELINE.md](../IMPLEMENTATION_BASELINE.md) §2（共享数据）、§4（状态与证据）、§5（首期固定选择）。
-
-## 当前实现复核（2026-11-06）
-
-以下事项已在代码中落地，剩余验收不得重复要求实现：内容摘要字段与计算已移除；菜单背景 `ended` 回执、主音轨选择后的 PSR1 写回、菜单输入与 VM/sound 集成已存在；浏览器的外部影片路径使用 URL Protocol，不使用本地桥。菜单循环结束和音轨变化仍需按各自 change 的验收证据确认。
-
-HDMV 默认 Limits 已从 core 派生，`convert --limits FILE` 已将配置传入转换时与打包后的 HDMV VM；仍未完成的实现项包括：导航图上下文边、交付层真实来源路径、无菜单媒体时启动 VM、normal-only 按钮命中，以及 builder 不再读取 workspace 源码。媒体结束回执和 PSR1 写回已实现但本 change 的完整回归尚未复核。性能基准未建立。
+实现与验收状态见 [tasks.md](tasks.md)。
 
 ## Goals / Non-Goals
 
@@ -58,56 +42,38 @@ const DEFAULTS = {
 
 M6 对文件完整性与制品替换的验证任务保持未完成。文档只描述实际执行的结构检查，不作字节替换检测结论。
 
-### 3. 导航图按"上下文"而不是"opcode 黑名单"判定（D11）
+### 3. 导航图与标题调用（D11）
 
-`graph.ts:63` 的 `terminatesFlow` 把 `JUMP_TITLE` / `LINK_PI` / `LINK_MK` / `TERMINATE_PL` 一律当终止，而 VM 在 MovieObject 上下文的实际行为是：
+- `terminatesFlow` 按 `opcode` 和 `context: "object" | "playlist"` 判定。MovieObject 中的 `LINK_PI`、`LINK_MK` 和 `TERMINATE_PL` 不终止该流；playlist 上下文中的对应指令终止该流。
+- `JUMP_TITLE` 生成指向目标标题首个 program 的 `sequence` 边，标记 `origin: "jump-title"`；跳转后的原位置下一条指令不因此可达。
+- `CALL_TITLE` 保存标题调用上下文并发出 `TITLE_SEARCH`；浏览器动作分发器调用 `selectTitle()`。目标不可用或出错时解除等待并记录诊断。
+- 上下文不适用的指令记录含 opcode 与 context 的 `HDMV_OPCODE_CONTEXT_SKIPPED`（info），随后继续执行。
 
-- `JUMP_TITLE`：跳到目标 title 的 MovieObject 继续执行（`vm.ts:427-436`），**有后继**。图上缺 `sequence` 边会让静态可达性把目标 title 判成不可达，覆盖统计随之失真。
-- `LINK_PI` / `LINK_MK` / `TERMINATE_PL`：在 PlayList 上下文终止该流；在 MovieObject 上下文不作为流终止符。
-- `CALL_TITLE`（`vm.ts:437-458`）：设置 `pendingTitleCall` 后 suspended，没有 continuation。桥返回 `MEDIA_UNAVAILABLE` 时 `handleEvent` 因找不到等待记录而丢弃（`HDMV_IGNORED_EVENT`），VM 永久停在 suspended。
+### 4. 来源位置（D12）
 
-决策：
+`SourceRef.path` 使用相对 BDMV 根的 POSIX 路径，例如 `PLAYLIST/00001.mpls`。来源保留 `origin` 和文件字节偏移。
 
-- `terminatesFlow` 改为 `(opcode, context)` 两参数，`context: "object" | "playlist"`；MovieObject 上下文只有 `TERMINATE_PL` 之外的真终止码才终止，`LINK_*` 不终止。
-- `buildNavigationGraph` 为 `JUMP_TITLE` 生成指向目标 entry 的 `sequence` 边（target = 目标 title 的首个 program），边来源标注为 `jump-title`，与 `jump` 边区分。
-- `CALL_TITLE` 当前建立 VM 标题调用上下文并挂起，发出 `TITLE_SEARCH`；浏览器动作分发器调用 `selectTitle()` 恢复 VM。任务应补齐该路径的目标不可用/错误行为与诊断，不额外引入重复的桥端 `responseTo` 事件路径。
-- 被上下文忽略的指令（`PLAY_PL*` / `LINK_*` 在错误上下文）必须记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级），替代当前静默 `return`（`vm.ts:460-470`）。没有诊断的"按了没反应"是排查成本最高的一类缺陷。
+- DiscIR entry 保留 `entry.source`；必需的 `SourceRef` 使用真实来源或明确标记的合成来源。没有实际位置的 Diagnostic 使用空位置字段并保留 `stage`。
+- `vmPrograms` 保留指令的原始 `source.path`、`offset` 和 `instructionIndex`。
+- IGS 结构诊断保留调用方提供的 path、clipId、pid 和 origin；未知位置使用可空字段并标明诊断阶段。
+- entry 来源指向 `index.bdmv` 或 `BACKUP/index.bdmv`；Playlist 和 CLPI 来源保留在对应子对象中。
 
-### 4. `SourceRef` 一条规则贯通到底（D12）
+### 5. 媒体生命周期（D13）
 
-基线 §2 已规定 `SourceRef` 含"相对 BDMV 根的 `path`、`origin`、文件字节偏移"。当前交付层三处违反：
+- 初始 `runTurn()` 和 First Play 在有无菜单媒体时均执行；媒体播放由产生的 action 处理。
+- 媒体桥按 action 和 `responseTo` 关联结束、错误和中断回执；非循环背景结束返回 `MEDIA_ENDED`。
+- 主音轨选择成功或回滚时，PSR1 写入对应流号。
+- 按钮命中区域使用可用按钮的 `selected ?? normal` bounds。
 
-| 位置 | 现状 | 改为 |
-| --- | --- | --- |
-| `apps/cli/src/commands/build.ts`（DiscIR entry 投影） | `{ path: "source/structural", origin: "primary", byteOffset: "0" }`，诊断 `sourcePath/offset` 置 `null` | 从 `entry.source` 复制真实位置；`DiscIR` 中 required 的 `SourceRef` 保留真实或受约束的合成来源，不置 `null`；无实际位置的 Diagnostic 保持 `null` 并保留 `stage` |
-| `apps/cli/src/commands/build.ts`（`vmPrograms` 指令投影） | 指令来源写成 `<MovieObject>` | 保留原始 `source.path` + `offset` + `instructionIndex` |
-| `packages/igs/src/extract.ts`（`toIgsSource`） | `BDMV/STREAM/.m2ts`（clipId/pid 丢失） | 由调用方传入真实 path/clipId/pid/origin；未知时用显式可空字段并标注诊断阶段 |
+### 6. 发布布局（D7）
 
-entry 自身的来源是 `index.bdmv`（含 `BACKUP/index.bdmv` 与 `origin: "backup"`），Playlist 与 CLPI 的来源分别落在对应子对象上。
+`runtime-web` 的 build 由 `tsc` 生成 dist，再由 esbuild 将 `src/browser.ts` 打包为 `dist/browser.bundle.js`（IIFE、ES2020）。`package.json` 通过 `./browser-bundle` 导出该产物。`package-builder` 消费该导出。两个包通过 `files: ["dist"]` 声明发布内容。
 
-**路径约定锁定为"相对 BDMV 根"**（`PLAYLIST/00001.mpls`，不带 `BDMV/` 前缀）。理由：基线 §2 原文即如此，且 parser 与 `bdmv-io` 的 containment 判定都以 BDMV 根为基准。`BDMV/` 前缀只在用户可见的输出文案里出现。这条约定写入 `disc-contracts` 的 requirement，避免 parser/CLI 两种写法继续混用。
-
-### 5. 媒体桥的生命周期按 `responseTo` 收全（D13）
-
-三处缺口分开修：
-
-- **初始 VM 与媒体解耦**：`packages/runtime-web/src/browser.ts` 的初始 `runTurn()` / First Play 以 `data.media`、`data.menuMedia` 与 `video`/`audio` 为条件，无媒体包因此不执行 MovieObject。改为无条件执行初始 `runTurn`，媒体播放作为其产生的 action 处理。
-- **背景媒体生命周期**：`MenuLoopPlaybackBridge` 当前已有 `ended` 监听和按动作回执的实现。该能力列为回归验收，不再描述为缺失代码；真实播放与错误路径由运行时回归覆盖。
-- **`loop=false` 结束语义**：当前代码回 `MEDIA_ENDED`，不引入 `MEDIA_HELD`。运行时已有 `ended` 监听；结束语义按 `offline-menu-runtime` 的「非循环背景结束」场景验收。
-- **PSR1 写回**：当前主音轨切换成功及回滚路径均调用 `systemWrite(1, streamNumber)`。保留既有测试并在回归中验证，不再视为待实现功能。
-- **命中几何统一**：当前 `MenuController.hit()` 仍只用 `states.selected` 的 bounds，而 adapter 允许只有 `normal` 图形的按钮可用，造成可聚焦但不可点。实现与验收仍待完成。
-
-### 6. builder 依赖产物，不依赖源码树（D7）
-
-`packages/package-builder/src/index.ts` 用 `resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` 取入口，并把 `@bdmv2web/hdmv` alias 到 `../../hdmv/src/index.ts`。在 monorepo 内成立，在 `dist` 发布布局下必然断（`src/` 不在包内）。
-
-改动：`runtime-web` 的 build 先由 `tsc` 生成 dist，再由 esbuild 打包 `src/browser.ts` → `dist/browser.bundle.js`（IIFE、ES2020），`package.json` 的 `exports` 提供 `"./browser-bundle"`；builder 改为解析该子路径，删除两处相对路径 alias。`runtime-web` 已有 `files: ["dist"]`，`package-builder` 补齐同名白名单，避免发布带上 `src` 与测试。
-
-验收：`grep` builder 产物与源码中不再出现 `runtime-web/src`、`hdmv/src`；并加一条单测用 `node:fs` 拦截读取 `**/src/*.ts` 的路径（若被读取即失败）。
+隔离安装验收使用发布包构建最小菜单包，并检查 bundle 可作为 classic script 加载。
 
 ### 7. 基准先行，修复按数据排序（D5=B）
 
-五处热点目前只有静态判断。先建基准再改，避免"感觉慢就重构"：
+基准覆盖以下五项：
 
 - `packages/bdmv-parser`：`buildGraph` 用 N = 200 / 1000 / 5000 个 PlayItem 的合成 disc；
 - `packages/igs`：`PesAssembler.append` 用 184 B × {1000, 10000, 50000} 个 TS 包拼 1 MB / 8 MB PES；
@@ -115,17 +81,15 @@ entry 自身的来源是 `index.bdmv`（含 `BACKUP/index.bdmv` 与 `origin: "ba
 - `packages/media-export`：`directoryBytesExcluding` 在 10k 文件目录上单次耗时（决定轮询间隔）；
 - `packages/bdmv-io`：`buildInputFileTable` 在 1000 文件上相对"一次性 root 解析"的耗时差。
 
-每项输出 `{ case, n, ms, rss }` 到 `test-data/bench/<git-sha>.json`（不入库，路径加入 `.gitignore`）。修复只针对实测呈超线性或占比显著的项，每项独立提交并附前后对比；没有数据的项保留现状并写入 change 的 `benchmark.md`。
+每项输出 `{ case, n, ms, rss }` 到 `test-data/bench/<git-sha>.json`（不入库，路径加入 `.gitignore`）。修复针对实测呈超线性或占比显著的项，每项记录前后对比；其他项的测量结论写入 `benchmark.md`。
 
-本 change 不设 CPU 百分比之类的产品级目标（缺少稳定测量环境），只设**回归门限**：同一 case 相对记录基线退化 > 20% 视为需要说明。
+基准记录重复测量的波动范围；同一 case 相对记录基线退化超过 20% 时记录原因。
 
 ## Risks / Trade-offs
 
-- **旧包兼容**：旧包可能含有当前不再使用的清单字段；读取侧忽略未知字段，重新生成报告时使用当前格式。
-- **M6 取消勾选会让"发布完成"后退**：当前勾选与实际证据不符，取消后以实际证据为准。
-- **`CALL_TITLE` 改 continuation 会动 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 的接口**：两个桥都要改，且 `browser.ts` 的 TITLE_SEARCH 分支与它语义重叠——本 change 只保证"不可用能解除等待"，不合并两处语义（合并属更大重构）。
-- **`SourceRef` 改为真实路径后输出体积上升**：每条指令带 path/offset 会让 IR 变大。用"同文件短索引 + 文件表"记路径可缓解，但会增加一层间接。先按可读性优先（逐条 path），体积问题在有实测数据后处理。
-- **系统交接**：当前正片动作使用 URL Protocol。M6 记录构造的目标、请求结果类别与不可观测项；外部程序是否执行请求、是否完成播放记为未验证，不作为交付阻断条件。
+- 历史包的未知清单字段由读取侧忽略；历史包兼容性需独立验证。
+- `SourceRef` 逐条记录 path 和 offset；输出体积可通过实测评估。
+- 系统交接记录目标和请求结果类别；外部程序执行和播放状态记为未验证。
 
 ## Migration Plan
 
