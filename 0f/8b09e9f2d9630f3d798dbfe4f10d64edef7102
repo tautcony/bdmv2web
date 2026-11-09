@@ -1,0 +1,21 @@
+openspec/changes/archive/2026-11-09-verify-offline-release/proposal.md
+  s_c99302e3c919c9::t_59c75a582ff138 5
+openspec/specs/offline-delivery-assurance/spec.md
+  s_c99302e3c919c9::t_dd1412482277ca 1-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0f8b09e9f2d9630f3d798dbfe4f10d64edef7102",
+  "prompts": {},
+  "sessions": {
+    "s_c99302e3c919c9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be58-9a67-70c0-9c07-182848e206a4",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
