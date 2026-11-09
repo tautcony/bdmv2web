@@ -184,7 +184,7 @@ CLI `convert`：
 
 ## Evidence
 
-验证环境：macOS，Homebrew `ffmpeg 9.0.2`（configure 未含 libzimg、libplacebo）。
+验证环境：macOS，Homebrew `ffmpeg 9.0.2`（configure 未含 libzimg、libplacebo）；另取 macOS 静态构建 `9.0.2`（`--enable-libzimg`）与 Ubuntu 24.04 容器内 `ffmpeg 6.1.1`（`--enable-libzimg --enable-libplacebo`）验证两条色调映射链。来源、SHA256 与命令见 [verification.md](./verification.md)。
 
 | 检查 | 结果 |
 | --- | --- |
@@ -204,7 +204,8 @@ CLI `convert`：
 | --- | --- |
 | SDR 源 → BT.709 标记与帧亮度 | pass：`h264/yuv420p/bt709/bt709/bt709`，YAVG 71.74 → 71.75（容差 2） |
 | 无色调映射滤镜的 HDR10 源 | pass：输出 `bt2020nc/smpte2084/bt2020`、10-bit，warning `MEDIA_HDR_TONEMAP_UNAVAILABLE` |
-| 色调映射到 BT.709 | not-verified：本机 ffmpeg 9.0.2 无 `zscale`/`libplacebo`；具备该构建时同一用例执行断言 |
+| 色调映射到 BT.709（`zscale` 链） | pass：静态 9.0.2（libzimg）输出 `h264/yuv420p/bt709/bt709/bt709`、8-bit，YAVG 61.12、YMIN 17、YMAX 252 |
+| 色调映射到 BT.709（`libplacebo` 链） | pass：Ubuntu 6.1.1 容器输出 `h264/yuv420p/bt709/bt709/bt709`、8-bit，YAVG 92.20、YMIN 17、YMAX 234；纯软件 Vulkan 下需 `-init_hw_device vulkan` + `hwupload` 桥接 |
 
 缺少 ffmpeg 的环境跳过该文件整体，不阻断构建。
 
