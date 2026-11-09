@@ -1,6 +1,6 @@
 # M6 — 离线发布验证参考
 
-对应 change：[tasks.md](../../../openspec/changes/verify-offline-release/tasks.md) / [design.md](../../../openspec/changes/verify-offline-release/design.md)。
+对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-09-verify-offline-release/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-09-verify-offline-release/design.md)（已于 2026-11-09 归档，主规格见 [offline-delivery-assurance](../../../openspec/specs/offline-delivery-assurance/spec.md)）。
 
 | 来源 | 任务 | 可用内容 | 使用边界 |
 | --- | --- | --- | --- |

@@ -40,7 +40,7 @@
 
 ## Impact
 
-`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
+`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/specs/offline-delivery-assurance/spec.md`（由已归档的 `verify-offline-release` 建立）、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
 
 ## Acceptance Boundary
 

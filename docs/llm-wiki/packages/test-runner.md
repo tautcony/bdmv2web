@@ -103,7 +103,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 
 | 需求 | 位置 | 同步 |
 | --- | --- | --- |
-| 新增审计项 | `package-audit.ts` 的 `add(...)` | 上面的检查项表、`openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md` |
+| 新增审计项 | `package-audit.ts` 的 `add(...)` | 上面的检查项表、`openspec/specs/offline-delivery-assurance/spec.md` |
 | 改状态规则 | `decisions.ts` | `openspec/specs/cli-delivery-status/spec.md` 的「结论只由失败证据决定」 |
 | 改报告字段 | `report.ts` / `release-summary.ts` | `packages/cli` 的 `validate` 写盘、`docs/guides/development.md` |
 
