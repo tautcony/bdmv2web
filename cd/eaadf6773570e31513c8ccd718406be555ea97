@@ -1,0 +1,29 @@
+packages/hdmv/src/index.test.ts
+  s_ed871e2efc1cc1::t_2f3e7c7cde97c3 739-752
+packages/media-export/src/external-targets.test.ts
+  s_ed871e2efc1cc1::t_7c5fd8e500d809 18-27,37-48,63-72
+packages/media-export/src/external-targets.ts
+  s_ed871e2efc1cc1::t_2a1835b46524a6 36-41,77,88
+packages/runtime-web/src/bdmv-url.test.ts
+  s_ed871e2efc1cc1::t_504a41acf80e52 1-68
+packages/runtime-web/src/bdmv-url.ts
+  s_ed871e2efc1cc1::t_0a7fb0aa1565e9 1-66
+packages/runtime-web/src/browser.ts
+  s_ed871e2efc1cc1::t_c19d6abc9c75ec 5,423-430,432-434
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cdeaadf6773570e31513c8ccd718406be555ea97",
+  "prompts": {},
+  "sessions": {
+    "s_ed871e2efc1cc1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1be6a-4475-71c0-b1fd-502404aefb96",
+        "model": "unknown"
+      },
+      "human_author": "TautCony <i@tautcony.xyz>"
+    }
+  }
+}
