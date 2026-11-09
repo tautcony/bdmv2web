@@ -133,7 +133,7 @@ function parseIndexUhdExtension(r: Bits, dataLength: number, file: FileEntry, or
   return uhd;
 }
 
-function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "backup", warn: Warn = ignoreWarning): ParsedFile<ParsedIndex> {
+export function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "backup", warn: Warn = ignoreWarning): ParsedFile<ParsedIndex> {
   const r = new Bits(data);
   r.checkMagic("INDX"); const version = r.version(); const section = r.u32(); const ext = r.u32();
   if (section < 40 || section >= data.length) throw new ContractError("BDMV_INVALID_SECTION", "/indexOffset", `Invalid index section offset ${section}`);
@@ -164,7 +164,7 @@ function parseIndex(data: Uint8Array, file: FileEntry, origin: "primary" | "back
   return { value: { entries, appInfo, uhd }, version, raw: data };
 }
 
-function parseMobj(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<MovieObject[]> {
+export function parseMobj(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<MovieObject[]> {
   const r = new Bits(data); r.checkMagic("MOBJ"); const version = r.version(); const ext = r.u32();
   if (ext && ext >= data.length) throw new ContractError("BDMV_INVALID_SECTION", "/extensionOffset", `Invalid MOBJ extension offset ${ext}`);
   r.seek(40); const length = r.u32(); const sectionEnd = r.offset + length; if (length < 6 || sectionEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", "/dataLength", "MOBJ data section is too short or exceeds file");
@@ -187,7 +187,7 @@ function parseMobj(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   return { value: result, version, raw: data };
 }
 
-function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<Playlist> {
+export function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backup"): ParsedFile<Playlist> {
   const r = new Bits(data); r.checkMagic("MPLS"); const version = r.version(); const listPos = r.u32(); const markPos = r.u32(); const extPos = r.u32();
   r.skip(20); const appLenOffset = r.offset; const appLen = r.u32(); if (appLen > data.length - r.offset) throw new ContractError("BDMV_INVALID_SECTION", "/appInfoLength", "MPLS app info exceeds file");
   const appEnd = r.offset + appLen;
@@ -292,7 +292,7 @@ function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   return { value: { id: file.rel.split("/").pop()!.replace(/\.mpls$/i, ""), version, appInfo, playItems, marks, subPaths, source: sourceFor(file, "", origin, 0) }, version, raw: data };
 }
 
-function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backup", warn: Warn = ignoreWarning): ParsedFile<ClipInfo> {
+export function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backup", warn: Warn = ignoreWarning): ParsedFile<ClipInfo> {
   const r = new Bits(data); r.checkMagic("HDMV"); const version = r.version(); const seqPos = r.u32(); const programPos = r.u32(); const cpiPos = r.u32(); const markPos = r.u32(); const extPos = r.u32();
   for (const [name, pos] of [["sequence", seqPos], ["program", programPos], ["cpi", cpiPos], ["mark", markPos], ["extension", extPos]] as const) if (pos && pos >= data.length) throw new ContractError("BDMV_INVALID_SECTION", `/${name}Offset`, `${name} offset exceeds file`);
   r.seek(40); const infoStart = 40; const infoLen = r.u32(); const infoEnd = r.offset + infoLen;
@@ -391,7 +391,7 @@ function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   return { value: { id: file.rel.split("/").pop()!.replace(/\.clpi$/i, ""), version, header, sequence, programs, cpi, source: sourceFor(file, "", origin, 0) }, version, raw: data };
 }
 
-function parseSound(data: Uint8Array, file: FileEntry, fullLength: number): SoundEntry[] {
+export function parseSound(data: Uint8Array, file: FileEntry, fullLength: number): SoundEntry[] {
   const r = new Bits(data); r.checkMagic("BCLK"); r.version(); const dataStart = r.u32(); const ext = r.u32(); if (dataStart >= data.length || (ext && ext >= data.length)) throw new ContractError("BDMV_INVALID_SECTION", "/dataOffset", "Sound data offset exceeds file");
   r.seek(40); const dataLength = r.u32(); r.skip(1); const count = r.u8(); if (dataLength > fullLength - dataStart) throw new ContractError("BDMV_INVALID_SECTION", "/dataLength", "Sound section exceeds file");
   const items: Array<{ index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; offset: number; declaredBytes: number; source: SourceLocation }> = [];
@@ -421,7 +421,7 @@ function choose<T>(kind: string, located: LocatedFile, bytes: Map<string, Uint8A
   return undefined;
 }
 
-function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[], playlists: Playlist[], clips: ClipInfo[], sounds: SoundEntry[], files: FileEntry[], diagnostics: ParseDiagnostic[]): ParsedDisc["graph"] {
+export function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[], playlists: Playlist[], clips: ClipInfo[], sounds: SoundEntry[], files: FileEntry[], diagnostics: ParseDiagnostic[]): ParsedDisc["graph"] {
   const nodes: GraphNode[] = []; const edges: GraphEdge[] = []; const add = (node: GraphNode) => { if (!nodes.some((item) => item.id === node.id)) nodes.push(node); };
   const fileByPath = new Map(files.map((file) => [normCase(file.rel), file]));
   const pathSource = (file: FileEntry) => sourceFor(file, "", "primary", 0);
