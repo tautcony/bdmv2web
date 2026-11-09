@@ -44,3 +44,5 @@
 ### 计数说明
 
 调整前活动 change 的未勾选任务为 56 项。其中 4 项按本记录移除，6 项替换或重写验收内容，另新增 2 项（X-AUDIT、X-COMPARE）。实际未完成数在 `tasks.md` 勾选前以文件内容为准，不使用算术推导。
+
+逐项处置与当前状态见 [task-disposition-index.md](./task-disposition-index.md)。
