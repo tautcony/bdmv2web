@@ -1,8 +1,10 @@
 # Tasks
 
-当前 validate 已有包内 schema、引用、manifest、启动项及必需资产检查；external target 与系统播放器状态仍需按当前交接模型补齐验收。任务描述区分已存在实现和未验证证据。
+当前 validate 已有包内 schema、引用、manifest、启动项及必需资产检查；external target 审计与状态聚合仍需补齐验收。任务描述区分已存在实现和未验证证据。
 
-共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列行为案例及结果；未取得参考或环境证据不得勾选对应验收。M6 原语位于 `packages/test-runner/src`；`validate --offline` 生成当前 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`，缺失的覆盖率或参考证据列为 actionable gap。跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
+验收口径：离线包结构审计、路径与 URL 编码、模拟浏览器事件、协议请求模拟、检查结果聚合、独立参考对照。外部播放器的实机打开、人工音画观察与跨浏览器解码记录不计入本 change 的验收。范围调整见 [scope-changes.md](../scope-changes.md)。
+
+共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列行为案例及结果；未取得参考或环境证据不得勾选对应验收。M6 原语位于 `packages/test-runner/src`；`validate --offline` 生成当前 `compatibility.json`、`dependency-audit.json` 和 `reports/release-summary.json`，缺失的覆盖率或参考证据列入 `notVerified`。跨阶段 M4/M5 制品和参考 golden 仍须按后续门槛完成。
 
 ## 1. 独立包检查
 
@@ -15,7 +17,7 @@
 ## 2. 完整度与覆盖
 
 - [x] 2.1 以共享决策表实现failed/partial/complete和strict退出码；验收：convert、混合/纯BD-J、unknown opcode、缺媒体、缺证据逐行测试。
-- [ ] 2.1a 按当前 convert 产物更新共享决策表和 strict 退出码；覆盖外部系统交接不可用/未验证、混合/纯 BD-J、unknown opcode、缺源 M2TS 和缺证据。
+- [ ] 2.1a 按当前 convert 产物更新共享决策表和 strict 退出码；覆盖请求结果不可观测、混合/纯 BD-J、unknown opcode、缺源 M2TS 和缺证据。验收：`complete` 只表示无已知失败证据；`not-verified` 不降低状态且逐条列入 `notVerified`；`fail` 优先于 `not-verified`。
 - [x] 2.2 实现acknowledged错误和降级记录；验收：不删除原严重性/影响，strict策略变化不提升能力状态。
 - [x] 2.3 实现入口/指令/媒体/测试的分母和未知计数；验收：零分母N/A、探索超限unknown，不能报虚假100%。
 
@@ -26,7 +28,12 @@
 - [x] 3.3 实现独立IG像素对照和视频质量分离；验收：调色板/alpha/时序偏差准确定位，视频编码噪声不混入IG判定。
 - [x] 3.4 汇总截断/超尺寸/路径/跳转环安全回归；验收：预算内终止，诊断准确且源/旧输出不变。
 
-## 4. 发布与系统播放器交接
+## 4. 发布与离线包交接
 
-- [ ] 4.2 按当前产品边界完成适用场景和系统默认播放器交接证据：菜单启动/导航/音效、移动目录、中文空格路径、DPI、源缺失、播放策略恢复与 URL Protocol 请求。外部播放器负责正片控制、章节和字幕；记录 expected/actual/result、播放器版本及操作系统。
-- [x] 4.4 生成最终compatibility/audit/manifest/发布摘要和README；验收：只有全部门槛满足可complete，失败/未验证列具体缺口，完整包无开发/参考工具依赖。
+- [ ] 4.2 自动化验证独立离线包的启动引用、目录迁移、配置修改后的路径解析、特殊字符 URL 编码、协议请求模拟、无同步回执时的 VM 恢复、菜单媒体静音与恢复；记录 expected/actual/checkId。验收：在测试进程中屏蔽源码路径与 FFmpeg 可执行文件，包仍可审计；不要求真实设备、系统默认程序或人工播放观察。
+- [x] 4.4 生成最终 compatibility/audit/manifest/发布摘要和 README；验收：`status` 由已知失败证据决定，`not-verified` 记入 `notVerified` 并按条列出缺口，完整包无开发/参考工具依赖。该验收文字按 2026-11-09 决策 D-01/D-02 修正，实施结果不变。
+
+## 5. 新增任务（2026-11-09）
+
+- [ ] X-AUDIT 统一检查结果聚合优先级为 `fail > not-verified > pass`，空集合为 `not-verified`；混合检查项不得掩盖 `fail`。验收：`release-summary.ts::summarizeCheckResult()` 与 `report.ts::createDependencyAuditReport()` 对 `fail + not-verified` 的两种顺序、多项混合、空检查、重复检查与 strict 两档分别断言子状态、最终状态、退出码与缺口列表；含一条"把 fail 放回时测试必须失败"的负例。
+- [ ] X-COMPARE 将 `packages/test-runner/src/compare.ts` 的参考对照能力接入 `apps/cli/src/commands/compare.ts`：定义输入序列、初始 VM 状态、实际 trace、独立参考 trace、参考工具与版本、输出路径；CLI 不再返回无条件 `E_NOT_IMPLEMENTED`。验收：按规格退出码断言——一致 0、分歧/输入错误/执行错误 1、参考缺席 `not-verified` 2；三组 fixture（相同 trace、首处分歧、缺独立参考）断言稳定报告 JSON、最早差异位置与错误信息；不得用被测 trace 作为参考。

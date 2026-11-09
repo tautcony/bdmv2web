@@ -12,7 +12,7 @@
 
 ### 输出位置和源路径配置
 
-发现输入的 BDMV 目录后，默认将 HTML 输出目录与该 BDMV 目录并排。例如 `影片/BDMV/` 对应 `影片/BDMV-menu/`。用户可通过 `--out` 指定其他输出路径，包括本地目录；输出不得与源目录重叠。默认拒绝已存在的输出，只有显式传入 `--overwrite` 才替换现有菜单包。替换使用 staging/backup 事务，生成失败时保留原包。若旧包的媒体计划与本次 Playlist、Clip、时间范围、流声明和编码设置一致，复制并复用 H.264/AAC 文件；不匹配或文件缺失时重新转码。此复用比较计划元数据，不对源 M2TS 做内容指纹校验。非同级输出的可编辑配置默认使用发现的 BDMV 绝对路径。输入是 BDMV 自身还是其直接父目录，均以发现的 BDMV 为基准。
+发现输入的 BDMV 目录后，默认将 HTML 输出目录与该 BDMV 目录并排。例如 `影片/BDMV/` 对应 `影片/BDMV-menu/`。用户可通过 `--out` 指定其他输出路径，包括本地目录；输出不得与源目录重叠。默认拒绝已存在的输出，只有显式传入 `--overwrite` 才替换现有菜单包。替换使用 staging/backup 事务，生成失败时保留原包。若旧包的媒体计划与本次 Playlist、Clip、时间范围、流声明和编码设置一致，复制并复用已有菜单媒体文件（视频按生效 `codec`，音频 AAC）；不匹配或文件缺失时重新转码。此复用比较计划元数据，不对源 M2TS 做内容指纹校验。非同级输出的可编辑配置默认使用发现的 BDMV 绝对路径。输入是 BDMV 自身还是其直接父目录，均以发现的 BDMV 为基准。
 
 产物包含可编辑的 `runtime/bdmv-config.js`；CLI 当前按输出位置写入相对或绝对 BDMV 路径，浏览器从该配置读取并在重新加载后生效。相对路径以 HTML 输出目录为基准。仍需完成共同移动、单独移动、配置编辑与 reload 的验收记录。
 
@@ -24,7 +24,7 @@
 
 ### Top Menu 背景媒体识别
 
-菜单 Playlist 由 `index.bdmv` 的 Top Menu 入口及 HDMV MovieObject 执行结果确定。转换时运行 First Play MovieObject 读取初始化状态，再通过 `selectTitle(0)` 进入 Top Menu；Top Menu MovieObject 发出的 `PLAY_PL` 指定菜单 Playlist。背景媒体按 Playlist 的 PlayItem 和 mark 生成：单片、同源 Clip 的连续区间作为完整时间线；重复尾段或有效 loop mark 设置循环。跨 Clip、时间间隙、流声明变化和多角度序列记录为媒体不可用。无循环背景播放完后保留末帧，并把 `MEDIA_ENDED` 交给 VM。AVC/H.264 与 HEVC 视频统一转成包内 H.264。
+菜单 Playlist 由 `index.bdmv` 的 Top Menu 入口及 HDMV MovieObject 执行结果确定。转换时运行 First Play MovieObject 读取初始化状态，再通过 `selectTitle(0)` 进入 Top Menu；Top Menu MovieObject 发出的 `PLAY_PL` 指定菜单 Playlist。背景媒体按 Playlist 的 PlayItem 和 mark 生成：单片、同源 Clip 的连续区间作为完整时间线；重复尾段或有效 loop mark 设置循环。跨 Clip、时间间隙、流声明变化和多角度序列记录为媒体不可用。无循环背景播放完后保留末帧，并把 `MEDIA_ENDED` 交给 VM。包内视频按生效 `codec` 编码（默认 HEVC，加 `-tag:v hvc1`；`--codec h264` 时为 H.264），音频为 AAC。
 
 ### 菜单场景与影片角色
 
@@ -38,7 +38,7 @@ IGS 提取支持分片 ICS：start 段带 12 字节头与总长度，continuatio
 
 ### 系统交接与能力边界
 
-用户触发影片动作后，前端按映射将 M2TS 转成 `file://` URL 并调用操作系统 URL Protocol。运行时按当前实现选择 IINA 或 PotPlayer 协议。播放动作只报告协议请求，不伪造开始/结束状态；VM 对应等待可恢复，菜单继续可操作。真实播放器打开和目标路径行为仍需环境验证。
+用户触发影片动作后，前端按映射将 M2TS 转成 `file://` URL 并调用操作系统 URL Protocol。运行时按当前实现选择 IINA 或 PotPlayer 协议。播放动作只报告协议请求，不伪造开始/结束状态；VM 对应等待可恢复，菜单继续可操作。
 
 `PLAY_PLAYLIST_MARK` 的 `time45k` 是所指 PlayItem 的 Clip 时间戳。系统将 mark/PlayItem 时间转换为 90 kHz，再减去 CLPI 中与 PlayItem `stc_id` 对应的 STC `presentation_start_time`，得到 M2TS 内相对跳转位置。IINA 1.4.4 或更新版本通过 `mpv_start` 接收秒数；Windows 上的 PotPlayer 打开目标 M2TS。页面记录协议请求，VM 随后恢复菜单导航；播放、暂停、章节、音轨、字幕与播放结束由外部播放器处理。
 
@@ -52,4 +52,4 @@ IGS 提取支持分片 ICS：start 段带 12 字节头与总长度，continuatio
 
 ## Verification / Exit Criteria
 
-验证单 Clip 映射、多个 PlayItem/重复 Clip、未知目标、缺失文件、中文/空格/`#`/`%` 特殊路径和协议请求；核对实际打开的文件。记录所用浏览器、操作系统、默认关联程序、版本、用户动作和观察结果；支持环境分别验证。断网、菜单包移动和外部源可用状态仍待实测。
+验证单 Clip 映射、多个 PlayItem/重复 Clip、未知目标、缺失文件、中文/空格/`#`/`%` 特殊路径和协议目标构造；断言生成目标的完整字符串、时间参数与结果类别。菜单音频以模拟事件验证静音与恢复。离线包迁移与路径解析由 `verify-offline-release` 的自动化审计覆盖。外部播放器是否打开文件、是否完成播放、菜单在不同浏览器中的解码表现不计入本 change 的验收；这些状态在报告中记为未验证。

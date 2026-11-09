@@ -2,7 +2,7 @@
 
 ## Purpose
 
-让 CLI 的阶段结果、交付状态与进程退出码三者一致，并使参数契约不出现"接受但不生效"的项。
+让 CLI 的阶段结果、交付状态与进程退出码三者一致：状态判定只反映已验证事实，参数契约不出现"接受但不生效"的项，未实现能力明确报错并退出，严格模式只改变接受策略而不改写支持结论。
 
 ## Requirements
 
@@ -69,8 +69,8 @@
 
 #### Scenario: 状态判定不含模式
 
-- **WHEN** 交付包除模式外无任何缺口
-- **THEN** 状态可为 complete；`mode` 只作为记录字段出现在报告中
+- **WHEN** 菜单包无任何缺口
+- **THEN** 状态可为 complete；stdout、manifest、report 与 compatibility 均不包含 `mode` 字段
 
 ### Requirement: 结论只由失败证据决定
 
@@ -115,10 +115,15 @@
 - **WHEN** 旗标出现在命令末尾且没有值（如 `inspect INPUT --out`）
 - **THEN** 返回参数错误 `CLI_MISSING_VALUE` 并退出 1，不回退到 stdout 输出
 
-#### Scenario: 未接线的参数
+#### Scenario: limits 已接线
 
-- **WHEN** 使用依赖其它 change 尚未接线的参数（`--limits`）
-- **THEN** 明确报未实现并退出 1，不出现"接受但无效果"
+- **WHEN** `convert` 收到 `--limits FILE`
+- **THEN** 合法文件中的 Limits 对象传入转换阶段与打包后的 HDMV VM，可通过 trace 的 limit 字段观察生效值
+
+#### Scenario: limits 非法
+
+- **WHEN** `--limits` 的文件不可读、JSON 非法或取值不合法
+- **THEN** 以 `INVALID_LIMITS_FILE` / `INVALID_LIMITS` / `INVALID_LIMIT` 诊断退出 1，不启动转换，不生成输出目录
 
 #### Scenario: 已接线参数生效
 

@@ -58,7 +58,7 @@ interface EventEnvelope<T> {
 | extract INPUT --out DIR | 结构/原始命令，M2 接入后含 IG/PNG | 明确已完成与未完成阶段，不生成播放器 |
 | convert INPUT [--out DIR] | 统一离线菜单包，影片交给默认关联程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 可指定不重叠的其他目标；strict 开启 |
 | validate DIR --offline [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
-| compare INPUT DIR --trace FILE | 指定输入序列的参考比较 | 开发命令，可用原碟和参考工具 |
+| compare INPUT DIR --trace FILE | 指定输入序列的参考比较 | 开发命令；CLI 已注册，当前返回 `E_NOT_IMPLEMENTED`，接线与退出码由 M6 `X-COMPARE` 跟踪；参考缺席为 not-verified |
 
 `--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
 
@@ -66,15 +66,15 @@ interface EventEnvelope<T> {
 
 ## 4. 状态统一判定
 
-compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profile/status/diagnostics/coverage。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
+compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/profile/status/diagnostics/coverage/notVerified。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |
-| 关键入口/解析损坏、不能启动、离线边界违规、必需包内资产缺失 | failed | 非零，不发布新正式包 |
-| 可启动但有 BD-J、可达不支持能力、影片交接或可达性未证明、验证缺失/失败 | partial | 退出 2，可保留审阅包 |
-| 统一产物在声明范围内资源/菜单/影片交接闭环，矩阵及对照证据通过，无阻断诊断 | complete | 退出 0 |
+| 关键入口/解析损坏、不能启动、离线边界违规、必需包内资产缺失、fatal 诊断、检查 `fail` | failed | 非零，不发布新正式包 |
+| 可启动但有 BD-J、可达不支持能力、未认可的 `error` | partial | 退出 2，可保留审阅包 |
+| 无 `fail`/`fatal`/阻断 `error`；未执行或不可观察的检查记入 `notVerified` | complete | 退出 0 |
 
-任意 fatal 或安全检查失败一律 failed；未认可的 error 至少阻止 complete。不可达损坏实体仍保留诊断，只有证明不影响任何入口/可达路径并记录非阻断理由，才可作为已认可的诊断。确认 Error、缩小分母、删除入口、关闭 strict 均不能提升完整度。无有效 HDMV 入口的纯 BD-J 碟片在首期为 failed。M5 的功能跑通不自动代表 M6 发布证明完成；缺外部播放器交接证据为 partial。
+检查结果聚合优先级为 `fail > not-verified > pass`，空集合为 `not-verified`。任意 fatal 或安全检查失败一律 failed；未认可的 error 至少阻止 complete。不可达损坏实体仍保留诊断，只有证明不影响任何入口/可达路径并记录非阻断理由，才可作为已认可的诊断。确认 Error、缩小分母、删除入口、关闭 strict 均不能提升完整度。无有效 HDMV 入口的纯 BD-J 碟片在首期为 failed。`complete` 表示无已知交付失败证据，不表示所有证据均已收集；未执行、缺分母或不可观察的检查进入 `notVerified`，不改变状态。M5 的功能跑通不自动代表 M6 发布证明完成。
 
 ## 5. 本轮固定的首期产品选择
 
@@ -84,7 +84,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/mode/profi
 | --- | --- | --- |
 | 工具链 | Node LTS、pnpm、TS、Vitest、classic IIFE ES2020 | M0 选择精确版本、lockfile、干净构建 |
 | 浏览器 | 不设浏览器版本锁定；产物按同目录静态文件与 classic script 打包 | 浏览器环境验收与跨浏览器矩阵不属交付门槛 |
-| 媒体 | 菜单动态背景和音轨转换时使用 FFmpeg 生成本地 MP4/M4A 并用 FFprobe 检验；音效为 WAV。正片打开原始 M2TS，由默认关联程序播放 | 菜单运行时不依赖 FFmpeg；M5 验证交接，M6 记录源文件和外部程序依赖 |
+| 媒体 | 菜单动态背景和音轨转换时使用 FFmpeg 生成本地 MP4/M4A 并用 FFprobe 检验；音效为 WAV。正片打开原始 M2TS，由默认关联程序播放 | 菜单运行时不依赖 FFmpeg；M5 验证目标映射与协议请求构造，M6 把源文件可用性和外部程序状态记为未验证 |
 | 质量 | 菜单图形与背景按实际资源及支持范围报告 | M2/M4 验证菜单视觉和音效 |
 | 影片音轨 | 外部播放器负责 | 不承诺网页控制或状态同步 |
 | 影片字幕 | 外部播放器负责 | 不承诺网页渲染、选择或状态同步 |

@@ -4,6 +4,8 @@
 
 让包内菜单媒体在高动态范围源上保持正确的亮度与色彩，并把编码质量参数交给调用方决定。
 
+主规格归属：本 delta 与 `export-playable-media` 共享 `offline-media-playback`。归档顺序为先 M5、后 HDR，两份 delta 合并为同一份主规格；本文件不单独声明与该 capability 冲突的编码语义。
+
 ## ADDED Requirements
 
 ### Requirement: 按源动态范围决定输出色彩
@@ -27,7 +29,7 @@
 
 ### Requirement: 色调映射转换为 SDR
 
-系统 SHALL 默认把 HDR 源转换为 SDR BT.709 8 位输出，使画面在普通显示器上保持正确对比度。转换 SHALL 使用 `zscale`（libzimg）链，缺该滤镜时使用 `libplacebo` 链。系统不得使用无法接受 `smpte2084` 的 `colorspace` 滤镜。
+系统 SHALL 默认把 HDR 源转换为 SDR BT.709 8 位输出，使输出按 BT.709 解释并由 `ffprobe` 读出对应标记。转换 SHALL 使用 `zscale`（libzimg）链，缺该滤镜时使用 `libplacebo` 链。系统不得使用无法接受 `smpte2084` 的 `colorspace` 滤镜。
 
 #### Scenario: 可用滤镜的优先级
 
@@ -70,7 +72,7 @@
 #### Scenario: H.264 与 HDR 组合
 
 - **WHEN** 调用方选择 `h264` 且结果为 HDR 标记
-- **THEN** 继续编码，并给出 warning 级 `MEDIA_HDR_CODEC_UNSUPPORTED` 说明浏览器不按 HDR 渲染
+- **THEN** 继续编码，并给出 warning 级 `MEDIA_HDR_CODEC_UNSUPPORTED`，记录该组合的 HDR 渲染不在支持范围内
 
 ### Requirement: 编码器私有参数写入色彩标记
 
@@ -79,7 +81,7 @@
 #### Scenario: HEVC 产物标记
 
 - **WHEN** 输出编码为 HEVC
-- **THEN** FFprobe 读出预期的 `color_primaries`、`color_transfer`、`color_space` 与 `hvc1` tag，Safari 可识别为 HEVC
+- **THEN** FFprobe 读出预期的 `color_primaries`、`color_transfer`、`color_space` 与 `hvc1` tag；该检查只证明写入的标记与品牌，不推断任何浏览器或硬件的解码能力
 
 ### Requirement: 编码后校验色彩一致性
 

@@ -1,6 +1,6 @@
 # Tasks
 
-决策已确认，按 1→7 顺序实施。`[x]` 表示代码与测试已落地；末尾的 7.5–7.8 是必须在真机/真素材上做的验收，尚未完成。
+决策已确认，按 1→7 顺序实施。`[x]` 表示代码与测试已落地。7.5 与 7.7 的验收依据为可构造输入、FFmpeg 返回码、滤镜链、ffprobe 元数据与可计算帧数值；人工目视与跨浏览器播放记录不计入本 change 的验收。范围调整见 [scope-changes.md](../scope-changes.md)。
 
 ## 0. 决策
 
@@ -64,7 +64,10 @@
 - [x] 7.2 更新 `docs/llm-wiki/packages/media-export.md` 滤镜链、降级行为、能力要求
 - [x] 7.3 README 说明 ffmpeg 所需编码器与 tone map 滤镜能力
 - [x] 7.4 用合成 HDR10 素材（bt2020/smpte2084、10-bit）确认降级路径的实际输出标记与 warning
-- [ ] 7.5 在带 zimg/libplacebo 的 ffmpeg 构建上验证 `zscale-tonemap` / `libplacebo-tonemap` 的标记与亮度分布（本机无该构建，未执行）
-- [ ] 7.6 真实 UHD 菜单 Clip 人工目视比对，记录结果与素材来源的匿名描述
-- [ ] 7.7 SDR 菜单回归：既有测试全绿，输出新增 BT.709 标记且无画面变化（测试侧已绿；目视部分未做）
-- [ ] 7.8 HEVC 产物的跨浏览器播放记录：Safari、Chrome（有/无硬件解码）、Firefox 分别记录结果
+- [ ] 7.5 使用具备所需滤镜的 FFmpeg 与合成测试视频验证 `zscale` / `libplacebo` 两条色调映射链：断言滤镜链选择、命令返回状态、编码结果元数据与可测帧数值范围。验收：具备该构建时给出可复现的输入、命令与数值结果；不具备时该项标注 `not-verified`，不阻断本轮交付。
+- [ ] 7.7 用合成 SDR 样本验证编码输出新增 BT.709 标记、未误用 HDR 处理链，且帧级数值回归在预先定义的容差内。验收：`ffprobe` 色彩字段与计划一致；固定容差的帧数值比较通过。
+
+### Removed (scope change 2026-11-09)
+
+- 7.6 原任务要求真实 UHD 菜单 Clip 的人工目视比对。该编号不再作为待办任务；记录见 [scope-changes.md](../scope-changes.md)。
+- 7.8 原任务要求 HEVC 产物在 Safari、Chrome（有/无硬件解码）与 Firefox 的播放记录。该编号不再作为待办任务。

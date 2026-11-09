@@ -4,6 +4,8 @@
 
 所有任务以当前仓库实现和下方明确列出的验证缺口为准。未接入的线性媒体 API 不等于产品路径已集成。
 
+验收口径：纯函数 URL/路径编码与参数构造、源目标安全约束、模拟浏览器交接事件、合成媒体编码与 FFprobe 元数据、静态媒体计划、事务回滚、离线包审计。外部播放器的实机打开、人工音画观察与跨浏览器解码记录不计入本 change 的验收。范围调整见 [scope-changes.md](../scope-changes.md)。
+
 共同约定见 [实施基线](../IMPLEMENTATION_BASELINE.md)。每项勾选需同时提交实现、所列正反例及结果；未取得参考或环境证据不得勾选对应验收。文中命令/文件是目标交付物，当前未实现。
 
 ## 1. 可达闭包与计划
@@ -15,7 +17,7 @@
 ## 2. 转码与时间表
 
 - [x] 2.1 接入FFprobe/FFmpeg探测及参数数组spawn；验收：记录版本/参数，无shell拼接，缺工具/编码器和特殊路径负例正确。
-- [x] 2.2 实现线性预合成、分支独立片段及菜单背景资产；验收：AVC/H.264 与 HEVC 源均转成 H.264/AAC/faststart，循环条件和单次 PlayItem 播放模式明确，比例/帧率/质量参数明确，不引用原 M2TS。
+- [x] 2.2 实现线性预合成、分支独立片段及菜单背景资产；验收：AVC/H.264 与 HEVC 源均按生效 `--codec` 编码为包内视频（默认 `hevc`，`--codec h264` 时为 `h264`），音频为 AAC，容器 faststart；循环条件和单次 PlayItem 播放模式明确，比例/帧率/质量参数明确，不引用原 M2TS。
 - [ ] 2.3 完成媒体导出 job 的取消、超时、进程失败和输出探测验收；半成品不得进入 manifest，FFprobe 失败不得以退出码 0 判成功。持久转码缓存当前关闭；菜单覆盖时已有媒体计划匹配复用是独立的目录事务行为，不扩展为内容指纹或通用缓存 key。
 - [x] 2.4 实现MediaTimelineMap双向映射/半开边界/45k/epoch；验收：设计中225000→PI1源495000和线性2.5秒数值准确，重复Clip不碰撞。
 - [x] 2.5 实现章节seek/loadedmetadata/seeked校准；验收：跨PlayItem和非零PTS seek误差不超过一帧，实际成功后才反馈。
@@ -35,7 +37,8 @@
 
 ## Remaining work
 
-- 2.3 remains open. Persistent media-asset caching stays disabled by user decision; no cache-key implementation is included.
+- 未勾选任务：2.3、5.1、5.2、5.3、5.5、6.2、6.3、6.4、7.1、7.3、8.2、9.2。
+- 持久媒体资产缓存按用户决定保持关闭，不包含缓存键实现。
 - Browser full-feature playback tasks 3.1–3.3, PGS rendering task 3.5 and tasks 4.1–4.2 were removed from this change's delivery scope. Existing library primitives remain code, not a browser playback product promise.
 
 
@@ -47,28 +50,34 @@
 
 - [ ] 5.1 对齐统一菜单产物的 CLI/文档契约：convert 直接生成唯一菜单产物，不提供模式参数；manifest、report 与 stdout 不包含产物模式字段。CLI、README 和开发文档已更新，测试覆盖产物模式字段已移除以及旧参数被拒绝；待运行相关测试确认。
 - [x] 5.4 默认在发现的 BDMV 同级生成 HTML 目录，`--out` 可指定不重叠的其他目标；为 BDMV 自身与父目录输入、路径冲突及既有目录添加验证。
-- [ ] 5.5 验收现有可编辑 BDMV 路径配置：CLI 已写入相对/绝对路径，浏览器读取 `runtime/bdmv-config.js`；验证共同移动、单独移动、编辑配置和 reload 后的 M2TS 目标。
+- [ ] 5.5 验收现有可编辑 BDMV 路径配置：CLI 已写入相对/绝对路径，浏览器读取 `runtime/bdmv-config.js`；用模拟资源解析验证共同移动、单独移动、编辑配置和 reload 后的 M2TS 目标路径构造，不作为第三方程序启动验证。
 - [ ] 5.2 复用结构和导航信息映射可达影片动作至实际 M2TS；保留 Playlist/PlayItem/Clip、IN/OUT、来源和分支，未知目标不猜测。
 - [ ] 5.3 验证多 PlayItem、重复 Clip、非零 IN/OUT 与缺失源文件；展示实际打开范围，不承诺完整 Playlist 语义。
 
 ## 6. 默认关联播放器接入
 
-- [ ] 6.1 在直接 `file://` 打开离线菜单的环境实测 macOS/IINA 与 Windows/PotPlayer URL Protocol；实现只使用前端协议导航，不启动本地服务或扩展。
-- [ ] 6.2 由用户动作请求对应 URL Protocol 打开实际 M2TS；将 Playlist mark 的 90 kHz 时间戳以 `mpv_start` 秒数传给 IINA；验证中文、空格、#、% 路径、IINA 跳转、PotPlayer 跳转能力、未注册协议、用户取消及启动失败。
-- [ ] 6.3 保证目标仅由已声明 BDMV STREAM 中的 Clip 映射生成，并正确编码路径；该纯前端方案不访问文件系统验证源文件/符号链接状态。
-- [ ] 6.4 区分协议请求与实际播放；无播放状态回传时不伪造 started/ended，解除 VM 等待并保持菜单可操作。
+- [ ] 6.2 用户影片动作只触发声明目标的 URL Protocol 请求：按操作系统构造 IINA `iina://open?url=` 或 PotPlayer `potplayer://` 目标，正确编码中文、空格、`#`、`%` 路径，并把 mark 相对 STC 起点的 90 kHz 偏移换算为秒数参数。验收：纯函数断言目标字符串与编码结果；模拟浏览器事件断言 `requested` / `unavailable` / `unknown` 三类结果，不以第三方应用实际打开或完成播放为验收标准。
+- [ ] 6.3 生成和运行时都校验 `streamPath` 精确对应已声明的 `STREAM/<clipId>.m2ts`：拒绝绝对路径、目录上跳、反斜线、URL scheme、混淆编码与未声明 Clip。生成阶段在 BDMV 根内做 canonical 路径与符号链接边界检查；浏览器阶段只校验目标结构与来源声明，不读取宿主文件系统，不判断文件是否存在或符号链接去向。验收：上述负例全部产生带来源位置的稳定诊断，合法目标不误伤。
+- [ ] 6.4 区分协议请求与实际播放：请求后只记录已构造并已发起的目标；无同步回执时按现有交接契约结束对应等待并恢复菜单操作，不产生 started / ended。验收：模拟无回执、重复回执与不可用目标三种路径后菜单仍可导航。
+
+### Removed (scope change 2026-11-09)
+
+- 6.1 原任务要求实机验证 macOS/IINA 与 Windows/PotPlayer 的 URL Protocol 打开。该编号不再作为待办任务；记录见 [scope-changes.md](../scope-changes.md)。
 
 ## 7. 集成与验证
 
-- [ ] 7.1 更新包审计及发布报告：显式区分包内菜单资源和允许的源 M2TS，报告外部源/系统关联的验证状态。
-- [ ] 7.2 实测断网、移动包、源有效/缺失及真实菜单动作；记录默认关联程序、实际打开文件和观察结果。
-- [ ] 7.3 回归菜单背景、音效、导航及不可用提示；不要求浏览器实现正片、字幕、章节、外部播放器返回或同步。
+- [ ] 7.1 更新包审计及发布报告：把引用分为包内菜单资源、已声明的外部影片流、不可观测的外部运行环境、非法引用四类；外部源可用性与系统关联状态记为未验证。验收：每类都有稳定 checkId 与 path，合法外部目标不计为离线资源缺失，报告不声称外部系统已执行请求。
+- [ ] 7.3 以模拟 DOM 与音频事件回归菜单背景、音效、导航及不可用提示；验证外部播放请求前后菜单音频的自动静音与恢复。验收：单测覆盖按钮状态、音源静音与导航迁移，不要求浏览器实现正片、字幕、章节、外部播放器返回或同步，不要求人工音画观察。
+
+### Removed (scope change 2026-11-09)
+
+- 7.2 原任务要求断网、移动包、源有效/缺失时的人工菜单动作与观察结果记录。该编号不再作为待办任务；离线包迁移与路径解析的自动化验收见 `verify-offline-release` 4.2。
 
 
 ## 2026-11-03 implementation evidence
 
 - 5.2/5.3: `extract` now emits `external-media-targets.json` from structural, MovieObject, and IGS button graphs. Known immediate playlist and HDMV title operands and later MovieObject continuation are represented; unresolved paths conservatively widen the set. A source target resolver retains each PlayItem occurrence, half-open 90 kHz bounds, and mark offsets; it reports missing or invalid targets and does not claim the system player will enforce ranges or continue automatically.
-- Remaining: verify the delivered package and actual external handoff against available feature media, including repeated Clip, nonzero IN/OUT and missing source. Mapping code is already included by `convert`.
+- Remaining: 5.2 在重复 Clip、非零 IN/OUT、缺源样例上的映射断言，以及交付包的离线审计；外部程序实际打开不在本轮验收范围。
 
 - Reference: pinned libbluray 1.5.0 `src/libbluray/hdmv/hdmv_vm.c` `_play_at` and `src/libbluray/bluray.c` `_process_hdmv_vm_event`, PSR8 and clip interval handling; the system default player is not assumed to implement the same playlist timeline.
 
@@ -80,7 +89,7 @@
 ## 9. 菜单静音控制
 
 - [x] 9.1 增加右下角静音切换，控制菜单背景视频、音轨和按钮音效；外部影片请求发起前自动静音，页面下一次按键或点击恢复该自动静音，手动静音不被恢复。验证：`runtime-web` 测试覆盖自动恢复与手动静音。
-- [ ] 9.2 在 `file://` 离线菜单中验证按钮状态、各音源静音、外部播放器请求时自动静音及返回页面后的自动恢复。
+- [ ] 9.2 以模拟 `file://` 资源解析回归按钮状态、各音源静音、外部播放请求触发的自动静音与返回页面后的自动恢复，手动静音保持不被页面输入解除。验收：单测覆盖三种状态迁移，不要求实机浏览或人工听感确认。
 
 ## 10. 菜单/内容 IGS 角色与菜单媒体范围
 

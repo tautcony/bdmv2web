@@ -30,7 +30,7 @@
 ## C. 图与 VM 语义（D11）
 
 - [ ] C.1 `packages/hdmv/src/graph.ts:63` 的 `terminatesFlow` 改为按上下文判定：签名 `(opcode, context: "object" | "playlist")`；MovieObject 上下文中 `LINK_PI` / `LINK_MK` 不终止，`JUMP_TITLE` 结束当前 run 且不生成到下一条指令的 `sequence` 边，`TERMINATE_PL` 仅在 playlist 上下文终止。验收：单测覆盖两种上下文 × 四个 opcode 共 8 组判定。
-- [ ] C.2 `buildNavigationGraph` 为 `JUMP_TITLE` 生成 `sequence` 边，指向目标 entry 的首个 program，边带 `origin: "jump-title"` 以便区分静态 `jump` 边。验收：最小 `JUMP_TITLE` 程序的图同时含 `jump` 与 `sequence` 两类边（当前只有 `jump`）；目标 entry 在可达集合中。
+- [ ] C.2 为 `NavigationGraphEdge` 增加 `origin` 字段（类型与 schema 同步，读取方忽略未知值），再由 `buildNavigationGraph` 为 `JUMP_TITLE` 生成指向目标 entry 首个 program 的 `sequence` 边，标 `origin: "jump-title"`，与静态 `jump` 边并存。验收：最小 `JUMP_TITLE` 程序的图同时含 `jump` 与 `sequence` 两类边；目标 entry 在可达集合中；原位置下一条指令不因该跳转成为可达。
 - [x] C.3 核对当前 `CALL_TITLE` 恢复路径：VM 暂停并发出 `TITLE_SEARCH`，runtime 调用 `selectTitle()`。验收覆盖有效 HDMV 目标、不可用目标及 BD-J/无效目标；VM 不永久 suspended，trace 保留结果与来源。不新增与现行直接选择路径重复的 `responseTo` 桥接机制。2026-11-06 审计修复：`selectTitle()` 失败释放标题切换，BD-J/缺表使用 `unsupportedOperation`；回归在 `packages/hdmv/src/index.test.ts`。
 - [ ] C.4 桥端只对 `waitFor` 匹配的动作回复：`runtime-web` 的 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 增加"是否有匹配等待"的检查，不再把任意事件交给 `handleEvent` 试。验收：无等待时收到事件不产生副作用（trace 记录 discarded 原因）。
 - [x] C.5 被上下文忽略的指令留诊断：`vm.ts:460-470` 的静默 `return` 改为记 `HDMV_OPCODE_CONTEXT_SKIPPED`（info 级，含 opcode 与 context）。验收：在 IG 上下文放入 `PLAY_PL` 或 MovieObject 上下文放入 `LINK_PI`，trace 出现该诊断且 VM 继续执行；`docs/support/hdmv-support.md` 已补充该码说明。回归在 `packages/hdmv/src/index.test.ts`。
@@ -39,15 +39,15 @@
 
 ## D. 源位置保真（D12）
 
-- [ ] D.1 `apps/cli/src/index.ts:194-204` 的 `createMenuDiscIR` 复制 `entry.source` 与诊断原始 `sourcePath` / `offset`，不再写 `source/structural` 与 `byteOffset: "0"`；无位置时保留 `null` 并保留 `stage`。验收：`grep -rn "source/structural" apps packages` 无命中；对 Tamako 样本执行 `extract` 后 `parsed-disc.json` 的每条 entry 都有真实 `PLAYLIST/*.mpls` / `CLIPINF/*.clpi` 路径。
-- [ ] D.2 `apps/cli/src/index.ts:303` 的 `vmPrograms` 保留原始指令 `source.path` / `offset` / `instructionIndex`。验收：`grep -rn "<MovieObject>" apps packages` 无命中；trace 中任一指令能回读到源文件与字节偏移。
-- [ ] D.3 `packages/igs/src/extract.ts:178` 的 `toIgsSource` 改为接收真实 `path` / `clipId` / `pid` / `origin`；IGS 结构诊断直接携带 `SourceLocation`。验收：对 Tamako 样本执行 `extract`，`source-map.json` 的 `diagnostics[].source` 不再出现 `BDMV/STREAM/.m2ts`，且含 `clipId` 与 `pid`。
+- [ ] D.1 `apps/cli/src/commands/build.ts` 的 DiscIR entry 来源从原始 `ParsedDisc` 的 `entry.source` 生成，保留 `path` / `origin` / `byteOffset`；不再写 `source/structural` 与 `byteOffset: "0"`。`DiscIR` 中 required 的 `SourceRef` 不得为 `null`；无实际位置的 Diagnostic 允许 `sourcePath` / `offset` 为 `null` 并保留 `stage`。验收：`grep -rn "source/structural" apps packages` 无命中；对 Tamako 样本执行 `extract` 与 `convert` 后，entry 来源为 `index.bdmv`（含 `BACKUP/index.bdmv` 与 `origin: "backup"`），Playlist/CLIPINF 来源出现在对应子对象中，Schema 校验通过。
+- [ ] D.2 `apps/cli/src/commands/build.ts` 的 `vmPrograms` 保留原始指令 `source.path` / `offset` / `instructionIndex`，不再写 `<MovieObject>`；必要时扩充中间类型，不在 CLI 二次推导字节偏移。验收：`grep -rn "<MovieObject>" apps packages` 无命中；trace 与 source-map 中任一指令能回到源文件与字节偏移，`byteOffset` 为有效十进制字符串。
+- [ ] D.3 `packages/igs/src/extract.ts` 的 `toIgsSource` 由调用方传入真实 `path` / `clipId` / `pid` / `origin`；位置未知时使用显式可空字段与准确诊断阶段，不生成 `STREAM/.m2ts` 或 `pid: 0` 占位。验收：`source-map.json` 的 `diagnostics[].source` 对已知结构位置含 `clipId` 与 `pid`，对未知位置为空并带阶段。
 - [ ] D.4 路径约定锁定为"相对 BDMV 根"（`PLAYLIST/00001.mpls`，不带 `BDMV/` 前缀）；`parseDiscIR` 对旧占位值（`source/structural`、`<MovieObject>`）报 `SCHEMA_SOURCE_PLACEHOLDER` 并拒绝。验收：单测用旧 IR 断言拒绝；新 IR 通过；`grep` 确认 parser 与 CLI 只用一种写法。
 - [ ] D.5 `docs/support/protocol-support.md` / `docs/support/hdmv-support.md` 的 Sources 章节补充"路径相对 BDMV 根"的约定与示例。验收：两份文档含该约定且示例路径符合格式。
 
 ## E. 运行时生命周期（D13）
 
-- [ ] E.1 `packages/runtime-web/src/browser.ts:164-173` 的初始 `runTurn()` / First Play 与 `data.media` 解耦：无条件执行初始 turns，媒体播放作为其产生的 action 处理。验收：构造无 `media` 字段的包，打开后 VM 有初始动作（trace 非空、`status` 进入预期状态）。
+- [ ] E.1 `packages/runtime-web/src/browser.ts` 的初始 `runTurn()` / First Play 与媒体存在性解耦：无条件执行初始 turns，媒体播放作为其产生的 action 处理。验收：构造无 `media` 与 `menuMedia` 字段的包，打开后 VM 有初始动作（trace 非空、`status` 进入预期状态），按钮可导航。
 - [ ] E.2 回归已实现的菜单媒体 `ended`/`error`/`abort` 回执：按 action/responseTo 关联，非循环背景结束发 `MEDIA_ENDED`，错误解除等待并保留诊断。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.3 回归已实现的音轨 PSR1 写回：成功选择和失败回滚均经 `systemWrite(1, streamNumber)` 更新系统寄存器；验证按钮程序读取所选值。实现已存在；本项只在相关回归证据确认后勾选。
 - [ ] E.4 命中几何统一：`MenuController.hit()` 按可用性决定命中集（可用即 `selected ?? normal` 的 bounds）。验收：只有 `normal` 视觉的启用按钮可被点击命中；单测覆盖"仅 normal""selected 与 normal 不同几何"两种情况。
@@ -55,10 +55,10 @@
 
 ## F. 发布布局可构建（D7）
 
-- [ ] F.1 `packages/runtime-web` 增加 `build:browser`：esbuild 打包 `src/browser.ts` → `dist/browser-entry.js`（IIFE / ES2020），`build` 顺序为 `tsc → build:browser`；`exports` 增加 `"./browser-entry"`。验收：`corepack pnpm --filter @bdmv2web/runtime-web build` 后该文件存在，且产物内不含 `require(` 之外的 Node 内建引用。
-- [ ] F.2 `packages/package-builder/src/index.ts:127-128` 改为解析 `@bdmv2web/runtime-web/browser-entry`，删除 `runtime-web/src/browser.ts` 与 `hdmv/src/index.ts` 两处相对路径与 alias。验收：`grep -rn "runtime-web/src\|hdmv/src" packages/package-builder/src` 无命中；`corepack pnpm --filter @bdmv2web/package-builder build` 成功。
+- [ ] F.1 固化 `packages/runtime-web` 的浏览器发布布局：构建先由 `tsc` 生成 dist，再由 esbuild 打包 `src/browser.ts` → `dist/browser.bundle.js`（IIFE / ES2020），并通过 `package.json` 的 `"./browser-bundle"` 导出。验收：`corepack pnpm --filter @bdmv2web/runtime-web build` 后该文件存在，为浏览器可直接运行的 classic script，不引用 workspace `src/*.ts` 或未注入的 Node 内建模块，且可由独立安装包解析。
+- [ ] F.2 `packages/package-builder` 仅通过 `@bdmv2web/runtime-web/browser-bundle` 读取运行时发布产物，不使用工作区相对源码路径。验收：`grep -rn "runtime-web/src\|hdmv/src" packages/package-builder/src` 无命中；隔离安装后的最小菜单包构建通过，未安装 `src` 目录时仍可运行。
 - [ ] F.3 防回归单测：拦截 `node:fs` 读取 `**/src/*.ts`（用 `vi.mock` 或 `module.register`），断言 `buildMenuPackage` 执行期间不发生此类读取。验收：测试通过；把实现改回相对路径时测试失败（验证后还原）。
-- [ ] F.4 `@bdmv2web/runtime-web` 与 `@bdmv2web/package-builder` 增加 `files: ["dist"]`。验收：两包 `npm pack --dry-run` 清单不含 `src/`、不含 `*.test.*`；生成的包仍能被 `apps/cli` 构建使用（`corepack pnpm -r build` 全通过）。
+- [ ] F.4 补齐 `@bdmv2web/package-builder` 的 `files: ["dist"]`；`@bdmv2web/runtime-web` 已有该白名单，本项只复核。验收：两包 `npm pack --dry-run` 清单不含 `src/`、不含 `*.test.*`；`corepack pnpm -r build` 全通过。
 - [ ] F.5 端到端：`convert` 一个现有样本，产物结构与此前一致。验收：`find <out> -type f | sort` 与改动前快照一致（除时间戳/版本字段）；`validate --offline` 结果不变。
 
 ## G. 性能基准与修复（D5=B）
@@ -81,9 +81,9 @@
   验收：三条命令的输出与上述口径逐字一致；第 3 条若在代码内有命中，说明 B.1 漏删，不得以"仅剩迁移说明"放过。
 - [ ] H.2 行为回归：`corepack pnpm build && corepack pnpm typecheck && corepack pnpm test:all` 全绿。
 - [ ] H.3 端到端两条链路不退化：`extract` → `convert` → `validate --offline` 在 `test-data` 样本上结果与第 1 批一致（除 `内容摘要字段` 字段移除与源位置字段变真实）。
-- [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；M6 未验证项保持未勾选。
+- [ ] H.4 诚实性检查：README 记录未实现字节级完整性校验、外部系统播放器状态不回传、`loop=false` 不提供独立末帧状态；M6 未验证项保持未勾选；活动 OpenSpec 中无实机播放、人工目视与跨浏览器解码验收条目。
 - [ ] H.5 范围守界：不实现浏览器内正片播放；影片使用系统 URL Protocol 交接；不新增未经计划的 CI workflow。
-- [ ] H.6 归档前按当前 status 的 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 主规格已存在；`offline-menu-runtime` 与 `offline-delivery-assurance` 主规格尚缺失，且其上游 change 仍活动。确定并记录这些 delta 的同步归属和顺序，使 archive 不丢失需求、不向缺失主规格应用 MODIFIED-only delta。不得再执行旧版“先归档已完成上游 change”的指令。
+- [ ] H.6 归档前按当前 delta 路径核对规格归属：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 主规格已存在，本 change 直接以 MODIFIED 应用；`offline-media-playback` 主规格缺失，由 `export-playable-media` → `fix-hdr-color-pipeline` 依次建立（ADDED → MODIFIED）。`offline-delivery-assurance` 的收敛要求已并入 `verify-offline-release` 的 ADDED 主规格，本 change 不持有该 delta，`openspec validate` 不再出现"目标主规格不存在"的归档提示。归档顺序为 `export-playable-media` → `fix-hdr-color-pipeline` → `verify-offline-release` → 本 change；不得对缺失主规格应用 MODIFIED-only delta。
 
 ## I. 已移出范围
 

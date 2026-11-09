@@ -13,7 +13,7 @@
 | X1 | CLPI 的 `0x24` HEVC 属性长度可能误判 | `packages/bdmv-parser/src/parser.ts` | 可能把合法的 HEVC UHD 盘判为结构损坏 | 需要真实 UHD 样本对照；本批无样本，改动等于盲改 | 首次遇到 UHD 碟解析失败，且错误指向 CLPI 属性长度 |
 | X2 | 损坏的 `sound.bdmv` 中止整个 `inspect` | `packages/cli` / `packages/bdmv-parser` | 一个附属文件损坏会让整张碟"无输出"，而不是"该能力不可用" | 属错误恢复策略，与 D10 的退出码只沾边；改了会牵动诊断分级 | 用户报告"某张碟 inspect 直接失败但主体可读" |
 | X3 | `EventScheduler.advance()` 零延迟自调度可能死循环 | `packages/runtime-web/src/index.ts:84-87` | 回调若以 `delay: 0` 重新调度自身，`advance()` 无迭代上限 | 需要先确认真实触发路径（当前菜单脚本未出现）；属防御性加固 | 出现浏览器挂起/单帧耗时飙升，且 trace 显示同一 action 连续入队 |
-| X4 | `summarizeCheckResult` 用 `not-verified` 掩盖 `fail` | `packages/test-runner` | 汇总层可能把明确的失败折叠成"未验证"，使交付状态偏乐观 | 与 D9=C 的"降级表述"方向相邻但不同：这是分类错误，不是承诺过度 | 出现"检查项 fail 但交付 complete"的报告，或 `not-verified` 数量异常增长 |
+| X4 | `summarizeCheckResult` 用 `not-verified` 掩盖 `fail` | `packages/test-runner` | 汇总层可能把明确的失败折叠成"未验证"，使交付状态偏乐观 | 已提升为 `verify-offline-release` 的 X-AUDIT（2026-11-09），不再作为遗留问题跟踪 | 见 X-AUDIT |
 | X5 | `validateLimits` 对未知键静默失效 | `packages/core/src/index.ts` | 用户写错键名（如 `maxCallDepthh`）时校验通过，实际未生效 | 与 D3 相邻但 D3 只收敛默认值；纳入会扩大 A 批范围 | D3 完成后再遇到"配置了但没生效"的报告 |
 
 ## 与已决策项的关系
@@ -28,7 +28,7 @@
 
 1. **X1**（可能拒绝合法输入）——需要样本，但影响最直接。
 2. **X2**（单文件损坏拖垮整条命令）——与 CLI 的"部分成功"语义相关，可并入未来的错误恢复 change。
-3. **X4**（状态分类错误）——改动小，但会让既有报告数字变化，需同步基线。
+3. ~~**X4**（状态分类错误）~~——已提升为 `verify-offline-release` 的 X-AUDIT，不在本表排序。
 4. **X3**（防御性加固）——无实际触发证据前不动。
 5. **X5**（配置静默失效）——D3 完成后顺手做，成本最低。
 
@@ -37,3 +37,4 @@
 | 日期 | 复核人 | 结论 |
 | --- | --- | --- |
 | 2026-11-04 | 评审方 | 建立登记；5 条均确认与 D1–D13 无重叠，且两个 change 的 tasks 中无对应条目 |
+| 2026-11-09 | 评审方 | X4 提升为 `verify-offline-release` X-AUDIT；其余条目维持登记状态 |

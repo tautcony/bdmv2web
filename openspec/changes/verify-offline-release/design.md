@@ -8,7 +8,7 @@
 
 **Goals:** 独立包校验、完整度/strict 决策、trace/IG 对照、可复现发布证据。
 
-**Non-Goals:** 替前置模块补业务实现、执行 BD-J、把参考工具作为输出运行依赖。
+**Non-Goals:** 替前置模块补业务实现、执行 BD-J、把参考工具作为输出运行依赖、外部播放器的实机打开与人工音画验收、跨浏览器解码能力记录。
 
 ## Decisions
 
@@ -22,11 +22,11 @@ manifest 可列出运行文件路径和长度作为清单信息。审计不计�
 
 HTML src/href/srcset、CSS url/@import、数据脚本/IR 资产、JS 静态资源入口分别解析，统一 URL 归一化及 realpath containment。拒绝 http/https、协议相对地址、未经授权的外部 file URL、编码后的目录逃逸、外部 symlink、远程嵌套资源。已声明且经过 BDMV STREAM 约束验证的源 M2TS 交接引用单独审计，不能用于加载菜单资源。不把说明文字中的参考网址误判为运行依赖。
 
-仅允许生成器声明的 PNG/音频等 data MIME 与内容；禁止可执行 HTML/SVG 数据载荷和嵌套远程引用。JS 构建检查模块/import/eval/网络 API，并结合浏览器断网运行观察；静态扫描不能证明任意 JS 永不联网，证据要同时覆盖构建来源与运行路径。报告指出具体文件/字段/归一化目标，不能只输出“发现外部地址”。
+仅允许生成器声明的 PNG/音频等 data MIME 与内容；禁止可执行 HTML/SVG 数据载荷和嵌套远程引用。JS 构建检查模块/import/eval/网络 API，并用模拟资源解析覆盖运行期入口；静态扫描不能证明任意 JS 永不联网，证据要同时覆盖构建来源与运行路径。报告指出具体文件/字段/归一化目标，不能只输出“发现外部地址”。
 
 ### 3. 完整度决策与覆盖分母
 
-按共享表从 failed → partial → complete 判定。strict 只改变接受策略/退出码，不改变能力事实。acknowledgement 仅可记录接受的降级，不能清除 unresolved/unsupported 或升级为 complete。统一产物的外部影片交接缺失或未经验证为 partial；纯 BD-J 无有效 HDMV 启动为 failed。
+按共享表从 failed → partial → complete 判定。`complete` 表示无已知交付失败证据；未执行或不可观察的检查进入 `notVerified`，不改变状态。检查结果聚合优先级为 `fail > not-verified > pass`，空集合为 `not-verified`。strict 只改变接受策略/退出码，不改变能力事实。acknowledgement 仅可记录接受的降级，不能清除 unresolved/unsupported 或升级为 complete。外部影片目标请求的结果在浏览器中不可观测，记入 `notVerified`；纯 BD-J 无有效 HDMV 启动为 failed。
 
 覆盖分别报告：声明/可达/未知入口数、可达指令编码及实例数、受支持/未支持/非法数、影片目标/已映射/缺失或未验证、测试路径/通过/失败/未验证。100% 必须同时有明确分母、无可达未知项、逐项证据；零分母记 N/A 并说明，不自动 100%。有限状态探索遇到动态输入时保留 unknown，该碟的完整度记为 unknown。
 
@@ -38,29 +38,29 @@ VM 比对 PC/寄存器 delta/栈/场景/播放动作，忽略墙钟、会话随�
 
 ### 5. 矩阵与 A–I 证据
 
-菜单直接从文件系统打开，断网并复制到中文/空格新路径后复跑；影片交接另在源 M2TS 可用时验证，源不可用时报告该缺口。
+菜单直接从文件系统打开，包复制到中文/空格新路径后由自动化检查复跑；影片交接以协议目标构造和模拟交接事件验证，源 M2TS 可读性与外部程序执行记为未验证。
 
 | 场景 | 验收主责与证据 |
 | --- | --- |
 | A 静态三态 | M2/M4；PNG、坐标与交互 trace |
-| B 动态背景/音效 | M4/M5；循环、首次手势、音频实播 |
+| B 动态背景/音效 | M4/M5；循环、首次手势、音频状态的模拟事件断言 |
 | C 多页/条件 | M3/M4；页/焦点/返回/寄存器 |
-| D 多 PlayItem/影片目标 | M5；源 M2TS、PlayItem 区间与实际交接范围；章节由外部播放器负责 |
+| D 多 PlayItem/影片目标 | M5；PlayItem 区间、构造的目标与请求结果类别；章节由外部播放器负责 |
 | E Pop-up | M3/M4；仅验证已打包的菜单 popup；外部播放器中的正片不由网页叠加控制 |
 | F 分片/调色板/动画 | M2/M4；IG 图像逐像素对照；动画和效果无时序 golden 时保持未验证 |
 | G PSR/GPR/Call/Resume | M3；参考 golden trace，外部播放器状态不假定可回传 |
 | H 混合 BD-J | M1/M6；入口保留、partial/strict 退出2 |
 | I 破损/缺失/循环 | 各模块/M6；预算内终止与准确诊断 |
 
-每份证据含 caseId/fixtureId/inputSequence/profile/mode/generatedMedia/expected/actual/result/artifactPaths。视频、音效测试要记录实际可观察结果，不以 API 无异常代替有声播放。文件长度不作为发布验证条件，制品内容指纹不属于证据字段。
+每份证据含 caseId/fixtureId/inputSequence/profile/generatedMedia/expected/actual/result/artifactPaths。视频证据取编码命令、ffprobe 元数据与可计算帧数值；音频证据取模拟事件后的状态迁移与静音标志。文件长度不作为发布验证条件，制品内容指纹不属于证据字段。
 
 ### 6. 发布与失败保留
 
-validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和人读摘要；compare 证据在 reports/evidence 下。发布清单要求声明范围内的场景通过、无功能阻断/未知支持、manifest 一致、运行包无开发依赖及说明完整。任一项缺席为 partial 或 failed，并列出下一步，不勾选不存在的通过。M6 没有重新定义此前能力范围的权力。
+validate 生成 compatibility.json/dependency-audit.json/asset-manifest.json 和人读摘要；compare 证据在 reports/evidence 下。发布清单要求声明范围内的场景有自动化证据、无功能阻断/未知支持、manifest 一致、运行包无开发依赖及说明完整。缺口按检查类别进入 `notVerified` 并列出下一步，不改变由失败证据决定的 `status`；不勾选不存在的通过。M6 没有重新定义此前能力范围的权力。
 
 ## Verification / Exit Criteria
 
-决策表驱动测试覆盖 complete 候选、外部交接未验证、混合/纯 BD-J、unknown opcode、缺媒体及 acknowledged Error。URL 负例含双重编码/反斜杠/协议相对/data 嵌套/symlink；合法中文/百分号与说明网址不过度拦截。A–I 对应实际证据，无法取得环境时准确保留未验证，不能宣布发布完成。
+决策表驱动测试覆盖 complete 候选、请求结果不可观测、混合/纯 BD-J、unknown opcode、缺媒体、acknowledged Error 与 `fail + not-verified` 混合。URL 负例含双重编码/反斜杠/协议相对/data 嵌套/symlink；合法中文/百分号与说明网址不过度拦截。A–I 对应自动化证据，无法取得参考时准确保留 `not-verified`。发布声明不包含外部程序的实机播放结果。
 
 ## Risks / Trade-offs
 

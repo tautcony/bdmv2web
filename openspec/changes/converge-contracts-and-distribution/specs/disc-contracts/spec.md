@@ -32,7 +32,7 @@
 
 ### Requirement: 版本化数据与精确时间
 
-系统 SHALL 为 DiscIR、资产、来源、诊断和事件提供版本化可校验契约；90k 时间使用规范十进制字符串持久化并显式还原 bigint；`SourceRef` 的 `path` 一律为相对 BDMV 根的 POSIX 路径，任何交付产物不得用占位路径或占位偏移代替真实来源。
+系统 SHALL 为 DiscIR、资产、来源、诊断和事件提供版本化可校验契约；90k 时间使用规范十进制字符串持久化并显式还原 bigint；`SourceRef` 的 `path` 一律为相对 BDMV 根的 POSIX 路径（不带 `BDMV/` 前缀）。`DiscIR` 中 required 的 `SourceRef` 不得为 `null`；无法取得真实位置时使用显式声明的合成来源并区分其来源类别，不得伪造 `byteOffset: "0"`。诊断的位置字段允许为 `null`。
 
 #### Scenario: 大数往返
 
@@ -52,7 +52,12 @@
 #### Scenario: 来源不得为占位值
 
 - **WHEN** 生成交付 IR、指令 trace 或 IGS 结构诊断
-- **THEN** 每条来源都含真实的相对 BDMV 根路径、origin 与文件字节偏移；无位置时明确为空，不写 `source/structural`、`<MovieObject>` 一类占位串
+- **THEN** 每条来源都含真实的相对 BDMV 根路径、origin 与文件字节偏移；`DiscIR` 中 required 的 `SourceRef` 使用真实来源或显式声明的合成来源，不写 `source/structural`、`<MovieObject>` 一类占位串，也不以零偏移冒充真实位置
+
+#### Scenario: 诊断位置可空
+
+- **WHEN** 一条 Diagnostic 对应不到具体文件位置
+- **THEN** 该诊断的 `sourcePath` 与 `offset` 为 `null`，并携带 `stage`；同一对象的 required `SourceRef` 不因此变成 `null`
 
 #### Scenario: 旧占位来源被拒绝
 

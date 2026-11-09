@@ -85,7 +85,7 @@ tone map 需要 zimg 提供的 `zscale`：ffmpeg 的 `colorspace` 滤镜不接�
 
 ### D5 编码器：默认 HEVC，H.264 可选，组合不设限制
 
-浏览器支持现状（2026-11 核对）：
+编码器选择的改版背景（2026-11 核对的公开资料，不属于验收条件，也不作为浏览器兼容承诺）：
 
 | 浏览器 | H.264 | HEVC |
 | --- | --- | --- |
@@ -173,6 +173,14 @@ CLI `convert`：
 ### D9 文档
 
 更新 `docs/llm-wiki/features/media.md`（编码参数表、HDR 策略、HEVC 播放前提）、`docs/llm-wiki/packages/media-export.md`（滤镜链、降级行为、能力要求）、README（ffmpeg 需要 `libx265`、`aac`；`--codec h264` 时还需要 `libx264`；tone map 需要 zimg 或 libplacebo）。
+
+## Verification / Exit Criteria
+
+1. 参数矩阵：`tonemap` / `preserve` × `h264` / `hevc` 四组的 ffmpeg 参数数组与 `pix_fmt` 断言通过；`-tag:v hvc1` 只出现在 HEVC。
+2. 编码输出：合成 HDR10 与 SDR 样本经真实命令行编码后，`ffprobe` 的 `codec_name`、`profile`、`pix_fmt`、`color_primaries`、`color_transfer`、`color_space` 与计划一致；不一致报 `MEDIA_OUTPUT_INVALID`。
+3. 滤镜链：具备 `zscale` / `libplacebo` 的构建分别验证链选择与返回状态；不具备时该项记 `not-verified`。
+4. 复用判定：仅 `codec`、`crf`、`preset` 或色彩策略变化时判定为不可复用。
+5. 不在验收范围内：真实 UHD 素材的人工目视比对、任何浏览器或硬件的播放与解码记录。
 
 ## Evidence
 

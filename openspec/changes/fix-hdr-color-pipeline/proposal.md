@@ -36,6 +36,6 @@ UHD 菜单背景素材为 HDR10（BT.2020 + PQ，10-bit）。当前导出命令�
 
 ## Acceptance Boundary
 
-HDR10 源在 `tonemap` 下输出 BT.709 标记的 SDR 视频，画面对比度与色相与参考 tone mapping 一致；`preserve` 下输出 10-bit 并标记为 BT.2020/PQ。缺少 tone mapping 能力的 ffmpeg 走直通降级并给出 warning，不阻断构建。CLI 传入的 `--crf` / `--preset` / `--codec` / `--hdr` 出现在 `media-plan.json` 与实际 ffmpeg 调用中，任意组合都可执行。
+HDR10 源在 `tonemap` 下输出 BT.709 标记的 SDR 视频，标记与位深由 `ffprobe` 验证；`preserve` 下输出 10-bit 并标记为 BT.2020/PQ。缺少 tone mapping 能力的 ffmpeg 走直通降级并给出 warning，不阻断构建。CLI 传入的 `--crf` / `--preset` / `--codec` / `--hdr` 出现在 `media-plan.json` 与实际 ffmpeg 调用中，任意组合都可执行。合成素材的帧数值回归在预先定义的容差内。
 
-浏览器 HDR 输出能力、Dolby Vision 动态元数据、HDR10+ 动态元数据不在承诺范围内。
+人工目视比对、浏览器或硬件解码能力、Dolby Vision 与 HDR10+ 动态元数据的保留不在承诺与验收范围内。

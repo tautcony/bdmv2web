@@ -4,11 +4,13 @@
 
 从离线菜单将实际 M2TS 交给操作系统的默认关联程序，并准确报告交接边界。
 
+主规格归属：本 change 以 ADDED 建立 `offline-media-playback`；`fix-hdr-color-pipeline` 的色彩与编码要求在同一 capability 内合并，归档时按 M5 → HDR 顺序写入同一份主规格。
+
 ## ADDED Requirements
 
 ### Requirement: 覆盖已有菜单包
 
-系统 SHALL 默认保留已存在的输出目录；仅在 `convert --overwrite` 时事务性替换整个菜单包。覆盖时，若旧媒体计划与新输入的 Playlist、Clip、时间边界、流声明及编码参数匹配，系统 SHALL 复用已有 H.264/AAC 资源而不重新转码；不匹配或资源缺失时重新生成。该匹配不对源 M2TS 内容作哈希或指纹验证。
+系统 SHALL 默认保留已存在的输出目录；仅在 `convert --overwrite` 时事务性替换整个菜单包。覆盖时，若旧媒体计划与新输入的 Playlist、Clip、时间边界、流声明及编码参数匹配，系统 SHALL 复用已有菜单媒体资源而不重新转码；不匹配或资源缺失时重新生成。该匹配不对源 M2TS 内容作哈希或指纹验证。
 
 #### Scenario: 覆盖并复用媒体
 
@@ -41,32 +43,27 @@
 
 ### Requirement: 交给默认关联程序
 
-系统 SHALL 在用户触发影片动作时，通过前端 URL Protocol 请求打开对应 M2TS。macOS SHALL 使用 IINA 的 `iina://open?url=` 协议，Windows SHALL 使用 PotPlayer 的 `potplayer://` 协议。系统不得要求本地服务、浏览器扩展或额外后台进程。
+系统 SHALL 在用户触发影片动作时，构造指向已声明 M2TS 的操作系统 URL Protocol 请求并交由浏览器导航。请求 SHALL 只表示已构造并已发起的目标，不表示外部程序已打开或已开始播放。系统不得要求本地服务、浏览器扩展或额外后台进程。当前实现按操作系统选择 IINA 或 PotPlayer 协议，属于实现细节。
 
 #### Scenario: 发起协议请求
 
 - **WHEN** 已解析到影片 M2TS 且用户点击影片动作
-- **THEN** 按操作系统生成对应的播放器协议 URL 并发起导航，状态只报告已发起请求
+- **THEN** 按操作系统生成对应的播放器协议 URL 并发起导航，输出记录目标路径、时间参数与结果类别（`requested` / `unavailable` / `unknown`）
 
-#### Scenario: 浏览器限制或无关联
+#### Scenario: 请求结果不可观测
 
-- **WHEN** 浏览器限制直接打开、系统无关联程序或打开失败
-- **THEN** 页面保留可操作菜单和目标文件路径
+- **WHEN** 浏览器限制直接打开、系统无关联程序，或请求已发起但没有状态回传
+- **THEN** 页面保留可操作菜单与目标文件路径，结果记为 `unknown`，不产生 started、ended 或自动返回事件
 
 #### Scenario: 跳转到所选章节
 
 - **WHEN** HDMV 请求播放 Playlist mark，且该 mark 已映射到目标 Clip 的 90 kHz 时间戳
-- **THEN** 以 mark/PlayItem 时间减去匹配 `stc_id` 的 CLPI STC 起始时间，macOS/IINA 1.4.4+ URL 以 `mpv_start` 秒数传递 M2TS 内相对偏移；Windows/PotPlayer 打开目标 M2TS
+- **THEN** 以 mark/PlayItem 时间减去匹配 `stc_id` 的 CLPI STC 起始时间，把相对偏移换算为秒数并写入该协议的起始时间参数
 
 #### Scenario: 特别收录页返回
 
 - **WHEN** 当前 IGS 按钮的邻接关系唯一指向一个无图形但带命令的 auto-action 按钮，且用户按 Escape
 - **THEN** 沿该光盘定义的导航边执行按钮命令，使菜单返回由 HDMV/IGS 脚本决定；没有唯一候选时使用配置的 Escape 映射
-
-#### Scenario: 未知外部播放状态
-
-- **WHEN** 交接机制不能获知播放进度或结束
-- **THEN** 不伪造播放开始、结束或自动返回事件，菜单仍可恢复操作
 
 ### Requirement: 单一离线菜单产物
 
@@ -75,7 +72,7 @@
 #### Scenario: 移动菜单包
 
 - **WHEN** 断网后移动产物并保留或重新关联源 M2TS
-- **THEN** 菜单正常运行，影片交接使用有效的源路径；若源文件不可用则显示诊断
+- **THEN** 菜单正常运行，影片目标按配置解析出的路径构造；源文件是否可读由外部程序结果决定，页面记为不可观测
 
 #### Scenario: 播放器职责
 
@@ -109,7 +106,7 @@
 #### Scenario: 多菜单 Playlist 本地媒体
 
 - **WHEN** Top Menu 之外的菜单 Playlist 具有单 Clip、连续时间线和受支持的主视频/音频声明
-- **THEN** 转换阶段为其生成独立目录下的 H.264/AAC 资产和独立媒体计划，运行时在 `PLAY_PLAYLIST` 时切换视频、音频与循环设置
+- **THEN** 转换阶段为其生成独立目录下的视频资产（按生效 `codec`）与 AAC 音轨，并生成独立媒体计划，运行时在 `PLAY_PLAYLIST` 时切换视频、音频与循环设置
 
 #### Scenario: 返回 Top Menu
 
@@ -153,17 +150,22 @@
 
 ### Requirement: 受限本地引用
 
-系统 SHALL 仅允许经验证的 BDMV STREAM 内实际 M2TS 作为外部影片目标，安全处理本地路径并与包内运行资源审计分开。
+系统 SHALL 仅允许已声明且位于 BDMV `STREAM` 的 M2TS 作为外部影片目标，在生成阶段与消费阶段分别执行可观察的约束，并与包内运行资源分开审计。
 
 #### Scenario: 特殊路径
 
 - **WHEN** 源路径包含中文、空格、# 或 %
-- **THEN** 交接到正确文件，且不将路径当作 shell 代码执行
+- **THEN** 构造正确的协议目标，且不将路径当作 shell 代码执行
 
 #### Scenario: 路径逃逸
 
-- **WHEN** 目标通过遍历或符号链接指向授权源目录外
-- **THEN** 拒绝交接并报告来源和原因
+- **WHEN** 目标含目录上跳、反斜线、非法 URL scheme、混淆编码或未声明的 ClipId
+- **THEN** 拒绝构造请求并报告来源和原因
+
+#### Scenario: 不可观测的宿主状态
+
+- **WHEN** 需要判断源文件是否存在、符号链接指向或外部程序是否启动
+- **THEN** 生成阶段在 BDMV 根内执行 canonical 路径与符号链接边界检查；浏览器阶段只校验目标结构与来源声明，并把实际文件系统与外部程序状态记为未验证
 
 ### Requirement: 菜单背景媒体生成
 
@@ -172,7 +174,7 @@
 #### Scenario: 动态背景与菜单音轨
 
 - **WHEN** index.bdmv 的 Top Menu 入口经 HDMV 执行选中菜单 Playlist，其背景由单 PlayItem、同一源 Clip 中连续且流声明一致的区间组成，或是明确的循环尾段，且视频编码为 AVC/H.264 或 HEVC
-- **THEN** 按完整背景时间线导出 H.264 视频和 AAC 主音轨；仅在重复尾段或有效 loop mark 存在时设置循环，并在 FFprobe 校验后随菜单打包
+- **THEN** 按完整背景时间线导出按生效 `codec` 编码的视频（默认 HEVC，`--codec h264` 时为 H.264）和 AAC 主音轨；仅在重复尾段或有效 loop mark 存在时设置循环，并在 FFprobe 校验后随菜单打包
 
 #### Scenario: 转换或校验失败
 
@@ -196,7 +198,7 @@
 #### Scenario: 修改源目录配置
 
 - **WHEN** 用户将配置改为其他相对或绝对本地 BDMV 路径并重新加载
-- **THEN** 影片交接按更新后的路径解析，菜单和接入程序使用一致的路径；目标无效时显示可定位的诊断
+- **THEN** 影片目标按更新后的路径解析，菜单与接入程序使用同一份配置；配置不可解析、指向非 BDMV 根或逃逸允许范围时显示可定位的诊断，目标文件是否存在记为不可观测
 
 #### Scenario: 输出到本地目录
 

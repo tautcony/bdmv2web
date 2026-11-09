@@ -36,11 +36,11 @@
 - `hdmv-navigation`：`CALL_TITLE` 的等待/回执契约；导航边的上下文判定与被忽略指令的诊断。
 - `offline-menu-runtime`：初始 VM 不依赖媒体；媒体桥生命周期回执；PSR1 音轨写回；命中几何一致。
 - `interactive-graphics-extraction`：IGS 结构诊断携带原始 `SourceLocation`。
-- `offline-delivery-assurance`：完整性校验由"承诺"降级为"显式未验证"，并限制证据绑定范围。
+- `offline-delivery-assurance`：完整性校验由"承诺"降级为"显式未验证"，并限制证据绑定范围；该主规格由 `verify-offline-release` 以 ADDED 建立，收敛要求已并入其 delta，本 change 不持有该主规格的 delta。
 
 ## Impact
 
-`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
+`packages/core`、`packages/hdmv`、`packages/igs`、`packages/runtime-web`、`packages/package-builder`、`packages/test-runner`、`packages/bdmv-parser`、`packages/media-export`、`packages/bdmv-io`、`apps/cli`；`openspec/changes/verify-offline-release/tasks.md` 与 `openspec/changes/verify-offline-release/specs/offline-delivery-assurance/spec.md`、`openspec/changes/IMPLEMENTATION_BASELINE.md` §4/§5、`docs/support/hdmv-support.md`、`docs/support/protocol-support.md`。
 
 ## Acceptance Boundary
 
@@ -56,7 +56,7 @@
 
 内容摘要逻辑已移除；媒体 `ended` 回执、PSR1 音轨写回、菜单 VM/sound 集成、HDMV 默认 Limits 收敛与 `convert --limits` 接线已实现；影片动作采用外部 URL Protocol 交接。无菜单媒体时初始 VM 仍受媒体字段条件限制，normal-only 按钮命中仍不完整。完整差异见 `design.md` 的“当前实现复核”。
 
-主规格现状：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction` 已存在；`offline-menu-runtime` 与 `offline-delivery-assurance` 缺失。apply 的第一步按 `openspec status` 的 `existingOutputPaths` 做 delta 对照，把本 change 的 delta 并入对应上游 spec（见 `tasks.md` H.6）。`restore-build-gate-and-delivery-status` 只有 `ADDED` delta，可随时归档。
+主规格现状：`disc-contracts`、`hdmv-navigation`、`interactive-graphics-extraction`、`offline-menu-runtime` 已存在，本 change 的 delta 直接以 MODIFIED 应用；`offline-media-playback` 缺失，由 `export-playable-media` 与 `fix-hdr-color-pipeline` 依次建立；`offline-delivery-assurance` 的收敛要求已写入 `verify-offline-release` 的 ADDED delta，本 change 不再携带该 delta。apply 的第一步按 `openspec status` 的 `existingOutputPaths` 做 delta 对照（见 `tasks.md` H.6）。`restore-build-gate-and-delivery-status` 只有 `ADDED` delta，可随时归档。
 
 ## Related
 

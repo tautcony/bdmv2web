@@ -79,9 +79,11 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 | 位置 | 现状 | 改为 |
 | --- | --- | --- |
-| `apps/cli/src/index.ts:194-204` | `{ path: "source/structural", origin: "primary", byteOffset: "0" }`，诊断 `sourcePath/offset` 置 `null` | 复制 `entry.source` 与诊断原始位置；无位置时保持 `null` 并保留 `stage` |
-| `apps/cli/src/index.ts:303` | 指令来源写成 `<MovieObject>` | 保留原始 `source.path` + `offset` + `instructionIndex` |
-| `packages/igs/src/extract.ts:178` | `BDMV/STREAM/.m2ts`（clipId/pid 丢失） | 由调用方传入真实 path/clipId/pid/origin；诊断直接携带 `SourceLocation` |
+| `apps/cli/src/commands/build.ts`（DiscIR entry 投影） | `{ path: "source/structural", origin: "primary", byteOffset: "0" }`，诊断 `sourcePath/offset` 置 `null` | 从 `entry.source` 复制真实位置；`DiscIR` 中 required 的 `SourceRef` 保留真实或受约束的合成来源，不置 `null`；无实际位置的 Diagnostic 保持 `null` 并保留 `stage` |
+| `apps/cli/src/commands/build.ts`（`vmPrograms` 指令投影） | 指令来源写成 `<MovieObject>` | 保留原始 `source.path` + `offset` + `instructionIndex` |
+| `packages/igs/src/extract.ts`（`toIgsSource`） | `BDMV/STREAM/.m2ts`（clipId/pid 丢失） | 由调用方传入真实 path/clipId/pid/origin；未知时用显式可空字段并标注诊断阶段 |
+
+entry 自身的来源是 `index.bdmv`（含 `BACKUP/index.bdmv` 与 `origin: "backup"`），Playlist 与 CLPI 的来源分别落在对应子对象上。
 
 **路径约定锁定为"相对 BDMV 根"**（`PLAYLIST/00001.mpls`，不带 `BDMV/` 前缀）。理由：基线 §2 原文即如此，且 parser 与 `bdmv-io` 的 containment 判定都以 BDMV 根为基准。`BDMV/` 前缀只在用户可见的输出文案里出现。这条约定写入 `disc-contracts` 的 requirement，避免 parser/CLI 两种写法继续混用。
 
@@ -89,7 +91,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 三处缺口分开修：
 
-- **初始 VM 与媒体解耦**：`browser.ts:164-173` 把 `runTurn()` / First Play 放在 `data.media && video && audio` 条件内，无媒体包因此不执行 MovieObject。改为无条件执行初始 `runTurn`，媒体播放作为其产生的 action 处理。这条是菜单正确性的前提——没有媒体的包也必须跑初始化。
+- **初始 VM 与媒体解耦**：`packages/runtime-web/src/browser.ts` 的初始 `runTurn()` / First Play 以 `data.media`、`data.menuMedia` 与 `video`/`audio` 为条件，无媒体包因此不执行 MovieObject。改为无条件执行初始 `runTurn`，媒体播放作为其产生的 action 处理。
 - **背景媒体生命周期**：`MenuLoopPlaybackBridge` 当前已有 `ended` 监听和按动作回执的实现。该能力列为回归验收，不再描述为缺失代码；真实播放与错误路径由运行时回归覆盖。
 - **`loop=false` 结束语义**：当前代码回 `MEDIA_ENDED`，不引入 `MEDIA_HELD`。运行时已有 `ended` 监听；结束语义按 `offline-menu-runtime` 的「非循环背景结束」场景验收。
 - **PSR1 写回**：当前主音轨切换成功及回滚路径均调用 `systemWrite(1, streamNumber)`。保留既有测试并在回归中验证，不再视为待实现功能。
@@ -97,9 +99,9 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 ### 6. builder 依赖产物，不依赖源码树（D7）
 
-`packages/package-builder/src/index.ts:127-128` 用 `resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` 取入口，并把 `@bdmv2web/hdmv` alias 到 `../../hdmv/src/index.ts`。在 monorepo 内成立，在 `dist` 发布布局下必然断（`src/` 不在包内）。
+`packages/package-builder/src/index.ts` 用 `resolve(import.meta.dirname, "../../runtime-web/src/browser.ts")` 取入口，并把 `@bdmv2web/hdmv` alias 到 `../../hdmv/src/index.ts`。在 monorepo 内成立，在 `dist` 发布布局下必然断（`src/` 不在包内）。
 
-改动：`runtime-web` 新增 `build:browser`（esbuild 打包 `src/browser.ts` → `dist/browser-entry.js`，IIFE、ES2020），`package.json` 的 `exports` 增加 `"./browser-entry"`；builder 改为解析该子路径，删除两处相对路径 alias。补 `files: ["dist"]` 白名单，避免发布带上 `src` 与测试。
+改动：`runtime-web` 的 build 先由 `tsc` 生成 dist，再由 esbuild 打包 `src/browser.ts` → `dist/browser.bundle.js`（IIFE、ES2020），`package.json` 的 `exports` 提供 `"./browser-bundle"`；builder 改为解析该子路径，删除两处相对路径 alias。`runtime-web` 已有 `files: ["dist"]`，`package-builder` 补齐同名白名单，避免发布带上 `src` 与测试。
 
 验收：`grep` builder 产物与源码中不再出现 `runtime-web/src`、`hdmv/src`；并加一条单测用 `node:fs` 拦截读取 `**/src/*.ts` 的路径（若被读取即失败）。
 
@@ -123,7 +125,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 - **M6 取消勾选会让"发布完成"后退**：当前勾选与实际证据不符，取消后以实际证据为准。
 - **`CALL_TITLE` 改 continuation 会动 `PreviewPlaybackBridge` 与 `MenuLoopPlaybackBridge` 的接口**：两个桥都要改，且 `browser.ts` 的 TITLE_SEARCH 分支与它语义重叠——本 change 只保证"不可用能解除等待"，不合并两处语义（合并属更大重构）。
 - **`SourceRef` 改为真实路径后输出体积上升**：每条指令带 path/offset 会让 IR 变大。用"同文件短索引 + 文件表"记路径可缓解，但会增加一层间接。先按可读性优先（逐条 path），体积问题在有实测数据后处理。
-- **系统交接**：当前正片动作使用 URL Protocol。M6 需记录实际请求、目标 M2TS 和系统播放器观察；没有播放器回传时不声称实际播放状态。
+- **系统交接**：当前正片动作使用 URL Protocol。M6 记录构造的目标、请求结果类别与不可观测项；外部程序是否执行请求、是否完成播放记为未验证，不作为交付阻断条件。
 
 ## Migration Plan
 
