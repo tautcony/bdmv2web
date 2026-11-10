@@ -1,0 +1,111 @@
+<Configuration>
+
+	<DEBUG_BUILD>0</DEBUG_BUILD>
+	<enableUpscaling>1</enableUpscaling>
+	<ORG_ID>7fff7669</ORG_ID>
+	<APP_ID>4050</APP_ID>
+	<DEFAULT_FONT_NAME></DEFAULT_FONT_NAME>
+	<EXIT_TITLE>20</EXIT_TITLE>
+	
+	<DISC_NUM_SIMULATOR>1</DISC_NUM_SIMULATOR>
+	
+	<!-- Set to 1 -->
+	<isOnPC>1</isOnPC>
+	
+	<!-- Set all to 999 to disable logging -->
+	<minLogLevel>999</minLogLevel>
+	<minConsoleLogLevel>999</minConsoleLogLevel>
+	<minServerLogLevel>999</minServerLogLevel>
+	
+	<serverLogPort>21777</serverLogPort>
+	<serverLogIP>127.0.0.1</serverLogIP>
+	
+	<!--  Loader Type and parameters -->
+	<!--  1 = ProgressBar, 2 = ProgressBarFade, 3 = ImageSequence, 4 = ImageSequenceProgress -->
+	<LoaderType>1</LoaderType>
+	<!--  ProgressBar is Vertical or not -->
+	<Loader_isVertical>1</Loader_isVertical>
+	<!--  ImageSequence animation rate -->
+	<LoderAnimationRate>4</LoderAnimationRate>
+	
+	<LOAD_SOUND_BDMV>1</LOAD_SOUND_BDMV>
+	
+	<SPLASH_DELAY>500</SPLASH_DELAY>
+
+	<PROGRESSIVE_RESOUCE_LOADING>0</PROGRESSIVE_RESOUCE_LOADING>
+	<USE_MULTI_TITLES>1</USE_MULTI_TITLES>
+	<HAS_BD_PLUS>1</HAS_BD_PLUS>
+
+	<REGION_CHECK_REQUIRED>0</REGION_CHECK_REQUIRED>
+	<REGION_TO_CHECK_FOR>1</REGION_TO_CHECK_FOR>
+	<PARENTAL_CHECK_REQUIRED>0</PARENTAL_CHECK_REQUIRED>
+	<PARENTAL_TO_CHECK_FOR>8</PARENTAL_TO_CHECK_FOR>
+	
+	<ENABLE_BDTRACK>1</ENABLE_BDTRACK>
+	
+	<!-- Set to 1 to auto calculate the bookmark icons' initial X value instead of manually positioning them in JMAT. When set to 1, create
+	     a bookmark at time 0, and in the simulator, check the leftmost bookmark icon position in the scenes menu and feature timeline.  -->
+	<AUTO_CALC_BOOKMARK_ICON_X>0</AUTO_CALC_BOOKMARK_ICON_X>
+	
+	<HAS_4K_CARDS>0</HAS_4K_CARDS>
+	
+	<!-- 3D Settings -->
+	<IS_3D_DISC>0</IS_3D_DISC>	<!-- If set to "1", also requires importing "com.spe.common.profile5" package, and uncommenting
+									 the line "Profile5Controller.getInstance()" in "StandardMenuXlet" and "PCStarter" -->
+	<ALL_VAM_3D>1</ALL_VAM_3D>
+	<OFFSET_SEQUENCEID_3D_TOPMENU>0</OFFSET_SEQUENCEID_3D_TOPMENU>
+	<OFFSET_SEQUENCEID_3D_FEATURE>0</OFFSET_SEQUENCEID_3D_FEATURE>
+	<OFFSET_3D_PU>6</OFFSET_3D_PU>
+	
+	<!-- Template 1 Only -->
+	<SELECTOR_DISPLACEMENT>0</SELECTOR_DISPLACEMENT>
+	<FEATURE_VAM_POPUP_BTN_X_OFFSET>0</FEATURE_VAM_POPUP_BTN_X_OFFSET>	<!-- Feature VAM ("Pod Mode") popup button x-offset -->
+	
+	<IS_MOD_DISC>0</IS_MOD_DISC>
+	<IS_VAM_DISC>0</IS_VAM_DISC>
+	<IS_VAM_NO_MENU_DISC>0</IS_VAM_NO_MENU_DISC>
+	<VAM_NO_MENU_DISC_PL_NAME>SF_AutoPlay</VAM_NO_MENU_DISC_PL_NAME>
+	
+	<!-- When IS_VAM_NO_MENU_DISC = 1, add csv menu ISO language codes,
+	     for all audio and subtitle languages on disc whose equivalent menu
+	     languages could exist on SPHE discs (i.e.: eng,fra,deu,ita,jpn,por,spa,rus) -->
+	<VIRTUAL_MENU_LANGS>eng,fra,deu,ita,jpn,por,spa</VIRTUAL_MENU_LANGS>
+	
+	<VAM_PLAY_ALL_POST_FEATURE>1</VAM_PLAY_ALL_POST_FEATURE>
+	
+	<JPN_DISC_ONLY>0</JPN_DISC_ONLY>
+	<JPN_CHILD_DISC>0</JPN_CHILD_DISC>	<!-- Children's disc: Initialize to Japanese audio with Japanese dub subs -->
+	<JPN_DISABLE_FORCED_TRAILERS>0</JPN_DISABLE_FORCED_TRAILERS>
+	
+	<!-- Dutch and French Benelux Age Level: "ALL", "6", "9", "12" or "16" -->
+	<BENELUX_AGE_LEVEL>ALL</BENELUX_AGE_LEVEL>
+	
+	<!--  France age Level: "", "Parental", "ADV", "12" or "16" -->
+	<FRENCH_AGE_LEVEL></FRENCH_AGE_LEVEL>
+	
+	<IS_FRANCE_RELEASING>0</IS_FRANCE_RELEASING>
+	<IS_GERMANY_RELEASING>0</IS_GERMANY_RELEASING>
+	<IS_INDIA_RELEASING>0</IS_INDIA_RELEASING>
+	<IS_INDIA_ONLY_DISC>0</IS_INDIA_ONLY_DISC>
+	<IS_US_RELEASING_NOT_LAM>0</IS_US_RELEASING_NOT_LAM>
+	
+	<HAS_JPN_DISCLAIMER_VAM>1</HAS_JPN_DISCLAIMER_VAM>
+	<HAS_JPN_DISCLAIMER_UNPLEASANT>0</HAS_JPN_DISCLAIMER_UNPLEASANT>
+	<HAS_JPN_DISCLAIMER_VIOLENCE>0</HAS_JPN_DISCLAIMER_VIOLENCE>
+	<HAS_JPN_DISCLAIMER_SEX>0</HAS_JPN_DISCLAIMER_SEX>
+	<HAS_JPN_DISCLAIMER_DISCRIMINATION>0</HAS_JPN_DISCLAIMER_DISCRIMINATION>
+	
+	<IS_BRANCHING_DISC>0</IS_BRANCHING_DISC>	<!-- 2 cuts of feature. E.g.: Theatrical and unrated -->
+	<HAS_MET_PLAYLISTS>1</HAS_MET_PLAYLISTS>	<!-- 2 cuts of feature with different main and end titles, etc. -->
+	<IS_DOUBLE_FEATURE>0</IS_DOUBLE_FEATURE>	<!-- 2 independent features. One or the other selected at startup -->
+	
+	<!--Play MPAA card in unrated feature (e.g.: Extended cut, director's cut) -->
+	<MPPA_PLAYS_IN_UR>0</MPPA_PLAYS_IN_UR>
+	
+	<!-- Gallery BDJO Title Number -->
+	<GALLERY_BDJO_TITLE>13</GALLERY_BDJO_TITLE>
+	
+	<!-- Trivia BDJO Title Number -->
+	<TRIVIA_BDJO_TITLE>14</TRIVIA_BDJO_TITLE>
+
+</Configuration>
