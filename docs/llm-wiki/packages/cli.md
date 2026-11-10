@@ -85,7 +85,7 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 ### `list`
 
 - `--type all|igs|sup`、`--m2ts CLIP_ID`、`--pid PID` 选择资源范围。
-- 从 IGS 场景和可达 SUP 引用中输出 M2TS clip、PID、IGS 图像对象属性、SUP 轨道；`--out` 写完整 JSON。
+- 按 M2TS 分组输出树形资源信息。每个 M2TS 节点显示源文件大小；IGS/SUP 节点显示 PID 原始传输载荷大小，IGS 节点展开场景与图像对象，SUP 节点列出语言和 playlist/playItem 引用。大小使用 1024 进位。`--out` 写完整 JSON。
 - 非法值：`CLI_INVALID_ASSET_TYPE`、`CLI_INVALID_M2TS`、`CLI_INVALID_PID`。
 
 ### `export`
