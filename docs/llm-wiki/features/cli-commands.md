@@ -64,11 +64,9 @@
 | `--type all\|igs\|sup` | 资源类型，默认 `all` |
 | `--m2ts CLIP_ID` | 只列指定 clip |
 | `--pid PID` | 只列指定 PID（十进制或 `0x` 前缀） |
-| `--decode png` | 附带 PNG 解码信息 |
-| `--png-level 0-9` | 写 PNG 时的 deflate 档位；不给则用各编码器的调优默认（IGS 元素 3，PGS 画布 6） |
 | `--format table\|json`、`--out FILE` | 输出格式与落盘 |
 
-报告包含：M2TS clip 列表、PID 与编码、IGS 图像对象（id/版本/尺寸/调色板）、可达 SUP 轨道（clip/PID/语言/时长）。
+报告包含 IGS 流的路径、clip/PID/字节数，IGS 图像对象的 ID/版本/尺寸，以及可达 SUP 轨道的路径、clip/PID/语言/流序号和每个 clip 的轨道数。
 
 ## `export`
 
@@ -202,7 +200,8 @@ bdmv2web compare <input> [--format json]
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 |
 | `INVALID_LIMITS_FILE` / `INVALID_LIMIT` | limits JSON 不可读 / 键或值非法 |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 |
-| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` / `CLI_INVALID_DECODE` | 资产命令参数非法 |
+| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 |
+| `CLI_INVALID_DECODE` | `export --decode` 值非法 |
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 |
 | `CLI_RENDER_SELECTION` | `render` 混用 BDMV 与 `.mnu`/`.sup`，或选项不适用于输入类型 |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 |
@@ -221,4 +220,4 @@ corepack pnpm run cli:dev build "/path/BDMV" --out /tmp/menu --player-profile pr
 corepack pnpm run cli:dev validate /tmp/menu --offline --strict
 ```
 
-`--decode` 只接受 `png`；`--m2ts`/`--pid` 取值来自 `list` 的表格或 JSON。
+`export --decode` 只接受 `png`；`--m2ts`/`--pid` 取值来自 `list` 的表格或 JSON。

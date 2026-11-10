@@ -37,13 +37,14 @@ rg '"CODE_NAME"' packages apps
 | 码 | 含义 | 首查 |
 | --- | --- | --- |
 | `CLI_USAGE` | 无命令、命令未知、位置参数过多 | `commandOptions` |
-| `CLI_UNKNOWN_OPTION` | 命令不支持的选项 | 拼写；`build --mode` 已移除 |
+| `CLI_UNKNOWN_OPTION` | 命令不支持的选项 | 该命令的 `--help` 选项列表 |
 | `CLI_MISSING_VALUE` | 带值选项缺值 | 参数顺序 |
 | `CLI_MISSING_INPUT` / `CLI_MISSING_OUTPUT` | 缺输入 / 缺 `--out` | 命令用法 |
 | `CLI_INVALID_FORMAT` | `--format` 值不支持 | `validate` 只接受 `json` |
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 | `--player-profile` |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 | `--type` 与 `--all` |
-| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` / `CLI_INVALID_DECODE` | 资产命令参数非法 | `list`/`export`/`render` |
+| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 | `list`/`export`/`render` |
+| `CLI_INVALID_DECODE` | `export --decode` 值非法 | `png` |
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 | 使用 ISO 639-2 三字母码 |
 | `CLI_RENDER_SELECTION` | `render` 混用输入类型或选项不适用 | 检查 BDMV、`--mnu`、`--sup` 的组合 |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 | 输入文件格式与完整性 |

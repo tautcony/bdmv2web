@@ -41,7 +41,7 @@ extract   [input]  --out --type --all --format --strict/--no-strict
 build     [input]  --out --title --player-profile --limits --overwrite --png-level --progress/--no-progress --strict/--no-strict
 validate  [input]  --offline --format --strict/--no-strict
 compare   [input]  --format --strict/--no-strict
-list      [input]  --type --m2ts --pid --decode --png-level --out --format
+list      [input]  --type --m2ts --pid --out --format
 export    [input]  --out --type --m2ts --pid --decode --png-level --format
 render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level --format
 ```
@@ -84,9 +84,9 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 
 ### `list`
 
-- `--type all|igs|sup`，`--m2ts CLIP_ID`、`--pid PID`、`--decode png` 过滤/解码；`--png-level 0-9` 覆盖写 PNG 的 deflate 档位。
-- 输出 M2TS clip、PID、IGS 图像对象属性、可达 SUP 轨道；`--out` 写完整 JSON。
-- 非法值：`CLI_INVALID_ASSET_TYPE`、`CLI_INVALID_M2TS`、`CLI_INVALID_PID`、`CLI_INVALID_DECODE`。
+- `--type all|igs|sup`、`--m2ts CLIP_ID`、`--pid PID` 选择资源范围。
+- 从 IGS 场景和可达 SUP 引用中输出 M2TS clip、PID、IGS 图像对象属性、SUP 轨道；`--out` 写完整 JSON。
+- 非法值：`CLI_INVALID_ASSET_TYPE`、`CLI_INVALID_M2TS`、`CLI_INVALID_PID`。
 
 ### `export`
 

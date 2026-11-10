@@ -120,10 +120,8 @@ export function buildProgram(version?: string): Command {
     .option("--type <type>", "all, igs, or sup", nonEmpty)
     .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
-    .option("--decode <format>", "png decodes assets while listing", nonEmpty)
     .option("--out <file>", "write the JSON report to a file", nonEmpty)
-    .option("--format <format>", "table or json", nonEmpty)
-    .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
+    .option("--format <format>", "table or json", nonEmpty);
   listCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("list", input, options));
 
   const exportCommand = program.command("export")
