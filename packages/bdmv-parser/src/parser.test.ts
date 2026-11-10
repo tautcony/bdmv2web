@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile, symlink, stat } from "node:fs/
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_LIMITS } from "@bdmv2web/core";
 import { buildM1ClipInfoProgramAndCpi, buildM1ClipInfoWithHevcVideo, buildM1ClipInfoWithSequence, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAppInfo, buildM1PlaylistWithAudioPid, buildM1PlaylistWithHevcVideo, buildM1PlaylistWithMultiClipSubPlayItem, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv2web/test-fixtures";
 import { discoverBdmvRoot, parseBdmv, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
 
@@ -12,6 +13,45 @@ async function skeleton(parent: string, index = buildM1Index()): Promise<string>
   await mkdir(join(root, "PLAYLIST"), { recursive: true }); await mkdir(join(root, "CLIPINF"), { recursive: true }); await mkdir(join(root, "STREAM"), { recursive: true });
   await writeFile(join(root, "index.bdmv"), index); await writeFile(join(root, "MovieObject.bdmv"), buildM1MovieObject());
   return realpath(root);
+}
+function appendMplsExtension(bytes: Uint8Array, id1: number, id2: number, payload: Uint8Array): Uint8Array {
+  return appendExtension(bytes, 16, id1, id2, payload);
+}
+function appendClpiExtension(bytes: Uint8Array, id1: number, id2: number, payload: Uint8Array): Uint8Array {
+  return appendExtension(bytes, 24, id1, id2, payload);
+}
+function appendExtension(bytes: Uint8Array, offsetField: number, id1: number, id2: number, payload: Uint8Array): Uint8Array {
+  const start = bytes.length; const out = new Uint8Array(start + 24 + payload.length); out.set(bytes);
+  const view = new DataView(out.buffer); view.setUint32(offsetField, start, false); view.setUint32(start, 8 + 12 + payload.length, false); out[start + 11] = 1;
+  view.setUint16(start + 12, id1, false); view.setUint16(start + 14, id2, false); view.setUint32(start + 16, 24, false); view.setUint32(start + 20, payload.length, false); out.set(payload, start + 24);
+  return out;
+}
+function setBits(bytes: Uint8Array, bitOffset: number, value: number, width: number): void {
+  for (let index = width - 1; index >= 0; index--) if ((value >>> index) & 1) { const bit = bitOffset + width - 1 - index; bytes[bit >>> 3] = (bytes[bit >>> 3] ?? 0) | (1 << (7 - (bit & 7))); }
+}
+function addCoarseCpiEntry(bytes: Uint8Array): Uint8Array {
+  const out = new Uint8Array(bytes.length + 8); out.set(bytes.subarray(0, 110)); out.set(bytes.subarray(110), 118); const view = new DataView(out.buffer);
+  view.setUint32(86, 32, false); view.setUint32(106, 12, false); out.fill(0, 94, 104);
+  const base = 94 * 8; setBits(out, base, 0x1100, 16); setBits(out, base + 16, 0, 10); setBits(out, base + 26, 1, 4); setBits(out, base + 30, 1, 16); setBits(out, base + 46, 1, 18); setBits(out, base + 64, 14, 32);
+  const coarse = 110 * 8; setBits(out, coarse, 0, 18); setBits(out, coarse + 18, 2, 14); setBits(out, coarse + 32, 0x20000, 32);
+  return out;
+}
+function buildMinimalBdjo(withApplication = false): Uint8Array {
+  const appBytes = withApplication ? 46 : 0; const out = new Uint8Array(94 + appBytes); out.set(new TextEncoder().encode("BDJO0200"));
+  let p = 48; const view = new DataView(out.buffer);
+  view.setUint32(p, 10, false); p += 4; out.set(new TextEncoder().encode("*****"), p); p += 5; out[p++] = 0; p += 4;
+  view.setUint32(p, 2, false); p += 4; out[p++] = 0; p++;
+  view.setUint32(p, 4, false); p += 4; out[p++] = 0; out[p++] = 0x18; p += 2;
+  view.setUint32(p, withApplication ? 48 : 2, false); p += 4; out[p++] = withApplication ? 1 : 0; p++;
+  if (withApplication) {
+    out[p++] = 1; out[p++] = 0x10; view.setUint32(p, 0x11223344, false); p += 4; view.setUint16(p, 7, false); p += 2; p += 10;
+    out[p++] = 0; out[p++] = 0; out[p++] = 5; out[p++] = 0; out[p++] = 0; out[p++] = 9; out.set(new TextEncoder().encode("eng\u0005Menu!"), p); p += 9; p++;
+    out[p++] = 0; out[p++] = 0; out[p++] = 0; out[p++] = 0;
+    out[p++] = 0; out[p++] = 0; out[p++] = 0; out[p++] = 0;
+    out[p++] = 0; out[p++] = 0; out[p++] = 0; out[p++] = 0;
+  }
+  out[p++] = 0x80; p += 3; view.setUint16(p, 2, false); p += 2; out.set(new TextEncoder().encode("./"), p);
+  return out;
 }
 
 describe("M1 BDMV discovery and structure", () => {
@@ -108,6 +148,60 @@ describe("M1 BDMV discovery and structure", () => {
       expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "bdjo:00042", type: "bdjo", state: "missing" }));
       expect(disc.graph.edges).toContainEqual(expect.objectContaining({ to: "bdjo:00042", kind: "bdj-target", resolution: "missing" }));
       expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "movieObject:1", type: "movieObject", state: "missing" }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses the BDJO referenced by INDEX and retains application and terminal declarations", async () => {
+    const parent = await temp(); const root = await skeleton(parent, buildM1Index({ bdjTitle: "00042" })); await mkdir(join(root, "BDJO")); await writeFile(join(root, "BDJO", "00042.bdjo"), buildMinimalBdjo(true));
+    try {
+      const disc = await parseBdmv(root); const bdjo = disc.bdjos?.[0];
+      expect(bdjo).toMatchObject({ path: "BDJO/00042.bdjo", version: "0200", terminalInfo: { defaultFont: "*****", initialHaviConfigId: 0, menuCallMask: false, titleSearchMask: false }, accessiblePlaylists: { accessToAll: true, autostartFirst: true, playlistIds: [] }, applications: [{ organizationId: 0x11223344, applicationId: 7, names: [{ language: "eng", name: "Menu!" }] }], keyInterest: { play: true }, fileAccessPaths: [{ path: "./" }] });
+      expect(bdjo?.source).toMatchObject({ path: "BDJO/00042.bdjo", origin: "primary", offset: "0" });
+      expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "bdjo:00042", type: "bdjo", state: "present", source: bdjo?.source }));
+      expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_BDJ_UNSUPPORTED")).toBe(true);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reports a truncated referenced BDJO and preserves the INDEX entry", async () => {
+    const parent = await temp(); const root = await skeleton(parent, buildM1Index({ bdjTitle: "00042" })); await mkdir(join(root, "BDJO")); await writeFile(join(root, "BDJO", "00042.bdjo"), new TextEncoder().encode("BDJO0200"));
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.entries.some((entry) => entry.target.target === "00042")).toBe(true);
+      expect(disc.bdjos).toEqual([]);
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "TRUNCATED_INPUT", sourcePath: "BDJO/00042.bdjo", recoverable: true }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses localized META/DL names, titles, thumbnail dimensions, and UTF-8 byte sources", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const xml = `<?xml version="1.0"?><meta><before>雪</before><title><name>Film &amp; Fun &#x2603;</name><alternative>別名 &lt;Alt&gt;</alternative><numSets>2</numSets><setNumber>1</setNumber></title><tableOfContents><titleName titleNumber="4">Part &amp; One</titleName></tableOfContents><description><thumbnail href="thumb&amp;one.jpg" size="320x180"/></description></meta>`;
+    await mkdir(join(root, "META", "DL"), { recursive: true }); await writeFile(join(root, "META", "DL", "bdmt_jpn.xml"), xml);
+    try {
+      const disc = await parseBdmv(root); const manifest = disc.metadata?.[0];
+      expect(manifest).toMatchObject({ language: "jpn", discName: "Film & Fun ☃", alternativeName: "別名 <Alt>", numberOfSets: 2, setNumber: 1, titles: [{ titleNumber: 4, titleName: "Part & One" }], thumbnails: [{ href: "thumb&one.jpg", size: "320x180", width: 320, height: 180 }] });
+      expect(manifest?.titles[0]?.source.offset).toBe(String(new TextEncoder().encode(xml.slice(0, xml.indexOf("<titleName"))).length));
+      expect(manifest?.thumbnails[0]?.source.path).toBe("META/DL/bdmt_jpn.xml");
+      expect(disc.graph.nodes).toContainEqual(expect.objectContaining({ id: "metaDl:jpn", type: "metaDl", state: "present", source: manifest?.source }));
+      expect(disc.declarations.metadata).toBe(1);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reports invalid XML and continues parsing the BDMV structure", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await mkdir(join(root, "META", "DL"), { recursive: true }); await writeFile(join(root, "META", "DL", "bdmt_eng.xml"), `<!DOCTYPE meta [<!ENTITY x SYSTEM "file:///etc/passwd">]><meta>&x;</meta>`);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.entries).toHaveLength(2);
+      expect(disc.metadata).toEqual([]);
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_XML", sourcePath: "META/DL/bdmt_eng.xml", recoverable: true }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reports a bounded META/DL read failure and continues parsing", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await mkdir(join(root, "META", "DL"), { recursive: true }); await writeFile(join(root, "META", "DL", "bdmt_eng.xml"), new Uint8Array(513).fill(32));
+    try {
+      const disc = await parseBdmv(root, { limits: { ...DEFAULT_LIMITS, maxSegmentBytes: 512 } });
+      expect(disc.entries).toHaveLength(2);
+      expect(disc.metadata).toEqual([]);
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "LIMIT_EXCEEDED", sourcePath: "META/DL/bdmt_eng.xml", recoverable: true }));
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -223,7 +317,7 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("preserves two PlayItems, original 45 kHz times, chapter marks, angle flags and SubPath", async () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistGolden());
-    try { const disc = await parseBdmv(root); const playlist = disc.playlists[0]!; expect(playlist.playItems.map((p) => [p.clipId, p.inTime45k, p.outTime45k])).toEqual([["00001", 0, 90_000], ["00003", 0, 45_000]]); expect(playlist.playItems[0]).toMatchObject({ multiAngle: true, angleCount: 2, differentAudio: true, seamlessAngle: true, uoMask: "9223372036854775808" }); expect(playlist.marks.map((m) => [m.playItemRef, m.time45k])).toEqual([[0, 0], [1, 45_000]]); expect(playlist.subPaths).toMatchObject([{ type: 3, repeat: true, items: [] }]); }
+    try { const disc = await parseBdmv(root); const playlist = disc.playlists[0]!; expect(playlist.playItems.map((p) => [p.clipId, p.inTime45k, p.outTime45k])).toEqual([["00001", 0, 90_000], ["00003", 0, 45_000]]); expect(playlist.playItems[0]).toMatchObject({ multiAngle: true, angleCount: 2, differentAudio: true, seamlessAngle: true, uoMask: "9223372036854775808", angles: [{ index: 0, clipId: "00001", codecId: "M2TS", stcId: 0, source: { offset: "90" } }, { index: 1, clipId: "00002", codecId: "M2TS", stcId: 0, source: { offset: "126" } }] }); expect(playlist.marks.map((m) => [m.playItemRef, m.time45k])).toEqual([[0, 0], [1, 45_000]]); expect(playlist.subPaths).toMatchObject([{ type: 3, repeat: true, items: [] }]); }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -265,15 +359,34 @@ describe("M1 BDMV discovery and structure", () => {
 
   it("parses nonempty CLPI stream metadata and CPI PTS/SPN access points", async () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoProgramAndCpi());
-    try { const disc = await parseBdmv(root); expect(disc.clips[0]?.programs[0]).toMatchObject({ sequenceStartSpn: 32, programMapPid: 0x1000, streams: [{ pid: 0x1100, codingType: 0x80, language: "eng" }] }); expect(disc.clips[0]?.cpi).toMatchObject([{ pid: 0x1100, epStreamType: 1, pts45k: 1280, spn: 7 }]); }
+    try { const disc = await parseBdmv(root); expect(disc.clips[0]?.programs[0]).toMatchObject({ sequenceStartSpn: 32, programMapPid: 0x1000, groupCount: 0, streams: [{ pid: 0x1100, codingType: 0x80, language: "eng" }] }); expect(disc.clips[0]?.cpi).toMatchObject([{ pid: 0x1100, epStreamType: 1, pts45k: 1280, spn: 7 }]); expect(disc.clips[0]?.cpiMaps).toMatchObject([{ pid: 0x1100, epStreamType: 1, coarse: [], fine: [{ angleChange: false, pts: 5, spnOffset: 7 }] }]); }
     finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("retains CPI coarse fields and derives the matching fine access point", async () => {
+    const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "CLIPINF", "00001.clpi"), addCoarseCpiEntry(buildM1ClipInfoProgramAndCpi()));
+    try {
+      const clip = (await parseBdmv(root)).clips[0]!;
+      expect(clip.cpiMaps).toMatchObject([{ coarse: [{ refFine: 0, pts: 2, spn: 0x20000 }], fine: [{ angleChange: false, endPositionOffset: 0, pts: 5, spnOffset: 7 }] }]);
+      expect(clip.cpi).toMatchObject([{ pts45k: 525_568, spn: 0x20007 }]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("parses MPLS HEVC color metadata and keeps the STN stream source", async () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithHevcVideo());
     try {
       const stream = (await parseBdmv(root)).playlists[0]?.playItems[0]?.streams[0];
-      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1011, dynamicRangeType: 1, colorSpace: 2, source: { path: "PLAYLIST/00001.mpls", offset: "140" } });
+      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1011, category: "primaryVideo", categoryIndex: 0, dynamicRangeType: 1, colorSpace: 2, videoAttributes: { videoFormat: 1, frameRate: 1, dynamicRangeType: 1, colorSpace: 2, crFlag: false, hdrPlus: false }, source: { path: "PLAYLIST/00001.mpls", offset: "140" } });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("retains the secondary-audio STN category and primary-audio references", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const base = buildM1PlaylistWithAudioPid(); const bytes = new Uint8Array(base.length + 4); bytes.set(base.subarray(0, 150)); bytes.set(base.subarray(150), 154);
+    const view = new DataView(bytes.buffer); view.setUint32(12, 154, false); view.setUint32(80, 70, false); view.setUint16(90, 62, false); view.setUint16(124, 28, false); bytes[129] = 0; bytes[132] = 1; bytes[150] = 1; bytes[152] = 0; view.setUint32(154, 2, false); view.setUint16(158, 0, false);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
+    try {
+      const stream = (await parseBdmv(root)).playlists[0]?.playItems[0]?.streams[0];
+      expect(stream).toMatchObject({ category: "secondaryAudio", categoryIndex: 0, primaryAudioReferences: [0], pid: 0x1100 });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -281,7 +394,7 @@ describe("M1 BDMV discovery and structure", () => {
     const parent = await temp(); const root = await skeleton(parent); await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoWithHevcVideo(0, 0));
     try {
       const stream = (await parseBdmv(root)).clips[0]?.programs[0]?.streams[0];
-      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1100, dynamicRangeType: 0, colorSpace: 0, source: { path: "CLIPINF/00001.clpi", offset: "74" } });
+      expect(stream).toMatchObject({ codingType: 0x24, pid: 0x1100, dynamicRangeType: 0, colorSpace: 0, videoAttributes: { videoFormat: 1, frameRate: 1, aspectRatio: 1, ocFlag: true, crFlag: false, hdrPlus: false }, source: { path: "CLIPINF/00001.clpi", offset: "74" } });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -509,6 +622,18 @@ describe("M1 BDMV discovery and structure", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
+  it("parses CLPI ATC delta records and subtitle font declarations", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const base = buildM1ClipInfoWithSequence(); const sequenceStart = 195;
+    const withDelta = new Uint8Array(base.length + 16); withDelta.set(base.subarray(0, sequenceStart)); withDelta.set(base.subarray(sequenceStart), sequenceStart + 16); const deltaView = new DataView(withDelta.buffer); deltaView.setUint32(8, sequenceStart + 16, false); deltaView.setUint32(40, 167, false); withDelta[196] = 1; deltaView.setUint32(197, 12_345, false); withDelta.set(new TextEncoder().encode("00007M2TS"), 201);
+    const withFont = new Uint8Array(base.length + 8); withFont.set(base.subarray(0, sequenceStart)); withFont.set(base.subarray(sequenceStart), sequenceStart + 8); const fontView = new DataView(withFont.buffer); fontView.setUint32(8, sequenceStart + 8, false); fontView.setUint32(40, 159, false); withFont[47] = 6; fontView.setUint32(48, 0, false); withFont[196] = 1; withFont.set(new TextEncoder().encode("FONT1"), 197);
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), withDelta); await writeFile(join(root, "CLIPINF", "00002.clpi"), withFont);
+    try {
+      const clips = (await parseBdmv(root)).clips;
+      expect(clips.find((clip) => clip.id === "00001")?.header?.atcDeltaEntries).toMatchObject([{ delta: 12_345, fileId: "00007", fileCode: "M2TS", source: { offset: "197" } }]);
+      expect(clips.find((clip) => clip.id === "00002")?.header?.fontFiles).toEqual(["FONT1"]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("leaves the clip header and sequence empty when the CLPI omits both sections", async () => {
     const parent = await temp(); const root = await skeleton(parent);
     await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1EmptyClipInfo());
@@ -566,6 +691,77 @@ describe("M1 BDMV discovery and structure", () => {
       const disc = await parseBdmv(root);
       expect([disc.entries.length, disc.playlists.length, disc.clips.length]).toEqual([2, 1, 1]);
       expect(disc.diagnostics.some((d) => d.code === "BDMV_UNSUPPORTED_VERSION")).toBe(false);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reports a known static metadata ExtensionData entry with its payload source", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const payload = new Uint8Array(36); new DataView(payload.buffer).setUint32(0, 32, false); payload[4] = 1; payload[8] = 0x10;
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), appendMplsExtension(buildM1EmptyPlaylist(), 3, 5, payload));
+    try {
+      const disc = await parseBdmv(root); const entry = disc.playlists[0]?.extensionData?.[0];
+      expect(entry).toMatchObject({ id1: 3, id2: 5, version: "0200", kind: "staticMetadata", parsed: true, offset: String(buildM1EmptyPlaylist().length + 24), length: 36, source: { path: "PLAYLIST/00001.mpls" }, data: { entries: [{ dynamicRangeType: 1 }] } });
+      expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_EXTENSION_UNPARSED")).toBe(false);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("decodes MPLS PIP metadata points and extension SubPath records", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const pip = new Uint8Array(30); const pipView = new DataView(pip.buffer); pipView.setUint32(0, 26, false); pipView.setUint16(4, 1, false); pipView.setUint16(6, 9, false); pipView.setUint32(16, 20, false); pipView.setUint16(20, 1, false); pipView.setUint32(22, 90_000, false); setBits(pip, 26 * 8, 100, 12); setBits(pip, 26 * 8 + 12, 200, 12); setBits(pip, 26 * 8 + 24, 2, 4);
+    const subpath = new Uint8Array(16); const subpathView = new DataView(subpath.buffer); subpathView.setUint32(0, 12, false); subpathView.setUint16(4, 1, false); subpathView.setUint32(6, 6, false); subpath[11] = 3; subpathView.setUint16(12, 0x8000, false);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), appendMplsExtension(buildM1EmptyPlaylist(), 1, 1, pip)); await writeFile(join(root, "PLAYLIST", "00002.mpls"), appendMplsExtension(buildM1EmptyPlaylist(), 2, 2, subpath));
+    try {
+      const parsed = (await parseBdmv(root)).playlists;
+      expect(parsed[0]?.extensionData).toMatchObject([{ id1: 1, id2: 1, kind: "pipMetadata", parsed: true, data: { blocks: [{ clipRef: 9, points: [{ time: 90_000, x: 100, y: 200, scaleFactor: 2 }] }] } }]);
+      expect(parsed[1]?.extensionData).toMatchObject([{ id1: 2, id2: 2, kind: "subPath", parsed: true, data: { subPaths: [{ type: 3, repeat: true, items: [] }] } }]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("decodes a CLPI CPI SS payload into coarse/fine records", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const original = buildM1ClipInfoProgramAndCpi(); await writeFile(join(root, "CLIPINF", "00001.clpi"), appendClpiExtension(buildM1EmptyClipInfo(), 2, 6, original.subarray(86)));
+    try {
+      const entry = (await parseBdmv(root)).clips[0]?.extensionData?.[0];
+      expect(entry).toMatchObject({ kind: "cpiSs", parsed: true, data: { maps: [{ pid: 0x1100, epStreamType: 1, coarse: [], fine: [{ angleChange: false, pts: 5, spnOffset: 7 }] }] } });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("parses CLPI ClipMark records and extent start points with source offsets", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const base = buildM1EmptyClipInfo(); const markStart = base.length; const marked = new Uint8Array(markStart + 17); marked.set(base); const markView = new DataView(marked.buffer); markView.setUint32(20, markStart, false); markView.setUint32(markStart, 13, false); markView.setUint16(markStart + 4, 1, false); marked[markStart + 6] = 1; markView.setUint32(markStart + 7, 123, false); markView.setUint32(markStart + 11, 456_000, false); markView.setUint16(markStart + 15, 90, false);
+    const payload = new Uint8Array(16); const payloadView = new DataView(payload.buffer); payloadView.setUint32(0, 12, false); payloadView.setUint32(4, 2, false); payloadView.setUint32(8, 100, false); payloadView.setUint32(12, 200, false);
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), appendClpiExtension(marked, 2, 4, payload));
+    try {
+      const clip = (await parseBdmv(root)).clips[0]!;
+      expect(clip.clipMarks).toMatchObject([{ index: 0, markType: 1, spn: 123, pts90k: 456_000, duration45k: 90, source: { path: "CLIPINF/00001.clpi", offset: String(markStart + 6) } }]);
+      expect(clip.extensionData).toMatchObject([{ id1: 2, id2: 4, kind: "extentStartPoints", parsed: true, data: { points: [100, 200] } }]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("keeps ClipInfo when the optional CLPI ClipMark section is truncated", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const base = buildM1EmptyClipInfo(); const bytes = new Uint8Array(base.length + 4); bytes.set(base); const view = new DataView(bytes.buffer); view.setUint32(20, base.length, false); view.setUint32(base.length, 100, false);
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.clips).toHaveLength(1);
+      expect(disc.clips[0]?.clipMarks).toEqual([]);
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", sourcePath: "CLIPINF/00001.clpi", recoverable: true }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("retains an unknown ExtensionData entry identity and diagnoses its payload", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), appendMplsExtension(buildM1EmptyPlaylist(), 0xaaaa, 0xbbbb, Uint8Array.of(0xde, 0xad)));
+    try {
+      const disc = await parseBdmv(root); const entry = disc.playlists[0]?.extensionData?.[0];
+      expect(entry).toMatchObject({ id1: 0xaaaa, id2: 0xbbbb, kind: null, parsed: false, length: 2, data: null });
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_EXTENSION_UNPARSED", sourcePath: "PLAYLIST/00001.mpls", offset: entry?.offset, recoverable: true }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("keeps the playlist when an ExtensionData entry crosses its declared table boundary", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const bytes = appendMplsExtension(buildM1EmptyPlaylist(), 0xaaaa, 0xbbbb, Uint8Array.of(1, 2)); new DataView(bytes.buffer).setUint32(buildM1EmptyPlaylist().length + 20, 200, false);
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), bytes);
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.playlists).toHaveLength(1);
+      expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_INVALID_SECTION", sourcePath: "PLAYLIST/00001.mpls", recoverable: true }));
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

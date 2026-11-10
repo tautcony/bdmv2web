@@ -28,6 +28,8 @@ export async function inspect(): Promise<void> {
     ["MovieObjects", disc.declarations.movieObjects], ["Playlists", disc.declarations.playlists],
     ["PlayItems", disc.declarations.playItems], ["Clips", disc.declarations.clips],
     ["Streams", disc.declarations.streams], ["Sounds", disc.declarations.sounds],
+    ["BDJO", disc.declarations.bdjos ?? 0], ["META/DL", disc.declarations.metadata ?? 0],
+    ["ExtensionData entries", disc.declarations.extensionData ?? 0], ["CLPI ClipMarks", disc.declarations.clipMarks ?? 0],
     ["Diagnostics", disc.diagnostics.length], ["Support prediction", disc.supportPrediction.status],
   ]);
   process.exitCode = allowPartial ? 0 : outcome.exitCode;
