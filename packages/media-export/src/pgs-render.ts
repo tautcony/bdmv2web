@@ -59,28 +59,30 @@ export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: nu
   for (const placement of display.placements) {
     const bitmap = display.bitmaps.get(placement.objectId);
     if (!bitmap) continue;
-    const crop = placement.crop ?? { x: 0, y: 0, width: bitmap.width, height: bitmap.height };
+    const pixels = bitmap.pixels;
+    const { width, height } = bitmap;
+    const crop = placement.crop ?? { x: 0, y: 0, width, height };
     for (let sy = 0; sy < crop.height; sy++) for (let sx = 0; sx < crop.width; sx++) {
       const dx = placement.x + sx; const dy = placement.y + sy;
       const sourceX = crop.x + sx; const sourceY = crop.y + sy;
-      if (dx < 0 || dy < 0 || dx >= display.width || dy >= display.height || sourceX >= bitmap.width || sourceY >= bitmap.height) continue;
-      const sourceOffset = (sourceY * bitmap.width + sourceX) * 4;
+      if (dx < 0 || dy < 0 || dx >= display.width || dy >= display.height || sourceX >= width || sourceY >= height) continue;
+      const sourceOffset = (sourceY * width + sourceX) * 4;
       const targetOffset = (dy * display.width + dx) * 4;
-      if (bitmap.pixels[sourceOffset + 3] === 0) continue;
+      if (pixels[sourceOffset + 3] === 0) continue;
       painted = true;
       // Opaque sprites are the common case: copy instead of running the blend.
-      if (bitmap.pixels[sourceOffset + 3] === 255 && rgba[targetOffset + 3] === 0) {
-        rgba[targetOffset] = bitmap.pixels[sourceOffset]!;
-        rgba[targetOffset + 1] = bitmap.pixels[sourceOffset + 1]!;
-        rgba[targetOffset + 2] = bitmap.pixels[sourceOffset + 2]!;
+      if (pixels[sourceOffset + 3] === 255 && rgba[targetOffset + 3] === 0) {
+        rgba[targetOffset] = pixels[sourceOffset]!;
+        rgba[targetOffset + 1] = pixels[sourceOffset + 1]!;
+        rgba[targetOffset + 2] = pixels[sourceOffset + 2]!;
         rgba[targetOffset + 3] = 255;
         continue;
       }
-      const sourceAlpha = bitmap.pixels[sourceOffset + 3]! / 255;
+      const sourceAlpha = pixels[sourceOffset + 3]! / 255;
       const targetAlpha = rgba[targetOffset + 3]! / 255;
       const outputAlpha = sourceAlpha + targetAlpha * (1 - sourceAlpha);
       for (let channel = 0; channel < 3; channel++) {
-        rgba[targetOffset + channel] = Math.round((bitmap.pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
+        rgba[targetOffset + channel] = Math.round((pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
       }
       rgba[targetOffset + 3] = Math.round(outputAlpha * 255);
     }

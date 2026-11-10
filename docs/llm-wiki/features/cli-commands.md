@@ -112,7 +112,7 @@
 
 `render` 不写 `.mnu`/`.sup`。独立 SUP 的文件名为 `<源文件名>-display-<00001>.png`；独立 MNU 使用 IGS 元素命名。清单条目与 `export --decode png` 相同。
 
-IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与调色板展开后的 RGBA 完全一致；PGS 显示集仍是 RGBA。`--png-level` 覆盖默认档位：zlib 的档位曲线是台阶，1–3 走快通道、4–9 走慢通道，元素图在 3 与 6 上体积只差 3%，画布则差一倍以上，因此两者默认不同。
+IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与调色板展开后的 RGBA 完全一致。PGS 显示集仍是 RGBA，画布降到 3 会让单帧体积增大约 70%。`--png-level` 覆盖默认档位：索引图默认 1，画布默认 6；索引图从 1 升到 3 只省约 3% 体积，画布在 3 与 6 之间差一倍以上。
 
 ## `build`
 

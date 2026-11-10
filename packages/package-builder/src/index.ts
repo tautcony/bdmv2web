@@ -362,19 +362,21 @@ function encodePgsDisplayPng(set: PgsDisplaySet, pngLevel: number | undefined): 
   for (const placement of set.placements) {
     const bitmap = set.bitmaps.get(placement.objectId);
     if (!bitmap) continue;
-    const crop = placement.crop ?? { x: 0, y: 0, width: bitmap.width, height: bitmap.height };
+    const pixels = bitmap.pixels;
+    const { width, height } = bitmap;
+    const crop = placement.crop ?? { x: 0, y: 0, width, height };
     for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) {
       const sourceX = crop.x + x, sourceY = crop.y + y;
       const targetX = placement.x + x, targetY = placement.y + y;
-      if (sourceX >= bitmap.width || sourceY >= bitmap.height || targetX < 0 || targetY < 0 || targetX >= set.width || targetY >= set.height) continue;
-      const sourceOffset = (sourceY * bitmap.width + sourceX) * 4;
+      if (sourceX >= width || sourceY >= height || targetX < 0 || targetY < 0 || targetX >= set.width || targetY >= set.height) continue;
+      const sourceOffset = (sourceY * width + sourceX) * 4;
       const targetOffset = (targetY * set.width + targetX) * 4;
-      const sourceAlpha = bitmap.pixels[sourceOffset + 3]! / 255;
+      const sourceAlpha = pixels[sourceOffset + 3]! / 255;
       if (sourceAlpha === 0) continue;
       const targetAlpha = rgba[targetOffset + 3]! / 255;
       const outputAlpha = sourceAlpha + targetAlpha * (1 - sourceAlpha);
       for (let channel = 0; channel < 3; channel++) {
-        rgba[targetOffset + channel] = Math.round((bitmap.pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
+        rgba[targetOffset + channel] = Math.round((pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
       }
       rgba[targetOffset + 3] = Math.round(outputAlpha * 255);
     }

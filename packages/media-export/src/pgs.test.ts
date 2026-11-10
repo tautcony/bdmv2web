@@ -93,6 +93,24 @@ describe("PGS SUP parsing", () => {
     expect(sets[3]!.bitmaps.get(7)).toBe(sets[2]!.bitmaps.get(7));
   });
 
+  it("shares repeated palette definitions and expands pixels only on access", () => {
+    const palette = segment(1, 0x14, [0, 0, 1, 235, 128, 128, 255, 2, 81, 128, 128, 255]);
+    // RLE: two opaque pixels of index 1, end of line, two transparent pixels, end of line.
+    const object = segment(1, 0x15, [0, 7, 0, 0xc0, 0, 0, 13, 0, 2, 0, 2, 0, 0x82, 1, 0, 0, 0, 0x02, 0, 0]);
+    const composition = (pts: number) => segment(pts, 0x16, [0, 2, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0, 7, 0, 0, 0, 0, 0, 0]);
+    const sets = parsePgsSup(join(
+      palette, object, composition(1), segment(1, 0x80, []),
+      palette, composition(2), segment(2, 0x80, []),
+    ));
+    // The repeated PDS decodes to one palette map, and the bitmap cache then reuses it.
+    expect(sets[1]!.palette).toBe(sets[0]!.palette);
+    const bitmap = sets[0]!.bitmaps.get(7)!;
+    expect(typeof Object.getOwnPropertyDescriptor(bitmap, "pixels")?.get).toBe("function");
+    const pixels = bitmap.pixels;
+    expect(bitmap.pixels).toBe(pixels);
+    expect([...pixels]).toEqual([255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
   it("bounds decoded RGBA allocation and rejects trailing RLE bytes", () => {
     const rle = [1, 0, 1, 0, 0, 0, 1, 2, 0, 0];
     const object = segment(1, 0x15, [0, 7, 0, 0xc0, 0, 0, 14, 0, 2, 0, 2, ...rle]);

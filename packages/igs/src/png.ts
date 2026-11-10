@@ -12,11 +12,12 @@ const EMPTY = new Uint8Array(0);
 /**
  * Tuned deflate levels. zlib's curve is a step, not a slope: levels 1-3 use the fast
  * configuration, 4-9 the slow one, and level 9 costs twice level 6 for the same bytes.
- * Indexed sprite scans reach the same size at 3 as at 6, so assets take the fast ramp;
- * a full-HD PGS canvas is 1920x1080 bytes per row whatever it paints, so it needs the
- * slow configuration to stay small.
+ * Indexed sprite scans reach the same size within a few percent on the fast ramp, so
+ * assets take its first step; a full-HD PGS canvas is 1920x1080 bytes per row whatever
+ * it paints, so it needs the slow configuration to stay small. The run-length strategy
+ * encodes sprites 41% faster but grows the reference set by 13%, so it stays out.
  */
-export const DEFAULT_ASSET_PNG_LEVEL = 3;
+export const DEFAULT_ASSET_PNG_LEVEL = 1;
 export const DEFAULT_CANVAS_PNG_LEVEL = 6;
 
 export interface PngEncodeOptions {

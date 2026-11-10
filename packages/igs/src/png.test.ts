@@ -22,7 +22,7 @@ describe("PNG encoders", () => {
   });
 
   it("keeps the tuned levels distinct per shape", () => {
-    expect(DEFAULT_ASSET_PNG_LEVEL).toBe(3);
+    expect(DEFAULT_ASSET_PNG_LEVEL).toBe(1);
     expect(DEFAULT_CANVAS_PNG_LEVEL).toBe(6);
   });
 

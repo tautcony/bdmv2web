@@ -33,7 +33,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | `limits` | `DEFAULT_LIMITS` | 读窗口、重组、像素上限 |
 | `chunkSize` | `limits.maxReadWindowBytes`（默认 8 MiB） | 读文件块大小 |
 | `renderAssets` | `true` | 关闭后只解析场景，不生成 PNG（`extract --type hdmv` 用） |
-| `pngLevel` | 调优默认 | 写 PNG 的 deflate 档位 0–9；元素图默认 3（`DEFAULT_ASSET_PNG_LEVEL`） |
+| `pngLevel` | 调优默认 | 写 PNG 的 deflate 档位 0–9；元素图默认 1（`DEFAULT_ASSET_PNG_LEVEL`） |
 | `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export` 用） |
 | `table` | 自动发现 | 复用已验证的输入文件表 |
 
