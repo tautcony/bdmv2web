@@ -71,7 +71,7 @@ describe("inspect structural records", () => {
         id: "metaDl:eng", type: "metaDl", state: "present", source: parsed.metadata[0].source,
       }));
       expect(parsed.supportPrediction.status).toBe("partial");
-      expect(parsed.supportPrediction.unverified).toContain("INDX/MOBJ/MPLS/CLPI/BDJO/sound candidate version-wide conformance");
+      expect(parsed.supportPrediction.unverified).toContain("INDX candidate versions 0100 and 0240; AppInfoBDMV and UHD extension fields outside compared samples");
     } finally {
       await rm(parent, { recursive: true, force: true });
     }

@@ -83,6 +83,16 @@ describe("libbluray 1.5.0 navigation baseline", () => {
       expect(playlist, `${caseId} playlist ${title.playlist}`).toBeDefined();
       expect({ clips: playlist!.playItems.length, chapters: playlist!.marks.filter((mark) => mark.type === 1).length },
         `${caseId} playlist ${title.playlist} structure`).toEqual({ clips: title.clips, chapters: title.chapters });
+      const firstItem = playlist!.playItems[0];
+      expect(firstItem?.angleCount, `${caseId} playlist ${title.playlist} angles`).toBe(title.angles);
+      expect({
+        video: firstItem?.streams.filter((stream) => stream.category === "primaryVideo").length ?? 0,
+        audio: firstItem?.streams.filter((stream) => stream.category === "primaryAudio").length ?? 0,
+        pg: firstItem?.streams.filter((stream) => stream.category === "primaryPresentationGraphics").length ?? 0,
+        ig: firstItem?.streams.filter((stream) => stream.category === "primaryInteractiveGraphics").length ?? 0,
+      }, `${caseId} playlist ${title.playlist} first PlayItem STN categories`).toEqual({
+        video: title.video, audio: title.audio, pg: title.pg, ig: title.ig,
+      });
     }
 
     const graph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries, maxStates: 200_000 });

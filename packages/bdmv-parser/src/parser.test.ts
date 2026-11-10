@@ -185,6 +185,17 @@ describe("M1 BDMV discovery and structure", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
+  it("parses namespace-qualified BDA META/DL manifest elements", async () => {
+    const parent = await temp(); const root = await skeleton(parent); const xml = `<?xml version="1.0"?><disclib xmlns="urn:BDA:bdmv;disclib"><di:discinfo xmlns:di="urn:BDA:bdmv;discinfo"><di:title><di:name>Spider-Man: Into the Spider-Verse</di:name><di:numSets>1</di:numSets><di:setNumber>1</di:setNumber></di:title><di:description><di:tableOfContents><di:titleName titleNumber="1">Menus BDJO</di:titleName></di:tableOfContents><di:thumbnail href="jacket_416.jpg"/><di:thumbnail href="jacket_640.jpg"/></di:description><di:language>eng</di:language></di:discinfo></disclib>`;
+    await mkdir(join(root, "META", "DL"), { recursive: true }); await writeFile(join(root, "META", "DL", "bdmt_eng.xml"), xml);
+    try {
+      const disc = await parseBdmv(root); const manifest = disc.metadata?.[0];
+      expect(manifest).toMatchObject({ language: "eng", discName: "Spider-Man: Into the Spider-Verse", numberOfSets: 1, setNumber: 1, titles: [{ titleNumber: 1, titleName: "Menus BDJO" }], thumbnails: [{ href: "jacket_416.jpg" }, { href: "jacket_640.jpg" }] });
+      expect(manifest?.titles[0]?.source.path).toBe("META/DL/bdmt_eng.xml");
+      expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_INVALID_XML")).toBe(false);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("reports invalid XML and continues parsing the BDMV structure", async () => {
     const parent = await temp(); const root = await skeleton(parent); await mkdir(join(root, "META", "DL"), { recursive: true }); await writeFile(join(root, "META", "DL", "bdmt_eng.xml"), `<!DOCTYPE meta [<!ENTITY x SYSTEM "file:///etc/passwd">]><meta>&x;</meta>`);
     try {
@@ -752,6 +763,23 @@ describe("M1 BDMV discovery and structure", () => {
       const disc = await parseBdmv(root); const entry = disc.playlists[0]?.extensionData?.[0];
       expect(entry).toMatchObject({ id1: 0xaaaa, id2: 0xbbbb, kind: null, parsed: false, length: 2, data: null });
       expect(disc.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_EXTENSION_UNPARSED", sourcePath: "PLAYLIST/00001.mpls", offset: entry?.offset, recoverable: true }));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("accepts an empty ExtensionData section declared by a zero length", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    const appendEmpty = (bytes: Uint8Array, offsetField: number): Uint8Array => {
+      const start = bytes.length; const output = new Uint8Array(start + 4); output.set(bytes);
+      const view = new DataView(output.buffer); view.setUint32(offsetField, start, false); view.setUint32(start, 0, false);
+      return output;
+    };
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), appendEmpty(buildM1EmptyPlaylist(), 16));
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), appendEmpty(buildM1EmptyClipInfo(), 24));
+    try {
+      const disc = await parseBdmv(root);
+      expect(disc.playlists[0]?.extensionData).toEqual([]);
+      expect(disc.clips[0]?.extensionData).toEqual([]);
+      expect(disc.diagnostics.some((diagnostic) => diagnostic.code === "BDMV_INVALID_SECTION")).toBe(false);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

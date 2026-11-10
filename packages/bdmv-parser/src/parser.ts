@@ -91,6 +91,7 @@ function parseExtensionData(data: Uint8Array, start: number, file: FileEntry, or
   if (!start) return [];
   const r = new Bits(data); r.seek(start);
   const declaredLength = r.u32();
+  if (declaredLength === 0) return [];
   const tableEnd = start + 4 + declaredLength;
   if (declaredLength < 8 || tableEnd > data.length) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${start}`, "ExtensionData table exceeds file or is too short");
   r.u32(); r.skip(3); const countOffset = r.offset; const count = r.u8();
@@ -452,12 +453,13 @@ function parseXmlDocument(bytes: Uint8Array): XmlNode {
   return root!;
 }
 function xmlNodeText(node: XmlNode): string { return node.content.map((part) => typeof part === "string" ? part : xmlNodeText(part)).join("").trim(); }
+function xmlLocalName(name: string): string { const separator = name.lastIndexOf(":"); return separator < 0 ? name : name.slice(separator + 1); }
 function xmlDescendants(node: XmlNode, name: string): XmlNode[] {
   const found: XmlNode[] = [];
-  for (const part of node.content) if (typeof part !== "string") { if (part.name === name) found.push(part); found.push(...xmlDescendants(part, name)); }
+  for (const part of node.content) if (typeof part !== "string") { if (xmlLocalName(part.name) === name) found.push(part); found.push(...xmlDescendants(part, name)); }
   return found;
 }
-function metaField(parent: XmlNode, name: string): XmlNode | undefined { return parent.content.find((part): part is XmlNode => typeof part !== "string" && part.name === name); }
+function metaField(parent: XmlNode, name: string): XmlNode | undefined { return parent.content.find((part): part is XmlNode => typeof part !== "string" && xmlLocalName(part.name) === name); }
 function metaInteger(text: string | undefined): number | null { return text !== undefined && /^\d+$/.test(text.trim()) ? Number(text.trim()) : null; }
 function parseMetaDl(data: Uint8Array, file: FileEntry, origin: "primary" | "backup", language: string): ParsedFile<NonNullable<ParsedDisc["metadata"]>[number]> {
   const root = parseXmlDocument(data); const titles: NonNullable<ParsedDisc["metadata"]>[number]["titles"] = []; const thumbnails: NonNullable<ParsedDisc["metadata"]>[number]["thumbnails"] = [];
@@ -468,10 +470,10 @@ function parseMetaDl(data: Uint8Array, file: FileEntry, origin: "primary" | "bac
     numberOfSets = metaInteger(metaField(title, "numSets") ? xmlNodeText(metaField(title, "numSets")!) : undefined) ?? numberOfSets;
     setNumber = metaInteger(metaField(title, "setNumber") ? xmlNodeText(metaField(title, "setNumber")!) : undefined) ?? setNumber;
   }
-  for (const toc of xmlDescendants(root, "tableOfContents")) for (const titleName of toc.content.filter((part): part is XmlNode => typeof part !== "string" && part.name === "titleName")) {
+  for (const toc of xmlDescendants(root, "tableOfContents")) for (const titleName of toc.content.filter((part): part is XmlNode => typeof part !== "string" && xmlLocalName(part.name) === "titleName")) {
     const titleNumber = metaInteger(titleName.attributes["titleNumber"]); if (titleNumber !== null) titles.push({ titleNumber, titleName: xmlNodeText(titleName), source: sourceFor(file, "", origin, titleName.offset) });
   }
-  for (const description of xmlDescendants(root, "description")) for (const thumbnail of description.content.filter((part): part is XmlNode => typeof part !== "string" && part.name === "thumbnail")) {
+  for (const description of xmlDescendants(root, "description")) for (const thumbnail of description.content.filter((part): part is XmlNode => typeof part !== "string" && xmlLocalName(part.name) === "thumbnail")) {
     const href = thumbnail.attributes.href; if (href === undefined) continue; const size = thumbnail.attributes.size ?? null; const match = size ? /^(\d+)\s*x\s*(\d+)$/i.exec(size) : null;
     thumbnails.push({ href, size, width: match?.[1] ? Number(match[1]) : null, height: match?.[2] ? Number(match[2]) : null, source: sourceFor(file, "", origin, thumbnail.offset) });
   }
@@ -913,6 +915,15 @@ export async function parseBdmv(inputPath: string, options: { limits?: Limits } 
   const extensionCount = playlists.reduce((count, playlist) => count + (playlist.extensionData?.length ?? 0), 0) + clips.reduce((count, clip) => count + (clip.extensionData?.length ?? 0), 0);
   const clipMarkCount = clips.reduce((count, clip) => count + (clip.clipMarks?.length ?? 0), 0);
   const declarations = { entries: entries.length, movieObjects: objects.length, playlists: playlists.length, playItems: playlists.reduce((n, p) => n + p.playItems.length, 0), clips: clips.length, streams: clips.reduce((n, c) => n + c.programs.reduce((m, p) => m + p.streams.length, 0), 0), sounds: sounds.length, bdjos: bdjos.length, metadata: metadata.length, extensionData: extensionCount, clipMarks: clipMarkCount, unknown: diagnostics.filter((d) => d.code.includes("UNSUPPORTED") || d.code.includes("UNKNOWN") || d.code.includes("UNPARSED")).length };
-  const unverified = ["INDX/MOBJ/MPLS/CLPI/BDJO/sound candidate version-wide conformance", "unknown ExtensionData payload semantics", "dynamic MovieObject target resolution", "BDJO field-level conformance", "META/DL field-level conformance"];
+  const unverified = [
+    "INDX candidate versions 0100 and 0240; AppInfoBDMV and UHD extension fields outside compared samples",
+    "MOBJ candidate versions 0100 and 0240 outside compared samples",
+    "MPLS candidate versions 0100 and 0240; alternate angles, secondary streams, and PIP/extension-SubPath payloads outside compared samples",
+    "CLPI candidate versions 0100 and 0240; ClipMark, nonzero ProgramInfo groups, and typed ExtensionData outside compared samples",
+    "BDJO versions and field combinations outside the compared 0200 records",
+    "META/DL languages and field combinations outside the compared eng manifest",
+    "sound.bdmv fields without independent field comparisons",
+    "unknown ExtensionData payload semantics",
+  ];
   return { schemaVersion: "1.0", analysisStage: "structural", root, discInfo: { appInfo: parsedIndex?.value.appInfo ?? null, uhd: parsedIndex?.value.uhd ?? null }, entries, movieObjects: objects, bdjos, metadata, playlists, clips, sounds, graph, declarations, diagnostics, supportPrediction: { status: "partial", supported: [], unsupported: ["BD-J execution", "MPLS multi-angle playback", "SubPath playback", "media decoding"], unverified } };
 }
