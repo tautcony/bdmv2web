@@ -4,10 +4,10 @@ import { createRequire } from "node:module";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateSync } from "node:zlib";
+import { crc32, deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
 
 const templateDirectory = existsSync(new URL("./templates/index.html", import.meta.url)) ? "./templates/" : "../templates/";
 const PACKAGE_TEMPLATES = {
@@ -162,6 +162,8 @@ export interface MenuPackageInput {
   /** Previous package directory used as the source for media-plan-matched assets on overwrite. */
   reuseMediaFromDirectory?: string;
   pngLimits?: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number };
+  /** Deflate level 0-9 for packaged PGS display PNGs. Defaults to the tuned canvas level. */
+  pngLevel?: number | undefined;
 }
 
 /** What the caller can act on after the package is written: the diagnostics recorded in its manifest. */
@@ -175,7 +177,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   const soundResult = convertSounds(input.soundEntries ?? [], input.soundBytes ?? null, input.scene);
   const sounds = soundResult.assets;
   const diagnostics = [...(input.diagnostics ?? []), ...soundResult.diagnostics];
-  const serializedPgsTracks = (input.pgsTracks ?? []).map(serializePgsTrack);
+  const serializedPgsTracks = (input.pgsTracks ?? []).map((track) => serializePgsTrack(track, input.pngLevel));
   const pgsPayloadBytes = Buffer.byteLength(serializeSafeScriptData(serializedPgsTracks));
   const maxPgsRuntimeBytes = input.pgsLimits?.maxRuntimeBytes ?? 64 * 1024 * 1024;
   if (!Number.isSafeInteger(maxPgsRuntimeBytes) || maxPgsRuntimeBytes <= 0) throw new RangeError("maxPgsRuntimeBytes must be a positive safe integer.");
@@ -337,7 +339,7 @@ export function runtimeAudioTrackMetadata(track: { streamNumber?: number; path: 
   return { streamNumber: track.streamNumber!, psrStreamNumber: track.streamNumber! + 1, path: track.path, language: track.language, ...(track.durationSeconds === undefined ? {} : { durationSeconds: track.durationSeconds }) };
 }
 
-function serializePgsTrack(track: PgsTrackPackageInput) {
+function serializePgsTrack(track: PgsTrackPackageInput, pngLevel: number | undefined) {
   if (!Number.isSafeInteger(track.pid) || !Number.isSafeInteger(track.streamNumber) || track.streamNumber <= 0 || !Number.isSafeInteger(track.playItemIndex) || track.playItemIndex < 0) throw new TypeError("PGS package track has invalid PID, stream number, or PlayItem index.");
   if (BigInt(track.sourceOut90k) <= BigInt(track.sourceIn90k)) throw new TypeError("PGS package track has an invalid source interval.");
   return {
@@ -349,13 +351,13 @@ function serializePgsTrack(track: PgsTrackPackageInput) {
       compositionState: set.compositionState, paletteId: set.paletteId,
       palette: [...set.palette].map(([index, rgba]) => [index, [...rgba]]),
       bitmaps: [...set.bitmaps.values()].map((bitmap) => ({ objectId: bitmap.objectId, width: bitmap.width, height: bitmap.height })),
-      imageBase64: encodePgsDisplayPng(set),
+      imageBase64: encodePgsDisplayPng(set, pngLevel),
       placements: set.placements,
     })),
   };
 }
 
-function encodePgsDisplayPng(set: PgsDisplaySet): string {
+function encodePgsDisplayPng(set: PgsDisplaySet, pngLevel: number | undefined): string {
   const rgba = new Uint8Array(set.width * set.height * 4);
   for (const placement of set.placements) {
     const bitmap = set.bitmaps.get(placement.objectId);
@@ -381,7 +383,10 @@ function encodePgsDisplayPng(set: PgsDisplaySet): string {
   for (let y = 0; y < set.height; y++) scanlines.set(rgba.subarray(y * set.width * 4, (y + 1) * set.width * 4), y * (set.width * 4 + 1) + 1);
   const header = Buffer.alloc(13);
   header.writeUInt32BE(set.width, 0); header.writeUInt32BE(set.height, 4); header[8] = 8; header[9] = 6;
-  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", header), pngChunk("IDAT", deflateSync(scanlines, { level: 9 })), pngChunk("IEND", Buffer.alloc(0))]);
+  // Level 9 cost twice level 6 and saved 2% of the bytes on a full-HD subtitle canvas,
+  // so the package path now defaults to the tuned canvas level.
+  const level = assertPngLevel(pngLevel ?? DEFAULT_CANVAS_PNG_LEVEL);
+  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", header), pngChunk("IDAT", deflateSync(scanlines, { level })), pngChunk("IEND", Buffer.alloc(0))]);
   return png.toString("base64");
 }
 
@@ -389,17 +394,8 @@ function pngChunk(type: string, data: Buffer): Buffer {
   const typeBytes = Buffer.from(type, "ascii");
   const contents = Buffer.concat([typeBytes, data]);
   const chunk = Buffer.alloc(data.length + 12);
-  chunk.writeUInt32BE(data.length, 0); contents.copy(chunk, 4); chunk.writeUInt32BE(pngCrc32(contents), data.length + 8);
+  chunk.writeUInt32BE(data.length, 0); contents.copy(chunk, 4); chunk.writeUInt32BE(crc32(contents), data.length + 8);
   return chunk;
-}
-
-function pngCrc32(data: Buffer): number {
-  let crc = 0xffffffff;
-  for (const byte of data) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-  }
-  return (crc ^ 0xffffffff) >>> 0;
 }
 
 export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Record<string, unknown> {

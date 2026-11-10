@@ -93,15 +93,15 @@ bdmv2web validate ./BDMV-menu --offline
 | --- | --- | --- |
 | `inspect <BDMV>` | Show disc structure and diagnostics | `--format table\|json`, `--out FILE`, `--strict` |
 | `extract <BDMV> --out DIR` | Export HDMV, IGS, and SUP analysis data | `--type hdmv\|igs\|sup` or `--all` |
-| `list <BDMV>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
-| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--decode png` |
-| `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG` |
-| `build <BDMV>` | Build the offline menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--overwrite`, `--strict` |
+| `list <BDMV>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--png-level 0-9`, `--format table\|json` |
+| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--decode png`, `--png-level 0-9` |
+| `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG`, `--png-level 0-9` |
+| `build <BDMV>` | Build the offline menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--png-level 0-9`, `--overwrite`, `--strict` |
 | `validate <menu dir> --offline` | Validate a menu package and update the audit report | `--format json`, `--strict` |
 
 `build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. Movie PGS subtitles are exported with `export --type sup`.
 
-Values for `--m2ts` and `--pid` can be looked up with `list`. `export --decode png` writes PNG files alongside the raw assets. `render` accepts a BDMV, `.mnu`, or `.sup` input.
+Values for `--m2ts` and `--pid` can be looked up with `list`. `export --decode png` writes PNG files alongside the raw assets. `render` accepts a BDMV, `.mnu`, or `.sup` input. `--png-level 0-9` sets the deflate level for written PNGs; without it IGS elements use level 3 and PGS canvases use level 6.
 
 `sup-png` entries in `assets-manifest.json` record `displaySet`, `startSeconds`, `endSeconds`, `width`, and `height`. `startSeconds` is where the display set starts and `endSeconds` is where the next display set starts, in seconds with 3 decimals relative to the start of the track; both are `null` when they cannot be determined. Fully transparent display sets produce no PNG and are not written to the manifest.
 

@@ -183,6 +183,8 @@ export interface IgsOptions {
   chunkSize?: number;
   /** Skip PNG asset generation so callers can parse/navigation-process scenes separately. Defaults to true. */
   renderAssets?: boolean;
+  /** Deflate level 0-9 for rendered asset PNGs. Defaults to the tuned asset level in `png.ts`. */
+  pngLevel?: number | undefined;
   /** Retain igstools-compatible MNU bytes for explicit asset export. Defaults to false. */
   captureStreams?: boolean;
 }

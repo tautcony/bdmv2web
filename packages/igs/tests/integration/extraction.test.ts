@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { inflateSync } from "node:zlib";
 import { buildInputFileTable } from "@bdmv2web/bdmv-io";
 import { DEFAULT_LIMITS } from "@bdmv2web/core";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { extractIgsFromChunks, extractIgsScenes } from "../../src/extract.js";
 import { consumeSegment, createIgsState, parseSegments } from "../../src/igs.js";
 import { renderIgsAssets, renderSceneAssets } from "../../src/png.js";
+import { decodePng } from "../helpers/decode-png.js";
 import type { IgsSegment } from "../../src/igs.js";
 import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "../helpers/fixtures.js";
 
@@ -137,8 +137,9 @@ describe("synthetic IGS extraction", () => {
     expect(result.assets).toHaveLength(1);
     expect(result.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
     const png = result.assets[0]!.pngBytes;
-    const idatLength = (png[33]! << 24) | (png[34]! << 16) | (png[35]! << 8) | png[36]!;
-    expect([...inflateSync(png.slice(41, 41 + idatLength))]).toEqual([0, 0, 0, 0, 0]);
+    // The omitted entry keeps the palette table's zero, so the pixel decodes to fully
+    // transparent black regardless of how the file stores its pixels.
+    expect([...decodePng(png).rgba]).toEqual([0, 0, 0, 0]);
   });
 
   it("maps one ODS through two palettes and preserves palette alpha in provisional PNG pixels", async () => {
@@ -505,12 +506,9 @@ function decodePngRgbaPixel(asset: { pngBytes: Uint8Array }): number[] {
 }
 
 function decodePngRgbaPixels(asset: { pngBytes: Uint8Array }): number[][] {
-  const png = asset.pngBytes;
-  const idatLength = (png[33]! * 0x1000000) + (png[34]! << 16) + (png[35]! << 8) + png[36]!;
-  const scanline = inflateSync(png.slice(41, 41 + idatLength));
-  if (scanline[0] !== 0) throw new Error(`Unsupported PNG filter ${scanline[0]}`);
+  const { rgba } = decodePng(asset.pngBytes);
   const pixels: number[][] = [];
-  for (let offset = 1; offset < scanline.length; offset += 4) pixels.push([...scanline.slice(offset, offset + 4)]);
+  for (let offset = 0; offset < rgba.length; offset += 4) pixels.push([...rgba.slice(offset, offset + 4)]);
   return pixels;
 }
 

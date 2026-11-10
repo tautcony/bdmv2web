@@ -1,4 +1,4 @@
-import { pgsTrackEntrySuffixes, pidOption, safeAssetStem, selectedPid, supDisplaySetPath, uniquePgsReferences, validateAssetType } from "../cli/assets.js";
+import { pgsTrackEntrySuffixes, pidOption, pngLevelOption, safeAssetStem, selectedPid, supDisplaySetPath, uniquePgsReferences, validateAssetType } from "../cli/assets.js";
 import { inputPath, optionValue, strictDefault } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
@@ -22,6 +22,7 @@ export async function renderPng(): Promise<void> {
   const typeOption = optionValue("--type");
   const language = renderLanguage();
   const pid = pidOption();
+  const pngLevel = pngLevelOption();
   if ((mnuPath !== undefined || supPath !== undefined) && positional !== undefined) fail("CLI_RENDER_SELECTION", "render accepts either a positional input or --mnu/--sup, not both");
   if ((mnuPath !== undefined || supPath !== undefined) && typeOption !== undefined) fail("CLI_RENDER_SELECTION", "--type applies to BDMV input; omit it for --mnu/--sup");
   if ((mnuPath !== undefined || supPath !== undefined) && optionValue("--m2ts") !== undefined) fail("CLI_RENDER_SELECTION", "--m2ts applies to BDMV input");
@@ -34,13 +35,13 @@ export async function renderPng(): Promise<void> {
     else {
       if (sources.length) fail("CLI_RENDER_SELECTION", "render accepts either a BDMV input or --mnu/--sup, not both");
       if (language !== undefined) fail("CLI_RENDER_SELECTION", "--language applies to SUP input; BDMV tracks carry their declared language");
-      return renderPngFromBdmv(positional, out, typeOption, pid);
+      return renderPngFromBdmv(positional, out, typeOption, pid, pngLevel);
     }
   }
   if (!sources.length) fail("CLI_MISSING_INPUT", "render requires a BDMV input, a .mnu/.sup positional input, or --mnu/--sup");
   if (language !== undefined && !sources.some((source) => source.kind === "sup")) fail("CLI_RENDER_SELECTION", "--language applies to SUP input");
   if (pid !== undefined && !sources.some((source) => source.kind === "mnu")) fail("CLI_RENDER_SELECTION", "--pid applies to MNU input");
-  return renderPngFromFiles(sources, out, language, pid);
+  return renderPngFromFiles(sources, out, language, pid, pngLevel);
 }
 
 export function renderLanguage(): string | undefined {
@@ -50,7 +51,7 @@ export function renderLanguage(): string | undefined {
   return value.toLocaleLowerCase("en-US");
 }
 
-export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; path: string }>, out: string, language: string | undefined, pid: number | undefined): Promise<void> {
+export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; path: string }>, out: string, language: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
   const files: AssetRecord[] = [];
   const pending: Array<{ path: string; bytes: Uint8Array }> = [];
   let partial = false;
@@ -60,7 +61,7 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
     const stem = safeAssetStem(input);
     if (source.kind === "mnu") {
       let parsed;
-      try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120 }); }
+      try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120, pngLevel }); }
       catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${error instanceof Error ? error.message : String(error)}`); }
       if (parsed.status === "failed" || parsed.scenes.length === 0) {
         const detail = parsed.diagnostics.find((item) => item.severity === "error")?.message ?? "no complete display set";
@@ -92,7 +93,7 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
     for (let index = 0; !current.done; index++) {
       const displaySet = current.value;
       const endTime90k = pgsDisplaySetEnd90k(next.done ? [displaySet] : [displaySet, next.value], 0);
-      const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, origin90k);
+      const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, origin90k, { level: pngLevel });
       if (rendered.visible) {
         const path = `assets/subtitles/${stem}-display-${String(index + 1).padStart(5, "0")}.png`;
         pending.push({ path, bytes: rendered.pngBytes });
@@ -109,14 +110,14 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
   await commitRenderedAssets(out, files, pending, partial, strictDefault());
 }
 
-export async function renderPngFromBdmv(input: string, out: string, rawType: string | undefined, pid: number | undefined): Promise<void> {
+export async function renderPngFromBdmv(input: string, out: string, rawType: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
   const type = rawType === undefined ? "all" : validateAssetType(rawType);
   const selection = { ...(pid === undefined ? {} : { pid }) };
   const disc = await parseBdmv(input);
   const facts = classifyDiagnostics(disc.diagnostics);
   if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
   const roots = await assertDisjointRoots(disc.root, resolve(out));
-  const igs = await extractIgsScenes(disc, { renderAssets: type !== "sup", captureStreams: false });
+  const igs = await extractIgsScenes(disc, { renderAssets: type !== "sup", captureStreams: false, pngLevel });
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
   if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
   const files: AssetRecord[] = [];
@@ -142,7 +143,7 @@ export async function renderPngFromBdmv(input: string, out: string, rawType: str
         const trackEnd90k = Number(track.sourceOut90k) - Number(track.sourceIn90k);
         for (const [index, displaySet] of track.displaySets.entries()) {
           const endTime90k = pgsDisplaySetEnd90k(track.displaySets, index, trackEnd90k);
-          const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k);
+          const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, 0, { level: pngLevel });
           if (!rendered.visible) continue;
           const path = supDisplaySetPath(track.clipId, track.pid, track.language, index, trackSuffix);
           pending.push({ path, bytes: rendered.pngBytes });

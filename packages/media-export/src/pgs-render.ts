@@ -1,5 +1,10 @@
 import { encodeRgbaPng } from "@bdmv2web/igs";
+import type { PngEncodeOptions } from "@bdmv2web/igs";
 import type { PgsDisplaySet } from "./pgs.js";
+
+// Re-exported so a caller that already depends on media-export (the package builder)
+// can apply the same tuned level without taking a dependency on the IGS package.
+export { assertPngLevel, DEFAULT_ASSET_PNG_LEVEL, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/igs";
 
 export interface RenderedPgsDisplaySet {
   /** 1-based position in the SUP stream. */
@@ -46,7 +51,7 @@ export function pgsSeconds90k(time90k: number, origin90k = 0): number | null {
 }
 
 /** Render a complete PCS canvas and report whether it contains any visible pixel. */
-export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0): RenderedPgsDisplaySet {
+export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0, options: PngEncodeOptions = {}): RenderedPgsDisplaySet {
   const rgba = new Uint8Array(display.width * display.height * 4);
   // Only sourceAlpha > 0 writes, and such a write always leaves a non-zero output
   // alpha, so the painted flag replaces a full-canvas visibility scan.
@@ -92,6 +97,6 @@ export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: nu
     width: display.width,
     height: display.height,
     visible,
-    pngBytes: visible ? encodeRgbaPng(display.width, display.height, rgba) : new Uint8Array(),
+    pngBytes: visible ? encodeRgbaPng(display.width, display.height, rgba, options) : new Uint8Array(),
   };
 }

@@ -64,7 +64,7 @@ export function parseIgsMnu(data: Uint8Array, options: IgsMnuOptions = {}): IgsE
   const scenes = state.scenes;
   const assets: IgsExtraction["assets"] = [];
   if (options.renderAssets !== false) {
-    const rendered = renderIgsAssets(scenes);
+    const rendered = renderIgsAssets(scenes, { level: options.pngLevel });
     assets.push(...rendered.assets);
     diagnostics.push(...rendered.diagnostics);
   } else diagnostics.push(...validateIgsSceneAssets(scenes));

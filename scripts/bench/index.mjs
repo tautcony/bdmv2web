@@ -146,7 +146,10 @@ async function main() {
   if (cli.json) {
     const store = await writeSampleStore(runDir, rows);
     if (store) report.samples = store;
-    await writeFile(join(runDir, "run.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
+    // The record is machine-read and its bulk is per-fork series, so it is written
+    // without indentation: the same bytes, half the file, and the series live in the
+    // binary stores beside it.
+    await writeFile(join(runDir, "run.json"), `${JSON.stringify(report)}\n`, { flag: "wx" });
   }
   process.stdout.write(`Run directory: ${runDir}\n`);
   process.stdout.write(`# BDMV2Web performance run ${runId}\n\n| Case | Forks | Calls/sample | Median ms/call | CV % |\n|---|---:|---:|---:|---:|\n`);

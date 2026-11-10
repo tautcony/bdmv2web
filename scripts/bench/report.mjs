@@ -65,8 +65,9 @@ function forkSummary(row) {
     driftPercent: perFork("driftPercent").length ? perFork("driftPercent").reduce((worst, value) => (Math.abs(value) > Math.abs(worst) ? value : worst)) : null,
     unstable: perFork("driftPercent").some((value) => Math.abs(value) >= DRIFT_LIMIT_PERCENT),
     // A GC pause storm inside the window is the usual explanation for a slow tail,
-    // so the flag is qualified instead of being read as a regression.
-    gcEvents: (row?.forks ?? []).reduce((sum, fork) => sum + (Array.isArray(fork?.gc?.events) ? fork.gc.events.length : 0), 0),
+    // so the flag is qualified instead of being read as a regression. The count lives
+    // on the fork since the events themselves moved to the gc.f64 sample store.
+    gcEvents: (row?.forks ?? []).reduce((sum, fork) => sum + (fork?.gc?.eventCount ?? (Array.isArray(fork?.gc?.events) ? fork.gc.events.length : 0)), 0),
   };
 }
 function profileKey(row, run) {

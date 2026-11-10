@@ -8,10 +8,10 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { extractIgsFromChunks } from "../../src/extract.js";
 import { chunks } from "../helpers/fixtures.js";
+import { decodePng } from "../helpers/decode-png.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const goldenPath = resolve(repositoryRoot, "test-data/baselines/igs-reference-element-summary.json");
@@ -38,47 +38,6 @@ const cases = [
   { caseId: "tamako", clipId: "00043", pid: 0x1400 },
 ] as const;
 
-/** Decode a non-interlaced 8-bit RGBA PNG. Mirrors the summary extracted from the igstools reference PNGs. */
-function decodeRgbaPng(input: Uint8Array): { width: number; height: number; rgba: Uint8Array } {
-  const bytes = Buffer.from(input);
-  if (bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("not a PNG");
-  const idat: Buffer[] = [];
-  let width = 0, height = 0, at = 8;
-  while (at + 12 <= bytes.length) {
-    const length = bytes.readUInt32BE(at);
-    const type = bytes.toString("ascii", at + 4, at + 8);
-    const body = bytes.subarray(at + 8, at + 8 + length);
-    at += 12 + length;
-    if (type === "IHDR") {
-      width = body.readUInt32BE(0); height = body.readUInt32BE(4);
-      if (body[8] !== 8 || body[9] !== 6 || body[12] !== 0) throw new Error("expected 8-bit RGBA non-interlaced PNG");
-    } else if (type === "IDAT") idat.push(body);
-    else if (type === "IEND") break;
-  }
-  const raw = inflateSync(Buffer.concat(idat));
-  const stride = width * 4;
-  const rgba = new Uint8Array(width * height * 4);
-  let previous = new Uint8Array(stride), offset = 0;
-  for (let y = 0; y < height; y++) {
-    const filter = raw[offset++];
-    const line = new Uint8Array(raw.subarray(offset, offset + stride));
-    offset += stride;
-    if (filter === 1) for (let i = 4; i < stride; i++) line[i] = (line[i]! + line[i - 4]!) & 255;
-    else if (filter === 2) for (let i = 0; i < stride; i++) line[i] = (line[i]! + previous[i]!) & 255;
-    else if (filter === 3) for (let i = 0; i < stride; i++) line[i] = (line[i]! + (((i >= 4 ? line[i - 4]! : 0) + previous[i]!) >> 1)) & 255;
-    else if (filter === 4) {
-      for (let i = 0; i < stride; i++) {
-        const a = i >= 4 ? line[i - 4]! : 0, b = previous[i]!, c = i >= 4 ? previous[i - 4]! : 0;
-        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-        line[i] = (line[i]! + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
-      }
-    } else if (filter !== 0) throw new Error(`unsupported PNG filter ${filter}`);
-    rgba.set(line, y * stride);
-    previous = line;
-  }
-  return { width, height, rgba };
-}
-
 const hex2 = (value: number): string => value.toString(16).padStart(2, "0");
 const pixelHex = (rgba: Uint8Array, index: number): string => {
   const base = index * 4;
@@ -86,7 +45,7 @@ const pixelHex = (rgba: Uint8Array, index: number): string => {
 };
 
 function summarizePng(input: Uint8Array, id: string): ElementRow {
-  const { width, height, rgba } = decodeRgbaPng(input);
+  const { width, height, rgba } = decodePng(input);
   const count = width * height;
   const bins = Array<number>(64).fill(0);
   let firstOpaque: PixelAnchor = null, lastOpaque: PixelAnchor = null;

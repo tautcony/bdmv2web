@@ -92,7 +92,8 @@ export function buildProgram(version?: string): Command {
     .option("--codec <codec>", "menu video codec: hevc (default) or h264", oneOf("codec", ["h264", "hevc"]))
     .option("--hdr <mode>", "HDR handling: tonemap (default) or preserve", oneOf("hdr", ["tonemap", "preserve"]))
     .option("--progress", "print step progress on stderr")
-    .option("--no-progress", "keep stderr silent");
+    .option("--no-progress", "keep stderr silent")
+    .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty);
   withStrict(buildCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("build", input, options));
 
   const validateCommand = program.command("validate")
@@ -121,7 +122,8 @@ export function buildProgram(version?: string): Command {
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
     .option("--decode <format>", "png decodes assets while listing", nonEmpty)
     .option("--out <file>", "write the JSON report to a file", nonEmpty)
-    .option("--format <format>", "table or json", nonEmpty);
+    .option("--format <format>", "table or json", nonEmpty)
+    .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
   listCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("list", input, options));
 
   const exportCommand = program.command("export")
@@ -132,7 +134,8 @@ export function buildProgram(version?: string): Command {
     .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
     .option("--decode <format>", "png also writes decoded PNGs", nonEmpty)
-    .option("--format <format>", "table or json", nonEmpty);
+    .option("--format <format>", "table or json", nonEmpty)
+    .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
   exportCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("export", input, options));
 
   const renderCommand = program.command("render")
@@ -145,7 +148,8 @@ export function buildProgram(version?: string): Command {
     .option("--type <type>", "all, igs, or sup for BDMV input", nonEmpty)
     .option("--m2ts <clip>", "restrict to one clip for BDMV input", nonEmpty)
     .option("--pid <pid>", "restrict to one PID", nonEmpty)
-    .option("--format <format>", "table or json", nonEmpty);
+    .option("--format <format>", "table or json", nonEmpty)
+    .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
   renderCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("render", input, options));
 
   return program;

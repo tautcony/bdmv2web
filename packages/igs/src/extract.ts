@@ -166,7 +166,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const scenes = state.scenes;
   const assets = [] as IgsExtraction["assets"];
   if (options.renderAssets !== false) {
-    const rendered = renderIgsAssets(scenes);
+    const rendered = renderIgsAssets(scenes, { level: options.pngLevel });
     assets.push(...rendered.assets);
     diagnostics.push(...rendered.diagnostics);
   } else diagnostics.push(...validateIgsSceneAssets(scenes));

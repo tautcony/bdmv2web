@@ -2,18 +2,40 @@ import { crc32, deflateSync } from "node:zlib";
 import type { IgsAsset, IgsDiagnostic, IgsObject, IgsPalette, IgsScene } from "./types.js";
 
 const SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
-const LITTLE_ENDIAN = new Uint8Array(Uint32Array.of(1).buffer)[0] === 1;
 const TYPE_IHDR = Uint8Array.of(73, 72, 68, 82);
+const TYPE_PLTE = Uint8Array.of(80, 76, 84, 69);
+const TYPE_tRNS = Uint8Array.of(116, 82, 78, 83);
 const TYPE_IDAT = Uint8Array.of(73, 68, 65, 84);
 const TYPE_IEND = Uint8Array.of(73, 69, 78, 68);
 const EMPTY = new Uint8Array(0);
+
+/**
+ * Tuned deflate levels. zlib's curve is a step, not a slope: levels 1-3 use the fast
+ * configuration, 4-9 the slow one, and level 9 costs twice level 6 for the same bytes.
+ * Indexed sprite scans reach the same size at 3 as at 6, so assets take the fast ramp;
+ * a full-HD PGS canvas is 1920x1080 bytes per row whatever it paints, so it needs the
+ * slow configuration to stay small.
+ */
+export const DEFAULT_ASSET_PNG_LEVEL = 3;
+export const DEFAULT_CANVAS_PNG_LEVEL = 6;
+
+export interface PngEncodeOptions {
+  /** Deflate level 0-9. Omitted means the encoder's tuned default. */
+  level?: number | undefined;
+}
+
+/** Reject a level zlib would silently clamp, so the CLI cannot accept a typo. */
+export function assertPngLevel(level: number): number {
+  if (!Number.isInteger(level) || level < 0 || level > 9) throw new RangeError("PNG deflate level must be an integer from 0 to 9.");
+  return level;
+}
 
 /**
  * One palette entry per index, pre-converted to RGBA. A page reuses a palette across
  * hundreds of objects, so converting every pixel through a function that allocates a
  * tuple per pixel dominated the render.
  */
-function paletteTable(palette: IgsPalette): { bytes: Uint8Array; words: Uint32Array | null } {
+export function paletteRgbaTable(palette: IgsPalette): Uint8Array {
   const bytes = new Uint8Array(256 * 4);
   // Palette definitions may omit indices. The pinned libbluray PDS decoder starts its
   // 256-entry table at zero before applying the sparse entries; in IGS the alpha
@@ -23,17 +45,17 @@ function paletteTable(palette: IgsPalette): { bytes: Uint8Array; words: Uint32Ar
     const [r, g, b] = ycbcrLimited709(entry.y, entry.cb, entry.cr);
     const at = index * 4; bytes[at] = r; bytes[at + 1] = g; bytes[at + 2] = b; bytes[at + 3] = entry.alpha;
   }
-  return { bytes, words: LITTLE_ENDIAN ? new Uint32Array(bytes.buffer) : null };
+  return bytes;
 }
 
-
-export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
+export function renderSceneAssets(scene: IgsScene, options: PngEncodeOptions = {}): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
   const assets: IgsAsset[] = []; const diagnostics: IgsDiagnostic[] = [];
   // Later definitions win, matching the previous reverse-then-find lookup without
   // rebuilding a reversed array for every referenced object.
   const palettesById = new Map<number, IgsPalette>(); for (const item of scene.palettes) palettesById.set(item.id, item);
   const objectsById = new Map<number, IgsObject>(); for (const item of scene.objects) objectsById.set(item.id, item);
-  const paletteTables = new Map<IgsPalette, { bytes: Uint8Array; words: Uint32Array | null }>();
+  const paletteTables = new Map<IgsPalette, Uint8Array>();
+  const level = options.level === undefined ? DEFAULT_ASSET_PNG_LEVEL : assertPngLevel(options.level);
   for (const page of scene.pages) {
     const objectPalettes = new Map<string, { objectId: number; paletteId: number }>();
     const add = (objectId: number, paletteId: number) => { if (objectId !== 0xffff) objectPalettes.set(`${objectId}:${paletteId}`, { objectId, paletteId }); };
@@ -59,16 +81,12 @@ export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagno
         diagnostics.push({ severity: "error", code: "UNRESOLVED_OBJECT", message: `Page ${page.id} references object ${objectId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
         continue;
       }
-      const rgba = new Uint8Array(object.indices.length * 4);
-      const table = paletteTables.get(palette) ?? paletteTable(palette);
+      // The object is a palette index per pixel, so the file can be written as an
+      // indexed PNG: no RGBA expansion, no per-pixel colour lookup, and a quarter of
+      // the bytes handed to deflate.
+      const table = paletteTables.get(palette) ?? paletteRgbaTable(palette);
       paletteTables.set(palette, table);
-      const words = LITTLE_ENDIAN ? new Uint32Array(rgba.buffer) : null;
-      if (words && table.words) for (let i = 0; i < object.indices.length; i++) words[i] = table.words[object.indices[i]!]!;
-      else for (let i = 0; i < object.indices.length; i++) {
-        const from = object.indices[i]! * 4, to = i * 4;
-        rgba[to] = table.bytes[from]!; rgba[to + 1] = table.bytes[from + 1]!; rgba[to + 2] = table.bytes[from + 2]!; rgba[to + 3] = table.bytes[from + 3]!;
-      }
-      const pngBytes = encodeRgbaPng(object.width, object.height, rgba);
+      const pngBytes = encodeIndexedPng(object.width, object.height, object.indices, table, { level });
       const id = `igs-${scene.clipId}-${scene.pid}-${scene.compositionNumber}-p${page.id}-o${object.id}v${object.version}-pal${palette.id}v${palette.version}`;
       assets.push({ id, relativePath: `assets/graphics/${safe(id)}.png`, mimeType: "image/png", width: object.width, height: object.height, pngBytes, objectId: object.id, objectVersion: object.version, paletteId: palette.id, paletteVersion: palette.version, source: object.source, colorConversion: "bt709-limited-round-nearest" });
     }
@@ -77,11 +95,11 @@ export function renderSceneAssets(scene: IgsScene): { assets: IgsAsset[]; diagno
 }
 
 /** Render package-ready PNG assets for scenes that were extracted without assets. */
-export function renderIgsAssets(scenes: readonly IgsScene[]): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
+export function renderIgsAssets(scenes: readonly IgsScene[], options: PngEncodeOptions = {}): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
   const assets: IgsAsset[] = [];
   const diagnostics: IgsDiagnostic[] = [];
   for (const scene of scenes) {
-    const rendered = renderSceneAssets(scene);
+    const rendered = renderSceneAssets(scene, options);
     assets.push(...rendered.assets);
     diagnostics.push(...rendered.diagnostics);
   }
@@ -120,11 +138,12 @@ export function validateIgsSceneAssets(scenes: readonly IgsScene[]): IgsDiagnost
   return diagnostics;
 }
 
-export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): Uint8Array {
+export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array, options: PngEncodeOptions = {}): Uint8Array {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new RangeError("RGBA dimensions do not match pixel data");
+  const level = options.level === undefined ? DEFAULT_CANVAS_PNG_LEVEL : assertPngLevel(options.level);
   const scanlines = new Uint8Array((width * 4 + 1) * height);
   for (let y = 0; y < height; y++) scanlines.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
-  const compressed = deflateSync(scanlines);
+  const compressed = deflateSync(scanlines, { level });
   const ihdr = new Uint8Array(13); putU32(ihdr, 0, width); putU32(ihdr, 4, height); ihdr.set([8, 6, 0, 0, 0], 8);
   // One buffer for the whole file: the IDAT payload used to be copied into a typed
   // array, then into a chunk body, then into the chunk, then into the file.
@@ -132,6 +151,37 @@ export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): 
   png.set(SIGNATURE, 0);
   let at = 8;
   at = writeChunk(png, at, TYPE_IHDR, ihdr);
+  at = writeChunk(png, at, TYPE_IDAT, compressed);
+  writeChunk(png, at, TYPE_IEND, EMPTY);
+  return png;
+}
+
+/**
+ * Write a palette-indexed PNG (colour type 3, 8 bits per index) from the object's own
+ * index buffer. The 256-entry table is the palette converted once per page, so the
+ * pixels are copied and never looked up: `alpha` becomes a tRNS chunk.
+ */
+export function encodeIndexedPng(width: number, height: number, indices: Uint8Array, paletteRgba: Uint8Array, options: PngEncodeOptions = {}): Uint8Array {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || indices.length !== width * height) throw new RangeError("Indexed PNG dimensions do not match pixel data");
+  if (paletteRgba.length !== 256 * 4) throw new RangeError("Indexed PNG palette must hold 256 RGBA entries");
+  const level = options.level === undefined ? DEFAULT_ASSET_PNG_LEVEL : assertPngLevel(options.level);
+  const scanlines = new Uint8Array((width + 1) * height);
+  for (let y = 0; y < height; y++) scanlines.set(indices.subarray(y * width, (y + 1) * width), y * (width + 1) + 1);
+  const compressed = deflateSync(scanlines, { level });
+  const plte = new Uint8Array(256 * 3);
+  const trns = new Uint8Array(256);
+  for (let index = 0; index < 256; index++) {
+    const at = index * 4;
+    plte[index * 3] = paletteRgba[at]!; plte[index * 3 + 1] = paletteRgba[at + 1]!; plte[index * 3 + 2] = paletteRgba[at + 2]!;
+    trns[index] = paletteRgba[at + 3]!;
+  }
+  const ihdr = new Uint8Array(13); putU32(ihdr, 0, width); putU32(ihdr, 4, height); ihdr.set([8, 3, 0, 0, 0], 8);
+  const png = new Uint8Array(8 + (12 + 13) + (12 + plte.length) + (12 + trns.length) + (12 + compressed.length) + 12);
+  png.set(SIGNATURE, 0);
+  let at = 8;
+  at = writeChunk(png, at, TYPE_IHDR, ihdr);
+  at = writeChunk(png, at, TYPE_PLTE, plte);
+  at = writeChunk(png, at, TYPE_tRNS, trns);
   at = writeChunk(png, at, TYPE_IDAT, compressed);
   writeChunk(png, at, TYPE_IEND, EMPTY);
   return png;

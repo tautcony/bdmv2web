@@ -8,7 +8,7 @@
 | --- | --- |
 | `src/transport.ts` | `M2tsPacketReader`（192 字节源包）、`PsiAssembler`（PAT/PMT）、`PesAssembler`、`decodeTimestamp`、`source()` |
 | `src/igs.ts` | `parseSegments`、`consumeSegment`、`decodeRle`、`createIgsState`、`IgsError` |
-| `src/png.ts` | `renderSceneAssets`、`renderIgsAssets`、`validateIgsSceneAssets`、`encodeRgbaPng` |
+| `src/png.ts` | `renderSceneAssets`、`renderIgsAssets`、`validateIgsSceneAssets`、`encodeIndexedPng`、`encodeRgbaPng`、`paletteRgbaTable` |
 | `src/extract.ts` | `extractIgsScenes`（基于 `ParsedDisc`）、`extractIgsFromChunks`（任意分块输入） |
 | `src/types.ts` | `IgsScene`、`IgsPage`、`IgsButton`、`IgsAsset`、`IgsExtraction`、`IgsOptions` |
 
@@ -20,9 +20,10 @@ extractIgsFromChunks(clipId, chunks: AsyncIterable<Uint8Array>, expectedPidCues?
 parseSegments(input, baseOffset?, residual?, clipId?, pid?, pts?): SegmentParseResult
 consumeSegment(state, segment, clipId, pid, pts, packetOffset, pesOffset, segmentFileOffset, limits?)
 decodeRle(data, width, height, limits?): Uint8Array
-renderSceneAssets(scene): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] }
+renderSceneAssets(scene, options?): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] }
 parseIgsMnu(data, options?): IgsExtraction
-encodeRgbaPng(width, height, rgba): Uint8Array
+encodeIndexedPng(width, height, indices, paletteRgba, options?): Uint8Array
+encodeRgbaPng(width, height, rgba, options?): Uint8Array
 ```
 
 `IgsOptions`：
@@ -32,6 +33,7 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `limits` | `DEFAULT_LIMITS` | 读窗口、重组、像素上限 |
 | `chunkSize` | `limits.maxReadWindowBytes`（默认 8 MiB） | 读文件块大小 |
 | `renderAssets` | `true` | 关闭后只解析场景，不生成 PNG（`extract --type hdmv` 用） |
+| `pngLevel` | 调优默认 | 写 PNG 的 deflate 档位 0–9；元素图默认 3（`DEFAULT_ASSET_PNG_LEVEL`） |
 | `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export` 用） |
 | `table` | 自动发现 | 复用已验证的输入文件表 |
 
@@ -58,7 +60,7 @@ encodeRgbaPng(width, height, rgba): Uint8Array
 | `0x80` END | 结束当前 Display Set |
 
 8. 场景完整后才 `complete: true`；损坏数据、未解析对象/调色板、未完成对象序列都使其不完整。
-9. `renderAssets` 时对每个被引用对象按当前调色板做 RLE 解码 → RGBA → PNG。
+9. `renderAssets` 时对每个被引用对象按当前调色板做 RLE 解码，直接写成调色板索引 PNG（color type 3 + `PLTE` + `tRNS`），不再展开成 RGBA：像素与展开后逐字节一致，deflate 输入只有四分之一。
 10. 汇总 `status`：有 `error` 且无场景 → `failed`；有 `error` 或有 `warning` 或无场景 → `partial`；否则 `complete`。
 
 ## 场景模型

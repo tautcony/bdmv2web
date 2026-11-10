@@ -65,6 +65,7 @@
 | `--m2ts CLIP_ID` | 只列指定 clip |
 | `--pid PID` | 只列指定 PID（十进制或 `0x` 前缀） |
 | `--decode png` | 附带 PNG 解码信息 |
+| `--png-level 0-9` | 写 PNG 时的 deflate 档位；不给则用各编码器的调优默认（IGS 元素 3，PGS 画布 6） |
 | `--format table\|json`、`--out FILE` | 输出格式与落盘 |
 
 报告包含：M2TS clip 列表、PID 与编码、IGS 图像对象（id/版本/尺寸/调色板）、可达 SUP 轨道（clip/PID/语言/时长）。
@@ -77,6 +78,7 @@
 | `--type all\|igs\|sup` | 默认 `all` |
 | `--m2ts` / `--pid` | 选择范围 |
 | `--decode png` | 额外导出 PNG |
+| `--png-level 0-9` | 同上；只影响 `--decode png` 写出的文件 |
 
 产物：
 
@@ -97,6 +99,7 @@
 | `--type all\|igs\|sup` | 仅 BDMV 输入；选择 PNG 来源 |
 | `--m2ts` / `--pid` | 仅 BDMV 输入；`--pid` 也用于独立 MNU 的场景标识 |
 | `--language LANG` | 仅独立 SUP；写入清单的三字母语言 |
+| `--png-level 0-9` | 写 PNG 时的 deflate 档位，见下 |
 
 产物：
 
@@ -109,6 +112,8 @@
 
 `render` 不写 `.mnu`/`.sup`。独立 SUP 的文件名为 `<源文件名>-display-<00001>.png`；独立 MNU 使用 IGS 元素命名。清单条目与 `export --decode png` 相同。
 
+IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与调色板展开后的 RGBA 完全一致；PGS 显示集仍是 RGBA。`--png-level` 覆盖默认档位：zlib 的档位曲线是台阶，1–3 走快通道、4–9 走慢通道，元素图在 3 与 6 上体积只差 3%，画布则差一倍以上，因此两者默认不同。
+
 ## `build`
 
 | 选项 | 默认 | 作用 |
@@ -118,6 +123,7 @@
 | `--player-profile FILE` | 内置默认 | PSR16–20 语言/国家/地区 |
 | `--limits FILE` | `DEFAULT_LIMITS` | VM 指令/队列/调用预算 |
 | `--overwrite` | 关 | 允许覆盖已有目录；匹配的旧媒体可复用 |
+| `--png-level 0-9` | 见 `render` | 包内 PNG（元素图与 PGS 字幕画布）的 deflate 档位 |
 | `--strict` | 关 | partial 退出 2 |
 | `--progress` | 自动 | stderr 非终端时也逐行输出进度 |
 | `--no-progress` | 关 | 关闭进度输出 |

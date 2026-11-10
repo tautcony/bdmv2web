@@ -1,4 +1,4 @@
-import { assetSelection, assetTypeOption, igsMnuPath, pgsTrackEntrySuffixes, selectedClip, selectedPid, supDisplaySetPath, supTrackPath, uniquePgsReferences } from "../cli/assets.js";
+import { assetSelection, assetTypeOption, igsMnuPath, pngLevelOption, pgsTrackEntrySuffixes, selectedClip, selectedPid, supDisplaySetPath, supTrackPath, uniquePgsReferences } from "../cli/assets.js";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail, outputFormat } from "../cli/errors.js";
 import { printTable, writeJsonFile } from "../cli/output.js";
@@ -22,7 +22,7 @@ export async function listAssets(): Promise<void> {
   const disc = await parseBdmv(input);
   const fatal = classifyDiagnostics(disc.diagnostics);
   if (fatal.hasFatal) { stageFailure(firstBlockingCode(fatal.blocking), fatal.blocking); return; }
-  const extraction = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup" });
+  const extraction = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", pngLevel: pngLevelOption() });
   const scenes = extraction.scenes.filter((scene) => selectedClip(scene.clipId, selection) && selectedPid(scene.pid, selection));
   const igsStreams = type === "sup" ? [] : extraction.streams.filter((stream) => selectedClip(stream.clipId, selection) && selectedPid(stream.pid, selection)).map((stream) => ({ type: "igs", format: "mnu", path: igsMnuPath(stream.clipId, stream.pid), clipId: stream.clipId, pid: stream.pid, byteLength: stream.byteLength }));
   const igsElements = type === "sup" ? [] : scenes.flatMap((scene) => scene.objects.map((object) => ({ type: "igs-image-element", clipId: scene.clipId, pid: scene.pid, sceneId: scene.id, compositionNumber: scene.compositionNumber, objectId: object.id, objectVersion: object.version, width: object.width, height: object.height })));
@@ -39,7 +39,7 @@ export async function listAssets(): Promise<void> {
         const trackEnd90k = Number(track.sourceOut90k) - Number(track.sourceIn90k);
         track.displaySets.forEach((displaySet, displaySetIndex) => {
           const endTime90k = pgsDisplaySetEnd90k(track.displaySets, displaySetIndex, trackEnd90k);
-          const rendered = renderPgsDisplaySet(displaySet, displaySetIndex + 1, endTime90k);
+          const rendered = renderPgsDisplaySet(displaySet, displaySetIndex + 1, endTime90k, 0, { level: pngLevelOption() });
           if (!rendered.visible) return;
           supPngs.push({ type: "sup-png", path: supDisplaySetPath(track.clipId, track.pid, track.language, displaySetIndex, trackSuffixes[trackIndex]), clipId: track.clipId, pid: track.pid, displaySet: displaySetIndex + 1, startSeconds: rendered.startSeconds, endSeconds: rendered.endSeconds });
         });

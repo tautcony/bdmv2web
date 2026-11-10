@@ -1,4 +1,4 @@
-import { assetSelection, assetTypeOption, igsMnuPath, pgsTrackEntrySuffixes, selectedClip, selectedPid, supDisplaySetPath, supTrackPath, uniquePgsReferences } from "../cli/assets.js";
+import { assetSelection, assetTypeOption, igsMnuPath, pngLevelOption, pgsTrackEntrySuffixes, selectedClip, selectedPid, supDisplaySetPath, supTrackPath, uniquePgsReferences } from "../cli/assets.js";
 import { inputPath, optionValue, strictDefault } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
@@ -21,7 +21,7 @@ export async function exportAssets(): Promise<void> {
   const facts = classifyDiagnostics(disc.diagnostics);
   if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
   const roots = await assertDisjointRoots(disc.root, resolve(out));
-  const igs = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", captureStreams: type !== "sup" });
+  const igs = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", captureStreams: type !== "sup", pngLevel: pngLevelOption() });
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
   if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
   const transaction = await beginOutputTransaction(roots.output);
@@ -56,7 +56,7 @@ export async function exportAssets(): Promise<void> {
           const trackEnd90k = Number(track.sourceOut90k) - Number(track.sourceIn90k);
           for (const [index, displaySet] of track.displaySets.entries()) {
             const endTime90k = pgsDisplaySetEnd90k(track.displaySets, index, trackEnd90k);
-            const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k);
+            const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, 0, { level: pngLevelOption() });
             if (!rendered.visible) continue;
             const path = supDisplaySetPath(track.clipId, track.pid, track.language, index, trackSuffix);
             const target = resolve(transaction.stagingPath, path);

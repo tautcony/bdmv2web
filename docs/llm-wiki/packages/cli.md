@@ -38,12 +38,12 @@ src/
 ```ts
 inspect   [input]  --out --format --allow-partial --strict/--no-strict
 extract   [input]  --out --type --all --format --strict/--no-strict
-build     [input]  --out --title --player-profile --limits --overwrite --progress/--no-progress --strict/--no-strict
+build     [input]  --out --title --player-profile --limits --overwrite --png-level --progress/--no-progress --strict/--no-strict
 validate  [input]  --offline --format --strict/--no-strict
 compare   [input]  --format --strict/--no-strict
-list      [input]  --type --m2ts --pid --decode --out --format
-export    [input]  --out --type --m2ts --pid --decode --format
-render    [input]  --out --mnu --sup --language --type --m2ts --pid --format
+list      [input]  --type --m2ts --pid --decode --png-level --out --format
+export    [input]  --out --type --m2ts --pid --decode --png-level --format
+render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level --format
 ```
 
 `convert` 是 `build` 的别名。带值选项统一用 `nonEmpty` 解析器，`--out=` 这类空值在解析阶段失败。
@@ -84,21 +84,21 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --format
 
 ### `list`
 
-- `--type all|igs|sup`，`--m2ts CLIP_ID`、`--pid PID`、`--decode png` 过滤/解码。
+- `--type all|igs|sup`，`--m2ts CLIP_ID`、`--pid PID`、`--decode png` 过滤/解码；`--png-level 0-9` 覆盖写 PNG 的 deflate 档位。
 - 输出 M2TS clip、PID、IGS 图像对象属性、可达 SUP 轨道；`--out` 写完整 JSON。
 - 非法值：`CLI_INVALID_ASSET_TYPE`、`CLI_INVALID_M2TS`、`CLI_INVALID_PID`、`CLI_INVALID_DECODE`。
 
 ### `export`
 
 - 写 igstools 兼容 `.mnu`（`assets/igs/<clip>-pid-<pid>.mnu`）与 `.sup`（`assets/subtitles/<clip>-pid-<pid>.sup`）。
-- `--decode png` 额外写 IGS 元素与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。
+- `--decode png` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
 - 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`；秒值以轨道起点为 0。
 
 ### `render`
 
 - 输入为 BDMV、位置参数 `.mnu`/`.sup`，或 `--mnu`/`--sup`；后两种不需要 BDMV。
 - BDMV 输入复用 `extractIgsScenes` 与可达 PGS 抽取；独立 SUP 直接 `parsePgsSup`；独立 MNU 使用 `parseIgsMnu`。
-- 只写 PNG 与 `assets-manifest.json`，不写 `.mnu`/`.sup`。
+- 只写 PNG 与 `assets-manifest.json`，不写 `.mnu`/`.sup`；`--png-level 0-9` 覆盖默认档位。
 
 ### `build`
 

@@ -20,9 +20,11 @@ corepack pnpm bench --case perf.igs.battle-royale.parse --case perf.igs.battle-r
 corepack pnpm bench --case scale.graph-1x.build --case scale.graph-2x.build --case scale.graph-4x.build --forks 3 --out test-data/bench/runs
 ```
 
-The runner writes one schema version 1 record to a new run directory and prints its path. A record holds the environment, the configuration, measured rows, skipped cases, and failures; an existing record is never overwritten. Each row carries its fixture identity and scope, one entry per child-process fork, and aggregate fork statistics. Each fork holds its full millisecond samples normalized per call, `callsPerSample`, one CPU-time interval in microseconds, process memory snapshots, GC observations, and an optional profile path.
+The runner writes one schema version 1 record to a new run directory and prints its path. A record holds the environment, the configuration, measured rows, skipped cases, and failures; an existing record is never overwritten. Each row carries its fixture identity and scope, one entry per child-process fork, and aggregate fork statistics. Each fork holds its full millisecond samples normalized per call, `callsPerSample`, one CPU-time interval in microseconds, block references for its memory snapshots and GC observations, and an optional profile path.
 
 Per-call samples are stored in `samples.f64` next to `run.json` as little-endian float64; each fork points at its block with `{ encoding, file, offset, count }`, and the record's `samples` field names the file, encoding, byte size, and sample count. Every timing sample is retained; a batched sample covers `callsPerSample` calls.
+
+Per-fork memory snapshots and GC events use the same block references: `memory.f64` stores four interleaved channels per snapshot (`rss`, `heapUsed`, `external`, `arrayBuffers`) and `gc.f64` stores four columns per event (`kind`, `flags`, `durationMs`, `startTimeMs`). A fork's `memory.series` and `gc.series` name the block and its channels; the memory peaks and sample count stay on the record, and `gc.eventCount` carries the number of events. Reports read those summaries without opening the binary stores.
 
 Per-fork statistics cover min, mean, median, p90, p95, p99, max, standard deviation, coefficient of variation, median absolute deviation, interquartile range, outlier count and share, call throughput, window drift, and sample count. Rows declare `unit: "ms/call"`.
 

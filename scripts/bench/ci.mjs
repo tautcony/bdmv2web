@@ -85,7 +85,7 @@ async function runPair(options, dependencies = {}) {
   for (const [dir, merged] of [[baseDir, baseline], [candidateDir, candidate]]) {
     const store = await writeSampleStore(dir, merged.rows, { sources });
     if (store) merged.samples = store;
-    await writeFile(join(dir, "run.json"), `${JSON.stringify(merged, null, 2)}\n`, { flag: "wx" });
+    await writeFile(join(dir, "run.json"), `${JSON.stringify(merged)}\n`, { flag: "wx" });
   }
   const compareArgs = [join(scriptDir, "compare.mjs"), join(baseDir, "run.json"), join(candidateDir, "run.json"), "--out", join(resolve(options.out), "comparison.json")];
   const comparison = await run(process.execPath, compareArgs, workspace);

@@ -1,4 +1,5 @@
 import { flagEnabled, inputPath, optionNumber, optionState, optionValue, strictDefault } from "../cli/context.js";
+import { pngLevelOption } from "../cli/assets.js";
 import { fail } from "../cli/errors.js";
 import { loadLimits, loadPlayerProfile } from "../cli/profile.js";
 import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/stages.js";
@@ -318,7 +319,7 @@ export async function build(): Promise<void> {
   if (plannedTitle === undefined) progress.info("title", title);
 
   progress.start(CONVERT_STEPS.scenes);
-  const extraction = await extractIgsScenes(disc);
+  const extraction = await extractIgsScenes(disc, { pngLevel: pngLevelOption() });
   progress.done(CONVERT_STEPS.scenes, `${countOf(extraction.scenes.length, "scene", "scenes")} · ${countOf(extraction.assets.length, "image", "images")} · ${countOf(extraction.streams.length, "stream", "streams")}`);
 
   progress.start(CONVERT_STEPS.playlist);
@@ -480,6 +481,7 @@ export async function build(): Promise<void> {
     progress.done(CONVERT_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
     const mediaEncoding = menuMediaEncoding();
     const packaged = await buildMenuPackage({
+      pngLevel: pngLevelOption(),
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       ...(mediaEncoding ? { mediaEncoding } : {}),
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },

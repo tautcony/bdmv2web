@@ -538,6 +538,25 @@ describe("asset PNG rendering", () => {
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
+  it("writes palette PNGs by default and rejects a PNG level outside 0-9", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv render png level "));
+    const input = join(parent, "manual.mnu"); const output = join(parent, "out");
+    await writeFile(input, buildSyntheticMnu());
+    try {
+      const rejected = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "render", input, "--out", output, "--png-level", "10"]);
+      expect(rejected.status).toBe(1);
+      expect(rejected.stderr.toString()).toContain("CLI_INVALID_PNG_LEVEL");
+
+      const rendered = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "render", input, "--out", output, "--png-level", "6"]);
+      expect(rendered.status, rendered.stderr.toString()).toBe(0);
+      const [name] = await readdir(join(output, "assets/graphics"));
+      const png = await readFile(join(output, "assets/graphics", name!));
+      // IHDR colour type stays palette whatever level the caller asked for.
+      expect(png[25]).toBe(3);
+      expect(png.subarray(37, 41).toString("ascii")).toBe("PLTE");
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("records display-set timing in export-assets and omits transparent PNG records", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv export sup "));
     const fixture = resolve(root, "../../test-data/fixtures/synthetic-all-features/BDMV");

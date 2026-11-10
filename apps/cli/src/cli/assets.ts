@@ -29,6 +29,17 @@ export function assetTypeOption(): AssetType {
   return validateAssetType(optionValue("--type") ?? "all");
 }
 
+/**
+ * Deflate level for every PNG the command writes. Omitted keeps each encoder on its
+ * tuned default, which differs for sprite sheets and for full-HD subtitle canvases.
+ */
+export function pngLevelOption(): number | undefined {
+  const raw = optionValue("--png-level");
+  if (raw === undefined) return undefined;
+  if (!/^[0-9]$/.test(raw)) fail("CLI_INVALID_PNG_LEVEL", "--png-level must be a deflate level from 0 to 9");
+  return Number(raw);
+}
+
 export function pidOption(): number | undefined {
   const rawPid = optionValue("--pid");
   if (rawPid === undefined) return undefined;

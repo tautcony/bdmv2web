@@ -115,3 +115,14 @@ test("report CLI reads run directories and writes portable HTML and Markdown out
     assert.match(markdownOutput, /synthetic\.parse/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("GC counts come from the stored summary and from inline legacy events", () => {
+  const summarized = run("a", "2026-01-01");
+  summarized.run.rows[0].forks[0].gc = { available: true, eventCount: 3 };
+  summarized.run.rows[0].forks[1].gc = { available: true, events: [{}, {}] };
+  assert.equal(buildTrend([summarized]).series[0].runs[0].gcEvents, 5);
+
+  const legacy = run("b", "2026-01-02");
+  legacy.run.rows[0].forks[0].gc = { available: true, events: [{}, {}] };
+  assert.equal(buildTrend([legacy]).series[0].runs[0].gcEvents, 2);
+});
