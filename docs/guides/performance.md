@@ -13,6 +13,8 @@ corepack pnpm bench --list
 corepack pnpm bench --mode benchmark --build-mode normal --suite all --forks 3 --warmup-ms 100 --time-ms 500 --min-samples 10 --out test-data/bench/runs
 ```
 
+Start the run with `NODE_OPTIONS` unset, for example `env -u NODE_OPTIONS corepack pnpm bench …` in a POSIX shell. A preloaded module is charged to every case and every fork; the runner prints a warning on stderr and records the value in `environment.nodeOptions`, and `bench:compare` reports it as a compatibility mismatch against a run started without it.
+
 `--suite synthetic`, `--suite real`, and `--suite scenario` select fixture groups. `--case CASE_ID` selects exact cases and repeats. `--root DIR` runs the current harness against built artifacts and source data under another checkout.
 
 ```sh
