@@ -12,7 +12,7 @@
 
 - 生成包含菜单导航、背景视频、音轨、按钮图形和音效的菜单包。
 - 从打包的应用 JAR 运行 BD-J Xlet，并使用本地 Java 进程。
-- 将 BD-J 可访问 Playlist 的视频和音轨打包为浏览器播放资产。`build --overwrite` 会复用匹配的媒体资产。
+- 将 BD-J 可访问 Playlist 的视频和音轨打包为浏览器播放资产。`build --overwrite` 与 `build --resume` 会复用匹配的媒体资产。
 - 检查 BDMV 结构，导出 HDMV、IGS、SUP 数据与菜单资源。
 - 将受支持的整文件正片播放交给系统播放器。
 - 审计菜单包结构、引用、路径和依赖，并生成兼容性报告。
@@ -46,7 +46,9 @@
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
 | Java 运行时 | Java 21 或兼容 `java.desktop`；仅 BD-J 包需要 | 通过 `serve` 运行打包的 BD-J Xlet |
 
-默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）；缺该滤镜时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
+默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。蓝光菜单 clip 通常是 H.264，浏览器本身就能解码，因此 `build --video copy` 把源视频流直接复制进 MP4 而不重新编码，保留原盘码率；音轨仍转 AAC，因为浏览器在 MP4 里不解码 AC-3、DTS、LPCM。复制要求片段从播放器实际起播的入口点开始——PlayItem 的 in 点必须落在入口点表 5.689 ms 的量化栅格内——且源为 8-bit 4:2:0 SDR H.264；不满足的 clip 退回编码（未指定 `--codec` 时用 H.264），原因写进媒体计划并给出 `MEDIA_REMUX_UNAVAILABLE` 诊断。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）；缺该滤镜时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
+
+菜单媒体的范围由 `--menu-media auto|all|none` 控制，HDMV 与 BD-J 取值含义相同：`auto`（默认）只导出菜单用到的播放列表——HDMV 取 IGS 场景匹配到的，BD-J 取总时长不超过 15 分钟的，因为 BD-J 碟的 BDJO 通常授权整碟，不过滤就会把正片一并重编码；`all` 导出全部可达播放列表；`none` 不打包媒体，运行时把 `PLAY_PLAYLIST` 报为不可用。被 `auto` 跳过的播放列表会写进 `M5_MENU_MEDIA_SCOPE_SKIPPED` 诊断。
 
 ### 从 npm 安装
 
@@ -88,7 +90,7 @@ bdmv2web validate ./BDMV-menu
 
 直接打开 `BDMV-menu/index.html` 可运行 HDMV 菜单包。菜单媒体保存在输出包内。正片播放由配置的外部播放器适配器处理。
 
-构建阶段会将 BD-J 可访问 Playlist 的 PlayItem 导出为 MP4 视频和 AAC 音频，并写入输出目录。等价媒体引用共用资产。使用 `--overwrite` 时，匹配媒体计划的资产会复用；源区间或编码设置变化时会重新导出。
+构建阶段会将 BD-J 可访问 Playlist 的 PlayItem 导出为 MP4 视频和 AAC 音频，并写入输出目录。等价媒体引用共用资产。使用 `--overwrite` 时从输出目录复用匹配媒体计划的资产；源区间或编码设置变化时重新导出。`--resume [DIR]` 改为从上次中断留下的目录复用：给了 `DIR` 就用它，省略时取输出目录旁最新的 `.<输出名>.staging-*`。复用的资产会被探测，时长与媒体计划相差超过 0.25s 的重新导出。目录是可选值，输入写在标志之前，或用 `--resume=DIR`。
 
 使用本地 Java 运行时启动 BD-J 菜单包：
 
@@ -109,11 +111,11 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 | `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--png-level 0-9`、`--format table\|json` |
 | `export <BDMV> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--png-level 0-9` |
 | `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG`、`--png-level 0-9` |
-| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--png-level 0-9`、`--overwrite`、`--strict` |
+| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--png-level 0-9`、`--overwrite`、`--resume [DIR]`、`--strict` |
 | `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json`、`--strict` |
 | `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
-`build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。影片 PGS 字幕通过 `export --type sup` 导出。
+`build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。运行中断时目标目录尚未写入，已完成的工作留在 `.<输出名>.staging-*`；`--resume` 从该目录继续。影片 PGS 字幕通过 `export --type sup` 导出。
 
 `--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --decode png` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.mnu` 或 `.sup` 输入。
 

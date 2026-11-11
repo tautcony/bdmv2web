@@ -42,6 +42,7 @@ rg '"CODE_NAME"' packages apps
 | `CLI_MISSING_INPUT` / `CLI_MISSING_OUTPUT` | 缺输入 / 缺 `--out` | 命令用法 |
 | `CLI_INVALID_FORMAT` | `--format` 值不支持 | `validate` 只接受 `json` |
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 | `--player-profile` |
+| `CLI_INVALID_RESUME` | `--resume` 目录不存在，或输出目录旁没有可续跑的工作目录 | 传入上次运行留下的 `.<输出名>.staging-*` 目录 |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 | `--type` 与 `--all` |
 | `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 | `list`/`export`/`render` |
 | `CLI_INVALID_DECODE` | `export --decode` 值非法 | `png` |
@@ -134,6 +135,7 @@ rg '"CODE_NAME"' packages apps
 | `MEDIA_TOOL_UNAVAILABLE` / `MEDIA_ENCODER_UNAVAILABLE` / `MEDIA_TOOL_COMMAND_FAILED` | 缺 `ffmpeg`/`ffprobe`、缺 `libx264`/`aac`，或工具命令执行失败 |
 | `MEDIA_PROCESS_FAILED` / `MEDIA_JOB_TIMEOUT` / `MEDIA_JOB_CANCELLED` | 进程失败/超时/取消 |
 | `MEDIA_OUTPUT_INVALID` | 产物无法探测 |
+| `MEDIA_REMUX_UNAVAILABLE` | 警告：请求了 `--video copy` 但该 clip 不能复制，或复制产物未通过校验，已退回编码 |
 | `MEDIA_ASSET_BUDGET_EXCEEDED` | 单个媒体资产估算或实测超过 `maxAssetBytes`，导出失败 |
 | `MEDIA_STREAM_FILE_MISSING` / `MEDIA_PLAYLIST_MISSING` / `MEDIA_CLIP_INFO_MISSING` / `MEDIA_STRUCTURE_MISSING` | 源结构缺失 |
 | `MEDIA_VIDEO_PID_UNRESOLVED` / `MEDIA_PID_UNRESOLVED` / `MEDIA_VIDEO_TRACK_UNRESOLVED` / `MEDIA_AUDIO_STREAM_UNVERIFIED` | PID/轨道无法唯一确定 |
@@ -180,6 +182,8 @@ rg '"CODE_NAME"' packages apps
 | `M4_MEDIA_METADATA_NOT_PROJECTED` | 未导出菜单媒体，源视频流与播放元数据不在包内（warning） | 是否触发 `--export-media` |
 | `M4_POPUP_RENDER_PARTIAL` | 弹出菜单只在包内菜单画面上叠加 | 正片由外部播放器播放 |
 | `M4_MENU_PLAY_ITEM_NOT_PACKAGED` | Top Menu 播放列表的某个 PlayItem 声明了 IGS 流但没有匹配的场景，`LINK_PI` 跳过去仍停当前页（warning） | `list --type igs` 中该 PlayItem 的 clip/PID |
+| `M5_MENU_MEDIA_SCOPE_SKIPPED` | `--menu-media auto` 跳过了超出 900 秒的播放列表，消息列出编号与分钟数（info） | 需要时改用 `--menu-media all` |
+| `M5_MENU_MEDIA_DISABLED` | `--menu-media none` 明确关闭媒体导出，运行时把 `PLAY_PLAYLIST` 报为不可用（info） | 预期 |
 | `M5_MENU_LOOP_UNAVAILABLE` | 背景时间线无法表示为连续区间 | 播放列表 PlayItem 结构 |
 | `M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE` | 菜单 PlayItem 的背景媒体没有导出，该页沿用上一个背景（warning） | `menuLoopMediaInput` 的过滤条件与 ffmpeg 日志 |
 | `M5_POPUP_CONTENT_MEDIA_EXTERNAL` | 弹出菜单所属正片交给外部播放器 | 预期 |

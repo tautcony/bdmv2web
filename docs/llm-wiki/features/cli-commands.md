@@ -122,12 +122,17 @@ IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与
 | `--player-profile FILE` | 内置默认 | PSR16–20 语言/国家/地区 |
 | `--limits FILE` | `DEFAULT_LIMITS` | VM 指令/队列/调用预算 |
 | `--overwrite` | 关 | 允许覆盖已有目录；匹配的旧媒体可复用 |
+| `--resume [dir]` | 关 | 从上次运行留下的目录复用已完成的媒体；省略 `dir` 时取输出目录旁最新的 `.<输出名>.staging-*` |
+| `--video encode\|copy` | `encode` | `copy` 把源 H.264 视频流复制进 MP4 不重编码；复制起点是播放器解码的入口点（EP map 中 `in` 点之前最近的关键帧），`in` 点须落在该入口点 256 tick（5.689 ms）的量化栅格内，其余自动退回编码并给 `MEDIA_REMUX_UNAVAILABLE` 警告。`copy` 时 `--codec` 缺省 `h264` |
+| `--menu-media auto\|all\|none` | `auto` | 导出哪些播放列表的媒体，HDMV 与 BD-J 共用同一个取值。`auto` 只导菜单级媒体；`all` 导出导航可达的全部 PlayItem；`none` 不导媒体 |
 | `--png-level 0-9` | 见 `render` | 包内 PNG（元素图与 PGS 字幕画布）的 deflate 档位 |
 | `--strict` | 关 | partial 退出 2 |
 | `--progress` | 自动 | stderr 非终端时也逐行输出进度 |
 | `--no-progress` | 关 | 关闭进度输出 |
 
-进度输出（stderr）：开头是 `input`、`output`、`title`、`profile` 四行，随后是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，无媒体可导时该步标记为跳过。媒体编码期间显示 ffmpeg 百分比、文件与已编码时长。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 不是终端时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
+`--menu-media` 的三种取值在两种导航模式下含义相同，判定证据不同：HDMV 由 IGS 场景确定哪些 PlayItem 属于菜单，`auto` 即「场景匹配到的菜单媒体」；BD-J 没有场景证据，BDJO 又常以 `accessToAll` 授权整碟，`auto` 改以播放列表总时长不超过 900 秒作为菜单级判据，超出的写 `M5_MENU_MEDIA_SCOPE_SKIPPED`（列出编号与分钟数，提示可用 `--menu-media all`）。`all` 在两种模式下都导出全部可达 PlayItem（HDMV 取 VM 可达集合，BD-J 取 BDJO 授权集合），会包含正片，开销接近整碟。`none` 只打包结构与场景，运行时把 `PLAY_PLAYLIST` 报为不可用，并写 `M5_MENU_MEDIA_DISABLED`。
+
+进度输出（stderr）：开头是 `input`、`output`、`title`、`profile` 四行，`--resume` 时另加 `resume` 行给出复用来源，随后是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，行首标记随计时器持续动画，无媒体可导时该步标记为跳过。媒体导出期间该步按 **clip** 聚合：一个 clip 的背景与它的全部音轨算一个单位，音轨再多也只推进一次，百分比与 `clip i/N` 同步，复用的 clip 也计入已完成（它主动上报一个已完成事件，所以 `--resume` 续跑同样能走到 100%）。明细为 `clip i/N · Clip · 流 · 已编码/总时长`，其中 `i/N` 是计划内的 clip 位置，背景流那一项写作 `background copy` 或 `background encode`，直接给出该 clip 实际走的是复制还是重编码（请求了 `--video copy` 但被拒绝时这里显示 `encode`，不再静默回退），复用时另带 `· reused`。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 不是终端时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
 
 产物目录：
 
@@ -138,16 +143,15 @@ manifest.json
 asset-manifest.json
 compatibility.json
 external-targets.json          # 有外部播放目标时
-media-plan.json                # 有菜单循环媒体时
-media-plans/playlist-*.json    # 额外菜单播放列表
+media-plans/playlist-*-pi*-clip-*.json   # 每个导出单元一份计划
 runtime/disc-data.js
 runtime/assets-data-000.js ...
 runtime/app.bundle.js
 runtime/style.css
 runtime/bdmv-config.js         # 有外部播放时
 assets/audio/sound-N.wav
-assets/media/background.mp4
-assets/media/audio-*.m4a
+assets/media/playlist-<id>-pi<n>-clip-<clipId>/background.mp4
+assets/media/playlist-<id>-pi<n>-clip-<clipId>/audio-*.m4a
 report.json                    # build 成功与失败路径都写
 reports/                       # validate 之后出现
 ```

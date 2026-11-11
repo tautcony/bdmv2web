@@ -19,12 +19,12 @@ function parse(args: string[]): Record<string, unknown> {
 }
 
 describe("menu media encoding options", () => {
-  it("parses --crf, --preset, --codec and --hdr into the encoder settings", () => {
-    const options = parse(["--crf", "23", "--preset", "fast", "--codec", "h264", "--hdr", "tonemap"]);
-    expect(options).toMatchObject({ crf: 23, preset: "fast", codec: "h264", hdr: "tonemap" });
+  it("parses --crf, --preset, --codec, --hdr and --video into the encoder settings", () => {
+    const options = parse(["--crf", "23", "--preset", "fast", "--codec", "h264", "--hdr", "tonemap", "--video", "copy"]);
+    expect(options).toMatchObject({ crf: 23, preset: "fast", codec: "h264", hdr: "tonemap", video: "copy" });
     setActiveCommand("disc", options);
     // `--hdr` is the CLI spelling; the package contract calls the field hdrMode.
-    expect(menuMediaEncoding()).toEqual({ crf: 23, preset: "fast", codec: "h264", hdrMode: "tonemap" });
+    expect(menuMediaEncoding()).toEqual({ crf: 23, preset: "fast", codec: "h264", hdrMode: "tonemap", videoMode: "copy" });
   });
 
   it("leaves the encoder settings empty so the media layer applies its own defaults", () => {
@@ -47,12 +47,13 @@ describe("menu media encoding options", () => {
     expect(() => parse(["--preset", "placebo"])).toThrow(/preset must be one of: ultrafast, veryfast, fast, medium/);
     expect(() => parse(["--codec", "vp9"])).toThrow(/codec must be one of: h264, hevc/);
     expect(() => parse(["--hdr", "dynamic"])).toThrow(/hdr must be one of: tonemap, preserve/);
+    expect(() => parse(["--video", "remux"])).toThrow(/video must be one of: encode, copy/);
   });
 
   it("keeps the media options on the convert alias as well", () => {
     const program = buildProgram();
     const convert = program.commands.find((entry) => entry.aliases().includes("convert"));
     expect(convert?.name()).toBe("build");
-    expect(convert?.options.map((option) => option.long)).toEqual(expect.arrayContaining(["--crf", "--preset", "--codec", "--hdr"]));
+    expect(convert?.options.map((option) => option.long)).toEqual(expect.arrayContaining(["--crf", "--preset", "--codec", "--hdr", "--video"]));
   });
 });

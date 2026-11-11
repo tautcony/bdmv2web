@@ -55,6 +55,23 @@ async function waitForText(path: string, expected: string): Promise<string> {
   return readFile(path, "utf8");
 }
 
+/**
+ * Stop the server and only then delete its scratch directory.
+ *
+ * The fake Java process writes its log after the server hands it an RPC
+ * response, and the server signals that child on SIGTERM. Removing the
+ * directory first raced both: the assertion read a log the child had not
+ * written yet, and the removal hit ENOTEMPTY when the file appeared midway.
+ */
+async function stopServer(child: ChildProcess | undefined, parent: string): Promise<void> {
+  if (child && child.exitCode === null) {
+    const exited = new Promise<void>((resolveExit) => { child.once("exit", () => resolveExit()); });
+    child.kill("SIGTERM");
+    await Promise.race([exited, new Promise<void>((resolveTimeout) => { setTimeout(resolveTimeout, 500).unref(); })]);
+  }
+  await rm(parent, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+}
+
 async function fixture(parent: string, args: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>, script: string, runtimeSession: Record<string, unknown> = {}): Promise<{ root: string; java: string }> {
   const root = join(parent, "package");
   await mkdir(join(root, "runtime", "bdj"), { recursive: true });
@@ -127,14 +144,13 @@ it.skipIf(process.platform === "win32")("routes the startup BD-J playlist to pac
     ] });
     expect((media.items as Array<Record<string, unknown>>)[0]).not.toHaveProperty("loopStartOffset90k");
     expect((media.items as Array<Record<string, unknown>>)[0]).not.toHaveProperty("loopMarkIndex");
-    expect(await readFile(responseLog, "utf8")).toBe("pending");
+    expect(await waitForText(responseLog, "pending")).toBe("pending");
     const item = (media.items as Array<{ url: string }>)[0]!;
     const asset = await fetch(new URL(item.url, `http://127.0.0.1:${port}`));
     expect(asset.status).toBe(200); expect(asset.headers.get("content-type")).toBe("video/mp4"); expect(Number(asset.headers.get("content-length"))).toBeGreaterThan(0);
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -161,8 +177,7 @@ it.skipIf(process.platform === "win32")("publishes a contextual warning and miss
     expect((media.items as Array<Record<string, unknown>>)[0]).not.toHaveProperty("url");
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -201,8 +216,7 @@ it.skipIf(process.platform === "win32")("stops prepared BD-J media after a playl
     expect(await waitForText(responseLog, "stop:pending\n")).toBe("start:pending\nstop:pending\n");
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -231,8 +245,7 @@ it.skipIf(process.platform === "win32")("uses the external adapter only after a 
     await expect(readEvent(reader, "player-handoff")).resolves.toMatchObject({ playerId: "token-feature", playlist: 100, status: "unavailable", message: expect.stringContaining("requires bounded playback") });
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -257,18 +270,17 @@ it.skipIf(process.platform === "win32")("serves BD-J resources and forwards obse
     const reader = events.body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
     await expect(readEvent(reader, "player-resource")).resolves.toMatchObject({ playerId: "token-1", path: "bdj/BDMV/JAR/00000/tone.wav" });
-    expect(await readFile(responseLog, "utf8")).toBe("pending");
+    expect(await waitForText(responseLog, "pending")).toBe("pending");
     for (const event of ["started", "ended"] as const) {
       expect((await fetch(`http://127.0.0.1:${port}/api/bdj/media-event`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playerId: "token-1", event }) })).status).toBe(204);
       await expect(readEvent(reader, "player-observation")).resolves.toMatchObject({ playerId: "token-1", event });
     }
-    const logged = await readFile(eventLog, "utf8");
+    const logged = await waitForText(eventLog, b64("ended"));
     expect(logged).toContain(`BDMV_EVENT\tplayer\ttoken-1\t${b64("started")}`);
     expect(logged).toContain(`BDMV_EVENT\tplayer\ttoken-1\t${b64("ended")}`);
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -297,8 +309,7 @@ it.skipIf(process.platform === "win32")("replays a user-selected feature player 
     await expect(readEvent(reconnectedReader, "player-handoff")).resolves.toMatchObject({ playerId: "token-1", playlist: 100, status: "unavailable", message: expect.stringContaining("requires bounded playback") });
     await reconnectedReader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -347,8 +358,7 @@ it.skipIf(process.platform === "win32")("routes mixed BD-J and HDMV title events
     await expect(readEvent(reader, "navigation")).resolves.toMatchObject({ title: 0, programId: 1 });
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -396,8 +406,7 @@ it.skipIf(process.platform === "win32")("runs HDMV First Play before the indexed
     expect(await readFile(observations, "utf8")).toContain("gpr:5");
     await reader.cancel();
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });
 
@@ -436,7 +445,6 @@ it.skipIf(process.platform === "win32")("authored Java title selection bypasses 
     expect(masked.status).toBe(400);
     expect(await masked.text()).toContain("masks user title-search requests");
   } finally {
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
-    await rm(parent, { recursive: true, force: true });
+    await stopServer(serverProcess, parent);
   }
 });

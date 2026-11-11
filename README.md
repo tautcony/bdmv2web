@@ -12,7 +12,7 @@ Inspect a Blu-ray BDMV disc and build a web menu package for HDMV and BD-J discs
 
 - Build a menu package with menu navigation, background video, audio tracks, button graphics, and sound effects.
 - Run BD-J Xlets from packaged application JARs with a local Java process.
-- Package BD-J accessible Playlist video and audio for browser playback. `build --overwrite` reuses matching media assets.
+- Package BD-J accessible Playlist video and audio for browser playback. `build --overwrite` and `build --resume` reuse matching media assets.
 - Inspect BDMV structure and export HDMV, IGS, and SUP data together with menu assets.
 - Hand off supported whole-file feature playback to the system player.
 - Audit package structure, references, paths, and dependencies; produce a compatibility report.
@@ -46,7 +46,9 @@ Inspect a Blu-ray BDMV disc and build a web menu package for HDMV and BD-J discs
 | ffprobe | Callable from `PATH` | Read menu media metadata |
 | Java runtime | Java 21 or compatible with `java.desktop`; BD-J packages only | Run packaged BD-J Xlets with `serve` |
 
-Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; pass `--codec h264` to use H.264 (`crf` defaults to 18). HDR sources are tone mapped to SDR BT.709 by default, which requires an FFmpeg build with the `zscale` filter (libzimg). Without it the package is still produced, but the HDR tag is preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning is reported in diagnostics (the picture appears washed out on SDR displays).
+Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; pass `--codec h264` to use H.264 (`crf` defaults to 18). A Blu-ray menu clip is usually H.264, which browsers already decode, so `build --video copy` remuxes the source video stream into MP4 instead of re-encoding it and keeps the disc's bitrate. Audio is still encoded to AAC because browsers do not decode AC-3, DTS, or LPCM in MP4. A copy needs the segment to start on the entry point a player decodes from — the PlayItem in-time has to name that entry point within the 5.689 ms grid the entry-point map stores — and the source to be 8-bit 4:2:0 SDR H.264; any other clip is encoded (H.264 when `--codec` is not given) and the plan records why, with a `MEDIA_REMUX_UNAVAILABLE` diagnostic. HDR sources are tone mapped to SDR BT.709 by default, which requires an FFmpeg build with the `zscale` filter (libzimg). Without it the package is still produced, but the HDR tag is preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning is reported in diagnostics (the picture appears washed out on SDR displays).
+
+Menu media is scoped by `--menu-media auto|all|none`, which means the same thing for HDMV and BD-J: `auto` (default) exports the playlists a menu uses — for HDMV the ones an IGS scene matches, for BD-J the ones no longer than 15 minutes, because a BD-J disc usually grants access to every playlist and would otherwise re-encode the feature; `all` exports every reachable playlist; `none` packages no media and the runtime reports `PLAY_PLAYLIST` as unavailable. Playlists dropped by `auto` are listed in a `M5_MENU_MEDIA_SCOPE_SKIPPED` diagnostic.
 
 ### From npm
 
@@ -88,7 +90,7 @@ bdmv2web validate ./BDMV-menu
 
 Open an HDMV package directly from `BDMV-menu/index.html`. Its menu media is stored in the package. Feature playback uses the configured external player adapter.
 
-Build exports BD-J accessible Playlist PlayItems as MP4 video and AAC audio assets in the output directory. Equivalent media references share assets. With `--overwrite`, matching media plans reuse existing assets; changed source ranges or encoding settings are exported again.
+Build exports BD-J accessible Playlist PlayItems as MP4 video and AAC audio assets in the output directory. Equivalent media references share assets. With `--overwrite`, matching media plans reuse existing assets from the output directory; changed source ranges or encoding settings are exported again. `--resume [DIR]` reads that reuse source from a directory an interrupted run left behind: `DIR` when given, otherwise the newest `.<output name>.staging-*` beside the output target. Reused assets are probed, and one whose duration differs from its media plan by more than 0.25s is exported again. The directory is an optional value, so write the input before the flag or use `--resume=DIR`.
 
 Run a BD-J package with a local Java runtime:
 
@@ -113,11 +115,11 @@ Open the loopback URL printed by `serve`. A BD-J page opened with `file://` disp
 | `list <BDMV>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
 | `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--decode png`, `--png-level 0-9` |
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG`, `--png-level 0-9` |
-| `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--png-level 0-9`, `--overwrite`, `--strict` |
+| `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--png-level 0-9`, `--overwrite`, `--resume [DIR]`, `--strict` |
 | `validate <menu dir>` | Audit a menu package and update the audit report | `--format json`, `--strict` |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session | `--port N`, `--java EXECUTABLE`, `--player system`, `--disc-id HEX` |
 
-`build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. Movie PGS subtitles are exported with `export --type sup`.
+`build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. An interrupted run leaves the target unwritten and keeps its work in `.<output name>.staging-*`; `--resume` continues from that directory. Movie PGS subtitles are exported with `export --type sup`.
 
 Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS scene and reachable SUP track metadata. `export --decode png` writes PNG files alongside the raw assets. `render` accepts a BDMV, `.mnu`, or `.sup` input. `--png-level 0-9` sets the deflate level for written PNGs; the default is level 1 for IGS elements and level 6 for PGS canvases.
 

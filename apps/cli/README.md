@@ -40,7 +40,7 @@ bdmv2web validate ./BDMV-menu
 | `list <BDMV>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
 | `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets (`--type`, `--m2ts`, `--pid`, `--decode png`) |
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
-| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--overwrite`, `--strict`) |
+| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--strict`) |
 | `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`, `--strict`) |
 
 `convert` is an alias of `build`. `bdmv2web --help` lists every command and `bdmv2web <command> --help` lists the options of one command.

@@ -38,7 +38,7 @@ src/
 ```ts
 inspect   [input]  --out --format --allow-partial --strict/--no-strict
 extract   [input]  --out --type --all --format --strict/--no-strict
-build     [input]  --out --title --player-profile --limits --overwrite --png-level --progress/--no-progress --strict/--no-strict
+build     [input]  --out --title --player-profile --limits --overwrite --resume --video --png-level --progress/--no-progress --strict/--no-strict
 validate  [input]  --format --strict/--no-strict
 compare   [input]  --format --strict/--no-strict
 list      [input]  --type --m2ts --pid --out --format

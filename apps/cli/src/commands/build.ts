@@ -9,6 +9,7 @@ import { collectBdjApplicationFiles } from "../shared/bdj-files.js";
 import { buildBdjHostApiJar } from "../shared/bdj-host.js";
 import { normalizeDiscId, readBdmvDiscId } from "../shared/disc-id.js";
 import { referencedAssetIds, safeDiagnosticMessage } from "./extract.js";
+import { mediaExportProgress } from "./media-progress.js";
 import { readJsonObject } from "../cli/output.js";
 import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
@@ -19,24 +20,43 @@ import { createExternalMediaTargets, resolveMenuLoopStart45k, type MenuLoopMedia
 import { buildMenuPackage, type MenuMediaEncoding } from "@bdmv2web/package-builder";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 import { classifyDiagnostics, decideDelivery } from "@bdmv2web/test-runner";
-import { readFile, realpath, writeFile } from "node:fs/promises";
+import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import type { ProgressMode } from "../progress.js";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 import type { DiscIR, Limits, PlayerProfile } from "@bdmv2web/core";
 
-/** Menu media encoder settings from `--crf`, `--preset`, `--codec` and `--hdr`. */
 export function menuMediaEncoding(): MenuMediaEncoding | undefined {
   const crf = optionNumber("--crf");
   const preset = optionValue("--preset");
   const codec = optionValue("--codec");
   const hdrMode = optionValue("--hdr");
+  const videoMode = optionValue("--video");
   const encoding: MenuMediaEncoding = {};
   if (crf !== undefined) encoding.crf = crf;
   if (preset !== undefined) encoding.preset = preset as NonNullable<MenuMediaEncoding["preset"]>;
   if (codec !== undefined) encoding.codec = codec as NonNullable<MenuMediaEncoding["codec"]>;
   if (hdrMode !== undefined) encoding.hdrMode = hdrMode as NonNullable<MenuMediaEncoding["hdrMode"]>;
+  if (videoMode !== undefined) encoding.videoMode = videoMode as NonNullable<MenuMediaEncoding["videoMode"]>;
   return Object.keys(encoding).length ? encoding : undefined;
+}
+
+export type MenuMediaScope = "auto" | "all" | "none";
+
+export const MENU_MEDIA_AUTO_MAX_SECONDS = 900;
+
+export function menuMediaScope(): MenuMediaScope {
+  const value = optionValue("--menu-media");
+  return value === "all" || value === "none" ? value : "auto";
+}
+
+export function playlistDurationSeconds(playlist: ParsedDisc["playlists"][number]): number {
+  return playlist.playItems.reduce((total, item) => total + Math.max(0, item.outTime45k - item.inTime45k), 0) / 45_000;
+}
+
+export function menuMediaScopedOut(playlist: ParsedDisc["playlists"][number], scope: MenuMediaScope, maxSeconds = MENU_MEDIA_AUTO_MAX_SECONDS): boolean {
+  if (scope === "none") return true;
+  return scope === "auto" && playlistDurationSeconds(playlist) > maxSeconds;
 }
 
 export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], playItemIndex?: number): Array<{ clipId: string; pid: number }> {
@@ -180,7 +200,24 @@ export function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, li
   return fallbackTarget;
 }
 
-export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined, options: { playItemIndex?: number; purpose?: "static-background" | "bdj-playback" } = {}): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
+/**
+ * The clip entry point a player decodes from for `time45k`: the latest video
+ * entry point at or before it. This mirrors libbluray, which seeks with
+ * `clpi_lookup_spn(in_time, before = 1)` (`bdnav/navigation.c`) and then wipes
+ * packets until the first PES with `pts >= in_time` (`decoders/m2ts_filter.c`),
+ * so the first frame a player presents is the one holding the start.
+ */
+export function menuMediaEntryPoint45k(disc: ParsedDisc, clipId: string, time45k: number, videoPid?: number): number | undefined {
+  let entry: number | undefined;
+  for (const point of disc.clips.find((clip) => clip.id === clipId)?.cpi ?? []) {
+    if (point.epStreamType !== 1 || point.pts45k > time45k) continue;
+    if (videoPid !== undefined && point.pid !== videoPid) continue;
+    if (entry === undefined || point.pts45k > entry) entry = point.pts45k;
+  }
+  return entry;
+}
+
+export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined, options: { playItemIndex?: number; purpose?: "static-background" | "bdj-playback" } = {}): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; copyStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
   if (!playlist || playlist.playItems.length === 0) return null;
   const playItems = options.playItemIndex === undefined ? playlist.playItems : playlist.playItems.filter((item) => item.index === options.playItemIndex);
   if (playItems.length === 0) return null;
@@ -219,9 +256,10 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   if (!video?.pid || (!stillWithoutAudio && audioStreams.length === 0) || audioStreams.some((stream) => !/^[A-Za-z]{3}$/.test(stream.language!))) return null;
   const sourceFile = `BDMV/STREAM/${first.clipId}.m2ts`;
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
+  const copyStart45k = menuMediaEntryPoint45k(disc, first.clipId, loopStart45k ?? spanStart, video.pid);
   return {
     sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: repeatedTail ? last.index : first.index, clipId: first.clipId,
-    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: options.purpose === "bdj-playback" ? 1 : Math.max(1, repeatCount), loopBackground: options.purpose === "bdj-playback" ? false : loopItem.stillMode === 2 || (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
+    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), ...(copyStart45k !== undefined ? { copyStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: options.purpose === "bdj-playback" ? 1 : Math.max(1, repeatCount), loopBackground: options.purpose === "bdj-playback" ? false : loopItem.stillMode === 2 || (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
     audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
   };
 }
@@ -285,6 +323,29 @@ export async function plannedOutputPath(path: string): Promise<string> {
   try { return resolve(await realpath(dirname(target)), basename(target)); } catch { return target; }
 }
 
+export async function resumeMediaDirectory(output: string | undefined, requested: string | true): Promise<string> {
+  const directory = requested === true ? (output === undefined ? undefined : await newestStagingDirectory(output)) : resolve(requested);
+  if (directory === undefined) fail("CLI_INVALID_RESUME", "--resume found no staging directory for this output target");
+  const info = await stat(directory).catch(() => undefined);
+  if (info?.isDirectory() !== true) fail("CLI_INVALID_RESUME", `--resume requires an existing directory, got '${directory}'`);
+  return directory;
+}
+
+async function newestStagingDirectory(output: string): Promise<string | undefined> {
+  const target = resolve(output);
+  const parent = dirname(target);
+  const prefix = `.${basename(target)}.staging-`;
+  const entries = await readdir(parent, { withFileTypes: true }).catch(() => []);
+  const candidates: Array<{ path: string; modified: number }> = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(prefix)) continue;
+    const path = resolve(parent, entry.name);
+    const info = await stat(path).catch(() => undefined);
+    if (info !== undefined) candidates.push({ path, modified: info.mtimeMs });
+  }
+  return candidates.sort((left, right) => right.modified - left.modified)[0]?.path;
+}
+
 export async function build(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "build requires a BDMV input path");
   // Argument contract first: every option value is resolved before the input is parsed and
@@ -306,6 +367,11 @@ export async function build(): Promise<void> {
     ? await plannedOutputPath(outOption)
     : plannedRoot === undefined ? undefined : await plannedOutputPath(resolve(dirname(plannedRoot), "BDMV-menu"));
   const plannedTitle = titleOption ?? (plannedRoot === undefined ? undefined : basename(dirname(plannedRoot)));
+  const resumeOption = optionValue("--resume");
+  const resumeWithoutDirectory = optionState("--resume") === true;
+  const plannedResume = resumeOption !== undefined
+    ? await resumeMediaDirectory(undefined, resumeOption)
+    : resumeWithoutDirectory && plannedOut !== undefined ? await resumeMediaDirectory(plannedOut, true) : undefined;
   const mode = progressMode();
   const progress = new ProgressReporter({
     command: "convert",
@@ -314,6 +380,7 @@ export async function build(): Promise<void> {
     details: [
       ...(plannedOut === undefined ? [] : [["output", plannedOut] as const]),
       ...(plannedTitle === undefined ? [] : [["title", plannedTitle] as const]),
+      ...(plannedResume === undefined ? [] : [["resume", plannedResume] as const]),
       ["profile", `region ${profile.region} · ${profile.outputProfile}`] as const,
     ],
     ...(mode === undefined ? {} : { mode }),
@@ -343,9 +410,15 @@ export async function build(): Promise<void> {
   const bdjAccessiblePlaylists = new Set((disc.bdjos ?? []).flatMap((bdjo) => bdjo.accessiblePlaylists.accessToAll
     ? disc.playlists.map((playlist) => playlist.id)
     : bdjo.accessiblePlaylists.playlistIds.map((id) => id.padStart(5, "0"))));
+  const mediaScope = menuMediaScope();
   const bdjMenuMediaAssets: MenuLoopMediaInput[] = [];
+  const bdjScopedOutPlaylists: Array<{ id: string; seconds: number }> = [];
   if (hasBdjEntries) for (const playlist of disc.playlists) {
     if (!bdjAccessiblePlaylists.has(playlist.id)) continue;
+    if (menuMediaScopedOut(playlist, mediaScope)) {
+      if (mediaScope === "auto") bdjScopedOutPlaylists.push({ id: playlist.id, seconds: playlistDurationSeconds(playlist) });
+      continue;
+    }
     for (const playItem of playlist.playItems) {
       const input = await menuLoopMediaInput(disc, playlist, { playItemIndex: playItem.index, purpose: "bdj-playback" }).catch(() => null);
       if (input) bdjMenuMediaAssets.push(input);
@@ -362,9 +435,12 @@ export async function build(): Promise<void> {
   const out = plannedOut ?? resolve(dirname(disc.root), "BDMV-menu");
   const title = plannedTitle ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
+  const resumeDirectory = plannedResume ?? (resumeWithoutDirectory ? await resumeMediaDirectory(roots.output, true) : undefined);
+  const reuseDirectory = resumeDirectory ?? (overwrite ? roots.output : undefined);
   // The header names the target for inputs that follow the documented BDMV layout.
   if (plannedOut === undefined) progress.info("output", roots.output);
   if (plannedTitle === undefined) progress.info("title", title);
+  if (plannedResume === undefined && resumeDirectory !== undefined) progress.info("resume", resumeDirectory);
 
   progress.start(CONVERT_STEPS.scenes);
   const extraction = await extractIgsScenes(disc, { pngLevel: pngLevelOption() });
@@ -373,7 +449,7 @@ export async function build(): Promise<void> {
   progress.start(CONVERT_STEPS.playlist);
   const menuTarget = findTopMenuPlaylist(disc, profile, limits, extraction.scenes);
   const menuPlaylist = menuTarget?.playlist;
-  const menuMedia = await menuLoopMediaInput(disc, menuPlaylist, { ...(menuTarget ? { playItemIndex: menuTarget.playItem } : {}) });
+  const menuMedia = mediaScope === "none" ? null : await menuLoopMediaInput(disc, menuPlaylist, { ...(menuTarget ? { playItemIndex: menuTarget.playItem } : {}) });
   progress.done(CONVERT_STEPS.playlist, menuTarget === undefined
     ? "no HDMV Top Menu entry"
     : `playlist ${menuTarget.playlist.id} · PlayItem ${menuTarget.playItem}`);
@@ -431,6 +507,12 @@ export async function build(): Promise<void> {
         ...bdjFiles.diagnostics,
         ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
         { code: "BDJ_RUNTIME_EXECUTION_UNVERIFIED", message: "Browser execution, Java API host calls, AWT rendering, and disc playback callbacks have not been verified with this runtime package.", severity: "warning" },
+        ...(bdjScopedOutPlaylists.length ? [{
+          code: "M5_MENU_MEDIA_SCOPE_SKIPPED",
+          message: `Skipped ${countOf(bdjScopedOutPlaylists.length, "playlist", "playlists")} longer than ${MENU_MEDIA_AUTO_MAX_SECONDS} seconds (${bdjScopedOutPlaylists.slice(0, 8).map((item) => `${item.id} · ${Math.round(item.seconds / 60)} min`).join(", ")}${bdjScopedOutPlaylists.length > 8 ? ", …" : ""}). --menu-media auto exports menu-length playlists only; use --menu-media all to export every playlist the BDJO declares.`,
+          severity: "info",
+        }] : []),
+        ...(mediaScope === "none" ? [{ code: "M5_MENU_MEDIA_DISABLED", message: "--menu-media none: no playlist media was exported; BD-J players that request a playlist will report it as unavailable.", severity: "info" }] : []),
       ];
       const decisionFacts = deliveryDiagnostics(diagnostics);
       const decision = decideDelivery({
@@ -443,6 +525,7 @@ export async function build(): Promise<void> {
       const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
       progress.done(CONVERT_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
       const mediaEncoding = menuMediaEncoding();
+      const mediaProgress = mediaExportProgress(bdjMenuMediaAssets, (ratio, detail) => progress.progress(ratio, detail));
       const packaged = await buildMenuPackage({
         outputDirectory: transaction.stagingPath, title, ir: createMenuDiscIR(disc, mixedMenuScenes.map((item) => ({ id: item.scene.id ?? `playlist-${item.playlistId}-pi-${item.playItem}`, clipId: item.scene.clipId ?? "" })), false, true), scene: null, graphics: mixedGraphics,
         status: decision.status, entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
@@ -454,19 +537,13 @@ export async function build(): Promise<void> {
         mediaEncoding: { codec: "h264", ...mediaEncoding },
         soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
         ...(bdjMenuMediaAssets.length ? { additionalMenuMedia: bdjMenuMediaAssets } : {}),
-        ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
+        ...(reuseDirectory === undefined ? {} : { reuseMediaFromDirectory: reuseDirectory }),
         bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
         diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
-        onMediaProgress: ({ outTimeSeconds, durationSeconds, state, source }) => {
-          const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
-          const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;
-          const language = source.language !== undefined && source.language !== "" && source.language !== "und" ? source.language : `0x${source.pid.toString(16)}`;
-          const stream = source.kind === "background" ? "background" : `audio ${language}`;
-          progress.progress(ratio, `clip ${source.clipId} · ${stream} ${seconds}`);
-        },
+        onMediaProgress: mediaProgress.onMediaProgress,
         onPhase: (phase) => {
-          if (phase === "media") { if (bdjMenuMediaAssets.length) progress.start(CONVERT_STEPS.media); return; }
-          if (phase === "assets") { if (bdjMenuMediaAssets.length) progress.done(CONVERT_STEPS.media, countOf(bdjMenuMediaAssets.length, "BD-J PlayItem", "BD-J PlayItems")); else progress.skip(CONVERT_STEPS.media, "no declared BD-J menu media"); progress.start(CONVERT_STEPS.package); return; }
+          if (phase === "media") { if (bdjMenuMediaAssets.length) progress.start(CONVERT_STEPS.media, countOf(mediaProgress.clips, "clip", "clips")); return; }
+          if (phase === "assets") { if (bdjMenuMediaAssets.length) progress.done(CONVERT_STEPS.media, countOf(bdjMenuMediaAssets.length, "BD-J PlayItem", "BD-J PlayItems")); else progress.skip(CONVERT_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no playlist media inside the menu scope"); progress.start(CONVERT_STEPS.package); return; }
           if (phase === "bundle") { progress.note("bundling BD-J and HDMV runtime"); return; }
           if (phase === "manifest") { progress.done(CONVERT_STEPS.package, "manifest written"); progress.start(CONVERT_STEPS.report); }
         },
@@ -532,18 +609,32 @@ export async function build(): Promise<void> {
     const popupContentPlaylists: number[] = [];
     const missingPlayItemMedia: number[] = [];
     const primaryPlayItem = menuMedia ? menuTarget?.playItem ?? 0 : null;
+    const queuedPlayItems = new Set<string>();
     for (const item of playlistSceneResults) {
       const isMenuPlaylist = item.playlistId === menuPlaylistNumber;
+      queuedPlayItems.add(`${item.playlistId}\0${item.playItem}`);
       if (isMenuPlaylist && item.playItem === primaryPlayItem) continue;
       if (!isMenuPlaylist && !reachablePlaylistIds.has(item.playlistId)) continue;
       if (!isMenuPlaylist && item.scene.uiModel === 1) {
         popupContentPlaylists.push(item.playlistId);
         continue;
       }
+      if (mediaScope === "none") continue;
       const playlist = disc.playlists.find((candidate) => Number(candidate.id) === item.playlistId);
       const media = await menuLoopMediaInput(disc, playlist, { playItemIndex: item.playItem });
       if (media) additionalMenuMedia.push(media);
       else if (isMenuPlaylist) missingPlayItemMedia.push(item.playItem);
+    }
+    if (mediaScope === "all") for (const playlist of disc.playlists) {
+      const id = Number(playlist.id);
+      if (!reachablePlaylistIds.has(id) || popupContentPlaylists.includes(id)) continue;
+      for (const playItem of playlist.playItems) {
+        const key = `${id}\0${playItem.index}`;
+        if (queuedPlayItems.has(key)) continue;
+        queuedPlayItems.add(key);
+        const media = await menuLoopMediaInput(disc, playlist, { playItemIndex: playItem.index, purpose: "bdj-playback" }).catch(() => null);
+        if (media) additionalMenuMedia.push(media);
+      }
     }
     const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
     const popupScenes = popupAdaptations.map((result) => result.scene);
@@ -569,7 +660,8 @@ export async function build(): Promise<void> {
     }
     if (missingPlayItemMedia.length) diagnostics.push({ code: "M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE", message: `Menu playlist ${menuPlaylist.id} PlayItem${missingPlayItemMedia.length === 1 ? "" : "s"} ${missingPlayItemMedia.join(", ")} could not be exported as background media; the previous menu background keeps playing on those pages.`, severity: "warning" });
     if (popupScenes.length) diagnostics.push({ code: "M4_POPUP_RENDER_PARTIAL", message: "Popup IGS compositions are overlaid when POPUP_MENU has an unambiguous match for the active packaged menu clip/PID. Title playback delegated to the external player cannot be overlaid.", severity: "warning" });
-    if (!menuMedia) diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "The HDMV Top Menu command selected a playlist, but its background timeline could not be represented as one continuous source-clip span or a repeated tail with supported video and primary audio streams.", severity: "warning" });
+    if (!menuMedia && mediaScope !== "none") diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "The HDMV Top Menu command selected a playlist, but its background timeline could not be represented as one continuous source-clip span or a repeated tail with supported video and primary audio streams.", severity: "warning" });
+    if (mediaScope === "none") diagnostics.push({ code: "M5_MENU_MEDIA_DISABLED", message: "--menu-media none: no playlist media was exported; the runtime falls back to the preview bridge and reports PLAY_PLAYLIST as unavailable.", severity: "info" });
     for (const playlistId of popupContentPlaylists) diagnostics.push({ code: "M5_POPUP_CONTENT_MEDIA_EXTERNAL", message: `Playlist ${String(playlistId).padStart(5, "0")} is title playback with a popup IGS composition; its video is handed to the external player and the popup composition is not available there.`, severity: "warning" });
     if (additionalMenuMedia.length) diagnostics.push({ code: "M5_PLAYLIST_MEDIA_EXPORTED", message: `Packaged local media for playlist${additionalMenuMedia.length === 1 ? "" : "s"} ${[...new Set(additionalMenuMedia.map((media) => media.playlistId))].join(", ")}.`, severity: "info" });
     if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands.", severity: "warning" });
@@ -594,7 +686,7 @@ export async function build(): Promise<void> {
       hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
       // `buildMenuPackage` reached this point, so no required asset can be missing.
       hasMissingRequiredAsset: false,
-      limitations: menuMedia ? [] : ["Menu loop media is unavailable; the menu background holds its final frame."],
+      limitations: menuMedia ? [] : [mediaScope === "none" ? "Menu media export is disabled by --menu-media none." : "Menu loop media is unavailable; the menu background holds its final frame."],
     }, strictDefault());
     const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
     const plannedMedia = [
@@ -603,6 +695,7 @@ export async function build(): Promise<void> {
     ].filter((item): item is string => item !== null);
     progress.done(CONVERT_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
     const mediaEncoding = menuMediaEncoding();
+    const mediaProgress = mediaExportProgress([...(menuMedia === null ? [] : [menuMedia]), ...additionalMenuMedia], (ratio, detail) => progress.progress(ratio, detail));
     const packaged = await buildMenuPackage({
       pngLevel: pngLevelOption(),
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
@@ -616,26 +709,20 @@ export async function build(): Promise<void> {
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
       ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }),
       graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, vmLimits: limits,
-      ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
+      ...(reuseDirectory === undefined ? {} : { reuseMediaFromDirectory: reuseDirectory }),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
       ...(bdjFiles.files.length ? { bdjFiles: bdjFiles.files } : {}),
       ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjHostApiJar: bdjHostApiJar!, bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
-      onMediaProgress: ({ outTimeSeconds, durationSeconds, state, source }) => {
-        const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
-        const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;
-        const language = source.language !== undefined && source.language !== "" && source.language !== "und" ? source.language : `0x${source.pid.toString(16)}`;
-        const stream = source.kind === "background" ? "background" : `audio ${language}`;
-        progress.progress(ratio, `clip ${source.clipId} · ${stream} ${seconds}`);
-      },
+      onMediaProgress: mediaProgress.onMediaProgress,
       onPhase: (phase) => {
         if (phase === "media") {
-          if (plannedMedia.length) progress.start(CONVERT_STEPS.media);
+          if (plannedMedia.length) progress.start(CONVERT_STEPS.media, countOf(mediaProgress.clips, "clip", "clips"));
           return;
         }
         if (phase === "assets") {
           if (plannedMedia.length) progress.done(CONVERT_STEPS.media, plannedMedia.join(" + "));
-          else progress.skip(CONVERT_STEPS.media, "no menu media");
+          else progress.skip(CONVERT_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no menu media");
           progress.start(CONVERT_STEPS.package);
           return;
         }

@@ -22,7 +22,7 @@ The Java host receives the package BDMV/JAR directory as its resource root. The 
 
 ## Menu and feature media
 
-The browser presents declared BD-J resources through local package URLs. Build exports accessible menu PlayItem video and audio into the output directory. Equivalent media references share one encoded asset, and `build --overwrite` reuses media assets whose source plan and encoding settings match. `serve` reads the package manifest and serves those assets without runtime transcoding. Java receives resource `pending` when the browser begins the operation, then receives `started`, `ended`, `error`, `blocked`, or `stopped` only from observed browser media events. A blocked operation remains available for user-gesture recovery while its player remains active.
+The browser presents declared BD-J resources through local package URLs. Build exports accessible menu PlayItem video and audio into the output directory. Equivalent media references share one encoded asset, and `build --overwrite` or `build --resume` reuses media assets whose source plan and encoding settings match. `serve` reads the package manifest and serves those assets without runtime transcoding. Java receives resource `pending` when the browser begins the operation, then receives `started`, `ended`, `error`, `blocked`, or `stopped` only from observed browser media events. A blocked operation remains available for user-gesture recovery while its player remains active.
 
 Feature playback uses the `--player` adapter selected for the `serve` process:
 

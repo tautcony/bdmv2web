@@ -140,7 +140,7 @@ export class ProgressReporter {
   info(label: string, value: string): void {
     if (this.mode === "none") return;
     this.clearLive();
-    this.stream.write(`  ${this.paintText(label.padEnd(6), "dim")}  ${value}\n`);
+    this.stream.write(`  ${this.paintText(label.padEnd(HEADER_LABEL_WIDTH), "dim")}  ${value}\n`);
     if (this.mode === "tty" && this.current !== undefined) this.paint();
   }
 
@@ -241,11 +241,8 @@ export class ProgressReporter {
 
   private startTimer(): void {
     if (this.mode !== "tty" || this.timer !== undefined || this.current === undefined) return;
-    // Only a step without a measurable ratio needs to animate; a measured step
-    // repaints on its own progress reports.
     this.timer = setInterval(() => {
       if (this.current === undefined) return;
-      if (this.steps[this.current]!.ratio !== undefined) return;
       this.frame += 1;
       this.paint();
     }, 100);
