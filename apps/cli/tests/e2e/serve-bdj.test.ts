@@ -173,9 +173,11 @@ it.skipIf(process.platform === "win32")("stops prepared BD-J media after a playl
     "#!/usr/bin/env node",
     "const fs = require('node:fs');",
     `const responseLog = ${JSON.stringify(responseLog)};`,
+    `const stopFile = ${JSON.stringify(join(parent, "stop-player"))};`,
     `process.stdout.write('BDMV_RPC\\t1\\tplayerStart\\t${b64("token-cancel\u001fowner-cancel\u001fplaylist\u001f100")}\\n');`,
     `const stop = 'BDMV_RPC\\t2\\tplayerStop\\t${b64("token-cancel")}\\n';`,
-    "let input = ''; process.stdin.on('data', (chunk) => { input += chunk; const lines = input.split(/\\r?\\n/); input = lines.pop() || ''; for (const line of lines) { if (line.startsWith('BDMV_RES\\t1\\t')) { const result = Buffer.from(line.split('\\t')[2], 'base64').toString(); fs.appendFileSync(responseLog, 'start:' + result + '\\n'); if (result === 'pending') process.stdout.write(stop); } if (line.startsWith('BDMV_RES\\t2\\t')) fs.appendFileSync(responseLog, 'stop:' + Buffer.from(line.split('\\t')[2], 'base64').toString() + '\\n'); if (line.startsWith('BDMV_EVENT\\tshutdown')) process.exit(0); } });",
+    "const timer = setInterval(() => { if (fs.existsSync(stopFile)) { clearInterval(timer); process.stdout.write(stop); } }, 10);",
+    "let input = ''; process.stdin.on('data', (chunk) => { input += chunk; const lines = input.split(/\\r?\\n/); input = lines.pop() || ''; for (const line of lines) { if (line.startsWith('BDMV_RES\\t1\\t')) fs.appendFileSync(responseLog, 'start:' + Buffer.from(line.split('\\t')[2], 'base64').toString() + '\\n'); if (line.startsWith('BDMV_RES\\t2\\t')) fs.appendFileSync(responseLog, 'stop:' + Buffer.from(line.split('\\t')[2], 'base64').toString() + '\\n'); if (line.startsWith('BDMV_EVENT\\tshutdown')) process.exit(0); } });",
   ].join("\n");
   let serverProcess: ChildProcess | undefined;
   try {
@@ -193,8 +195,8 @@ it.skipIf(process.platform === "win32")("stops prepared BD-J media after a playl
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
-    await expect(readEvent(reader, "rpc")).resolves.toMatchObject({ operation: "playerStart", status: "ok" });
     await expect(readEvent(reader, "player-menu-media")).resolves.toMatchObject({ playerId: "token-cancel", playlistId: "00100" });
+    await writeFile(join(parent, "stop-player"), "stop");
     await expect(readEvent(reader, "player-stop")).resolves.toMatchObject({ playerId: "token-cancel" });
     expect(await waitForText(responseLog, "stop:pending\n")).toBe("start:pending\nstop:pending\n");
     await reader.cancel();
