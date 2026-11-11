@@ -25,6 +25,22 @@ This file records cross-cutting requirements repeated in Codex conversations for
 - Report only verification that was actually run. State unverified browser, real-disc, and CI behavior as unverified; keep environment-specific observations as historical evidence, not as universal platform requirements.
 - Avoid adding checks that the project explicitly removed, redundant guard layers, or tests whose only purpose is to prove an absence. Add or run verification that is relevant to the change and its stated acceptance criteria.
 
+## Reference cache
+
+`.reference-cache/` is gitignored and populated with the pinned references below. Read them in place. `python3 scripts/fetch-reference-cache.py` refreshes `repositories/` at the revisions in `docs/references/cache-manifest.json`, including submodules; set `https_proxy`, `http_proxy` and `all_proxy` when the network needs a proxy. Each `.reference-cache/<id>` entry is a symlink to `repositories/<id>`, so both path styles resolve to one copy.
+
+| Path | Role |
+| --- | --- |
+| `.reference-cache/repositories/libbluray-1.5.0/` | Full libbluray 1.5.0 checkout with the `contrib/libudfread` submodule; primary behavior reference for BDMV/HDMV parsing, IGS/PGS decoding and the navigation VM. |
+| `.reference-cache/repositories/igstools-2019/` | Full igstools checkout; the independent IGS parser and reference PNG exporter. |
+| `.reference-cache/repositories/libhdmv-2026-03/` | Full libhdmv checkout; Alpha cross-reference for parsers and VM, not a behavior golden. |
+| `.reference-cache/repositories/bdmvkit-0.7.0/` | Full bdmvkit checkout, including the `bluray_sim` harness that drives libbluray. |
+| `.reference-cache/specs/` | Five BDA public white papers with provenance notes; architecture background only. |
+| `.reference-cache/verification/` | igstools reference PNGs and extraction output from the IGS fixture runs, used for pixel comparisons. |
+| `.reference-cache/venv/` | Python environment with Pillow and pypng for the comparison scripts. |
+
+Keep disc content out of the cache and out of release output.
+
 ## Test layout and coverage
 
 - Place a test beside the module it covers as `src/**/*.test.ts` when it exercises one module. Place a test that combines modules, combines packages, or drives the built CLI under `<package>/tests/integration/`; place one that spawns the built executable under `<package>/tests/e2e/`. Put test-only code in `<package>/tests/helpers/` and test data in `<package>/tests/fixtures/`.
