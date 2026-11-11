@@ -154,7 +154,7 @@ export interface MenuPackageInput {
   /** BD-J application JARs and authored resources mapped into the Java virtual filesystem. */
   bdjFiles?: BdjPackageFile[];
   /** Native Java startup record for the packaged BDJO applications. */
-  bdjLaunch?: { discId: string; initialBdjoId: string; applications: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>; session?: { vmPrograms: VmProgram[]; vmEntries: VmOptions["entries"]; playerProfile: PlayerProfile; vmLimits: Limits; externalTargets?: ExternalMediaTargets; bdjMenuMediaInputs?: Array<Omit<MenuLoopMediaInput, "sourcePath">>; menuMediaEncoding?: MenuMediaEncoding; bdmvPath?: string; bdjoDescriptors?: unknown[] } };
+  bdjLaunch?: { discId: string; initialBdjoId: string; applications: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>; session?: { vmPrograms: VmProgram[]; vmEntries: VmOptions["entries"]; playerProfile: PlayerProfile; vmLimits: Limits; externalTargets?: ExternalMediaTargets; bdmvPath?: string; bdjoDescriptors?: unknown[] } };
   /** Compiled BD-J host bytes copied into this package's runtime directory. */
   bdjHostApiJar?: Uint8Array;
   soundEntries?: SoundMetadata[];
@@ -454,7 +454,6 @@ function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncodin
   return JSON.stringify({
     sourcePath: resolve(media.sourcePath),
     sourceFile: media.sourceFile,
-    playlistId: media.playlistId,
     clipId: media.clipId,
     inTime45k: media.inTime45k,
     loopStart45k: media.loopStart45k ?? null,

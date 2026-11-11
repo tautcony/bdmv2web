@@ -29,6 +29,7 @@
 - [ ] 4.2 Forward keyboard press/release/repeat, blur releases and pointer coordinates through the content rectangle; verify logical coordinates, letterboxing and Java event delivery.
 - [ ] 4.3 Render authored images/fonts/text and repaint/timer updates in native Java; verify synthetic pixel output and execute the available Spider-Man JAR to record reached behavior.
 - [ ] 4.4 Present declared package menu backgrounds/sounds in browser media elements and return observed correlated events with user-gesture recovery; verify started/ended/error/blocked paths.
+- [ ] 4.7 Export BDJO-accessible BD-J menu PlayItem media into the output package, deduplicate equivalent references across Playlist IDs, reuse matching media plans on overwrite, and resolve browser URLs from the package manifest; verify deduplication, build reuse, and serve playback.
 - [ ] 4.5 Render service-owned HDMV menu state and forward HDMV input in BD-J sessions; verify mixed navigation and keep static HDMV/IGS file:// coverage passing.
 - [ ] 4.6 Update current runtime-web and menu support docs with implemented and observed graphics/input/media scope; verify registered relative documentation links.
 
@@ -55,6 +56,7 @@
 
 ### Implemented
 
+- BDJO-accessible BD-J PlayItem assets are exported into the package output. Equivalent references share a transcode across Playlist IDs. `--overwrite` passes the prior output to media-plan reuse. The local service resolves packaged assets from `asset-manifest.json` and does not transcode during playback.
 - BD-J playlist media follows finite authored PlayItem intervals. Missing menu sources produce a warning with available BDJO/title/playlist/PlayItem/source context and skip immediately. Consecutive missing items are processed in order. A missing-only playlist sends one source-bearing completion event; it sends no started, presented, position or mark observations.
 - Build reads the 32-hex BDID from `CERTIFICATE/id.bdmv` or its backup. Build and serve accept `--disc-id <32hex>` overrides. Unknown source identity retains the zero value and build prints a warning.
 - PRESENT/AUTOSTART and title-bound lifecycle behavior, Java playback observation callbacks, and source-to-playlist mark mapping are implemented.
@@ -69,6 +71,7 @@
 
 ### Pending
 
+- Verify package media export, matching-plan reuse during overwrite, and manifest-backed playback in the local service.
 - Root to verify the current immediate-skip behavior with a quick real-disc missing-item run. The historical timed-blank run does not cover it.
 - Verify remaining authored menu actions, independent visual comparison, cross-platform launches and CI behavior.
 - Complete the remaining broad runtime criteria listed in sections 1–7. The real-disc menu presentation evidence does not complete those broader criteria.

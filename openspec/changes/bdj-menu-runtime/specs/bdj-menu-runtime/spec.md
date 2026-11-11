@@ -111,7 +111,7 @@
 
 ### Requirement: 菜单背景与声音
 
-系统 SHALL 由网页呈现已声明的包内菜单背景和声音，并将实际观察到的开始、结束、错误和自动播放受限状态关联回菜单运行时。交互重试 SHALL 只恢复仍有效的受限媒体操作。
+系统 SHALL 在构建阶段将 BDJO 可访问 Playlist 的 PlayItem 媒体转码到输出包目录，并由网页呈现这些包内菜单背景和声音。BDJ 与 HDMV 菜单媒体中的等价引用 SHALL 共用一次转码结果，即使其 Playlist ID 或 PlayItem ID 不同；输入文件、媒体区间、流映射或编码设置不同时 SHALL 分别处理。overwrite SHALL 在现有媒体计划与输入、范围及编码设置匹配时复用媒体资产。serve SHALL 只读取包内资产，不在运行期间转码。系统 SHALL 将实际观察到的开始、结束、错误和自动播放受限状态关联回菜单运行时。交互重试 SHALL 只恢复仍有效的受限媒体操作。
 
 #### Scenario: 菜单声音结束
 
@@ -122,6 +122,16 @@
 
 - **WHEN** 浏览器拒绝菜单媒体自动播放
 - **THEN** 页面提供用户手势入口，继续处理菜单输入，并回报受限状态
+
+#### Scenario: BD-J 菜单媒体构建与覆盖复用
+
+- **WHEN** 构建 BD-J 菜单包，或以 overwrite 重建现有包
+- **THEN** BDJO 可访问 Playlist 的 PlayItem 视频和音频作为 MP4/AAC 资产写入输出目录；overwrite 复用媒体计划匹配的资产，并为输入范围或编码设置已变化的资产重新转码；serve 从包内 manifest 读取对应资产路径
+
+#### Scenario: BDJ 与 HDMV 媒体引用共用等价资产
+
+- **WHEN** BDJ 或 HDMV 菜单包内的多个 Playlist 引用相同源文件、媒体区间、视频与音频流映射及编码设置
+- **THEN** 构建只转码一次，并为每个 Playlist/PlayItem 保留各自的运行时地址与 manifest 记录
 
 ### Requirement: Playlist 权限与正片交接
 

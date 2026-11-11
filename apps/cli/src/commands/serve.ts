@@ -1,15 +1,13 @@
 import { createReadStream } from "node:fs";
-import { mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { tmpdir } from "node:os";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { HdmvVm, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
 import { isDeclaredExternalStreamPath, resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayItem, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
-import { exportMenuLoopMedia, type MenuLoopMediaInput } from "@bdmv2web/media-export";
 import { buildExternalPlayerLaunch, launchExternalPlayer } from "../shared/external-player.js";
 import { normalizeDiscId } from "../shared/disc-id.js";
 
@@ -23,7 +21,7 @@ interface RuntimeLaunch {
   discId: string;
   initialBdjoId: string;
   applications: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>;
-  session?: { vmPrograms: VmProgram[]; vmEntries?: VmOptions["entries"]; playerProfile?: VmOptions["profile"]; vmLimits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; bdjMenuMediaInputs?: Array<Omit<MenuLoopMediaInput, "sourcePath">>; menuMediaEncoding?: { crf?: number; preset?: "medium" | "fast" | "veryfast" | "ultrafast"; codec?: "h264" | "hevc"; hdrMode?: "tonemap" | "preserve" }; bdmvPath?: string; bdjoDescriptors?: Array<{ path: string; terminalInfo: { titleSearchMask: boolean; menuCallMask: boolean }; accessiblePlaylists: { accessToAll: boolean; playlistIds: string[] } }> };
+  session?: { vmPrograms: VmProgram[]; vmEntries?: VmOptions["entries"]; playerProfile?: VmOptions["profile"]; vmLimits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; bdmvPath?: string; bdjoDescriptors?: Array<{ path: string; terminalInfo: { titleSearchMask: boolean; menuCallMask: boolean }; accessiblePlaylists: { accessToAll: boolean; playlistIds: string[] } }> };
 }
 
 interface MenuMediaTargetItem {
@@ -76,9 +74,8 @@ export async function serve(): Promise<void> {
   const pendingMenuPlayers = new Set<string>();
   const activePlayerTokens = new Set<string>();
   const menuMediaFiles = new Map<string, string>();
-  const menuMediaCache = new Map<string, Promise<PreparedMenuMediaItem>>();
   const latestPlayerHandoffs = new Map<string, Record<string, unknown>>();
-  let menuMediaDirectory: string | undefined;
+  let packagedMenuMedia: Promise<Array<Record<string, unknown>>> | undefined;
   let activeTitle = 0xffff;
   let userFeatureTitleSelected = false;
   let pendingUserSelection = false;
@@ -86,43 +83,38 @@ export async function serve(): Promise<void> {
   let latestFrame: { sequence: number; data: string } | undefined;
   const eventClients = new Set<import("node:http").ServerResponse>();
   const emit = (name: string, value: unknown) => { const record = `event: ${name}\ndata: ${JSON.stringify(value)}\n\n`; for (const client of eventClients) client.write(record); };
-  const ensureMenuMediaDirectory = async (): Promise<string> => menuMediaDirectory ??= await mkdtemp(join(tmpdir(), "bdmv2web-bdj-menu-"));
-  const transcodeMenuItem = async (bdmvRoot: string, item: MenuMediaTargetItem, playlistId: string): Promise<PreparedMenuMediaItem> => {
+  const packagedMenuItems = (): Promise<Array<Record<string, unknown>>> => packagedMenuMedia ??= readFile(resolve(root, "asset-manifest.json"), "utf8").then((json) => {
+    const manifest: unknown = JSON.parse(json);
+    return isRecord(manifest) && Array.isArray(manifest.menuMedia) ? manifest.menuMedia.filter(isRecord) : [];
+  });
+  const packagedMenuItem = async (item: MenuMediaTargetItem, playlistId: string, bdmvRoot: string): Promise<PreparedMenuMediaItem> => {
     if (!isDeclaredExternalStreamPath(item.clipId, item.streamPath)) throw new Error(`Menu playlist source '${item.streamPath}' is not a declared clip stream.`);
-    const sourcePath = resolve(bdmvRoot, "STREAM", `${item.clipId}.m2ts`); const sourceRelative = relative(bdmvRoot, sourcePath);
-    if (sourceRelative === ".." || sourceRelative.startsWith(`..${sep}`) || isAbsolute(sourceRelative)) throw new Error(`Menu playlist source '${item.streamPath}' is outside the BDMV root.`);
+    const sourcePath = resolve(bdmvRoot, "STREAM", `${item.clipId}.m2ts`);
     try { await stat(sourcePath); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       return { missing: true, audioFiles: [], warning: `BD-J media is missing: BDJO ${activeBdjoId || "unknown"}, title ${activeTitle}, playlist ${playlistId}, PlayItem ${item.index}, source ${item.streamPath}. Skipping this item.` };
     }
-    const mediaInput = activeLaunch?.session?.bdjMenuMediaInputs?.find((candidate) => candidate.playlistId === playlistId && candidate.playItemIndex === item.index && candidate.clipId === item.clipId);
-    if (!mediaInput) throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} source ${item.streamPath} is present but its packaged PID mapping is unavailable; rebuild the package.`);
     const start = BigInt(item.sourceStart90k); const end = BigInt(item.sourceEnd90k);
-    const cacheKey = `${sourcePath}\0${start}\0${end}\0${mediaInput.videoPid}\0${mediaInput.audioTracks.map((track) => track.pid).join(",")}\0bdj-finite`;
-    const prior = menuMediaCache.get(cacheKey);
-    if (prior) return prior;
-    const pending = (async () => {
-      const directory = await ensureMenuMediaDirectory();
-      const outputDirectory = join(directory, randomUUID());
-      const start90k = BigInt(item.sourceStart90k); const end90k = BigInt(item.sourceEnd90k);
-      if (start90k % 2n !== 0n || end90k % 2n !== 0n || end90k <= start90k) throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} has an interval that cannot be represented on the MPLS 45 kHz clock.`);
-      const { loopStart45k: _declaredLoopStart, ...sourceInput } = mediaInput;
-      const input: MenuLoopMediaInput = {
-        ...sourceInput, sourcePath, inTime45k: Number(start90k / 2n), outTime45k: Number(end90k / 2n),
-        includeIntro: true, repeatCount: 1, loopBackground: false,
-      };
-      const encoding = activeLaunch?.session?.menuMediaEncoding ?? {};
-      const exported = await exportMenuLoopMedia(input, { outputDirectory, codec: encoding.codec ?? "h264", ...(encoding.crf === undefined ? {} : { crf: encoding.crf }), ...(encoding.preset ? { preset: encoding.preset } : {}), ...(encoding.hdrMode ? { hdrMode: encoding.hdrMode } : {}) });
-      return { videoFile: exported.background.absolutePath, audioFiles: exported.audioTracks.map((track) => track.absolutePath) };
-    })();
-    menuMediaCache.set(cacheKey, pending);
-    try { return await pending; } catch (error) { menuMediaCache.delete(cacheKey); throw error; }
+    if (start % 2n !== 0n || end % 2n !== 0n || end <= start) throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} has an interval that cannot be represented on the MPLS 45 kHz clock.`);
+    const entries = await packagedMenuItems();
+    const match = entries.find((entry) => {
+      const plan = entry.plan;
+      return isRecord(plan) && plan.playlistId === playlistId && plan.playItemIndex === item.index && plan.clipId === item.clipId
+        && plan.sourceIn45k === Number(start / 2n) && plan.sourceOut45k === Number(end / 2n);
+    });
+    if (!match || !isRecord(match.background) || typeof match.background.path !== "string") throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} source ${item.streamPath} has no matching packaged playback asset; rebuild the package.`);
+    const audioFiles = Array.isArray(match.audioTracks) ? match.audioTracks.flatMap((track) => isRecord(track) && typeof track.path === "string" ? [resolve(root, track.path)] : []) : [];
+    const videoFile = resolve(root, match.background.path);
+    const outsidePackage = (path: string): boolean => { const fromRoot = relative(root, path); return fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot); };
+    if (outsidePackage(videoFile)) throw new Error(`Packaged BD-J menu media path '${match.background.path}' is outside the package.`);
+    for (const audioFile of audioFiles) if (outsidePackage(audioFile)) throw new Error(`Packaged BD-J menu audio path '${audioFile}' is outside the package.`);
+    return { videoFile, audioFiles };
   };
   const prepareMenuPlaylist = async (target: MenuMediaTarget, playerId: string, bdmvRoot: string, bdjoId: string, title: number) => {
     const items: Array<{ index: number; clipId: string; source: ExternalPlayItem["source"]; start90k: string; end90k: string; mediaStart90k: string; url?: string; audioUrls: string[]; missing?: true; warning?: string; loopStartOffset90k?: string; loopMarkIndex?: number; marks: Array<{ index: number; offset90k: string }> }> = [];
     for (const item of target.items) {
-      const file = await transcodeMenuItem(bdmvRoot, item, target.playlistId);
+      const file = await packagedMenuItem(item, target.playlistId, bdmvRoot);
       const assetId = file.missing ? undefined : randomUUID();
       if (assetId && file.videoFile) menuMediaFiles.set(assetId, file.videoFile);
       const audioUrls = file.audioFiles.map((audioFile) => { const audioId = randomUUID(); menuMediaFiles.set(audioId, audioFile); return `/api/bdj/menu-media/${audioId}`; });
@@ -519,7 +511,6 @@ export async function serve(): Promise<void> {
       child.once("exit", () => clearTimeout(killer));
     }
     for (const client of eventClients) client.end(); eventClients.clear(); server.close();
-    if (menuMediaDirectory) void rm(menuMediaDirectory, { recursive: true, force: true });
   };
   process.once("SIGINT", stop); process.once("SIGTERM", stop);
   await new Promise<void>((resolveClose) => server.once("close", resolveClose));

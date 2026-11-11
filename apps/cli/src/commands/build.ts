@@ -345,15 +345,12 @@ export async function build(): Promise<void> {
   const bdjAccessiblePlaylists = new Set((disc.bdjos ?? []).flatMap((bdjo) => bdjo.accessiblePlaylists.accessToAll
     ? disc.playlists.map((playlist) => playlist.id)
     : bdjo.accessiblePlaylists.playlistIds.map((id) => id.padStart(5, "0"))));
-  const bdjMenuMediaInputs: Array<Omit<MenuLoopMediaInput, "sourcePath">> = [];
+  const bdjMenuMediaAssets: MenuLoopMediaInput[] = [];
   if (hasBdjEntries) for (const playlist of disc.playlists) {
     if (!bdjAccessiblePlaylists.has(playlist.id)) continue;
     for (const playItem of playlist.playItems) {
       const input = await menuLoopMediaInput(disc, playlist, { playItemIndex: playItem.index, purpose: "bdj-playback" }).catch(() => null);
-      if (input) {
-        const { sourcePath: _sourcePath, ...packagedInput } = input;
-        bdjMenuMediaInputs.push(packagedInput);
-      }
+      if (input) bdjMenuMediaAssets.push(input);
     }
   }
   const fatalDiagnostics = classifyDiagnostics(disc.diagnostics);
@@ -456,12 +453,22 @@ export async function build(): Promise<void> {
         bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
         ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
         ...(firstPlayHdmv === undefined ? {} : { vmFirstPlayProgramId: firstPlayHdmv }),
-        ...(mediaEncoding ? { mediaEncoding } : {}),
+        mediaEncoding: { codec: "h264", ...mediaEncoding },
         soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
-        bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdjMenuMediaInputs, ...(mediaEncoding ? { menuMediaEncoding: mediaEncoding } : {}), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
+        ...(bdjMenuMediaAssets.length ? { additionalMenuMedia: bdjMenuMediaAssets } : {}),
+        ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
+        bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
         diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
+        onMediaProgress: ({ outTimeSeconds, durationSeconds, state, source }) => {
+          const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
+          const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;
+          const language = source.language !== undefined && source.language !== "" && source.language !== "und" ? source.language : `0x${source.pid.toString(16)}`;
+          const stream = source.kind === "background" ? "background" : `audio ${language}`;
+          progress.progress(ratio, `clip ${source.clipId} · ${stream} ${seconds}`);
+        },
         onPhase: (phase) => {
-          if (phase === "assets") { progress.skip(CONVERT_STEPS.media, "no HDMV menu loop"); progress.start(CONVERT_STEPS.package); return; }
+          if (phase === "media") { if (bdjMenuMediaAssets.length) progress.start(CONVERT_STEPS.media); return; }
+          if (phase === "assets") { if (bdjMenuMediaAssets.length) progress.done(CONVERT_STEPS.media, countOf(bdjMenuMediaAssets.length, "BD-J PlayItem", "BD-J PlayItems")); else progress.skip(CONVERT_STEPS.media, "no declared BD-J menu media"); progress.start(CONVERT_STEPS.package); return; }
           if (phase === "bundle") { progress.note("bundling BD-J and HDMV runtime"); return; }
           if (phase === "manifest") { progress.done(CONVERT_STEPS.package, "manifest written"); progress.start(CONVERT_STEPS.report); }
         },

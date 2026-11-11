@@ -22,7 +22,7 @@ The Java host receives the package BDMV/JAR directory as its resource root. The 
 
 ## Menu and feature media
 
-The browser presents declared BD-J resources through local package URLs. Java receives resource `pending` when the browser begins the operation, then receives `started`, `ended`, `error`, `blocked`, or `stopped` only from observed browser media events. A blocked operation remains available for user-gesture recovery while its player remains active.
+The browser presents declared BD-J resources through local package URLs. Build exports accessible menu PlayItem video and audio into the output directory. Equivalent media references share one encoded asset, and `build --overwrite` reuses media assets whose source plan and encoding settings match. `serve` reads the package manifest and serves those assets without runtime transcoding. Java receives resource `pending` when the browser begins the operation, then receives `started`, `ended`, `error`, `blocked`, or `stopped` only from observed browser media events. A blocked operation remains available for user-gesture recovery while its player remains active.
 
 Feature playback uses the `--player` adapter selected for the `serve` process:
 
@@ -48,7 +48,7 @@ BDJO application descriptors initialize PRESENT and AUTOSTART applications. Only
 | Pointer input | Forwards logical menu coordinates to the Java scene. |
 | Frames and traces | Streams PNG frames and Java diagnostics over the local event channel. |
 | Menu media observations | Reports browser-presented state, playlist-clock position, PlayItem changes, and reached MPLS marks to Java player listeners. BD-J playlist items follow their authored order and end when their bounded media finishes; Xlet lifecycle selects the next state. |
-| Missing BD-J menu media | Shows a warning with BDJO, title, playlist, PlayItem and source fields, then immediately skips the missing PlayItem. Restored source files play as video when present in the package directory. A missing-only playlist sends one source-bearing completion event so its Xlet can continue. |
+| Missing BD-J menu media | Shows a warning with BDJO, title, playlist, PlayItem and source fields, then immediately skips the missing PlayItem. A missing-only playlist sends one source-bearing completion event so its Xlet can continue. |
 | Shutdown | Calls Xlet destruction and closes the Java process when the service stops. |
 
 The Java host uses PRESENT/AUTOSTART descriptors, Java TV/DVB/HAVi/JMF/Blu-ray API implementations, AWT offscreen drawing, and in-process IXC. An API method outside the implemented host behavior returns an unsupported error with a Java call trace.
