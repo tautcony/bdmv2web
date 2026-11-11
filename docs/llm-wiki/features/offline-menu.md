@@ -1,4 +1,4 @@
-# 功能：离线菜单包
+# 功能：菜单包
 
 `build` 把解析和提取结果写成一个目录。静态 HDMV/IGS 包可从 `file://` 运行；含 BD-J 包使用 `bdmv2web serve <package-directory>` 和 Java 21 或兼容的 `java.desktop` 运行环境。服务管理本地 Java 进程和回环会话 API。
 

@@ -7,7 +7,7 @@
 
 ## 一句话
 
-把 Blu-ray BDMV 目录解析成结构化 IR 与 IGS 菜单场景，执行 HDMV 导航指令，并为 BD-J title 提供本地 Java 服务。无 BD-J 的包可从 `file://` 打开；含 BD-J 的包通过 `bdmv2web serve` 离线运行。原始 M2TS 可交给本机播放器适配器。
+把 Blu-ray BDMV 目录解析成结构化 IR 与 IGS 菜单场景，执行 HDMV 导航指令，并为 BD-J title 提供本地 Java 服务。无 BD-J 的包可从 `file://` 打开；含 BD-J 的包通过 `bdmv2web serve` 和 Java 运行。原始 M2TS 可交给本机播放器适配器。
 
 ## 五分钟心智模型
 
@@ -24,7 +24,7 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
                 │
                 └─ package-builder   自包含目录 index.html + runtime/*.js + assets/
                           │
-                          └─ test-runner  离线审计 + 交付判定 + 报告
+                          └─ test-runner  包审计 + 交付判定 + 报告
 ```
 
 三段边界固定：

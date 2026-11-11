@@ -147,7 +147,7 @@ async function runCli(root, caseDef, outputDir, sequence) {
   else if (caseDef.options.operation === "inspect") args = ["inspect", input, "--allow-partial", "--format", "json"];
   else if (caseDef.options.operation === "extract") args = ["extract", input, "--type", "hdmv", "--out", output];
   else if (caseDef.options.operation === "render") args = ["render", input, "--out", output];
-  else if (caseDef.options.operation === "validate") args = ["validate", input, "--offline", "--format", "json"];
+  else if (caseDef.options.operation === "validate") args = ["validate", input, "--format", "json"];
   else throw new Error(`Unsupported prepared CLI operation: ${caseDef.options.operation}`);
   let stdout;
   try { stdout = execFileSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 }); }
@@ -282,7 +282,7 @@ export async function prepareScenarioCase(caseDef, root) {
     };
     return {
       input: { ...prepared.input, ...prepared.expected }, fixture: caseDef.fixture, scope: caseDef.scope, run, validate,
-      describe: (value) => ({ summary: `Assembled an offline menu package with ${prepared.graphics.length} IGS PNG assets`, details: { ...prepared.expected, packageDiagnostics: value.diagnostics } }),
+      describe: (value) => ({ summary: `Assembled a menu package with ${prepared.graphics.length} IGS PNG assets`, details: { ...prepared.expected, packageDiagnostics: value.diagnostics } }),
       afterMeasurement: () => rm(temp, { recursive: true, force: true }), cleanup: () => rm(temp, { recursive: true, force: true }),
     };
   }

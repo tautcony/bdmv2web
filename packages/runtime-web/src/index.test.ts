@@ -76,7 +76,7 @@ function pointerRuntime(controller: MenuController): { move(): void; down(): voi
   return { move: () => listeners.get("pointermove")?.(event), down: () => listeners.get("pointerdown")?.(event), dispose: () => { dispose(); vi.unstubAllGlobals(); } };
 }
 
-describe("offline menu primitives", () => {
+describe("menu primitives", () => {
   it("maps clicks through letterboxing and rejects the bars", () => {
     const view = new CanvasViewport(100, 50); view.scale = 2; view.offsetX = 50; view.offsetY = 0;
     const rect = { left: 0, top: 0 } as DOMRect;

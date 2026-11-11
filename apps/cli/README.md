@@ -1,8 +1,8 @@
 # bdmv2web
 
-Inspect a Blu-ray BDMV disc and build an offline web menu package.
+Inspect a Blu-ray BDMV disc and build a web menu package.
 
-`bdmv2web` reads a Blu-ray BDMV directory and writes a self-contained browser menu: navigation, background video, audio tracks, button graphics, and sound effects. The package runs from the local filesystem without a web server or network access, and the original M2TS files open in the system player from the menu.
+`bdmv2web` reads a Blu-ray BDMV directory and writes a browser menu with navigation, background video, audio tracks, button graphics, and sound effects. HDMV packages open directly from `file://`. BD-J packages run with `bdmv2web serve` and a Java runtime. The menu can hand supported M2TS targets to the configured system player.
 
 This package is the published CLI. The repository also holds the parser, HDMV virtual machine, IGS toolkit, menu runtime, and package validator behind it; see [full documentation](https://github.com/tautcony/bdmv2web#readme).
 
@@ -26,7 +26,7 @@ bdmv2web build /path/to/BDMV --out ./BDMV-menu
 Open `BDMV-menu/index.html` in a browser. Keep the whole output directory when copying or moving the menu.
 
 ```sh
-bdmv2web validate ./BDMV-menu --offline
+bdmv2web validate ./BDMV-menu
 ```
 
 ### CLI
@@ -40,8 +40,8 @@ bdmv2web validate ./BDMV-menu --offline
 | `list <BDMV>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
 | `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets (`--type`, `--m2ts`, `--pid`, `--decode png`) |
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
-| `build <BDMV>` | Build the offline menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--overwrite`, `--strict`) |
-| `validate <menu dir> --offline` | Validate a menu package and update the audit report (`--format json`, `--strict`) |
+| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--overwrite`, `--strict`) |
+| `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`, `--strict`) |
 
 `convert` is an alias of `build`. `bdmv2web --help` lists every command and `bdmv2web <command> --help` lists the options of one command.
 

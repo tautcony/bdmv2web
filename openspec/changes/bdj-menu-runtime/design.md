@@ -23,7 +23,7 @@ The authored resource directory contains `projectsettings.xml`, `bluray_project.
 
 Static strings in `bluray_project.bin` identify the Main Menu Splash, Main Menu, menu trailers, forced trailers, feature playback, Play All variants, and main-feature playlist. `StandardMenuXlet` calls the Gallery/Trivia helper with 13/14; the helper writes GPR1000 and selects title 10. INDEX title 10 (`title:9`) selects HDMV MovieObject 2; instructions 2106/2107 enter PC 13/14. INDEX titles 13 and 14 point to MovieObject 0 and are not used by this helper.
 
-The application contains audio, subtitle, chapter, gallery, trivia, resume, bookmark, and playlist control paths. `ENABLE_BDTRACK=1`, `HAS_MET_PLAYLISTS=1`, and five named feature audio streams require audio selection to update the Xlet's feature playlist before playback. JMF and Blu-ray media controls expose audio/subtitle changes and playback events. The JAR also contains network and BD-Live references; offline execution reports those operations unavailable.
+The application contains audio, subtitle, chapter, gallery, trivia, resume, bookmark, and playlist control paths. `ENABLE_BDTRACK=1`, `HAS_MET_PLAYLISTS=1`, and five named feature audio streams require audio selection to update the Xlet's feature playlist before playback. JMF and Blu-ray media controls expose audio/subtitle changes and playback events. The JAR also contains network and BD-Live references; the local runtime reports those operations unavailable.
 
 The JAR inventory contains 626 class files at class-file version 47.0. Constant-pool references include Java SE I/O, collections, AWT, Java TV Xlet/selection, JMF Player/Controller, DVB application/events/IXC, HAVi scene/input, and Blu-ray RegisterAccess, BDLocator, DiscManager, TitleContext, playlist and media controls. The browser execution inventory remains trace-driven: each later menu path must record the Java class/method and host calls reached while the actual Xlet runs. Static strings alone do not establish that a menu path executes.
 
@@ -34,7 +34,7 @@ The JAR inventory contains 626 class files at class-file version 47.0. Constant-
 - Execute actual BDJO-selected JAR bytecode in a local JVM with java.desktop.
 - Maintain one authoritative disc session for BD-J/HDMV titles, shared registers, and correlated actions.
 - Present Java-rendered menu graphics and authored browser-playable background/sound resources through a local API.
-- Provide explicit offline launch requirements and portable Java/player invocation.
+- Provide local launch requirements and portable Java/player invocation.
 - Verify synthetic lifecycle, drawing, input, state routing, and handoff behavior; record reached real-disc paths individually.
 
 **Non-Goals:**
@@ -81,7 +81,7 @@ Successful launch dispatch returns requested. Keep this handoff status separate 
 
 ### Package and documentation
 
-Emit explicit local-jvm launch metadata, a service-readable session data file, host/application JARs and authored menu resources. Remove browser OpenJDK assets, the --jvm-runtime-dir build option and the OpenJDK21 browser global contract. Update generated HTML, README, compatibility output, audit rules and current docs together. BD-J file:// pages show the executable bdmv2web serve command and Java requirement. Package audit checks declared paths and file existence. Runtime operation remains local and offline.
+Emit explicit local-jvm launch metadata, a service-readable session data file, host/application JARs and authored menu resources. Remove browser OpenJDK assets, the --jvm-runtime-dir build option and the OpenJDK21 browser global contract. Update generated HTML, README, compatibility output, audit rules and current docs together. BD-J file:// pages show the executable bdmv2web serve command and Java requirement. Package audit checks declared paths and file existence. Runtime operation uses the local Java service and loopback HTTP URL.
 
 ## Risks / Trade-offs
 

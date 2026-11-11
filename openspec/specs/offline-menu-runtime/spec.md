@@ -22,7 +22,7 @@
 
 #### Scenario: 菜单图像使用 PNG
 
-- **WHEN** 菜单或弹出菜单引用 IGS 图像并生成离线包
+- **WHEN** 菜单或弹出菜单引用 IGS 图像并生成菜单包
 - **THEN** 图像对象先编码为 PNG，再以 `data:image/png;base64` 嵌入图形资源脚本；非 PNG 图像字节不得进入图形资源批次
 
 #### Scenario: 版本不兼容

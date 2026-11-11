@@ -180,7 +180,7 @@
 
 含 BD-J 后端的生成包 SHALL 通过 bdmv2web 本地服务启动，并明确声明兼容 Java 运行环境和包内 host/application JAR、菜单资源要求。页面和资源 SHALL 由回环地址提供，断开外网后继续运行。Java 可执行文件 SHALL 支持显式配置，启动机制 SHALL 覆盖 Windows、macOS 和 Linux。
 
-#### Scenario: 本地离线运行
+#### Scenario: 本地运行
 
 - **WHEN** 用户通过 bdmv2web serve 启动完整 BD-J 包并断开外网
 - **THEN** 本地 Java 执行包内应用，网页连接本地会话并显示可操作菜单

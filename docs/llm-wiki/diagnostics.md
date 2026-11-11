@@ -48,7 +48,6 @@ rg '"CODE_NAME"' packages apps
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 | 使用 ISO 639-2 三字母码 |
 | `CLI_RENDER_SELECTION` | `render` 混用输入类型或选项不适用 | 检查 BDMV、`--mnu`、`--sup` 的组合 |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 | 输入文件格式与完整性 |
-| `CLI_OFFLINE_REQUIRED` | `validate` 缺 `--offline` | 命令用法 |
 | `INVALID_LIMITS_FILE` | `--limits` 文件不是合法 JSON | 文件内容 |
 | `INVALID_LIMIT` | limits 键未知或值非法 | 允许键与取值范围 |
 | `E_NOT_IMPLEMENTED` | 命令已注册但未实现（`compare`），退出码 1 | 改走现有 `build` + `validate` 组合 |
@@ -208,7 +207,7 @@ rg '"CODE_NAME"' packages apps
 | `OFFLINE_URL_LOCAL` | pass | 运行时 URL 指向包内文件 |
 | `OFFLINE_URL_MISSING` / `OFFLINE_URL_ESCAPE` / `OFFLINE_URL_SYMLINK` / `OFFLINE_URL_NOT_FILE` | fail | URL 目标缺失/逃逸/是 symlink/不是普通文件 |
 | `OFFLINE_EXTERNAL_URL` / `OFFLINE_UNSAFE_URL` | fail | 外部 URL 或不安全协议 |
-| `OFFLINE_STATIC_AUDIT` | pass/fail/not-verified | 静态离线审计汇总 |
+| `OFFLINE_STATIC_AUDIT` | pass/fail/not-verified | 静态运行资源审计汇总 |
 | `ACTIVE_EMBED` | fail | 包内出现 `<iframe>`/`<object>`/`<embed>` |
 | `BASE_URL_UNSUPPORTED` | fail | 包内出现 `<base>`，会改变 URL 解析基准 |
 | `INLINE_EVENT_HANDLER` | fail | 出现内联 HTML 事件属性（`on*`） |

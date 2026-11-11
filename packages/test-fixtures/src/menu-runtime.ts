@@ -44,6 +44,6 @@ export const menuInteractionFixture = {
   ],
   verification: {
     supported: ["synthetic menu focus and button action dispatch"],
-    notVerified: ["offline directory relocation", "real disc rendering and media timeline"],
+    notVerified: ["package directory relocation", "real disc rendering and media timeline"],
   },
 } as const;

@@ -6,16 +6,16 @@ English | [简体中文](README.zh-CN.md)
 [![node](https://img.shields.io/node/v/bdmv2web)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-Inspect a Blu-ray BDMV disc and build an offline web menu package for HDMV and BD-J discs.
+Inspect a Blu-ray BDMV disc and build a web menu package for HDMV and BD-J discs.
 
-`bdmv2web` reads a Blu-ray BDMV directory and writes a package with menu navigation, media, graphics, and sound effects. HDMV packages open directly from `file://`. BD-J packages run through the local `serve` command, a Java runtime, and a loopback HTTP URL. Both modes work offline.
+`bdmv2web` reads a Blu-ray BDMV directory and writes a local package with menu navigation, media, graphics, and sound effects. HDMV packages open directly from `file://`. BD-J packages run through the local `serve` command, a Java runtime, and a loopback HTTP URL.
 
-- Build an offline menu package with menu navigation, background video, audio tracks, button graphics, and sound effects.
+- Build a menu package with menu navigation, background video, audio tracks, button graphics, and sound effects.
 - Run BD-J Xlets from packaged application JARs with a local Java process.
 - Package BD-J accessible Playlist video and audio for browser playback. `build --overwrite` reuses matching media assets.
 - Inspect BDMV structure and export HDMV, IGS, and SUP data together with menu assets.
 - Hand off supported whole-file feature playback to the system player.
-- Validate the offline dependencies of a menu package and produce a compatibility report.
+- Audit package structure, references, paths, and dependencies; produce a compatibility report.
 
 ## Table of Contents
 
@@ -70,7 +70,7 @@ After building from source, `apps/cli/dist/index.js` is the executable entry poi
 
 ## Usage
 
-Convert a BDMV directory into an offline menu package:
+Convert a BDMV directory into a menu package:
 
 ```sh
 bdmv2web build /path/to/BDMV --out ./BDMV-menu
@@ -81,7 +81,7 @@ Open `BDMV-menu/index.html` in a browser. Keep the whole output directory when c
 Validate the generated menu package:
 
 ```sh
-bdmv2web validate ./BDMV-menu --offline
+bdmv2web validate ./BDMV-menu
 ```
 
 ### HDMV and BD-J playback
@@ -100,7 +100,7 @@ Open the loopback URL printed by `serve`. A BD-J page opened with `file://` disp
 
 ### Runtime and validation boundaries
 
-`validate --offline` checks package structure, references, paths, and dependencies. It does not check byte-level file integrity. Playback state from the external system player does not return to the menu runtime. A background item with `loop=false` does not expose an independent final-frame state.
+`validate` checks package structure, references, paths, and dependencies. It does not check byte-level file integrity. Playback state from the external system player does not return to the menu runtime. A background item with `loop=false` does not expose an independent final-frame state.
 
 ### CLI
 
@@ -113,8 +113,8 @@ Open the loopback URL printed by `serve`. A BD-J page opened with `file://` disp
 | `list <BDMV>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
 | `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--decode png`, `--png-level 0-9` |
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG`, `--png-level 0-9` |
-| `build <BDMV>` | Build the offline menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--png-level 0-9`, `--overwrite`, `--strict` |
-| `validate <menu dir> --offline` | Validate a menu package and update the audit report | `--format json`, `--strict` |
+| `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--png-level 0-9`, `--overwrite`, `--strict` |
+| `validate <menu dir>` | Audit a menu package and update the audit report | `--format json`, `--strict` |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session | `--port N`, `--java EXECUTABLE`, `--player system`, `--disc-id HEX` |
 
 `build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. Movie PGS subtitles are exported with `export --type sup`.

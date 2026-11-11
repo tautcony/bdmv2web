@@ -134,4 +134,4 @@ HDMV VM actions resolve through `external-targets.json`. `bdmv2web serve <packag
 | 改启动流程 | `browser.ts` `boot()` | 包内脚本顺序：`disc-data.js` → `assets-data-*.js` → `app.bundle.js` |
 | 新增包内数据字段 | `PackageData` | 同时改 `package-builder` 写 `disc-data.js` 的分支 |
 
-约束：运行时代码不得出现 `fetch`、`XMLHttpRequest`、`WebSocket`、`import`、`eval`。`validate --offline` 的 `auditScript` 会对整包做静态扫描并判 fail。
+约束：运行时代码不得出现 `fetch`、`XMLHttpRequest`、`WebSocket`、`import`、`eval`。`validate` 的 `auditScript` 会对整包做静态扫描并判 fail。

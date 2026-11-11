@@ -49,7 +49,7 @@ describe("M4 build output", () => {
     return disc;
   }
 
-  it("writes a local offline menu package with a complete delivery status in default and strict modes", async () => {
+  it("writes a local menu package with a complete delivery status in default and strict modes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert "));
     const disc = await makeMenuDisc(parent);
     const regular = join(parent, "regular output"); const strict = join(parent, "strict output");
@@ -221,7 +221,7 @@ describe("M4 build output", () => {
       const parentResult = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "build", parent, "--out", parentOutput, "--no-strict"]);
       expect(parentResult.status).toBe(0);
       expect(await readFile(join(parentOutput, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
-      const verify = () => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", output, "--offline", "--format", "json"]);
+      const verify = () => spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", output, "--format", "json"]);
       const initialAudit = verify(); expect(initialAudit.status).toBe(0);
       const checks = JSON.parse(initialAudit.stdout.toString()).checks as Array<{ checkId: string; result: string }>;
       expect(checks.filter((item) => item.result === "fail")).toEqual([]);
@@ -637,7 +637,7 @@ describe("stage and argument contracts", () => {
   });
 });
 
-describe("offline validate CLI", () => {
+describe("validate CLI", () => {
   async function makePackage(directory: string, payload: Record<string, string>): Promise<void> {
     const files = [];
     for (const [path, content] of Object.entries(payload)) {
@@ -651,12 +651,12 @@ describe("offline validate CLI", () => {
     await writeFile(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", status: "complete", files }));
   }
 
-  it("validates a generated package offline without a BDMV or FFmpeg input", async () => {
+  it("validates a generated package without BDMV or FFmpeg input", async () => {
     const directory = await mkdtemp(join(tmpdir(), "bdmv validate 离线 "));
     try {
       await makePackage(directory, { "index.html": "<main>ready</main>" });
       await writeFile(join(directory, "compatibility.json"), JSON.stringify({ profile: "portable", status: "complete", notVerified: ["media timeline and seek accuracy"] }));
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--format", "json"]);
       expect(result.status).toBe(0);
       expect(result.stderr.toString()).toBe("");
       const audit = JSON.parse(result.stdout.toString());
@@ -674,14 +674,14 @@ describe("offline validate CLI", () => {
       expect(compatibility).not.toHaveProperty("browserEvidence");
       const release = JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8"));
       expect(release.release).toEqual(audit.releaseSummary.release);
-      const second = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
+      const second = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--format", "json"]);
       expect(second.status).toBe(0);
       expect(JSON.parse(second.stdout.toString()).checks.some((check: any) => check.checkId === "PACKAGE_UNLISTED_PAYLOAD")).toBe(false);
       expect(JSON.parse(second.stdout.toString()).releaseSummary.release.status).toBe("complete");
-      const strict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--strict", "--format", "json"]);
+      const strict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--strict", "--format", "json"]);
       expect(strict.status).toBe(0);
       expect(JSON.parse(strict.stdout.toString()).decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
-      const noStrict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--no-strict", "--format", "json"]);
+      const noStrict = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--no-strict", "--format", "json"]);
       expect(noStrict.status).toBe(0);
       expect(JSON.parse(noStrict.stdout.toString()).decision.status).toBe("complete");
     } finally { await rm(directory, { recursive: true, force: true }); }
@@ -693,7 +693,7 @@ describe("offline validate CLI", () => {
       await makePackage(directory, { "index.html": "<main>ready</main>" });
       const before = await readFile(join(directory, "manifest.json"));
       for (const args of [["--format"], ["--format", "xml"], ["--format="]]) {
-        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", ...args]);
+        const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, ...args]);
         expect(result.status, args.join(" ")).toBe(1);
         expect(result.stdout.toString()).toBe("");
         expect(result.stderr.toString()).toMatch(/CLI_(?:MISSING_VALUE|INVALID_FORMAT|INVALID_ARGUMENT)/);
@@ -711,7 +711,7 @@ describe("offline validate CLI", () => {
       // A failed conversion package: only README.md and report.json exist.
       await writeFile(join(directory, "README.md"), "# Menu package\n\nStatus: **failed**.\n");
       await writeFile(join(directory, "report.json"), JSON.stringify({ schemaVersion: "1.0", status: "failed", code: "MENU_SCENE_NOT_FOUND", auditScope: "convert", reasons: ["no scene"], notVerified: [], diagnostics: [], blockingDiagnostics: [] }));
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--format", "json"]);
       const audit = JSON.parse(result.stdout.toString());
       const disk = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(disk).toEqual(audit.dependencyAudit);
@@ -726,7 +726,7 @@ describe("offline validate CLI", () => {
     const directory = await mkdtemp(join(tmpdir(), "bdmv validate package "));
     try {
       await makePackage(directory, { "index.html": "<main>ready</main>" });
-      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--offline", "--format", "json"]);
+      const result = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "validate", directory, "--format", "json"]);
       const audit = JSON.parse(result.stdout.toString());
       expect(audit.decision).not.toHaveProperty("mode");
     } finally { await rm(directory, { recursive: true, force: true }); }
@@ -1018,7 +1018,7 @@ describe("compare command", () => {
   });
 });
 
-describe("offline validate CLI (M6)", () => {
+describe("validate CLI (M6)", () => {
   const cli = resolve(root, "dist/index.js");
 
   async function makePackage(directory: string, payload: Record<string, string>): Promise<void> {
@@ -1034,7 +1034,7 @@ describe("offline validate CLI (M6)", () => {
     await writeFile(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: "1.0", status: "complete", files }));
   }
   function validate(directory: string, options: { env?: NodeJS.ProcessEnv } = {}) {
-    return spawnSync(process.execPath, [cli, "validate", directory, "--offline", "--format", "json"], { encoding: "utf8", ...(options.env ? { env: options.env } : {}) });
+    return spawnSync(process.execPath, [cli, "validate", directory, "--format", "json"], { encoding: "utf8", ...(options.env ? { env: options.env } : {}) });
   }
 
   it("fails when the startup file or a required asset is missing", async () => {

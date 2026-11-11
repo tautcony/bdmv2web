@@ -1,6 +1,6 @@
 # 功能：交付验证
 
-验证层回答两个问题：包能不能离线运行，以及这次交付算不算完成。两者由不同函数回答，不要混用。
+验证层报告包内资源是否齐全，以及这次交付是否满足完成条件。两者由不同函数回答。
 
 ## 两条判定
 
@@ -36,7 +36,7 @@ complete← 以上都没有
 | --- | --- |
 | 结构 | 根目录、`index.html`、`manifest.json`、manifest 形状、文件存在、无 symlink |
 | 路径 | 相对 POSIX 路径、无重复、不占用报告路径、解析后仍在包内 |
-| 离线 | 所有 `src`/`href`/`url()`/JSON 路径都指向包内普通文件；无外部 URL |
+| 引用 | 所有 `src`/`href`/`url()`/JSON 路径都指向包内普通文件；无外部 URL |
 | 脚本 | 无 module script、无 `import`、无 `eval`、无网络 API；动态访问记 `not-verified` |
 
 详见 [packages/test-runner.md](../packages/test-runner.md) 的检查项 ID 表。

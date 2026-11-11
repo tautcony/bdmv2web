@@ -42,7 +42,7 @@ async function packageRoot(payload: Record<string, string | Uint8Array>, extra: 
   return root;
 }
 
-describe("offline package audit", () => {
+describe("package audit", () => {
   it("builds a dependency audit from concrete checks and leaves an empty audit unverified", () => {
     const base = { schemaVersion: "1.0" as const, packageRoot: "/package", manifestPath: "manifest.json", discoveredPayloadFiles: [] };
     expect(createDependencyAuditReport({ ...base, checks: [

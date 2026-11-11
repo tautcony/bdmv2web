@@ -14,7 +14,7 @@
 | M3 VM | navigation-hdmv、导航边分析 | 解码命令、执行器、操作码支持矩阵、NavigationGraph、trace |
 | M4 runtime | runtime-web、package-builder、音效输出、convert 菜单管线 | classic bundle、portable 菜单包、交互桥、WAV、资产清单 |
 | M5 media | 影片目标映射、系统播放器接入 | 可达 M2TS 映射、系统打开接入与外部依赖诊断 |
-| M6 assurance | test-runner、validate/compare、发布汇总 | 离线审计、状态决策、golden 对照、发布汇总 |
+| M6 assurance | test-runner、validate/compare、发布汇总 | 包资源审计、状态决策、golden 对照、发布汇总 |
 
 M1 只建立容器结构和明确声明的引用，不声称已得到完整控制流。M3 补 MovieObject 导航边；M2 交出按钮命令后，由同一个 M3 解码器补按钮边；M5 合并并计算媒体闭包。M3 单测使用合成按钮命令，不依赖 M2 完成，避免依赖环。sound 在 M1 解析、M4 转 WAV；影片字幕由系统关联的外部播放器负责。
 
@@ -56,8 +56,8 @@ interface EventEnvelope<T> {
 | --- | --- | --- |
 | inspect INPUT --format json --out FILE | 结构、入口、诊断、支持预测 | 不把预测写成最终完成度 |
 | extract INPUT --out DIR | 结构/原始命令，M2 接入后含 IG/PNG | 明确已完成与未完成阶段，不生成播放器 |
-| convert INPUT [--out DIR] | 统一离线菜单包，影片交给默认关联程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 可指定不重叠的其他目标；strict 开启 |
-| validate DIR --offline [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
+| convert INPUT [--out DIR] | 统一菜单包，影片交给默认关联程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 可指定不重叠的其他目标；strict 开启 |
+| validate DIR [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
 | compare INPUT --actual FILE [--reference FILE] [--reference-tool NAME] [--reference-version V] [--out FILE] | 指定输入序列的参考比较 | 开发命令，可用原碟和参考工具；退出码 0/1/2 由 M6 规格固定，参考缺席或未记录工具版本为 not-verified（退出 2），参考文件不得与被测 trace 相同 |
 
 `--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
@@ -70,7 +70,7 @@ compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/profile/st
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |
-| 关键入口/解析损坏、不能启动、离线边界违规、必需包内资产缺失、fatal 诊断、检查 `fail` | failed | 非零，不发布新正式包 |
+| 关键入口/解析损坏、不能启动、运行引用违规、必需包内资产缺失、fatal 诊断、检查 `fail` | failed | 非零，不发布新正式包 |
 | 可启动但有 BD-J、可达不支持能力、未认可的 `error` | partial | 退出 2，可保留审阅包 |
 | 无 `fail`/`fatal`/阻断 `error`；未执行或不可观察的检查记入 `notVerified` | complete | 退出 0 |
 
@@ -100,7 +100,7 @@ Limits 的工程初值为：maxReadWindowBytes=8 MiB、maxSegmentBytes=16 MiB、
 
 ## 6. 证据与样本交接
 
-每个格式/指令在 `docs/support/protocol-support.md` 登记：格式/版本或 opcode、字段/语义、可用规范章节或参考实现仓库与固定 revision/源码位置、fixture ID、预期结果、supported/unsupported/unverified。未验证不进入 supported；原始位和来源不代替正确语义。采用第三方代码时记录许可；参考工具不进入离线包。
+每个格式/指令在 `docs/support/protocol-support.md` 登记：格式/版本或 opcode、字段/语义、可用规范章节或参考实现仓库与固定 revision/源码位置、fixture ID、预期结果、supported/unsupported/unverified。未验证不进入 supported；原始位和来源不代替正确语义。采用第三方代码时记录许可；参考工具不进入发布包。
 
 fixture 统一在 packages/test-fixtures 登记构建器、字节来源、manifest、golden JSON/像素/trace、生成命令和许可。expected 来自已核验字段或独立参考，不由待测实现重新生成后直接作为基准。完整商业碟片不入库，本地参考素材按上游仓库和固定版本引用。
 

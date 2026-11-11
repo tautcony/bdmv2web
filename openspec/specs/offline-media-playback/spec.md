@@ -157,7 +157,7 @@
 - **WHEN** 当前 IGS 按钮的邻接关系唯一指向一个无图形但带命令的 auto-action 按钮，且用户按 Escape
 - **THEN** 沿该光盘定义的导航边执行按钮命令，使菜单返回由 HDMV/IGS 脚本决定；没有唯一候选时使用配置的 Escape 映射
 
-### Requirement: 单一离线菜单产物
+### Requirement: 单一菜单产物
 
 系统 SHALL 提供统一的 convert 产物，不使用产物模式字段；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。影片 PGS 字幕由外部播放器处理，不嵌入菜单运行时。
 
@@ -259,9 +259,9 @@
 - **WHEN** 需要判断源文件是否存在、符号链接指向或外部程序是否启动
 - **THEN** 生成阶段在 BDMV 根内执行 canonical 路径与符号链接边界检查；浏览器阶段只校验目标结构与来源声明，并把实际文件系统与外部程序状态记为未验证
 
-#### Scenario: 离线审计外部影片目标
+#### Scenario: 审计外部影片目标
 
-- **WHEN** 离线包审计发现已声明的 BDMV STREAM 目标和有效的 BDMV 路径配置
+- **WHEN** 包审计发现已声明的 BDMV STREAM 目标和有效的 BDMV 路径配置
 - **THEN** 审计记录外部源可用性、BDMV 路径配置和系统 URL Protocol 关联状态为未验证；STREAM 目标不作为包内缺失资源
 
 ### Requirement: 菜单背景媒体生成

@@ -1,4 +1,4 @@
-# HDMV 离线 Web：change 依赖与实施顺序
+# HDMV 菜单 Web：change 依赖与实施顺序
 
 本图依据`docs/archive/design/bdmv_hdmv_offline_web_architecture.md`（初版架构方案） 划分首期范围。箭头表示下游完成集成和验收前，必须取得上游已完成的契约及对应验收结果；接口稳定后可提前并行开发。这里记录 change 间的实施依赖，与 OpenSpec 每个 change 内 proposal → specs/design → tasks 的工件依赖不同；OpenSpec CLI 的工件状态不会自动强制执行本图。
 
@@ -53,6 +53,6 @@ flowchart TD
 | M2/M3 行为交接 | 场景/PNG/按钮原始命令；统一 decoder、VM/trace/导航边 | M4 菜单集成及 M5 媒体计划开发 |
 | M4 预览交接 | 断网直接打开、真实菜单交互、unavailable 不挂死 | M5 替换媒体桥并验证目标映射与协议目标构造链路 |
 | M5 媒体交接 | 目标 M2TS 映射、协议目标构造、生成期路径约束、失败处理与自动化交接证据 | M6 完整发布验收；不得提前宣称 complete |
-| M6 发布门槛 | A–I 适用场景的自动化证据、独立参考、聚合优先级与离线包审计 | 才能发布 complete 包；`not-verified` 项逐条保留，其它要求缺席仍为未验证 |
+| M6 发布门槛 | A–I 适用场景的自动化证据、独立参考、聚合优先级与包审计 | 才能发布 complete 包；`not-verified` 项逐条保留，其它要求缺席仍为未验证 |
 
 M1 结构图并非完整导航图：M3 提供 MovieObject 边，M2 的按钮命令再交同一 M3 分析器补边，M5 计算保守媒体闭包。M3 使用合成按钮单测，不反向依赖 M2。sound 在 M1 解析、M4 输出 WAV；影片字幕由外部播放器负责。M6 的模板与回归框架可提前建立，不必等全部业务完成才开始准备。

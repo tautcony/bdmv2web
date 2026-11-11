@@ -1,4 +1,4 @@
-import { flagEnabled, inputPath, optionValue, strictDefault } from "../cli/context.js";
+import { inputPath, optionValue, strictDefault } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { readJsonObject, writeGeneratedReport } from "../cli/output.js";
 import { auditOutputPackage, createDependencyAuditReport, createReleaseSummary, summarizeDeliveryCoverage } from "@bdmv2web/test-runner";
@@ -7,7 +7,6 @@ import type { DeliveryDiagnostic } from "@bdmv2web/test-runner";
 
 export async function validate(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "validate requires an output package directory");
-  if (!flagEnabled("--offline")) fail("CLI_OFFLINE_REQUIRED", "validate currently requires --offline");
   // Argument contract first: a rejected command must not rewrite the package (P2-P2-1).
   const format = optionValue("--format");
   if (format !== undefined && format !== "json") fail("CLI_INVALID_FORMAT", `validate supports only 'json' for --format, got '${format}'`);
@@ -94,7 +93,7 @@ export async function validate(): Promise<void> {
   else {
     const failed = audit.checks.filter((check) => check.result === "fail");
     const unverified = audit.checks.filter((check) => check.result === "not-verified");
-    process.stdout.write(`Offline package audit: ${failed.length ? "failed" : unverified.length ? "not verified" : "passed"}\n`);
+    process.stdout.write(`Package audit: ${failed.length ? "failed" : unverified.length ? "not verified" : "passed"}\n`);
     process.stdout.write(`Dependency audit: ${dependencyAudit.status}\n`);
     process.stdout.write(`Delivery decision: ${decision.status}${decision.strict ? " (strict)" : ""}\n`);
     if (manifestStatus !== undefined && manifestStatus !== decision.status) process.stdout.write(`Manifest status: ${manifestStatus} (not rewritten)\n`);

@@ -55,12 +55,12 @@
 
 ### Requirement: 单一产物形态
 
-系统 SHALL 通过 `convert` 产出唯一的离线菜单包，且不提供模式参数；stdout、manifest、report、兼容性报告和发布汇总不记录产物模式。产物形态不得作为"交付不完整"的判定依据。
+系统 SHALL 通过 `convert` 产出唯一的菜单包，且不提供模式参数；stdout、manifest、report、兼容性报告和发布汇总不记录产物模式。产物形态不得作为"交付不完整"的判定依据。
 
 #### Scenario: 裸跑转换
 
 - **WHEN** 执行 `convert INPUT`
-- **THEN** 生成统一离线菜单包，并按实际缺口判定状态；无缺口时退出 0
+- **THEN** 生成统一菜单包，并按实际缺口判定状态；无缺口时退出 0
 
 #### Scenario: 传入已移除的模式参数
 

@@ -57,7 +57,7 @@ function withStrict(command: Command): Command {
 /** `version` is optional so tests can build the command tree without package metadata. */
 export function buildProgram(version?: string): Command {
   const program = new Command("bdmv2web")
-    .description("Inspect a Blu-ray BDMV disc and build an offline web menu package.")
+    .description("Inspect a Blu-ray BDMV disc and build a web menu package.")
     .exitOverride()
     .configureOutput({ outputError: () => {} });
   if (version !== undefined) program.version(version);
@@ -81,7 +81,7 @@ export function buildProgram(version?: string): Command {
 
   const buildCommand = program.command("build")
     .alias("convert")
-    .description("Build a self-contained offline menu package")
+    .description("Build a self-contained menu package")
     .argument("[input]", "BDMV root or its parent directory")
     .option("--out <dir>", "output package directory", nonEmpty)
     .option("--title <title>", "package title", nonEmpty)
@@ -99,9 +99,8 @@ export function buildProgram(version?: string): Command {
   withStrict(buildCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("build", input, options));
 
   const validateCommand = program.command("validate")
-    .description("Audit a generated package offline")
+    .description("Audit a generated menu package")
     .argument("[input]", "package directory")
-    .option("--offline", "audit without a disc or FFmpeg (required)")
     .option("--format <format>", "json", nonEmpty);
   withStrict(validateCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("validate", input, options));
 

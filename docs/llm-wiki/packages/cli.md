@@ -39,7 +39,7 @@ src/
 inspect   [input]  --out --format --allow-partial --strict/--no-strict
 extract   [input]  --out --type --all --format --strict/--no-strict
 build     [input]  --out --title --player-profile --limits --overwrite --png-level --progress/--no-progress --strict/--no-strict
-validate  [input]  --offline --format --strict/--no-strict
+validate  [input]  --format --strict/--no-strict
 compare   [input]  --format --strict/--no-strict
 list      [input]  --type --m2ts --pid --out --format
 export    [input]  --out --type --m2ts --pid --decode --png-level --format
@@ -106,7 +106,7 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 
 ### `validate`
 
-1. 必须 `--offline`（否则 `CLI_OFFLINE_REQUIRED`）；`--format` 只接受 `json`（否则 `CLI_INVALID_FORMAT`，且在读写之前失败）。
+1. `--format` 只接受 `json`（否则 `CLI_INVALID_FORMAT`，且在读写之前失败）。
 2. `auditOutputPackage` → 读 `manifest.json` / 旧 `compatibility.json` → `createReleaseSummary`。
 3. `manifest.status` 与当前判定不一致时，追加 `MANIFEST_STATUS_UNVERIFIED`（`not-verified`），**不改写** manifest。
 4. 可写时依次写 `dependency-audit.json`、`compatibility.json`、`reports/release-summary.json`，三份都来自同一份 summary；任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。

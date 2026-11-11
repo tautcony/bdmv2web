@@ -53,7 +53,7 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
 
   const dependencyChecks = input.dependencyAudit.checks.length
     ? [...input.dependencyAudit.checks]
-    : [{ checkId: "DEPENDENCY_AUDIT_REQUIRED", result: "not-verified" as const, message: "No independent offline dependency checks were supplied." }];
+    : [{ checkId: "DEPENDENCY_AUDIT_REQUIRED", result: "not-verified" as const, message: "No independent package dependency checks were supplied." }];
   checks.push(...dependencyChecks);
 
   const coverageChecks = summarizeCoverageGates(coverage);

@@ -136,7 +136,7 @@ it("runs the initial VM turn and keeps menu input active when the package has no
   expect(trace.mock.calls.flat().join(" ")).toContain("button 2");
 });
 
-describe("offline browser boot", () => {
+describe("browser boot", () => {
   it("opens a matching popup IGS overlay on POPUP_MENU and closes it on POPUP_OFF", async () => {
     const mainScene = packageData().scene as Record<string, unknown>;
     const data = packageData({

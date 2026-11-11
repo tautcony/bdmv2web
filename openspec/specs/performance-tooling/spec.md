@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides reproducible performance runs for representative parser, renderer, prepared-data CLI, package assembly, and offline package workflows. Stores immutable measurements with sample and environment context and produces comparable process-level regression and trend reports.
+Provides reproducible performance runs for representative parser, renderer, prepared-data CLI, package assembly, and local package workflows. Stores immutable measurements with sample and environment context and produces comparable process-level regression and trend reports.
 
 ## Requirements
 
@@ -109,7 +109,7 @@ The benchmark suite SHALL include synthetic scale cases, real component cases, C
 
 #### Scenario: Generated package opens locally
 - **WHEN** the generated menu package is opened by the browser through a `file://` URL
-- **THEN** the browser case records whether its documented offline startup and menu interaction completed, alongside its timing measurements
+- **THEN** the browser case records whether its documented local startup and menu interaction completed, alongside its timing measurements
 
 ### Requirement: Continuous benchmark reporting
 The repository SHALL provide a fast synthetic CI run and scheduled or manually triggered full benchmark runs with downloadable records and job summaries.

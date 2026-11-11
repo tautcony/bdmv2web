@@ -2,9 +2,9 @@
 
 Menu preview. Delivery status: **{{STATUS}}**.{{#BACKGROUND_LOOP}} The detected menu playlist uses a repeated single-clip background loop with its declared primary audio tracks.{{/BACKGROUND_LOOP}}{{#BACKGROUND_SINGLE_PLAY_ITEM}} The detected menu playlist holds the final video frame after its single PlayItem; its declared primary audio tracks end with the PlayItem.{{/BACKGROUND_SINGLE_PLAY_ITEM}}{{#BACKGROUND_UNAVAILABLE}} No menu background media was exported.{{/BACKGROUND_UNAVAILABLE}}
 
-Run `bdmv2web validate <package-directory> --offline` to refresh `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json`.
+Run `bdmv2web validate <package-directory>` to refresh `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json`.
 
-Open index.html in a browser while offline. Use the mute button at the lower right to control menu audio.
+Open `index.html` in a browser. Use the mute button at the lower right to control menu audio.
 
 {{#BDJ_RUNTIME}}
 BD-J packages run through the local Java service. Use Java 21 or a compatible runtime with `java.desktop`, then run `bdmv2web serve <package-directory> [--java <executable>]` and open the loopback URL printed by the command. The package contains the BD-J host JAR, application JARs, authored resources and session data. A `file://` page displays the local service command; it does not start Java.

@@ -147,7 +147,7 @@
       "kind": "feature",
       "summary": "菜单包结构、场景选择、disc-data 字段、浏览器启动、交互与媒体边界。",
       "covers": ["package layout", "scene selection", "boot", "interaction", "media", "sound", "boundaries"],
-      "keywords": ["离线菜单", "file://", "popup", "build", "输入映射"],
+      "keywords": ["菜单包", "file://", "popup", "build", "输入映射"],
       "keyFiles": ["packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts"]
     },
     {

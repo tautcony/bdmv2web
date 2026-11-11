@@ -21,7 +21,7 @@
 - [ ] 3.2 Add same-origin local session control and streaming events, reconnect to a live session, and clean up pending calls on worker failure; verify API integration and page reconnect state.
 - [ ] 3.3 Apply playlist access and true-valued user title-search/menu-call masks, preserve authored Xlet navigation and action generations/continuations; verify authored requests, masked user requests and stale responses.
 - [ ] 3.4 Preserve complete existing checkpoint export/restore semantics across session extraction; verify an existing full checkpoint round trip and document live-JVM reconnection scope.
-- [ ] 3.5 Document local service launch, --java configuration and explicit offline runtime requirements; verify CLI help and launch diagnostics.
+- [ ] 3.5 Document local service launch, --java configuration and runtime requirements; verify CLI help and launch diagnostics.
 
 ## 4. Browser graphics, input and menu media
 
@@ -50,7 +50,7 @@
 
 - [ ] 7.1 Run targeted native Java/service/browser integration plus workspace build/typecheck/lint and affected tests; record exact commands and outcomes.
 - [ ] 7.2 Execute available Spider-Man Xlets through the generated package, record first frame, input, title/IXC and Gallery/Trivia reached paths, and compare graphics/navigation with independent reference evidence; keep unverified paths explicit.
-- [ ] 7.3 Record platform-specific launch results and offline package/browser behavior; keep unexecuted platform and CI checks explicitly unverified.
+- [ ] 7.3 Record platform-specific launch results and package/browser behavior; keep unexecuted platform and CI checks explicitly unverified.
 
 ## Evidence status
 

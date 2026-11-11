@@ -39,7 +39,7 @@
 | F.2 | 重写（描述） | 07 | 未勾选 | design §6 | builder 只经 `browser-bundle` 读取，去掉 workspace 源码路径 |
 | F.3 | 保留 | 07 | 未勾选 | — | 拦截读取 `**/src/*.ts` 的单测 |
 | F.4 | 重写（描述） | 07 | 未勾选 | — | 只补 package-builder 白名单；runtime-web 仅复核 |
-| F.5 | 保留 | 07、12 | 未勾选 | — | convert 产物结构不变，`validate --offline` 不退化 |
+| F.5 | 保留 | 07、12 | 未勾选 | — | convert 产物结构不变，`validate` 不退化 |
 | G.1 | 保留 | 11 | 未勾选 | — | 五项 case 脚本可执行并写出 JSON |
 | G.2 | 保留 | 11 | 未勾选 | — | 机器、版本与三轮结果入 `benchmark.md` |
 | G.3 | 保留 | 11 | 未勾选 | — | 五项按数据归类 |

@@ -25,7 +25,7 @@ function renderTemplate(template: string, values: Record<string, string>, sectio
   });
 }
 
-/** A rendered PNG image asset ready for offline embedding. */
+/** A rendered PNG image asset ready for package embedding. */
 export interface PngPayload { id: string; bytes: Uint8Array }
 export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
 export interface SoundMetadata { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number }
@@ -108,7 +108,7 @@ export function createCompatibility(metadata: MenuPackageMetadata, externalPlayb
     profile: "portable",
     coverage: { igs: "unverified" },
     externalDependencies: externalPlayback ? ["configured BDMV STREAM files", bdjRuntime ? "an operating-system file association for whole-file playback or a configured mpv executable for bounded playlists" : "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] : [],
-    notVerified: ["offline directory relocation", "real-disc rendering", "media timeline and seek accuracy"],
+    notVerified: ["package directory relocation", "real-disc rendering", "media timeline and seek accuracy"],
   };
 }
 

@@ -6,16 +6,16 @@
 [![node](https://img.shields.io/node/v/bdmv2web)](https://nodejs.org)
 [![许可](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-检查 Blu-ray BDMV 光盘结构，并为 HDMV 和 BD-J 光盘生成离线菜单包。
+检查 Blu-ray BDMV 光盘结构，并为 HDMV 和 BD-J 光盘生成菜单包。
 
-`bdmv2web` 读取 Blu-ray BDMV 目录，输出包含菜单导航、媒体、图形和音效的菜单包。HDMV 菜单包可直接通过 `file://` 打开。BD-J 菜单包通过本地 `serve` 命令、Java 运行时和 loopback HTTP 地址运行。两种模式均可离线使用。
+`bdmv2web` 读取 Blu-ray BDMV 目录，输出包含菜单导航、媒体、图形和音效的本地菜单包。HDMV 菜单包可直接通过 `file://` 打开。BD-J 菜单包通过本地 `serve` 命令、Java 运行时和 loopback HTTP 地址运行。
 
-- 生成包含菜单导航、背景视频、音轨、按钮图形和音效的离线菜单包。
+- 生成包含菜单导航、背景视频、音轨、按钮图形和音效的菜单包。
 - 从打包的应用 JAR 运行 BD-J Xlet，并使用本地 Java 进程。
 - 将 BD-J 可访问 Playlist 的视频和音轨打包为浏览器播放资产。`build --overwrite` 会复用匹配的媒体资产。
 - 检查 BDMV 结构，导出 HDMV、IGS、SUP 数据与菜单资源。
 - 将受支持的整文件正片播放交给系统播放器。
-- 校验菜单包的离线依赖并生成兼容性报告。
+- 审计菜单包结构、引用、路径和依赖，并生成兼容性报告。
 
 ## 目录
 
@@ -70,7 +70,7 @@ corepack pnpm bundle:cli
 
 ## 使用
 
-将 BDMV 目录转换为离线菜单包：
+将 BDMV 目录转换为菜单包：
 
 ```sh
 bdmv2web build /path/to/BDMV --out ./BDMV-menu
@@ -81,7 +81,7 @@ bdmv2web build /path/to/BDMV --out ./BDMV-menu
 校验生成的菜单包：
 
 ```sh
-bdmv2web validate ./BDMV-menu --offline
+bdmv2web validate ./BDMV-menu
 ```
 
 ### HDMV 与 BD-J 播放
@@ -109,8 +109,8 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 | `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--png-level 0-9`、`--format table\|json` |
 | `export <BDMV> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--png-level 0-9` |
 | `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG`、`--png-level 0-9` |
-| `build <BDMV>` | 生成离线菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--png-level 0-9`、`--overwrite`、`--strict` |
-| `validate <菜单包目录> --offline` | 校验菜单包并更新审计报告 | `--format json`、`--strict` |
+| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--png-level 0-9`、`--overwrite`、`--strict` |
+| `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json`、`--strict` |
 | `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
 `build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。影片 PGS 字幕通过 `export --type sup` 导出。

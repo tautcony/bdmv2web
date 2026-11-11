@@ -155,7 +155,7 @@ export interface UrlAuditResult { ok: boolean; kind: "local" | "data" | "externa
 export function inspectRuntimeUrl(raw: string): UrlAuditResult {
   const value = raw.trim();
   if (value === "" || value.startsWith("#")) return { ok: true, kind: "local", path: value };
-  if (value.startsWith("//")) return { ok: false, kind: "external", reason: "Protocol-relative URL is outside the offline package" };
+  if (value.startsWith("//")) return { ok: false, kind: "external", reason: "Protocol-relative URL is outside the package" };
   if (/^data:/i.test(value)) return inspectDataUrl(value);
   if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return { ok: false, kind: "external", reason: "Only package-relative and allowlisted data URLs are permitted" };
   const pathPart = value.split(/[?#]/, 1)[0] ?? "";

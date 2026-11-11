@@ -14,7 +14,7 @@
 1. 先按 [实施依赖](../../openspec/changes/DEPENDENCIES.md) 进入对应阶段，再打开该阶段索引；每行列出对应的 `tasks.md` 编号，并可直达 change 的 `tasks.md` / `design.md`。
 2. 格式/指令状态需记录固定实现来源/位置、许可、fixture、golden provenance 和验证范围。参考实现不等同规范；示例盘不构成覆盖证明。
 3. 固定环境时记录实际 Node、pnpm、FFmpeg、ffprobe、浏览器完整版本；本索引中未锁定为项目依赖的工具不能凭文档版本推定验收已通过。
-4. 参考素材只登记上游仓库地址和固定版本，不把商业盘内容复制进仓库。参考工具不进入离线发布包。
+4. 参考素材只登记上游仓库地址和固定版本，不把商业盘内容复制进仓库。参考工具不进入发布包。
 
 ## 阶段入口
 
@@ -24,9 +24,9 @@
 | M1 | [BDMV 结构解析](stages/M1-bdmv-structure.md) | index/MOBJ/MPLS/CLPI/sound、被引用的 BDJO、本地 META/DL、ExtensionData、引用图、BACKUP |
 | M2 | [传输流与 IGS](stages/M2-igs-scenes.md)、[IGS 字段登记](stages/M2-igs-field-register.md) | M2TS/TS/PES、PID、IGS Display Set、场景和像素 |
 | M3 | [HDMV 导航 VM](stages/M3-hdmv-navigation.md) | 12-byte 命令、PSR/GPR、控制流、trace |
-| M4 | [离线菜单运行时](stages/M4-offline-menu.md) | `file://` 资源、安全打包、音效、输入与 autoplay |
+| M4 | [本地菜单运行时](stages/M4-offline-menu.md) | `file://` 资源、安全打包、音效、输入与 autoplay |
 | M5 | [媒体导出与播放](stages/M5-media-playback.md) | FFmpeg/ffprobe、时间线、轨道、PGS 和媒体事件 |
-| M6 | [离线发布验证](stages/M6-release-verification.md) | 包审计、独立对照与完整度判定 |
+| M6 | [包审计与发布验证](stages/M6-release-verification.md) | 包审计、独立对照与完整度判定 |
 
 ## 标准获取、版权与边界
 

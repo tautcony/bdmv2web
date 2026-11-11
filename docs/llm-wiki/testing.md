@@ -37,7 +37,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 单元 | `packages/*/src/*.test.ts` | 与被测代码同目录 |
 | 集成 | `packages/*/tests/integration/`、`apps/cli/tests/integration/` | 跨模块或跨包，读 `test-data` 夹具与基线 |
 | 辅助 | `packages/*/tests/helpers/` | 仅供测试使用的夹具构造，不进 `dist` |
-| 端到端 | `apps/cli/tests/e2e/index.test.ts` | spawn 构建后的 `dist/index.js`，检查完整离线包 |
+| 端到端 | `apps/cli/tests/e2e/index.test.ts` | spawn 构建后的 `dist/index.js`，检查完整菜单包 |
 | 无头导航 | `runtime-web/tests/integration/*headless*.test.ts` | 用工作区样本跑 DFS/按钮路径 |
 | 真实样本 | `igs/tests/integration/tamako-external-navigation.test.ts`、`runtime-web/tests/integration/tamako-*` | 数据缺失时跳过 |
 | 一站式 | `apps/cli/tests/integration/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |

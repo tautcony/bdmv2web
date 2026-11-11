@@ -1,4 +1,4 @@
-# M6 — 离线发布验证参考
+# M6 — 包审计与发布验证参考
 
 对应 change：[tasks.md](../../../openspec/changes/archive/2026-11-09-verify-offline-release/tasks.md) / [design.md](../../../openspec/changes/archive/2026-11-09-verify-offline-release/design.md)（已于 2026-11-09 归档，主规格见 [offline-delivery-assurance](../../../openspec/specs/offline-delivery-assurance/spec.md)）。
 
@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | `WHATWG-URL-FILE` / `MDN-FILE-CORS` | 1.2–1.3, 4.2 | M4 所列的 [file URL](https://url.spec.whatwg.org/#file-scheme)、[origin](https://html.spec.whatwg.org/multipage/origin.html#origin)、[file CORS 行为](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS/Errors/CORSRequestNotHttp)。 | 审计嵌套 HTML/CSS/JS/manifest URL、路径逃逸、symlink、原盘引用和外部请求；HTTP 冒烟测试不能替代双击本地包的证据。 |
 | `JSON-SCHEMA-2020-12` | 1.1, 1.4 | 校验 manifest/compatibility/audit JSON 结构。 | 检查资产闭包和 status；不能只信包内 status 或 schema 校验通过。 |
-| `FFMPEG-DOCS` | 1.1, 4.2 | 收集 ffprobe JSON（`-show_streams -show_format -of json`）及转换工具 build/version 证据。 | 离线审计不应依赖原碟或 FFmpeg；转换证据绑定工具版本、profile 和本工具生成的输出资产，不记录原盘哈希。 |
+| `FFMPEG-DOCS` | 1.1, 4.2 | 收集 ffprobe JSON（`-show_streams -show_format -of json`）及转换工具 build/version 证据。 | 包审计不依赖原碟或 FFmpeg；转换证据绑定工具版本、profile 和本工具生成的输出资产，不记录原盘哈希。 |
 | `WPT` | 3.4 | [web-platform-tests](https://github.com/web-platform-tests/wpt) 上游标准回归用例。 | 社区网页测试不是 Blu-ray 或本应用的符合性证明；引入用例时锁定 commit/许可，且不能替代本应用的运行证据。 |
 | `MDN-AUTOPLAY` / `MDN-MEDIA` | 4.2 | 浏览器播放策略、错误和 media Promise API。 | 播放策略与错误行为随平台而异，实现按 API 契约处理；缺少浏览器或场景证据时标记 not-verified。 |
 | `LIBBLURAY-1.5.0`, `IGSTOOLS-2019`, `LIBHDMV-2026-03` | 3.1–3.3 | M1/M2/M3 固定版本的实现源码可用于交叉比较。 | 不同语言或仓库不代表来源独立；应检查算法/代码沿袭，使用另外建立的 expected 数据，并记录来源版本和许可。 |
@@ -16,7 +16,7 @@
 
 `compatibility.json` records status, checks, coverage, reasons and validation evidence. `dependency-audit.json` records status, external references and checks. Neither report records the producing tool name or version, or provides a separate structured diagnostics list with source path, byte offset and stage. Compatibility checks carry `checkId`, `result`, `message` and optional `path`, `entityId` and `evidence`.
 
-The package manifest carries conversion diagnostics with severity, code and message. The offline package audit retains severity, code, acknowledgement and completion-blocking fields when it reads those diagnostics; it does not retain their message, source path, byte offset or stage. Release results therefore identify check failures and missing evidence, while tool-version provenance and source-located diagnostic detail remain unrecorded.
+The package manifest carries conversion diagnostics with severity, code and message. The package audit retains severity, code, acknowledgement and completion-blocking fields when it reads those diagnostics; it does not retain their message, source path, byte offset or stage. Release results therefore identify check failures and missing evidence, while tool-version provenance and source-located diagnostic detail remain unrecorded.
 
 ## Task 3.4 安全回归证据
 
@@ -28,7 +28,7 @@ The package manifest carries conversion diagnostics with severity, code and mess
 | 结构解析 | `pnpm --filter @bdmv2web/bdmv-parser test` | 三字节截断 magic；12 字节命令截断不补零；图循环只遍历一次；节点预算返回未访问 frontier；原盘 symlink 拒绝。 |
 | IGS 传输与尺寸预算 | `pnpm --filter @bdmv2web/igs test` | 缺失首片/EOF、active ODS 聚合预算、有界 RLE 行溢出和像素预算。 |
 | HDMV 执行预算 | `pnpm --filter @bdmv2web/hdmv test` | 同步跳转/按钮循环以 `VM_EXECUTION_LIMIT` 终止；预算耗尽的图保留 unknown frontier。 |
-| 离线审计、对照、证据与发布摘要 | `pnpm --filter @bdmv2web/test-runner test` | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、发布缺口汇总。 |
+| 包审计、对照、证据与发布摘要 | `pnpm --filter @bdmv2web/test-runner test` | 双重编码逃逸、外部 symlink、远程嵌套 URL、未验证的动态入口、PNG/WAV 签名与 MIME、参考版本缺失时保留 not-verified、发布缺口汇总。 |
 
 这些结果来源于仓库合成 fixtures 及已提供的本地 IGS 样本。
 

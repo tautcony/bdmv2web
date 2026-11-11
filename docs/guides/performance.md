@@ -1,6 +1,6 @@
 # Performance benchmarks
 
-The benchmark suite covers eight BDMV, MNU, and PGS component cases, synthetic scale cases, CLI process start, prepared-data CLI inspect/extract/render scenarios, package assembly from prepared scene and PNG inputs, and the generated offline menu opened in a browser through `file://`. Each case has a stable ID, a fixture ID and version, fixture parameters, and a timing scope. Every input a case reads is committed to the repository: the runner refuses to start when one is missing, and records any input that git ignores, because a record built from a local-only file cannot be reproduced.
+The benchmark suite covers eight BDMV, MNU, and PGS component cases, synthetic scale cases, CLI process start, prepared-data CLI inspect/extract/render scenarios, package assembly from prepared scene and PNG inputs, and the generated menu opened in a browser through `file://`. Each case has a stable ID, a fixture ID and version, fixture parameters, and a timing scope. Every input a case reads is committed to the repository: the runner refuses to start when one is missing, and records any input that git ignores, because a record built from a local-only file cannot be reproduced.
 
 ## Run component and scenario benchmarks
 
