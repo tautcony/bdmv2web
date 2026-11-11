@@ -3,6 +3,9 @@ import type { IgsDiagnostic, PtsValue, TsPacket } from "./types.js";
 
 const SYNC = 0x47;
 const MAX_PTS = 1n << 33n;
+const M2TS_PACKET_BYTES = 192;
+const SYNC_OFFSET_IN_PACKET = 4;
+const SPLIT_RETAINED_BYTES = M2TS_PACKET_BYTES + SYNC_OFFSET_IN_PACKET - 1;
 
 export class M2tsPacketReader {
   private pending = new Uint8Array();
@@ -22,26 +25,25 @@ export class M2tsPacketReader {
     this.pending = joined;
     const packets: TsPacket[] = [];
     let consumed = 0;
-    while (this.pending.length - consumed >= 192) {
-      if (this.pending[consumed + 4] !== SYNC) {
+    while (this.pending.length - consumed >= M2TS_PACKET_BYTES) {
+      if (this.pending[consumed + SYNC_OFFSET_IN_PACKET] !== SYNC) {
         const next = this.findSync(consumed + 1);
         if (next < 0) {
-          // Keep enough bytes to recognize a 192-byte boundary split over the next read.
-          const discard = Math.max(0, this.pending.length - consumed - 195);
+          const discard = Math.max(0, this.pending.length - consumed - SPLIT_RETAINED_BYTES);
           if (discard === 0) break;
-          this.diagnostics.push(diag("TS_SYNC_LOST", `No 192-byte M2TS sync at file offset ${this.baseOffset + BigInt(consumed)}`));
+          this.diagnostics.push(diag("TS_SYNC_LOST", `No ${M2TS_PACKET_BYTES}-byte M2TS sync at file offset ${this.baseOffset + BigInt(consumed)}`));
           consumed += discard;
           continue;
         }
         this.diagnostics.push(diag("TS_SYNC_LOST", `Resynchronized after ${next - consumed} bytes`, this.baseOffset + BigInt(consumed)));
         consumed = next;
-        if (this.pending.length - consumed < 192) break;
-        if (this.pending[consumed + 4] !== SYNC) continue;
+        if (this.pending.length - consumed < M2TS_PACKET_BYTES) break;
+        if (this.pending[consumed + SYNC_OFFSET_IN_PACKET] !== SYNC) continue;
       }
       const offset = this.baseOffset + BigInt(consumed);
-      const packet = this.parsePacket(this.pending.subarray(consumed, consumed + 192), offset);
+      const packet = this.parsePacket(this.pending.subarray(consumed, consumed + M2TS_PACKET_BYTES), offset);
       if (packet) packets.push(packet);
-      consumed += 192;
+      consumed += M2TS_PACKET_BYTES;
     }
     if (consumed) {
       this.pending = this.pending.slice(consumed);

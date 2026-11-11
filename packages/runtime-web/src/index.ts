@@ -415,17 +415,8 @@ export class MenuController {
     if (this.activeEffect) return;
     if (kind === "escape") {
       if (!this.isUoAllowed(25)) return;
-      const current = this.button;
-      const hiddenAutoActions = current
-        ? [...new Set(Object.values(current.neighbors))]
-          .map((id) => this.page.buttons.find((button) => button.id === id))
-          .filter((button): button is MenuButton => !!button && this.isUsable(button) && button.autoAction === true && button.commands.length > 0 && button.states.selected?.bounds === undefined)
-        : [];
-      // Some authored pages (including this disc's Special Features page) encode
-      // their return control as a non-rendered auto-action in the selected
-      // button's neighbor graph. Escape should execute that real HDMV command,
-      // not route to an unavailable popup and leave the VM stopped.
-      if (hiddenAutoActions.length === 1) { this.selectButton(hiddenAutoActions[0]!.id); return; }
+      const escapeTarget = this.escapeTarget();
+      if (escapeTarget) { this.selectButton(escapeTarget.id); return; }
       if (this.inputConfig.escapeMapping === "popup") this.handle("popup");
       else if (this.inputConfig.escapeMapping === "topMenu") this.handle("topMenu");
       else if (this.inputConfig.escapeMapping === "custom") this.hooks.escape?.();
@@ -476,14 +467,21 @@ export class MenuController {
     this.hooks.render?.();
   }
   hit(x: number, y: number): number | null {
-    // libbluray scans BOGs in page order and tests only each BOG's enabled
-    // button selected-state object. The serialized button list is normally
-    // already flattened in that order; use declarations when available so
-    // hand-authored scenes follow the same rule.
-    const orderedButtons = this.page.bogDefaults
+    return this.buttonsInBogScanOrder().find((button) => this.isUsable(button) && contains(button.states.selected?.bounds ?? button.states.normal?.bounds, x, y))?.id ?? null;
+  }
+  // libbluray scans BOGs in page order.
+  private buttonsInBogScanOrder(): MenuButton[] {
+    return this.page.bogDefaults
       ? this.page.bogDefaults.flatMap(({ bog }) => this.page.buttons.filter((button) => button.bog === bog))
       : this.page.buttons;
-    return orderedButtons.find((button) => this.isUsable(button) && contains(button.states.selected?.bounds ?? button.states.normal?.bounds, x, y))?.id ?? null;
+  }
+  private escapeTarget(): MenuButton | null {
+    const current = this.button;
+    if (!current) return null;
+    const candidates = [...new Set(Object.values(current.neighbors))]
+      .map((id) => this.page.buttons.find((button) => button.id === id))
+      .filter((button): button is MenuButton => !!button && this.isUsable(button) && button.autoAction === true && button.commands.length > 0 && button.states.selected?.bounds === undefined);
+    return candidates.length === 1 ? candidates[0]! : null;
   }
   selectFromPointer(x: number, y: number): boolean {
     if (!this.isUoAllowed(18)) return false;
@@ -885,13 +883,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
           return false;
         }
       }
-      if (response) {
-        // Rebind the response so a later natural media end still reports
-        // MEDIA_ENDED for this playlist wait (the failed attempt cleared it).
-        this.activePlaylistResponse = response;
-        respondToWaitingAction(this.vm, response, { type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
-        if (!matchingWait(this.vm, response) && this.activePlaylistResponse === response) this.activePlaylistResponse = null;
-      }
+      if (response) this.confirmStarted(response);
       return true;
     }
     if (!this.startPromise) {
@@ -935,15 +927,13 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     const attempt = this.startPromise;
     const started = await attempt;
     if (this.startPromise === attempt && !started) this.startPromise = null;
-    if (started && response) {
-      // The initial attempt and its retry share this branch: a retry succeeds
-      // with the response already released by the failed attempt, so rebind it
-      // to keep reporting MEDIA_ENDED when the playlist media ends naturally.
-      this.activePlaylistResponse = response;
-      respondToWaitingAction(this.vm, response, { type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
-      if (!matchingWait(this.vm, response) && this.activePlaylistResponse === response) this.activePlaylistResponse = null;
-    }
+    if (started && response) this.confirmStarted(response);
     return started;
+  }
+  private confirmStarted(response: PlaybackAction): void {
+    this.activePlaylistResponse = response;
+    respondToWaitingAction(this.vm, response, { type: "MEDIA_STARTED", generation: response.generation, responseTo: response.id });
+    if (!matchingWait(this.vm, response) && this.activePlaylistResponse === response) this.activePlaylistResponse = null;
   }
 
   /** Swap the local video/audio source while the VM keeps its current generation. */

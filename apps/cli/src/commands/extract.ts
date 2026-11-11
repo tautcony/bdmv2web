@@ -160,11 +160,14 @@ export function serializeIgsScene(scene: Awaited<ReturnType<typeof extractIgsSce
     userTimeoutDuration: scene.userTimeoutDuration, rawIcs: Array.from(scene.rawIcs), complete: scene.complete,
     source: mapIgsSource(scene.source),
     pages: scene.pages.map((page) => ({ ...page, uoMask: page.uoMask.toString(10), buttons: page.buttons.map((button) => ({ ...button, commands: button.commands.map((command) => ({ ...command, bytes: Array.from(command.bytes) })) })) })),
-    // Pixel indices belong to the rendered asset stage; embedding them here makes
-    // large menus exceed the JSON string limit. Keep object metadata and length only.
-    objects: scene.objects.map(({ indices, ...object }) => ({ ...object, indicesLength: indices.length, source: mapIgsSource(object.source) })),
+    objects: scene.objects.map((object) => ({ ...withoutPixelIndices(object), source: mapIgsSource(object.source) })),
     palettes: scene.palettes.map((palette) => ({ id: palette.id, version: palette.version, entries: [...palette.entries].map(([id, entry]) => ({ id, ...entry })), source: mapIgsSource(palette.source) })),
   };
+}
+
+function withoutPixelIndices<T extends { indices: Uint8Array }>(object: T): Omit<T, "indices"> & { indicesLength: number } {
+  const { indices, ...rest } = object;
+  return { ...rest, indicesLength: indices.length };
 }
 
 export function safeDiagnosticMessage(message: string, sourceRoot: string): string {

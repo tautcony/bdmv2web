@@ -130,15 +130,14 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
         ...(normal ? { normal } : {}), ...(selected ? { selected } : {}), ...(activated ? { activated } : {}),
       };
       const hasSafeHitBounds = !!(states.selected ?? states.normal);
+      const hitTestableOrAutoAction = hasSafeHitBounds || button.autoAction;
       if (membership.length === 0) diagnostic("IGS_BUTTON_WITHOUT_BOG", `Button ${button.id} does not belong to a declared BOG and is disabled`, scene, diagnostics, page.id, button.id);
       if (membership.length > 1) diagnostic("IGS_BUTTON_MULTIPLE_BOGS", `Button ${button.id} belongs to multiple BOGs and is disabled`, scene, diagnostics, page.id, button.id);
       if (!hasSafeHitBounds) diagnostic("IGS_BUTTON_WITHOUT_HIT_GEOMETRY", `Button ${button.id} has no rendered normal or selected visual for safe hit geometry and is disabled`, scene, diagnostics, page.id, button.id);
       return {
         id: button.id,
         ...(membership.length === 1 ? { bog: membership[0]! } : {}),
-        // A no-visual auto-action button cannot be pointer-hit, but it still
-        // needs to execute when selected as the page default or by the VM.
-        enabled: membership.length === 1 && (hasSafeHitBounds || button.autoAction),
+        enabled: membership.length === 1 && hitTestableOrAutoAction,
         autoAction: button.autoAction,
         neighbors: { ...button.neighbors },
         states,

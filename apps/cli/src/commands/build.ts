@@ -43,7 +43,7 @@ export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["play
   const targets: Array<{ clipId: string; pid: number }> = [];
   for (const item of playlist.playItems) {
     if (playItemIndex !== undefined && item.index !== playItemIndex) continue;
-    const hasExplicitPrimaryIg = item.streams.some((stream) => stream.codingType === 0x91 && stream.streamType === 1 && stream.pid !== null);
+    const mplsDeclaresPrimaryIg = item.streams.some((stream) => stream.codingType === 0x91 && stream.streamType === 1 && stream.pid !== null);
     for (const stream of item.streams) {
       if (stream.codingType !== 0x91 || stream.pid === null) continue;
       if (stream.streamType === 1) {
@@ -53,17 +53,16 @@ export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["play
         if (clip) targets.push({ clipId: clip.clipId, pid: stream.pid });
       }
     }
-    // extractIgsScenes also accepts CLPI cues for primary clips when MPLS has no
-    // explicit IG stream. Keep that proven playlist-to-clip association here,
-    // while letting an explicit MPLS PID take precedence for the same clip.
-    if (!hasExplicitPrimaryIg) {
-      const clipInfo = disc.clips.find((clip) => clip.id.toLocaleLowerCase("en-US") === item.clipId.toLocaleLowerCase("en-US"));
-      for (const stream of clipInfo?.programs.flatMap((program) => program.streams) ?? []) {
-        if (stream.codingType === 0x91 && stream.pid !== null) targets.push({ clipId: item.clipId, pid: stream.pid });
-      }
-    }
+    if (!mplsDeclaresPrimaryIg) targets.push(...clpiPrimaryIgsTargets(disc, item.clipId));
   }
   return [...new Map(targets.map((target) => [`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`, target])).values()];
+}
+
+function clpiPrimaryIgsTargets(disc: ParsedDisc, clipId: string): Array<{ clipId: string; pid: number }> {
+  const clipInfo = disc.clips.find((clip) => clip.id.toLocaleLowerCase("en-US") === clipId.toLocaleLowerCase("en-US"));
+  return (clipInfo?.programs.flatMap((program) => program.streams) ?? [])
+    .filter((stream) => stream.codingType === 0x91 && stream.pid !== null)
+    .map((stream) => ({ clipId, pid: stream.pid }));
 }
 
 export function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], playItemIndex?: number) {
@@ -73,6 +72,10 @@ export function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"
   if (unique.length === 1) return { status: "found" as const, scene: unique[0]! };
   if (unique.length === 0) return { status: "not-found" as const };
   return { status: "ambiguous" as const, scenes: unique };
+}
+
+function isMenuSurfaceScene(uiModel: number, playlistId: number, topMenuPlaylistId: number): boolean {
+  return uiModel === 0 || playlistId === topMenuPlaylistId;
 }
 
 export function createVmPrograms(disc: ParsedDisc): VmProgram[] {
@@ -193,10 +196,6 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   const tailStart = playItems.length - (repeatedTail ? repeatCount : 1);
   const timelineItems = repeatedTail ? [last] : playItems;
   const loopItem = repeatedTail ? last : first;
-  // A Top Menu playlist is identified by the HDMV command chain above. Its
-  // background topology is derived from the selected timeline: a complete
-  // single item, adjacent intervals in the same source clip, an explicit loop
-  // mark, or an identical repeated tail. Playlist repetition is not a menu test.
   const sameSourceContinuous = timelineItems.every((item, index) => item.clipId === first.clipId
     && (index === 0 || timelineItems[index - 1]!.outTime45k === item.inTime45k));
   const oneTimelineSpan = repeatedTail || sameSourceContinuous;
@@ -227,7 +226,6 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   };
 }
 
-/** The visible work of a conversion; option parsing happens before the plan is printed. */
 const CONVERT_STEPS = {
   structure: "Parse BDMV structure",
   scenes: "Extract IGS scenes",
@@ -510,16 +508,6 @@ export async function build(): Promise<void> {
     const mediaClosure = buildMediaClosure(disc, extraction.scenes);
     const externalTargets = createExternalMediaTargets(disc, mediaClosure);
     const reachablePlaylistIds = new Set(mediaClosure.playlistIds.map((id) => Number(id.slice("playlist:".length))));
-    // An IGS composition identifies the playlist that owns it, not the role it
-    // plays. Always-on compositions (uiModel 0) are menu surfaces. Popup
-    // compositions (uiModel 1) belong to title playback and must not replace the
-    // Top Menu background with an overlay-only scene. The resolved Top Menu
-    // playlist is the exception: its selected composition is the packaged menu
-    // surface even when the disc models its menu as a popup composition.
-    // A menu playlist is not limited to the PlayItem the Top Menu command enters:
-    // LinkPI switches between sub-menus inside the same playlist, so every
-    // PlayItem that owns an IGS composition is packaged under its own
-    // (playlist, PlayItem) key.
     const menuPlaylistNumber = Number(menuPlaylist.id);
     const playlistSceneResults = disc.playlists.flatMap((playlist) => {
       const isMenuPlaylist = Number(playlist.id) === menuPlaylistNumber;
@@ -531,7 +519,7 @@ export async function build(): Promise<void> {
           : [];
       });
     });
-    const menuSceneResults = playlistSceneResults.filter((item) => item.scene.uiModel === 0 || item.playlistId === menuPlaylistNumber);
+    const menuSceneResults = playlistSceneResults.filter((item) => isMenuSurfaceScene(item.scene.uiModel, item.playlistId, menuPlaylistNumber));
     const menuPlaylistIds = [...new Set(menuSceneResults.map((item) => item.playlistId))];
     // PLAY_PLAYLIST_MARK names a play mark; the runtime needs the mark-to-
     // PlayItem mapping to select the packaged scene for the marked PlayItem.
@@ -543,9 +531,7 @@ export async function build(): Promise<void> {
     const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
     const popupContentPlaylists: number[] = [];
     const missingPlayItemMedia: number[] = [];
-    // The Top Menu PlayItem is the primary menu loop; the others are the
-    // sub-menus a LinkPI jump reaches, and each needs its own background.
-    const primaryPlayItem = menuMedia ? menuTarget?.playItem ?? 0 : -1;
+    const primaryPlayItem = menuMedia ? menuTarget?.playItem ?? 0 : null;
     for (const item of playlistSceneResults) {
       const isMenuPlaylist = item.playlistId === menuPlaylistNumber;
       if (isMenuPlaylist && item.playItem === primaryPlayItem) continue;

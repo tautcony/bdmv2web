@@ -103,7 +103,3 @@ export async function validate(): Promise<void> {
   }
   process.exitCode = decision.exitCode;
 }
-
-/** Read a JSON object, treating anything else as absent. A read failure is
- * reported to `onError` so a caller that depends on the content can keep the
- * failure visible instead of treating it as an empty document. */

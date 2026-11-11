@@ -305,7 +305,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   }
 
   const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
-  // const maxAssetBytes = options.maxAssetBytes ?? null;
 
   const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"], timeoutMs)).stdout);
   const ffprobeVersion = firstLine((await invoke(ffprobe, ["-version"], timeoutMs)).stdout);

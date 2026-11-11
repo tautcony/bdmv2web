@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { IgsPalette } from "../src/types.js";
 import { assertPngLevel, DEFAULT_ASSET_PNG_LEVEL, DEFAULT_CANVAS_PNG_LEVEL, encodeIndexedPng, encodeRgbaPng, paletteRgbaTable } from "../src/png.js";
 import { decodePng } from "../tests/helpers/decode-png.js";
 
-/** A palette whose entries are easy to recognise once decoded. */
-const palette = { id: 0, version: 0, entries: new Map([[0, { y: 16, cr: 128, cb: 128, alpha: 0 }], [1, { y: 235, cr: 128, cb: 128, alpha: 255 }], [7, { y: 81, cr: 240, cb: 90, alpha: 128 }]]) } as never;
+const palette: IgsPalette = {
+  id: 0,
+  version: 0,
+  entries: new Map([[0, { y: 16, cr: 128, cb: 128, alpha: 0 }], [1, { y: 235, cr: 128, cb: 128, alpha: 255 }], [7, { y: 81, cr: 240, cb: 90, alpha: 128 }]]),
+  source: { clipId: "00000", pid: 0x1400, packetOffset: "0", pesOffset: "0", segmentOffset: "0", segmentFileOffset: "0", pts90k: null, timeDomain: 0 },
+};
 
 describe("PNG encoders", () => {
   it("writes an indexed file that decodes to the palette's own colours", () => {

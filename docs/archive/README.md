@@ -18,3 +18,4 @@
 | [review-2026-11-06-daily](reviews/review-2026-11-06-daily/index.md) | 当日 16 提交批次审查，16 条 finding | P1/P2 全部修复，遗留 6 条 INFO |
 | [review-2026-11-06-hdmv-vm-conformance](reviews/review-2026-11-06-hdmv-vm-conformance/index.md) | HDMV VM 逐指令一致性审计（对照 libbluray 1.5.0 与 libhdmv 2026-03） | VM-01~08 已修复；当前 VM 行为以 hdmv-support.md 为准 |
 | [review-2026-11-07-over-defensive-audit](reviews/review-2026-11-07-over-defensive-audit/index.md) | 过度防御与辩解式内容审计 | 含 §7 修正记录（已修正/保留/未复现三分类） |
+| [review-2026-11-11-comment-audit](reviews/review-2026-11-11-comment-audit/index.md) | 全仓代码注释审计，476 条可删判定 | 已落地 2 条死内容与 29 项结构改动；约 250 条叙述删除与 10 项重塑未执行 |

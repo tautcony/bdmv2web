@@ -43,6 +43,7 @@ interface Composition { pts: number; width: number; height: number; number: numb
 const MAX_DIMENSION = 16_384;
 const MAX_OBJECT_BYTES = 64 * 1024 * 1024;
 const TRANSPARENT: PgsRgba = [0, 0, 0, 0];
+const SEGMENT = { PDS: 0x14, ODS: 0x15, PCS: 0x16, END: 0x80 } as const;
 const LITTLE_ENDIAN = new Uint8Array(Uint32Array.of(1).buffer)[0] === 1;
 
 /**
@@ -75,16 +76,8 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
   const { maxDimension, maxObjectBytes } = limits;
   const segments = readSegments(data);
   const palettes = new Map<number, Map<number, PgsRgba>>();
-  // A stream commonly repeats the same PDS before every display set. Reusing the
-  // decoded palette keeps one map instead of one per set, and lets the bitmap cache
-  // below treat the repeats as the same palette.
   const paletteBytes = new Map<number, Uint8Array>();
   const objects = new Map<number, ObjectData>();
-  // Presentation compositions reuse the same object across display sets; decoding
-  // per display set turned a re-displayed bitmap into a fresh allocation every time.
-  // The entry keeps the object data it was decoded from, because an ODS may legally
-  // redefine an object ID later in the stream. A streaming caller drops the cache so
-  // that the bitmaps of a rendered set become collectable.
   const decodedByPalette = retainBitmaps ? new WeakMap<Map<number, PgsRgba>, Map<number, { source: ObjectData; bitmap: PgsBitmap }>>() : null;
   const cacheFor = (palette: Map<number, PgsRgba>): Map<number, { source: ObjectData; bitmap: PgsBitmap }> => {
     if (!decodedByPalette) return new Map();
@@ -93,14 +86,13 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
     return cache;
   };
   const pending = new Map<number, { width: number; height: number; expected: number; chunks: Uint8Array[]; received: number }>();
-  // RLE validation reuses one index buffer instead of allocating one per object.
   let scratch: Uint8Array = new Uint8Array(0);
   let composition: Composition | undefined;
 
   for (const segment of segments) {
     const p = segment.payload;
     switch (segment.type) {
-      case 0x14: { // PDS
+      case SEGMENT.PDS: {
         if (p.length < 2 || (p.length - 2) % 5 !== 0) throw new TypeError("Malformed PGS palette definition segment.");
         const paletteId = p[0]!;
         const previous = paletteBytes.get(paletteId);
@@ -111,7 +103,7 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
         paletteBytes.set(paletteId, p);
         break;
       }
-      case 0x15: { // ODS
+      case SEGMENT.ODS: {
         if (p.length < 4) throw new TypeError("Malformed PGS object definition segment.");
         const id = u16(p, 0); const sequence = p[3]!;
         const first = (sequence & 0x80) !== 0; const last = (sequence & 0x40) !== 0;
@@ -144,10 +136,10 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
         }
         break;
       }
-      case 0x16: // PCS
+      case SEGMENT.PCS:
         composition = parseComposition(segment, maxDimension);
         break;
-      case 0x80: { // END completes the current display set
+      case SEGMENT.END: {
         if (!composition) break;
         const palette = palettes.get(composition.paletteId) ?? new Map<number, PgsRgba>();
         const decoded = cacheFor(palette);
@@ -157,8 +149,6 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
           if (!object) continue;
           const cached = decoded.get(placement.objectId);
           if (cached && cached.source === object) { used.set(placement.objectId, cached.bitmap); continue; }
-          // Validate the RLE now, but keep only the encoded object: the decoded
-          // pixels are materialised on the first `pixels` access.
           scratch = decodeIndices(placement.objectId, object, maxObjectBytes, scratch);
           const bitmap = lazyBitmap(placement.objectId, object, maxObjectBytes, palette);
           decoded.set(placement.objectId, { source: object, bitmap });
@@ -168,7 +158,6 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
         composition = undefined;
         break;
       }
-      // Window definitions and unknown extension segments do not change the ordinary bitmap result.
       default: break;
     }
   }
@@ -242,7 +231,6 @@ function parseComposition(segment: Segment, maxDimension: number): Composition {
   return { pts: segment.pts, width, height, number, state, paletteId, placements };
 }
 
-/** Decode RLE into palette indices, reusing `target` when it is large enough. */
 function decodeIndices(id: number, object: ObjectData, maxObjectBytes: number, target?: Uint8Array): Uint8Array {
   const pixelBytes = object.width * object.height * 4;
   if (!Number.isSafeInteger(pixelBytes) || pixelBytes > maxObjectBytes) throw new RangeError(`PGS object ${id} decoded bitmap exceeds configured byte limit.`);
@@ -280,7 +268,6 @@ function decodeIndices(id: number, object: ObjectData, maxObjectBytes: number, t
   }
 }
 
-/** Decode RLE to RGBA on the first `pixels` access, then keep the expanded array. */
 function lazyBitmap(objectId: number, object: ObjectData, maxObjectBytes: number, palette: ReadonlyMap<number, PgsRgba>): PgsBitmap {
   const { width, height } = object;
   let encoded: ObjectData | null = object;
@@ -296,8 +283,6 @@ function lazyBitmap(objectId: number, object: ObjectData, maxObjectBytes: number
         const packed = packPalette(palette);
         for (let i = 0; i < indices.length; i++) words[i] = packed[indices[i]!]!;
       } else for (let i = 0; i < indices.length; i++) output.set(palette.get(indices[i]!) ?? TRANSPARENT, i * 4);
-      // The expanded pixels replace the RLE data, so an all-set renderer keeps one
-      // representation per bitmap instead of both.
       encoded = null;
       pixels = output;
       return output;
@@ -305,7 +290,6 @@ function lazyBitmap(objectId: number, object: ObjectData, maxObjectBytes: number
   };
 }
 
-/** Pack every palette entry into one little-endian RGBA word per index. */
 function packPalette(palette: ReadonlyMap<number, PgsRgba>): Uint32Array {
   const packed = new Uint32Array(256);
   for (const [index, rgba] of palette) if (index >= 0 && index < 256) packed[index] = (rgba[0] | (rgba[1] << 8) | (rgba[2] << 16) | (rgba[3] << 24)) >>> 0;

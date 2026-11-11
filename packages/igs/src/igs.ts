@@ -67,17 +67,27 @@ export function decodeRle(data: Uint8Array, width: number, height: number, limit
   return output;
 }
 
+const ICS_SEQUENCE_FLAGS_OFFSET = 8;
+const ICS_LENGTH_OFFSET = 9;
+const ICS_PREFIX_BYTES = 12;
+const ICS_SEGMENT_FIRST_AND_LAST = 0xc0;
+
 function appendIcsFragment(previous: Uint8Array, fragment: Uint8Array): Uint8Array {
-  if (previous.length < 12 || fragment.length < 9) throw new IgsError("IGS_INVALID_SEGMENT", "ICS fragment is shorter than its header");
-  const payload = previous.subarray(12);
+  if (previous.length < ICS_PREFIX_BYTES || fragment.length < ICS_LENGTH_OFFSET) throw new IgsError("IGS_INVALID_SEGMENT", "ICS fragment is shorter than its header");
+  const payload = previous.subarray(ICS_PREFIX_BYTES);
   // Continuation ICS segments repeat the common fields and sequence flags but
   // omit the 24-bit total data length present in the start segment.
-  const nextPayload = fragment.subarray(9);
-  const combined = new Uint8Array(12 + payload.length + nextPayload.length);
-  combined.set(previous.subarray(0, 9));
-  combined.set(payload, 12);
-  combined.set(nextPayload, 12 + payload.length);
+  const nextPayload = fragment.subarray(ICS_LENGTH_OFFSET);
+  const combined = new Uint8Array(ICS_PREFIX_BYTES + payload.length + nextPayload.length);
+  combined.set(previous.subarray(0, ICS_LENGTH_OFFSET));
+  combined.set(payload, ICS_PREFIX_BYTES);
+  combined.set(nextPayload, ICS_PREFIX_BYTES + payload.length);
   return combined;
+}
+
+function sealCombinedIcs(ics: Uint8Array): void {
+  ics[ICS_SEQUENCE_FLAGS_OFFSET] = ICS_SEGMENT_FIRST_AND_LAST;
+  ics.set(u24Bytes(ics.length - ICS_PREFIX_BYTES), ICS_LENGTH_OFFSET);
 }
 
 function u24Bytes(value: number): Uint8Array {
@@ -126,11 +136,7 @@ export function consumeSegment(state: IgsStreamState, segment: IgsSegment, clipI
       const combinedLength = current.ics.length + segment.data.length - 9;
       if (combinedLength > limits.maxReassemblyBytes) throw new IgsError("LIMIT_EXCEEDED", `Combined ICS reassembly ${combinedLength} bytes exceeds maxReassemblyBytes ${limits.maxReassemblyBytes}`);
       current.ics = appendIcsFragment(current.ics, segment.data);
-      if (endsComposition) {
-        // The combined composition is parsed at the following END segment.
-        current.ics[8] = 0xc0;
-        current.ics.set(u24Bytes(current.ics.length - 12), 9);
-      }
+      if (endsComposition) sealCombinedIcs(current.ics);
       return;
     }
     if (segment.type === 0x14) {

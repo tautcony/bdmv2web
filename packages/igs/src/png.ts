@@ -9,14 +9,6 @@ const TYPE_IDAT = Uint8Array.of(73, 68, 65, 84);
 const TYPE_IEND = Uint8Array.of(73, 69, 78, 68);
 const EMPTY = new Uint8Array(0);
 
-/**
- * Tuned deflate levels. zlib's curve is a step, not a slope: levels 1-3 use the fast
- * configuration, 4-9 the slow one, and level 9 costs twice level 6 for the same bytes.
- * Indexed sprite scans reach the same size within a few percent on the fast ramp, so
- * assets take its first step; a full-HD PGS canvas is 1920x1080 bytes per row whatever
- * it paints, so it needs the slow configuration to stay small. The run-length strategy
- * encodes sprites 41% faster but grows the reference set by 13%, so it stays out.
- */
 export const DEFAULT_ASSET_PNG_LEVEL = 1;
 export const DEFAULT_CANVAS_PNG_LEVEL = 6;
 
@@ -51,10 +43,8 @@ export function paletteRgbaTable(palette: IgsPalette): Uint8Array {
 
 export function renderSceneAssets(scene: IgsScene, options: PngEncodeOptions = {}): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
   const assets: IgsAsset[] = []; const diagnostics: IgsDiagnostic[] = [];
-  // Later definitions win, matching the previous reverse-then-find lookup without
-  // rebuilding a reversed array for every referenced object.
-  const palettesById = new Map<number, IgsPalette>(); for (const item of scene.palettes) palettesById.set(item.id, item);
-  const objectsById = new Map<number, IgsObject>(); for (const item of scene.objects) objectsById.set(item.id, item);
+  const palettesByLastDefinition = new Map<number, IgsPalette>(); for (const item of scene.palettes) palettesByLastDefinition.set(item.id, item);
+  const objectsByLastDefinition = new Map<number, IgsObject>(); for (const item of scene.objects) objectsByLastDefinition.set(item.id, item);
   const paletteTables = new Map<IgsPalette, Uint8Array>();
   const level = options.level === undefined ? DEFAULT_ASSET_PNG_LEVEL : assertPngLevel(options.level);
   for (const page of scene.pages) {
@@ -70,13 +60,13 @@ export function renderSceneAssets(scene: IgsScene, options: PngEncodeOptions = {
     }
     for (const sequence of [page.effects.enter, page.effects.exit]) for (const effect of sequence.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
     for (const { objectId, paletteId } of objectPalettes.values()) {
-      const palette = palettesById.get(paletteId);
+      const palette = palettesByLastDefinition.get(paletteId);
       if (!palette) {
         scene.complete = false;
         diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
         continue;
       }
-      const object = objectsById.get(objectId);
+      const object = objectsByLastDefinition.get(objectId);
       if (!object) {
         scene.complete = false;
         diagnostics.push({ severity: "error", code: "UNRESOLVED_OBJECT", message: `Page ${page.id} references object ${objectId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });
@@ -146,8 +136,6 @@ export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array, o
   for (let y = 0; y < height; y++) scanlines.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
   const compressed = deflateSync(scanlines, { level });
   const ihdr = new Uint8Array(13); putU32(ihdr, 0, width); putU32(ihdr, 4, height); ihdr.set([8, 6, 0, 0, 0], 8);
-  // One buffer for the whole file: the IDAT payload used to be copied into a typed
-  // array, then into a chunk body, then into the chunk, then into the file.
   const png = new Uint8Array(8 + 12 + 13 + 12 + compressed.length + 12);
   png.set(SIGNATURE, 0);
   let at = 8;

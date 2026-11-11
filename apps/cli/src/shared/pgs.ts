@@ -10,10 +10,7 @@ export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaite
   const extracted = new Map<string, Awaited<ReturnType<typeof extractPgsTrack>> & { packagePath: string }>();
   const result = [];
   for (const [index, reference] of references.entries()) {
-    // A shared stream referenced at two PlayItem entry points needs one track
-    // per entry: the display set timestamps are shifted to the referenced
-    // source-in point, so the offset is part of the identity.
-    const key = `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`;
+    const key = trackIdentityBySourceIn(reference);
     let track = extracted.get(key);
     if (!track) {
       const sourcePath = await resolveInputFile(disc.root, `STREAM/${reference.clipId}.m2ts`);
@@ -24,6 +21,10 @@ export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaite
     result.push({ ...reference, path: track.packagePath, displaySets: track.displaySets });
   }
   return result;
+}
+
+function trackIdentityBySourceIn(reference: { clipId: string; pid: number; sourceIn90k: string }): string {
+  return `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`;
 }
 
 export function reachablePgsReferences(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {

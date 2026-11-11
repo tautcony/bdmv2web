@@ -821,21 +821,21 @@ async function boot(): Promise<void> {
         window.removeEventListener("click", restoreAutoMutedMenu, true);
       };
     };
+    const armAutoMuteRestoreAfterDispatch = () => {
+      if (armAutoMuteTimer !== undefined) clearTimeout(armAutoMuteTimer);
+      armAutoMuteTimer = setTimeout(() => {
+        armAutoMuteTimer = undefined;
+        if (menuMuted && !manualMuted) armAutoMuteRestore();
+      }, 0);
+    };
     const setMenuMuted = (muted: boolean, manual = false) => {
       if (manual) {
         manualMuted = muted;
         disarmAutoMuteRestore();
       }
       applyMenuMuted(muted);
-      if (muted && !manual && !manualMuted) {
-        // The handoff runs inside the key/click handler that caused it. Arm the
-        // restore listener after that event finishes so it does not undo the mute.
-        if (armAutoMuteTimer !== undefined) clearTimeout(armAutoMuteTimer);
-        armAutoMuteTimer = setTimeout(() => {
-          armAutoMuteTimer = undefined;
-          if (menuMuted && !manualMuted) armAutoMuteRestore();
-        }, 0);
-      } else if (!muted) disarmAutoMuteRestore();
+      if (muted && !manual && !manualMuted) armAutoMuteRestoreAfterDispatch();
+      else if (!muted) disarmAutoMuteRestore();
     };
     muteToggle.addEventListener("click", () => setMenuMuted(!menuMuted, true));
     const redraw = () => {
@@ -848,9 +848,7 @@ async function boot(): Promise<void> {
     start.textContent = data.bdjRuntime ? "Start or reconnect BD-J session" : "Start menu preview";
     start.hidden = false; start.disabled = false; showStatus(data.bdjRuntime ? "Select Start or reconnect to the live BD-J session." : "Images decoded. Select Start menu preview to enable input.");
     let removePointer: (() => void) | undefined;
-    // The test host awaits fired listeners, so the handler returns its completion promise.
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    start.addEventListener("click", async () => {
+    const startMenuPreview = async (): Promise<void> => {
       if (retrySound) { const retry = retrySound; retrySound = null; start.disabled = true; start.hidden = true; retry(); return; }
       if (retryMedia) { const retry = retryMedia; retryMedia = null; start.disabled = true; start.hidden = true; retry(); return; }
       if (inputStarted) return;
@@ -908,7 +906,11 @@ async function boot(): Promise<void> {
         removePointer = installCanvasPointerInput(canvas, viewport, controller, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
       }
       redraw();
-    });
+    };
+    // The test host awaits a fired listener's return value, so the DOM listener
+    // stays async and returns the preview promise.
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    start.addEventListener("click", startMenuPreview);
     window.addEventListener("pagehide", () => {
       removeKeyboard?.(); removePointer?.();
       removeBdjKeyboard?.(); removeBdjPointer?.(); bdjRuntimeHandle?.close();

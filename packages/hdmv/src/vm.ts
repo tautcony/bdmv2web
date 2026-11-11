@@ -346,7 +346,6 @@ export class HdmvVm {
         this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", error instanceof Error ? error.message : String(error), d.source, d, before, from); break;
       }
       this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) }); this.lastAction = undefined; this.instructionDiagnostic = null;
-      if (this.programId !== from.programId || this.pc !== from.pc + 1) { /* control transfer recorded in resulting snapshot */ }
     }
     return this.snapshot();
   }

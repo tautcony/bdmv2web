@@ -12,9 +12,10 @@ export function firstBlockingCode(diagnostics: DeliveryDiagnostic[]): string {
   return diagnostics.find((item) => item.severity.toLowerCase() === "fatal")?.code ?? diagnostics[0]?.code ?? "STAGE_FAILED";
 }
 
+type StageFailureRecord = { stageStatus: "failed"; code: string; diagnostics: DeliveryDiagnostic[] };
+
 export function stageFailure(code: string, diagnostics: DeliveryDiagnostic[]): void {
-  // `status` is reserved for delivery conclusions (convert/validate); a stage only
-  // reports whether its own goal was reached (D-5).
-  process.stdout.write(`${JSON.stringify({ stageStatus: "failed", code, diagnostics })}\n`);
+  const record: StageFailureRecord = { stageStatus: "failed", code, diagnostics };
+  process.stdout.write(`${JSON.stringify(record)}\n`);
   process.exitCode = 1;
 }

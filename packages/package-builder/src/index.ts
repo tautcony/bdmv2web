@@ -10,6 +10,7 @@ import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
 import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
 
 const templateDirectory = existsSync(new URL("./templates/index.html", import.meta.url)) ? "./templates/" : "../templates/";
+const RESERVED_REPORT_FILES = new Set(["compatibility.json", "asset-manifest.json"]);
 const PACKAGE_TEMPLATES = {
   menuIndex: readFileSync(new URL(`${templateDirectory}index.html`, import.meta.url), "utf8"),
   style: readFileSync(new URL(`${templateDirectory}style.css`, import.meta.url), "utf8"),
@@ -216,8 +217,6 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   if (input.menuLoopMedia && exportedMedia) mediaByKey.set(menuMediaReuseKey(input.menuLoopMedia, mediaEncoding), { result: exportedMedia, planPath: "media-plan.json" });
   const additionalMedia: Array<{ input: MenuLoopMediaInput; result: MenuLoopMediaResult; planPath: string }> = [];
   for (const media of input.additionalMenuMedia ?? []) {
-    // Each PlayItem keeps its own runtime address. Equivalent items share one
-    // encoded asset set and its source-traceable plan.
     const sanitizedId = `${media.playlistId}-pi${media.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
     const key = menuMediaReuseKey(media, mediaEncoding);
     const existing = mediaByKey.get(key);
@@ -292,14 +291,12 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...soundResult.files.map(async ({ path, bytes }) => { await mkdir(resolve(output, "assets/audio"), { recursive: true }); await writeFile(resolve(output, path), bytes); }),
     writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, bdjFiles: bdjFiles.map(({ bytes, ...file }) => ({ ...file, packagePath: `bdj/${file.path}`, byteLength: String(bytes.byteLength) })), ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
   ]);
-  // The menu runtime bundle is built by runtime-web during the workspace build, so packaging only copies it.
   input.onPhase?.("bundle");
   await writeFile(resolve(runtimeDirectory, "app.bundle.js"), await readFile(menuRuntimeBundlePath()));
   if (bdjRuntime) await writeFile(resolve(runtimeDirectory, "bdj-client.js"), await readFile(bdjClientBundlePath()));
   input.onPhase?.("manifest");
   await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility(metadata, !!input.externalTargets, bdjRuntime), null, 2)}\n`);
-  // M6 reserves compatibility.json and asset-manifest.json as report metadata and rejects them in manifest.files.
-  const manifestFiles = await Promise.all(files.filter((file) => file.path !== "compatibility.json" && file.path !== "asset-manifest.json").map(async (file) => {
+  const manifestFiles = await Promise.all(files.filter((file) => !RESERVED_REPORT_FILES.has(file.path)).map(async (file) => {
     const fileInfo = await stat(resolve(output, file.path));
     return { ...file, byteLength: String(fileInfo.size) };
   }));
@@ -308,7 +305,6 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
   const manifest = { schemaVersion: "1.0", status: metadata.status, launchMode: bdjRuntime ? "local-jvm" : "hdmv", ...(bdjRuntime ? { runtimeRequirements: ["bdmv2web serve <package-directory>", "Java 21 or a compatible Java runtime with java.desktop", "loopback HTTP connection"] } : {}), ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, ...(bdjRuntime ? ["BD-J packages run through the local bdmv2web service and native Java process."] : []), "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-  // Return post-encoding media warnings in diagnostics. The caller supplies package status.
   return { diagnostics: metadata.diagnostics };
 }
 
@@ -425,8 +421,6 @@ function encodePgsDisplayPng(set: PgsDisplaySet, pngLevel: number | undefined): 
   for (let y = 0; y < set.height; y++) scanlines.set(rgba.subarray(y * set.width * 4, (y + 1) * set.width * 4), y * (set.width * 4 + 1) + 1);
   const header = Buffer.alloc(13);
   header.writeUInt32BE(set.width, 0); header.writeUInt32BE(set.height, 4); header[8] = 8; header[9] = 6;
-  // Level 9 cost twice level 6 and saved 2% of the bytes on a full-HD subtitle canvas,
-  // so the package path now defaults to the tuned canvas level.
   const level = assertPngLevel(pngLevel ?? DEFAULT_CANVAS_PNG_LEVEL);
   const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", header), pngChunk("IDAT", deflateSync(scanlines, { level })), pngChunk("IEND", Buffer.alloc(0))]);
   return png.toString("base64");

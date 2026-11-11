@@ -42,10 +42,9 @@ function wantsJsonErrors(): boolean {
   return process.argv.includes("--format=json");
 }
 
-/** `ContractError.message` already carries `CODE at PATH: `; keep it once. */
 function plainMessage(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
-  return error instanceof ContractError ? text.replace(/^[A-Z][A-Z0-9_]* at .*?: /, "") : text;
+  if (!(error instanceof ContractError)) return error instanceof Error ? error.message : String(error);
+  return error.message.slice(`${error.code} at ${error.path}: `.length);
 }
 
 main().catch((error: unknown) => {

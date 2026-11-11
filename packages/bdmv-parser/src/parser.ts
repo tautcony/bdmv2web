@@ -2,9 +2,8 @@ import { BinaryCursor, ContractError, DEFAULT_LIMITS, serializeOffset, type Limi
 import { discoverBdmvInput, locateBdmvRoot, readRegisteredFile } from "@bdmv2web/bdmv-io";
 import type { AtcSequence, BdjoInfo, ClipHeader, ClipInfo, CpiMapEntry, DiscAppInfo, EntryTarget, ExtensionDataEntry, GraphEdge, GraphNode, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, Playlist, PlaylistAppInfo, PlayMark, SoundEntry, SourceLocation, StcSequence, StreamDeclaration, SubPath, UhdMetadata } from "./model.js";
 
-// 0240 is the 3D/MVC profile. libbluray does not restrict the version field and
-// ChapterTool's readers accept the same four values for INDX/MOBJ/MPLS/CLPI/BDJO.
-const supportedVersions = new Set(["0100", "0200", "0240", "0300"]);
+const VERSION_3D_MVC = "0240";
+const SUPPORTED_VERSIONS = new Set(["0100", "0200", VERSION_3D_MVC, "0300"]);
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 const asUtf8 = (bytes: Uint8Array) => new TextDecoder("ascii").decode(bytes);
 function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
@@ -38,7 +37,7 @@ class Bits {
   seek(byte: number): void { this.align(); this.cursor.seek(byte); this.bit = byte * 8; }
   sub(byteLength: number): Bits { this.align(); const start = this.offset; if (!Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > this.data.length - start) throw new ContractError("TRUNCATED_INPUT", "/offset", `Section length ${byteLength} exceeds file`); this.bit += byteLength * 8; return new Bits(this.data.subarray(start, start + byteLength), this.base + start); }
   checkMagic(value: string): void { const at = this.offset; const actual = this.text(value.length); if (actual !== value) throw new ContractError("BDMV_INVALID_MAGIC", `/offset/${at}`, `Expected ${value}, got ${actual}`); }
-  version(): string { const at = this.offset; const v = this.text(4); if (!supportedVersions.has(v)) throw new ContractError("BDMV_UNSUPPORTED_VERSION", `/offset/${at}`, `Unsupported version ${JSON.stringify(v)}`); return v; }
+  version(): string { const at = this.offset; const v = this.text(4); if (!SUPPORTED_VERSIONS.has(v)) throw new ContractError("BDMV_UNSUPPORTED_VERSION", `/offset/${at}`, `Unsupported version ${JSON.stringify(v)}`); return v; }
   source(path: string, origin: "primary" | "backup"): SourceLocation { return { path: bdmvRelativePath(path), origin, offset: serializeOffset(BigInt(this.absolute)) }; }
 }
 
@@ -67,15 +66,9 @@ function sourceFor(file: FileEntry, root: string, origin: "primary" | "backup", 
 interface ParsedFile<T> { value: T; version: string; raw: Uint8Array; }
 interface ParsedIndex { entries: EntryTarget[]; appInfo: DiscAppInfo | null; uhd: UhdMetadata | null; }
 
-/**
- * Record a non-fatal parse fact without aborting the whole file. Optional
- * metadata must never decide whether a disc is readable (D-3): the caller turns
- * these into `warning` diagnostics and keeps the navigation data.
- */
 type Warn = (code: string, message: string, file: FileEntry, offset: number | undefined) => void;
 const ignoreWarning: Warn = () => {};
 
-/** Optional sections are parsed from a private cursor so a failed attempt cannot move the caller's. */
 function optionalSection<T>(what: string, data: Uint8Array, file: FileEntry, warn: Warn, fallbackOffset: number, parseSection: (cursor: Bits) => T | null): T | null {
   try {
     return parseSection(new Bits(data));
@@ -86,7 +79,6 @@ function optionalSection<T>(what: string, data: Uint8Array, file: FileEntry, war
   }
 }
 
-/** Read the shared MPLS/CLPI ExtensionData address table with file and table bounds. */
 function parseExtensionData(data: Uint8Array, start: number, file: FileEntry, origin: "primary" | "backup", formatVersion: string, warn: Warn): ExtensionDataEntry[] {
   if (!start) return [];
   const r = new Bits(data); r.seek(start);
