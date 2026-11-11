@@ -1,6 +1,5 @@
 import type { AuditCheck, DeliveryStatus, OfflinePackageAudit } from "./types.js";
 import type { CoverageReport } from "./coverage.js";
-import type { DeliveryDecision } from "./decisions.js";
 import { compareVmTraces, validateCompareInput, type CompareInputSequence, type TraceComparison, type TraceEvent } from "./compare.js";
 
 export interface CompatibilityReport {
@@ -22,17 +21,6 @@ export interface DependencyAuditReport {
   checks: AuditCheck[];
 }
 
-export function createCompatibilityReport(audit: OfflinePackageAudit, decision: DeliveryDecision, coverage: CoverageReport): CompatibilityReport {
-  return {
-    schemaVersion: "1.0",
-    status: decision.status,
-    checks: audit.checks,
-    coverage,
-    reasons: decision.reasons,
-    validationEvidence: audit.checks.map(({ checkId, result, path, evidence }) => ({ checkId, result, ...(path === undefined ? {} : { path }), ...(evidence === undefined ? {} : { evidence }) })),
-  };
-}
-
 export function createDependencyAuditReport(audit: OfflinePackageAudit): DependencyAuditReport {
   const relevant = audit.checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
   // `fail` outranks `not-verified`: a missing evidence item must not hide a failure.
@@ -52,10 +40,6 @@ export interface CompareReport<T = unknown> {
   result: "pass" | "fail" | "not-verified";
   comparison: T | null;
   reason?: string;
-}
-
-export function createCompareReport<T>(args: Omit<CompareReport<T>, "schemaVersion">): CompareReport<T> {
-  return { schemaVersion: "1.0", ...args };
 }
 
 export interface ReferenceCompareReport extends CompareReport<TraceComparison> {

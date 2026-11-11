@@ -8,11 +8,11 @@
 | --- | --- |
 | `src/package-audit.ts` | `auditOutputPackage`、`inspectRuntimeUrl` |
 | `src/decisions.ts` | `decideDelivery`、`decideStageOutcome`、`classifyDiagnostics`、`acknowledgeDiagnostic` |
-| `src/coverage.ts` | `summarizeCoverage`、`summarizeDeliveryCoverage`、`isCoverageReportComplete` |
+| `src/coverage.ts` | `summarizeCoverage`、`summarizeDeliveryCoverage` |
 | `src/release-summary.ts` | `createReleaseSummary`：合并审计/依赖/覆盖/证据，产出 `gaps` |
 | `src/types.ts` | `CheckResult`、`DeliveryStatus`、`OfflinePackageAudit` 等公共类型 |
 | `src/compare.ts` | `compareVmTraces`、`compareIgRgbaFrames`、`videoQualityNote` |
-| `src/report.ts` | `createCompatibilityReport`、`createDependencyAuditReport`、`createCompareReport` |
+| `src/report.ts` | `CompatibilityReport`、`DependencyAuditReport`、`CompareReport`、`ReferenceCompareReport`、`createDependencyAuditReport`、`createReferenceCompareReport` |
 
 ## 包审计
 
@@ -77,7 +77,6 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 
 | 函数 | 产物 |
 | --- | --- |
-| `createCompatibilityReport(audit, decision, coverage)` | `compatibility.json`：`status`、`checks`、`coverage`、`notVerified` |
 | `createDependencyAuditReport(audit)` | `dependency-audit.json`：`OFFLINE_*` 检查与 `externalReferences` |
 | `createReleaseSummary(input)` | `reports/release-summary.json`：`release.{status,strict,exitCode,reasons,notVerified,gaps}` + `compatibility` + `dependencyAudit` + `coverage` + `checks` |
 

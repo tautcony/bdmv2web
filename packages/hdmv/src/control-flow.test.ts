@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildNavigationGraph, HdmvVm, m3Fixtures } from "./index.js";
+import { buildNavigationGraph, HdmvVm } from "./index.js";
+import { m3Fixtures } from "@bdmv2web/test-fixtures";
 
 function command(w0: number, w1 = 0, w2 = 0): string {
   return [w0, w1, w2].map((word) => (word >>> 0).toString(16).padStart(8, "0")).join("");

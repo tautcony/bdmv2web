@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { HdmvVm, m3Fixtures } from "./index.js";
+import { HdmvVm } from "./index.js";
+import { m3Fixtures } from "@bdmv2web/test-fixtures";
 import type { OpcodeName } from "./decode.js";
 
 function rawCommand(opCount: number, group: number, subGroup: number, option: number, w1 = 0, w2 = 0, immediate1 = false, immediate2 = false): string {

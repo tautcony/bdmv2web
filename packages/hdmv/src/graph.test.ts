@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { m3Fixtures } from "./fixtures.js";
+import { m3Fixtures } from "@bdmv2web/test-fixtures";
 import { buildNavigationGraph } from "./graph.js";
 
 const instructions = {

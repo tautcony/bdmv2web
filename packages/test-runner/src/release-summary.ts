@@ -1,7 +1,6 @@
 import { decideDelivery, type DeliveryDecisionInput, type DeliveryDecision } from "./decisions.js";
 import type { CoverageReport, CoverageSummary } from "./coverage.js";
 import type { CompatibilityReport, DependencyAuditReport } from "./report.js";
-import { createCompatibilityReport } from "./report.js";
 import type { AuditCheck, DeliveryStatus, OfflinePackageAudit } from "./types.js";
 
 const REQUIRED_COVERAGE = ["entries", "instructions", "media", "tests"] as const;
@@ -79,9 +78,14 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
     coverageComplete,
   };
   const decision: DeliveryDecision = decideDelivery(decisionInput, input.strict ?? false);
-  const compatibility = createCompatibilityReport(input.audit, decision, coverage);
-  compatibility.checks = checks;
-  compatibility.validationEvidence = checks.map(({ checkId, result, path, evidence }) => ({ checkId, result, ...(path === undefined ? {} : { path }), ...(evidence === undefined ? {} : { evidence }) }));
+  const compatibility = {
+    schemaVersion: "1.0" as const,
+    status: decision.status,
+    checks,
+    coverage,
+    reasons: decision.reasons,
+    validationEvidence: checks.map(({ checkId, result, path, evidence }) => ({ checkId, result, ...(path === undefined ? {} : { path }), ...(evidence === undefined ? {} : { evidence }) })),
+  };
   const gaps = checks.filter((check): check is AuditCheck & { result: "fail" | "not-verified" } => check.result !== "pass").map(toGap);
   return {
     schemaVersion: "1.0",

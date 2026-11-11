@@ -106,10 +106,3 @@ export function summarizeCoverageReport(input: Record<string, CoverageCounts>): 
 export function summarizeDeliveryCoverage(input: DeliveryCoverageInput): DeliveryCoverageReport {
   return summarizeCoverageReport({ entries: input.entries, instructions: input.instructions, media: input.media, tests: input.tests }) as DeliveryCoverageReport;
 }
-
-export function isCoverageReportComplete(report: CoverageReport): boolean {
-  const summaries = Object.values(report);
-  return summaries.length > 0 && summaries.every((summary) =>
-    summary.complete || (summary.status === "N/A" && summary.denominator === 0 && typeof summary.reason === "string" && summary.reason.trim().length > 0),
-  );
-}

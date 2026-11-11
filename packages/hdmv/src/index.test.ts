@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LIMITS, validateLimits } from "@bdmv2web/core";
-import { buildNavigationGraph, decodeInstruction, disassemble, HdmvVm, m3Fixtures, M3_FIXTURE_IDS, RegisterFile } from "./index.js";
+import { buildNavigationGraph, decodeInstruction, disassemble, HdmvVm, RegisterFile } from "./index.js";
+import { m3Fixtures } from "@bdmv2web/test-fixtures";
 
 function rawCommand(w0: number, w1 = 0, w2 = 0): string {
   return [w0, w1, w2].map((word) => (word >>> 0).toString(16).padStart(8, "0")).join("");
@@ -1146,5 +1147,4 @@ describe("M3 HDMV fixtures", () => {
     expect(graph.nodes.some((x) => x.id === "object:1")).toBe(true); expect(graph.complete).toBe(false);
     expect(graph.edges.some((x) => x.kind === "unknown" && x.resolution === "unresolved")).toBe(true);
   });
-  it("publishes stable fixture identifiers for parent integration", () => { expect(M3_FIXTURE_IDS).toHaveLength(7); });
 });

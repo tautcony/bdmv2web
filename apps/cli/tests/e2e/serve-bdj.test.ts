@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, type ChildProcess } from "node:child_process";
-import { m3Fixtures } from "@bdmv2web/hdmv";
+import { m3Fixtures } from "@bdmv2web/test-fixtures";
 import { expect, it } from "vitest";
 
 const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js");

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
 import type { MediaProcessRunner } from "@bdmv2web/media-export";
-import { m3Fixtures } from "@bdmv2web/hdmv";
+import { m3Fixtures } from "@bdmv2web/test-fixtures";
 
 const ir = {
   schemaVersion: "1.0" as const,

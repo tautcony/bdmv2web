@@ -132,6 +132,9 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@bdmv2web/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       '@types/node':
         specifier: 24.10.0
         version: 24.10.0
@@ -170,6 +173,9 @@ importers:
         specifier: workspace:*
         version: link:../igs
     devDependencies:
+      '@bdmv2web/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       '@types/node':
         specifier: 24.10.0
         version: 24.10.0
@@ -189,6 +195,9 @@ importers:
         specifier: workspace:*
         version: link:../runtime-web
     devDependencies:
+      '@bdmv2web/test-fixtures':
+        specifier: workspace:*
+        version: link:../test-fixtures
       '@types/node':
         specifier: 24.10.0
         version: 24.10.0

@@ -84,7 +84,7 @@
       "summary": "MenuController、播放桥、媒体时钟、场景序列化、浏览器启动与输入绑定。",
       "covers": ["menu controller", "input", "rendering", "playback bridge", "media clock", "boot"],
       "keywords": ["runtime-web", "MenuController", "CanvasViewport", "popup", "boot", "autoplay"],
-      "keyFiles": ["packages/runtime-web/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/igs-adapter.ts", "packages/runtime-web/src/media-clock.ts", "packages/runtime-web/src/linear-playback.ts"]
+      "keyFiles": ["packages/runtime-web/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/igs-adapter.ts", "packages/runtime-web/src/linear-playback.ts"]
     },
     {
       "path": "packages/package-builder.md",

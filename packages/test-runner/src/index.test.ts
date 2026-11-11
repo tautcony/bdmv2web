@@ -14,7 +14,6 @@ import {
   decideDelivery,
   decideStageOutcome,
   inspectRuntimeUrl,
-  isCoverageReportComplete,
   summarizeCoverage,
   validateCompareInput,
   videoQualityNote,
@@ -267,11 +266,6 @@ describe("delivery status and coverage", () => {
     expect(summarizeCoverage({ passed: 8 })).toMatchObject({ status: "N/A", percent: null, complete: false });
     expect(summarizeCoverage({ total: 3, passed: 3, evidenceComplete: false })).toMatchObject({ percent: null, complete: false });
     expect(summarizeCoverage({ total: 3, passed: 3, evidenceComplete: true })).toMatchObject({ status: "measured", percent: 100, complete: true });
-    const report = { empty: summarizeCoverage({ total: 0, reason: "Not applicable" }) };
-    expect(isCoverageReportComplete(report)).toBe(true);
-    expect(isCoverageReportComplete({ unknown: summarizeCoverage({ passed: 8 }) })).toBe(false);
-    expect(isCoverageReportComplete({ zeroWithoutReason: { ...report.empty, reason: "  " } })).toBe(false);
-    expect(isCoverageReportComplete({})).toBe(false);
   });
 });
 
