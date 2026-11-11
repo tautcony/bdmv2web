@@ -55,14 +55,6 @@ async function waitForText(path: string, expected: string): Promise<string> {
   return readFile(path, "utf8");
 }
 
-/**
- * Stop the server and only then delete its scratch directory.
- *
- * The fake Java process writes its log after the server hands it an RPC
- * response, and the server signals that child on SIGTERM. Removing the
- * directory first raced both: the assertion read a log the child had not
- * written yet, and the removal hit ENOTEMPTY when the file appeared midway.
- */
 async function stopServer(child: ChildProcess | undefined, parent: string): Promise<void> {
   if (child && child.exitCode === null) {
     const exited = new Promise<void>((resolveExit) => { child.once("exit", () => resolveExit()); });

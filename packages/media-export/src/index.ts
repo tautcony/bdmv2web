@@ -183,8 +183,8 @@ export interface MenuLoopMediaOptions {
   hdrMode?: HdrMode;
   /**
    * `copy` writes the source H.264 stream into MP4 without re-encoding it.
-   * A copy is only possible when the export starts on the clip's first frame and
-   * the source is 8-bit 4:2:0 SDR H.264; every other clip is encoded as usual
+   * A copy requires an entry point no more than 256 ticks before the export
+   * start, even dimensions, and 8-bit 4:2:0 SDR H.264; other clips are encoded
    * and the plan records the reason. Defaults to `encode`.
    */
   videoMode?: VideoExportMode;
@@ -255,14 +255,6 @@ interface ProbeStream extends ColorProbeFields { index?: number; id?: string; co
 interface ProbeResult { streams?: ProbeStream[]; format?: { start_time?: string; duration?: string }; }
 interface MediaToolFacts { ffmpegVersion: string; ffprobeVersion: string; encoders: string; filters: string; }
 
-/**
- * `ffmpeg -version`/`-encoders`/`-filters` and `ffprobe -version` describe the
- * installed tools, not the clip, so one probe per runner serves a whole package
- * instead of four extra processes per clip. The cache is keyed by the runner so
- * a host that supplies its own runner never reads facts collected from another,
- * and a failed probe is dropped so the next clip retries rather than inheriting
- * the error.
- */
 const toolFactCache = new WeakMap<MediaProcessRunner, Map<string, Promise<MediaToolFacts>>>();
 function toolFacts(run: MediaProcessRunner, invoke: MediaProcessRunner, ffmpeg: string, ffprobe: string, timeoutMs: number): Promise<MediaToolFacts> {
   let perRunner = toolFactCache.get(run);
@@ -375,8 +367,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
 
   const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
 
-  // Tool versions and build capabilities do not change while a package is being
-  // built, so they are probed once per runner instead of once per clip.
   const facts = await toolFacts(run, invoke, ffmpeg, ffprobe, timeoutMs);
   const ffmpegVersion = facts.ffmpegVersion;
   const ffprobeVersion = facts.ffprobeVersion;
@@ -396,7 +386,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const seekSeconds = rawSeekSeconds < 0.000001 ? 0 : rawSeekSeconds;
   const videoStream = findPidStream(sourceProbe, input.videoPid, "video", input.sourcePath);
   if (!new Set(["h264", "hevc"]).has(videoStream.codec_name ?? "")) throw new Error(`Top Menu Clip ${input.clipId} video PID ${input.videoPid} uses unsupported codec ${videoStream.codec_name ?? "unknown"}; H.264 and HEVC inputs are supported.`);
-  // Every declared track is checked against the probe before anything is written.
   for (const track of input.audioTracks) findPidStream(sourceProbe, track.pid, "audio", input.sourcePath);
   const aspectRatio = displayAspectRatio(videoStream);
   const colorPlan = planVideoColor(readSourceColor(videoStream), {
@@ -427,18 +416,11 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
 
   const backgroundAbsolute = resolve(output, backgroundPath);
   const created: string[] = [];
-  // One ffmpeg process demuxes the clip once and writes the background plus one
-  // AAC file per declared track. A pass per track re-read the whole clip from the
-  // disc (a six-track 2 GB menu cost seven reads of the same bytes), and because
-  // a process ends when its slowest output does, the audio never serializes
-  // behind the video.
   const reportBackground = (progress: MediaProcessProgress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: exportDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid, videoMode } });
   const audioOutputs = input.audioTracks.map((track) => {
     const relativePath = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
     return { track, relativePath, absolutePath: resolve(output, relativePath) };
   });
-  // The copy seeks the input to the declared start, so every audio output already
-  // begins there; an encoded start is seeked per output and needs the same offset.
   const audioStartSeconds = videoMode === "copy" ? 0 : seekSeconds;
   const audioArgs = audioOutputs.flatMap(({ track, absolutePath }) => [
     ...(audioStartSeconds > 0.000001 ? ["-ss", String(audioStartSeconds)] : []),
@@ -479,8 +461,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
         "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(exportDuration),
         "-vf", colorPlan.videoFilter, ...videoEncoderArgs(colorPlan, codec, crf, preset), "-aspect", aspectRatio, "-fps_mode", "passthrough",
         "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
-        // A copy that only failed verification on the video already left its
-        // audio on disk, so the re-encode writes the video alone.
         ...(audioWritten ? [] : audioArgs),
       ], timeoutMs, [backgroundAbsolute, ...audioOutputs.map(({ absolutePath }) => absolutePath)], options.maxAssetBytes, invoke, options.signal, reportBackground);
       const backgroundProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
@@ -523,8 +503,6 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     created.push(planAbsolute);
     const planText = `${JSON.stringify(plan, null, 2)}\n`;
     await writeFile(planAbsolute, planText, { flag: "wx" });
-    // The package size is carried forward from the walk taken before this clip
-    // instead of walking the growing package a second time.
     const wroteBytes = files.reduce((total, file) => total + BigInt(file.byteLength), 0n) + BigInt(Buffer.byteLength(planText));
     const actualOutputBytes = existingOutputBytes + wroteBytes;
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
@@ -945,7 +923,6 @@ async function runWithBudget(executable: string, args: string[], timeoutMs: numb
   let stopMonitor: (() => void) | undefined;
   let externalAbortHandler: (() => void) | undefined;
   const processPromise = run(executable, args, timeoutMs, controller.signal, onProgress);
-  // One process can write several assets, so the cap is enforced on each of them.
   const assertAssetsWithinLimit = async (phase: "during encoding" | "at process completion") => {
     for (const assetPath of assetPaths) {
       assertActualWithinLimit({ scope: "asset", actualBytes: await pathBytes(assetPath), limitBytes: maxAssetBytes, message: `Encoded media asset '${assetPath}' exceeded maxAssetBytes ${phase}.` });

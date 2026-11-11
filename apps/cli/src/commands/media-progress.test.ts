@@ -36,7 +36,6 @@ describe("media export progress", () => {
 
   it("keeps the bar in step with the clip counter on a six-track clip", () => {
     const ratios: number[] = [];
-    // Audio no longer reports separately, so a clip is one unit whatever its track count.
     const plan = mediaExportProgress([clip("00001", 0, "00377", [0x1100, 0x1101, 0x1102, 0x1103, 0x1104, 0x1105]), clip("00002", 0, "00378")], (ratio) => ratios.push(ratio));
     plan.onMediaProgress(report("00001", 0, "00377", 300, 600, "end"));
     plan.onMediaProgress(report("00002", 0, "00378", 30, 60));

@@ -12,7 +12,6 @@ const input: MenuLoopMediaInput = {
 const availableEncoders = " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n V....D libx265 H.265 / HEVC\n A....D aac AAC (Advanced Audio Coding)\n";
 const availableFilters = " TS zscale            V->V       Apply resizing, colorspace and dithering.\n .. tonemap           V->V       Conversion to/from different dynamic ranges.\n";
 const encodedVideo = (codec = "hevc", duration = "109.190") => ({ index: 0, id: "0x0", codec_type: "video", codec_name: codec, width: 1920, height: 1080, duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" });
-/** One encoder process writes the background and every audio track, so a stub writes each output it was given. */
 const outputPaths = (args: string[]) => args.filter((arg) => arg.endsWith(".mp4") || arg.endsWith(".m4a"));
 
 function mediaRunner(forInput: MenuLoopMediaInput, calls: Array<{ executable: string; args: string[] }> = []): MediaProcessRunner {
@@ -140,7 +139,6 @@ describe("menu-loop media export", () => {
       expect(videoEncode).toEqual(expect.arrayContaining(["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx265", "-x265-params", "log-level=error:colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p", "-tag:v", "hvc1", "-aspect", "16:9", "-fps_mode", "passthrough", "-movflags", "+faststart", "-f", "mp4"]));
       const audioEncode = calls.find((call) => call.executable === "ffmpeg" && call.args.includes("0:i:0x1100"))!.args;
       expect(audioEncode).toEqual(expect.arrayContaining(["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "ipod"]));
-      // One process carries the background and both audio tracks, so the disc is read once.
       expect(audioEncode).toEqual(expect.arrayContaining(["0:i:0x1011", "0:i:0x1100", "0:i:0x1101"]));
       expect(audioEncode.some((arg) => arg.endsWith("background.mp4"))).toBe(true);
       expect(audioEncode.some((arg) => arg.endsWith("audio-1100-eng.m4a"))).toBe(true);
@@ -517,7 +515,6 @@ describe("menu-loop media export", () => {
       await exportMenuLoopMedia(input, { outputDirectory: first, runProcess: run });
       expect(probes("-encoders")).toBe(1);
       await exportMenuLoopMedia(input, { outputDirectory: second, runProcess: run });
-      // Versions and build capabilities describe the tools, not the clip.
       expect(probes("-encoders")).toBe(1);
       expect(probes("-filters")).toBe(1);
       expect(calls.filter((call) => call.args[0] === "-version")).toHaveLength(2);
@@ -703,9 +700,7 @@ describe("video stream copy", () => {
       const video = videoCommands(calls)[0]!;
       expect(video).toEqual(expect.arrayContaining(["-c:v", "copy", "-movflags", "+faststart", "-f", "mp4"]));
       expect(video).not.toContain("-vf");
-      // The declared start is the container start here, so the copy needs no seek.
       expect(video.includes("-ss") ? Number(video[video.indexOf("-ss") + 1]) : 0).toBeCloseTo(0, 6);
-      // Audio is still transcoded: browsers do not decode Blu-ray AC-3 in MP4.
       const audio = calls.find((call) => call.args.includes("0:i:0x1100"))!.args;
       expect(audio).toEqual(expect.arrayContaining(["-c:a", "aac", "-b:a", "192k"]));
       expect(await readFile(join(root, result.background.path))).toHaveLength(13);

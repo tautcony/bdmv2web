@@ -1,21 +1,10 @@
 import type { MediaAssetProgress, MenuLoopMediaInput } from "@bdmv2web/media-export";
 
 export interface MediaExportProgress {
-  /** Clips in the plan, counted once per playlist PlayItem. */
   readonly clips: number;
   readonly onMediaProgress: (progress: MediaAssetProgress) => void;
 }
 
-/**
- * Turn per-clip encoder reports into one ratio for the whole media export plan.
- *
- * A clip is exported by one encoder process, so its reports restart at 0..1 and
- * carry no total. This counts finished clips against the plan and lets the
- * running clip fill the last unit, which keeps the bar in step with the
- * `clip i/N` counter beside it. A clip taken from a previous package reports
- * itself as finished the moment it is reached, so a resumed run still ends at
- * 100% instead of stalling at the reused fraction.
- */
 export function mediaExportProgress(
   media: readonly MenuLoopMediaInput[],
   report: (ratio: number, detail: string) => void,
@@ -52,8 +41,6 @@ function clipRatioOf(progress: MediaAssetProgress): number {
 }
 
 function detailOf(progress: MediaAssetProgress, position: number | undefined, clips: number): string {
-  // Name the source clip the way it is stored in BDMV/STREAM, so the line
-  // matches both the folder the export writes and the file the plan records.
   const clipFile = `${progress.source.clipId}.m2ts`;
   const label = position !== undefined && clips > 1
     ? `clip ${position}/${clips} · ${clipFile}`

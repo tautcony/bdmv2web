@@ -194,8 +194,6 @@ describe("menu package primitives", () => {
       if (executable === "ffmpeg") {
         ffmpegCalls += 1;
         const durationIndex = args.indexOf("-t");
-        // One process writes the background and every audio track, so the stub
-        // has to answer all of its outputs instead of the last argument only.
         for (const outputPath of mediaOutputs(args)) {
           if (durationIndex >= 0) durations.set(outputPath, args[durationIndex + 1]!);
           encodeOutputs.push(outputPath);
@@ -237,8 +235,6 @@ describe("menu package primitives", () => {
       runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), runtime);
       const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string }> };
       const physicalMediaFiles = manifest.files.filter((file) => file.kind === "media");
-      // Two media sets, one ffmpeg process each: the clip is demuxed once and
-      // every declared audio track is written by the same run as the video.
       expect(ffmpegCalls).toBe(2);
       expect(encodeOutputs).toHaveLength(6);
       expect(encodeOutputs.filter((path) => path.endsWith(".mp4"))).toHaveLength(2);
