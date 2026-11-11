@@ -24,6 +24,7 @@
 ### 能力与支持范围
 
 - [协议支持矩阵](support/protocol-support.md)：BDMV 结构解析（M1）的支持边界和证据。
+- [BD-J 本地 Java 运行支持](support/bdj-support.md)：Xlet/JAR 执行、本地服务、HDMV 标题交接、Java 要求与验证记录。
 - [HDMV 支持](support/hdmv-support.md)：指令、虚拟机行为和支持状态。
 - [IGS 支持](support/igs-support.md)：场景提取、图像处理和已知边界。
 

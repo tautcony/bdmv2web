@@ -10,7 +10,7 @@
 | `BDA-BDMV-SPECS` | 访问边界 | BDA 的[格式规范授权说明](https://blu-raydisc.info/format-spec/faq-info.php)。 | 规格书受授权协议管理；此访问状态不阻止按固定实现参考开发， |
 | `ITU-H222-2025` | 2.4, 3.1–3.2 | 仅供 PTS/DTS/PES 背景参考；当前 [v10 record](https://www.itu.int/rec/T-REC-H.222.0-202504-I) 及匿名可下载的已替代 2014 PDF 详情见 [README](../README.md#可复现获取). | 不定义 HDMV VM；不得从 PES 时间戳推断 PSR、Call/Resume 或指令控制语义。 |
 
-每个 opcode 应记录固定实现 revision、源文件/位置、许可、原始 12 bytes、测试/golden provenance、执行前后寄存器与 Action/Event 等待条件；若使用白皮书背景，附标题/版本/印刷页码。实现冲突须记录分歧及采用理由。证据不足的行为保留为 unverified；BD-J 保持 unsupported。来源清单 [`sources.json`](../sources.json)。
+每个 opcode 应记录固定实现 revision、源文件/位置、许可、原始 12 bytes、测试/golden provenance、执行前后寄存器与 Action/Event 等待条件；若使用白皮书背景，附标题/版本/印刷页码。实现冲突须记录分歧及采用理由。证据不足的行为保留为 unverified；BD-J 执行由浏览器 Java runtime 承担，见[BD-J 支持说明](../../support/bdj-support.md)。来源清单 [`sources.json`](../sources.json)。
 
 ## 2026-11-07 — libbluray 1.5.0 导航、逐命令反汇编与完整 CFG 基线
 
@@ -36,5 +36,5 @@
 
 - **自动化对照：** `apps/cli/src/libbluray-navigation-baseline.test.ts`（5 例）。逐盘对照 `parseBdmv()` 的 index 条目与对象引用和 `bd_info` / `bd_get_disc_info()`、5225 条命令的字节与 opcode 和 `mobj_dump -d`、`bd_list_titles -a` 的 playlist / clip / chapter 结构，并逐边对照完整 CFG。VM playlist 事件由 `bd_list_titles` 声明且被本项目解析。测试只读入库 JSON 与夹具，运行时不需要本机 libbluray。
 - **结果：** 4 个盘全部逐边一致（missing 0 / extra 0）；5225 条命令 byteMismatch 0、opcodeMismatch 0；playlist 结构 missing 0、clipDiff 0、markDiff 0。
-- **适用范围：** VM 事件覆盖 `bd_play()` 本次到达的 playlist；静态 CFG 覆盖反汇编出的全部命令。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 的 DFS 统计是本项目探索器的实现回归 pin，其索引条目数与静态 PLAY_PL 目标由本基线驱动。BD-J 保持 unsupported。
+- **适用范围：** VM 事件覆盖 `bd_play()` 本次到达的 playlist；静态 CFG 覆盖反汇编出的全部命令。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 的 DFS 统计是本项目探索器的实现回归 pin，其索引条目数与静态 PLAY_PL 目标由本基线驱动。BD-J 执行属于 runtime-web，不属于 M3 的 HDMV VM 一致性范围。
 - **其他参考工具记录：** 固定 commit `ec0e5b27d2852ca6b008719f66aa3324c0b43f28` 的 libhdmv `hdmv-inspect` 在当时登记的 5 个语料盘均以 index 解析 `unexpected end of data` 结束；`hdmv-insn` crate 可独立编译，其分支/opcode 映射输出与 libbluray 当前基准不一致，未纳入入库基线。

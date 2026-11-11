@@ -95,24 +95,22 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 
 1. 读 `globalThis.__BDMV_MENU_DATA__`，校验存在 `ir`；`validateEmbeddedDiscIR` 检查对象身份（`schemaVersion` 与必需数组），完整校验已在打包阶段完成。
 2. 遍历 `__BDMV_MENU_ASSETS__[]`，把 `data:image/png;base64` 解码为 `HTMLImageElement`；失败即报“Could not decode embedded PNG”。
-3. `normalizeScene` 绑定资产；没有 `scene` → 明确错误，不黑屏。
+3. `normalizeScene` 绑定 IGS 资产；没有 `scene` 但有 `bdjRuntime` 时，由 BD-J runtime 建立 Java scene；两者都没有时显示明确错误。
 4. `createMenuVm(data)`：用包内 `profile`、`limits`、`vmEntries` 构造 VM；`vmInitialProgramId` 有效则 `reset`。
 5. 选择播放桥：有 `data.media` 且存在 `video`/`audio` 元素 → `MenuLoopPlaybackBridge`，否则 `PreviewPlaybackBridge`。
 6. 创建主 `MenuController` 与弹出菜单 `MenuController`（`selectPopupScene` 按 clip/PID/时间匹配，匹配失败回 `MEDIA_UNAVAILABLE`）。
 7. 绑定键盘与指针；`start-menu` 按钮用于首次手势（自动播放被拒时显示“Retry”）。
 8. `start()` 后进入交互；错误写入 `#runtime-status` 与 `#runtime-diagnostics`，`role="alert"`。
 
+含 BD-J 的包通过本地服务启动 Java host 和 BDJO Xlet。`HScene` PNG 帧、键盘按下/释放、鼠标坐标、title、RegisterAccess 与 Xlet 生命周期事件通过回环会话 API 路由。会话在页面刷新后重新连接存活 Java 进程。实现状态和 2026-11-11 验证记录见 [BD-J 本地 Java 运行支持](../../support/bdj-support.md)。
+
+BD-J 菜单媒体按 authored PlayItem 顺序播放。缺失媒体会显示带 BDJO、title、playlist、PlayItem 和 source 的 warning，然后立即跳到下一项。仅含缺失项的 playlist 发送一条 source-bearing completion event；它不发送 started、presented、position 或 mark 观察。
+
 `vmConsoleLogger` 把 trace 合并为 `console.info("[VM] ...")` 批次，跳过 `RESET` 行。
 
 ## 外部播放
 
-`openExternalVideo(bdmvPath, streamPath, seekTime90k)`：
-
-- macOS → `iina://open?url=<file url>&mpv_start=<seconds>`；章节位置缺失时报错，不打开无偏移的播放器。
-- Windows → `potplayer://<file url>`。
-- 其它平台 → 明确报“External playback is available on macOS and Windows.”
-
-`runtime/bdmv-config.js` 里的 `__BDMV_BDMV_PATH__` 决定源 M2TS 的路径，改后刷新页面生效。
+HDMV VM actions resolve through `external-targets.json`. `bdmv2web serve <package-directory> --player system` requests the operating system's default player for a whole-file target. `--player mpv --player-executable <path>` requests mpv with the complete bounded playlist and source-time intervals. A successful process launch is reported as requested; the external player's playback state remains unobserved.
 
 ## 诊断码
 

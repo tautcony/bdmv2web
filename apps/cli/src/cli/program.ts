@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from "commander";
 import { setActiveCommand, type ParsedOptions } from "./context.js";
 
-export type CommandName = "inspect" | "extract" | "build" | "validate" | "compare" | "list" | "export" | "render";
+export type CommandName = "inspect" | "extract" | "build" | "validate" | "compare" | "list" | "export" | "render" | "serve";
 
 /**
  * One command module per name, imported on first use. Loading every command up
@@ -17,6 +17,7 @@ const loaders: Record<CommandName, () => Promise<() => Promise<void>>> = {
   list: async () => (await import("../commands/list.js")).listAssets,
   export: async () => (await import("../commands/export.js")).exportAssets,
   render: async () => (await import("../commands/render.js")).renderPng,
+  serve: async () => (await import("../commands/serve.js")).serve,
 };
 
 /** Commander parses and dispatches; each command body reads the snapshot this leaves behind. */
@@ -86,6 +87,7 @@ export function buildProgram(version?: string): Command {
     .option("--title <title>", "package title", nonEmpty)
     .option("--player-profile <file>", "player profile JSON", nonEmpty)
     .option("--limits <file>", "VM limits JSON", nonEmpty)
+    .option("--disc-id <32hex>", "BD-J disc identifier from CERTIFICATE/id.bdmv", nonEmpty)
     .option("--overwrite", "replace an existing output directory")
     .option("--crf <value>", "encoder quality 0-51 (HEVC default 24, H.264 default 18)", crfValue)
     .option("--preset <preset>", "encoder preset: ultrafast, veryfast, fast, medium", oneOf("preset", ["ultrafast", "veryfast", "fast", "medium"]))
@@ -102,6 +104,16 @@ export function buildProgram(version?: string): Command {
     .option("--offline", "audit without a disc or FFmpeg (required)")
     .option("--format <format>", "json", nonEmpty);
   withStrict(validateCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("validate", input, options));
+
+  const serveCommand = program.command("serve")
+    .description("Serve a generated menu package and run its local BD-J Java session")
+    .argument("[input]", "package directory (defaults to the current directory)")
+    .option("--port <port>", "loopback HTTP port (default: 4173)", nonEmpty);
+  serveCommand.option("--java <executable>", "Java executable used for BD-J packages", nonEmpty);
+  serveCommand.option("--disc-id <32hex>", "BD-J disc identifier for packages without source certificate metadata", nonEmpty);
+  serveCommand.option("--player <adapter>", "feature player adapter: system or mpv", oneOf("player", ["system", "mpv"]));
+  serveCommand.option("--player-executable <path>", "executable for the selected player adapter", nonEmpty);
+  withStrict(serveCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("serve", input, options));
 
   const compareCommand = program.command("compare")
     .description("Compare an actual VM trace against an independent reference trace")

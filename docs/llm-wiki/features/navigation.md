@@ -81,6 +81,10 @@ reset(programId) ──▶ runTurn() ──▶ 快照（idle/suspended/stopped/f
 
 `findStaticNavigationLoops` 只做静态回边检测，用来发现潜在死循环和高频路径；它不执行 VM，也不判断可达性。
 
+## 浏览器 mixed-target router
+
+`build` 保留 INDEX 中 HDMV 与 BD-J target。运行时将 HDMV target 送入 `HdmvVm`，将 BD-J target 送入 BDJO 选择的 Java Xlet。title `0` 选择 Top Menu，`65535` 选择 First Play，其他 title 使用 1-based title 表。Java `TitleContext` 请求经过同一个 router；title 10 的 Gallery/Trivia 交接保留 GPR1000，HDMV MovieObject 2 再按 GPR1000 选择 PC 13/14。浏览器执行状态与限制见[BD-J 支持](../../support/bdj-support.md)。
+
 ## 常见偏差
 
 | 现象 | 可能原因 | 检查点 |

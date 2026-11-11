@@ -393,6 +393,40 @@ export class HdmvVm {
       return this.snapshot();
     }
   }
+  /** Select a BD-J INDEX entry while retaining the shared player registers for the Java runtime. */
+  selectBdjTitle(title: number): VmSnapshot {
+    try {
+      if (!this.entries) throw new RegisterFault("HDMV_UNVERIFIED_OPCODE", "BD-J title navigation requires the disc title table");
+      this.validateTitleTarget(title);
+      const entry = title === 0 ? this.entries.find((item) => item.kind === "topMenu")
+        : title === 0xffff ? this.entries.find((item) => item.kind === "firstPlay")
+          : this.entries.filter((item) => item.kind === "title")[title - 1];
+      if (!entry) throw new RegisterFault("HDMV_INVALID_TARGET", `Title ${title} has no index entry`);
+      if (entry.target.objectType !== "BDJ" || typeof entry.target.target !== "string") throw new RegisterFault("HDMV_INVALID_TARGET", `Title ${title} does not resolve to a BD-J object`);
+      if (this.continuation) this.consumedResponses.add(`${this.continuation.action.generation}:${this.continuation.action.id}`);
+      this.actionQueue.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null;
+      this.pendingTitleCall = null; this.titleTransition = false; this.eventQueue.length = 0;
+      this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
+      this.programId = 0; this.pc = 0; this.status = "idle";
+      const before = this.registers.snapshot();
+      this.registers.systemWrite(4, title);
+      this.record({ source: entry.source, raw: null, decoded: `BDJ_TITLE_SELECTED title=${title} bdjo=${entry.target.target}`, registerDelta: delta(before, this.registers.snapshot()), status: this.status });
+      return this.snapshot();
+    } catch (error) {
+      const issue = { code: error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", message: error instanceof Error ? error.message : String(error), source: null };
+      this.diagnostic = issue; this.diagnostics.push(issue);
+      this.record({ source: null, raw: null, decoded: "BDJ_TITLE_SELECTION_REJECTED", registerDelta: EMPTY_DELTA, status: this.status, diagnostic: issue });
+      return this.snapshot();
+    }
+  }
+  /** Queue a BD-J playback operation through the same correlated action bridge as HDMV commands. */
+  requestHostAction(type: ActionType, payload: Record<string, number | string | boolean | null>, source: SourceLocation): NavigationAction {
+    if (!["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "PLAY_STOP", "SET_STREAM", "SET_SECONDARY_STREAM"].includes(type)) throw new TypeError(`BD-J cannot request HDMV action '${type}'.`);
+    this.actionAndSuspend(type, payload, source);
+    const action = this.lastAction;
+    if (!action) throw new Error(`BD-J action '${type}' was not queued.`);
+    return action;
+  }
   /** Stop waiting for an external player whose playback state is not observable. */
   releaseExternalPlayback(action: NavigationAction): void {
     if (!this.continuation || this.continuation.action.id !== action.id || this.continuation.action.generation !== action.generation) return;
@@ -927,7 +961,9 @@ export class HdmvVm {
     const firstPlay = this.entries.find((entry) => entry.kind === "firstPlay")?.target;
     const topMenu = this.entries.find((entry) => entry.kind === "topMenu")?.target;
     const titleCount = this.entries.filter((entry) => entry.kind === "title").length;
-    const specialEntryAvailable = (target: typeof firstPlay): boolean => target?.objectType === "HDMV" && typeof target.target === "number" && target.target !== 0xffff;
+    const specialEntryAvailable = (target: typeof firstPlay): boolean => target?.objectType === "HDMV"
+      ? typeof target.target === "number" && target.target !== 0xffff
+      : target?.objectType === "BDJ" && typeof target.target === "string" && /^\d{5}(?:\.bdjo)?$/i.test(target.target);
     const valid = title === 0
       ? specialEntryAvailable(topMenu)
       : title === 0xffff

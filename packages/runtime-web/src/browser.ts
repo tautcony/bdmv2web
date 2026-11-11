@@ -3,11 +3,13 @@ import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInp
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 import { format90kSeconds, requestExternalPlayback } from "./bdmv-url.js";
+import type { BdjHostRequest, BdjPackageData, BdjRuntimeHandle, BdjRuntimeCallbacks } from "./bdj-runtime.js";
+import { startBdjMenuMedia, type BdjMenuMediaHandle } from "./bdj-menu-media.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
-export interface PackageData { ir: unknown; title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; vmEntries?: VmOptions["entries"]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
+export interface PackageData extends BdjPackageData { title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
-declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; }
+declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; var __BDMV_BDJ_CLIENT__: { start: (data: BdjPackageData, root: HTMLElement, callbacks: BdjRuntimeCallbacks, requestedBdjoId?: string) => BdjRuntimeHandle; installKeyboardInput: (target: Window, runtime: BdjRuntimeHandle) => () => void; installPointerInput: (root: HTMLElement, runtime: BdjRuntimeHandle) => () => void } | undefined; }
 
 /** Build the menu VM from packaged data. The packaged player profile must reach the
  * VM here: the conversion-time VM already ran with it, and PSR-dependent button
@@ -25,6 +27,7 @@ export interface StatusToastOptions {
 }
 type StatusToastHost = { textContent: string | null; classList?: { add(name: string): void; remove(name: string): void; toggle(name: string, force?: boolean): unknown } };
 type StatusCopyButton = { addEventListener?: (type: string, listener: () => void) => void; setAttribute?: (name: string, value: string) => void };
+interface RuntimeBdjoDescriptor { path: string; source: { path: string; origin: "primary" | "backup"; byteOffset: string }; accessiblePlaylists: { accessToAll: boolean; playlistIds: string[] }; terminalInfo: { menuCallMask: boolean; titleSearchMask: boolean } }
 
 /** Render status updates as a translucent toast in the top-right corner. Ordinary
  * updates fade out again; persistent ones stay until the next update and accept
@@ -197,9 +200,9 @@ async function boot(): Promise<void> {
         assetMap.set(asset.id, image);
       }));
     }
-    if (!data.scene) throw new Error("The package contains no supported menu scene.");
-    let scene = normalizeScene(data.scene, assetMap);
-    let activeMenuSceneKey = menuSceneKey(data.scene);
+    if (!data.scene && !data.bdjRuntime) throw new Error("The package contains no supported menu scene or BD-J application.");
+    let scene = data.scene ? normalizeScene(data.scene, assetMap) : null;
+    let activeMenuSceneKey = data.scene ? menuSceneKey(data.scene) : "";
     const status = document.getElementById("runtime-status"); const start = document.getElementById("start-menu") as HTMLButtonElement | null;
     const muteToggle = document.getElementById("audio-mute-toggle") as HTMLButtonElement | null;
     const canvas = document.getElementById("menu-canvas") as HTMLCanvasElement | null;
@@ -207,10 +210,10 @@ async function boot(): Promise<void> {
     const video = document.getElementById("menu-background") as HTMLVideoElement | null;
     const audio = document.getElementById("menu-audio") as HTMLAudioElement | null;
     if (!status || !start || !muteToggle || !canvas) throw new Error("The menu page is missing required runtime elements.");
-    let viewport = new CanvasViewport(scene.width, scene.height);
+    let viewport = new CanvasViewport(scene?.width ?? 1920, scene?.height ?? 1080);
     // Context for the console trace. The button is recorded by the controllers
     // and consumed by the next batch, so a line names the control that ran it.
-    const logState = { scene: sceneLabel(data.scene), button: "" };
+    const logState = { scene: data.scene ? sceneLabel(data.scene) : "BD-J menu", button: "" };
     const vm = createMenuVm(data, vmConsoleLogger(() => {
       const button = logState.button;
       logState.button = "";
@@ -279,10 +282,34 @@ async function boot(): Promise<void> {
       if (controller) { controller.syncVmContext(); redraw(); }
     };
     const pendingActions: Array<ReturnType<HdmvVm["drainActions"]>[number]> = [];
+    let bdjRuntimeHandle: BdjRuntimeHandle | null = null;
+    let bdjPersistentError = false;
+    let removeBdjKeyboard: (() => void) | undefined;
+    let removeBdjPointer: (() => void) | undefined;
+    let activeBdjoId: string | null = null;
+    const bdjAudioPlayers = new Map<string, HTMLAudioElement>();
+    const bdjMenuVideos = new Map<string, BdjMenuMediaHandle>();
+    const bdjPlayerPlaylists = new Map<string, number>();
+    let bdjActiveVideoPlayer: string | null = null;
+    let serverHdmvMode = false;
+    let routeDiscTitle: (title: number, origin?: "user" | "startup" | "system" | "authored") => string = () => "ERROR: Disc title routing is not ready.";
+    let handleBdjHostRequest: (request: BdjHostRequest) => Promise<string> | string = () => "ERROR: BD-J host services are not ready.";
     // The playlist the VM is currently playing. `LinkPI`/`LinkMK` address a
     // PlayItem inside it and carry no playlist operand of their own.
     let activeMenuPlaylist: number | null = data.media?.playlist ?? data.menuPlaylistIds?.[0] ?? null;
     const missingMenuMedia = new Set<string>();
+    const controllerVm = {
+      handleEvent: (...args: Parameters<HdmvVm["handleEvent"]>) => { if (serverHdmvMode) bdjRuntimeHandle?.sendHdmv({ kind: "event", event: args[0] }); else vm.handleEvent(...args); },
+      snapshot: () => vm.snapshot(),
+      applyMenuContext: (pageId: number, selectedButtonId: number | null) => { if (serverHdmvMode) bdjRuntimeHandle?.sendHdmv({ kind: "context", pageId, selectedButtonId }); else vm.applyMenuContext(pageId, selectedButtonId); },
+      beginMenuAction: () => { if (!serverHdmvMode) vm.beginMenuAction(); },
+      recoverMenuAction: (...args: Parameters<HdmvVm["recoverMenuAction"]>) => serverHdmvMode ? false : vm.recoverMenuAction(...args),
+      executeButtonProgram: (...args: Parameters<HdmvVm["executeButtonProgram"]>): ReturnType<HdmvVm["executeButtonProgram"]> => {
+        if (!serverHdmvMode) return vm.executeButtonProgram(...args);
+        bdjRuntimeHandle?.sendHdmv({ kind: "button", commands: args[0] });
+        return { ...vm.snapshot(), actions: [], terminated: false, buttonCommandTerminated: false, fault: null };
+      },
+    };
     const activateMenuScene = (target: { scene: SerializedScene }): void => {
       // Always-on menu compositions replace the menu scene. Menu backgrounds are
       // switched through the playback bridge when that playlist has local media.
@@ -294,7 +321,7 @@ async function boot(): Promise<void> {
       activeMenuSceneKey = targetSceneKey;
       logState.scene = sceneLabel(target.scene);
       viewport = new CanvasViewport(scene.width, scene.height);
-      controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; }, activateButton: (pageId, button) => { logState.button = `button ${button.id} (page ${pageId})`; } }, data.inputConfig);
+      controller = new MenuController(scene, controllerVm, { render: redraw, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; }, activateButton: (pageId, button) => { logState.button = `button ${button.id} (page ${pageId})`; } }, data.inputConfig);
       const rect = canvas.getBoundingClientRect(); viewport.resize(canvas, rect.width, rect.height, window.devicePixelRatio || 1);
       controller.start();
       if (inputStarted) {
@@ -305,7 +332,7 @@ async function boot(): Promise<void> {
     };
     const dispatchActions = () => {
       pendingActions.push(...vm.drainActions());
-      if (!controller) return { menuPlaylistRequested: false, completion: Promise.resolve() };
+      if (!controller && !data.bdjRuntime) return { menuPlaylistRequested: false, completion: Promise.resolve() };
       const mediaActions: Promise<void>[] = [];
       let menuPlaylistRequested = false;
       // The controller records the activation before running its commands, so the
@@ -347,7 +374,7 @@ async function boot(): Promise<void> {
               if (context) drawMenu(context, popupScene, popupController, popupViewport, rect.width, rect.height, window.devicePixelRatio || 1);
               ensureAnimationLoop();
             };
-            popupController = new MenuController(popupScene, vm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate(), activateButton: (pageId, button) => { logState.button = `popup button ${button.id} (page ${pageId})`; } }, data.inputConfig);
+            popupController = new MenuController(popupScene, controllerVm, { render: drawPopup, dispatchActions, diagnostic: (message) => showStatus(message), playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => soundPlayer.invalidate(), activateButton: (pageId, button) => { logState.button = `popup button ${button.id} (page ${pageId})`; } }, data.inputConfig);
             const rect = popupCanvas.getBoundingClientRect(); popupViewport.resize(popupCanvas, rect.width, rect.height, window.devicePixelRatio || 1);
             removePopupPointer = installCanvasPointerInput(popupCanvas, popupViewport, popupController, () => { const size = popupCanvas.getBoundingClientRect(); return { width: size.width, height: size.height }; });
             popupController.start();
@@ -356,10 +383,10 @@ async function boot(): Promise<void> {
           }
         } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {
           closePopup();
-          const selected = vm.selectTitle(action.payload.title);
-          if (selected.diagnostic) {
-            showStatus(selected.diagnostic.message);
-            if (vm.recoverMenuAction()) { controller.syncVmContext(); pendingActions.length = 0; continue; }
+          const result = routeDiscTitle(action.payload.title);
+          if (result.startsWith("ERROR:")) {
+            showStatus(result.slice(6).trim(), { persist: true, error: true });
+            if (vm.recoverMenuAction()) { controller?.syncVmContext(); pendingActions.length = 0; continue; }
           }
           pendingActions.push(...vm.drainActions());
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
@@ -451,6 +478,307 @@ async function boot(): Promise<void> {
       offerRetry: (retry) => { retrySound = retry; start.textContent = "Retry sound"; start.hidden = false; start.disabled = false; },
       isCurrent: (_soundId, buttonId) => !!controller && controller.button?.id === buttonId && controller.activatedButtonId === buttonId,
     });
+    const packagedBdjEntries = (): NonNullable<ReturnType<typeof readBdjDescriptors>> => readBdjDescriptors(data.ir);
+    const entryForTitle = (title: number) => {
+      const entries = data.vmEntries ?? [];
+      return title === 0 ? entries.find((item) => item.kind === "topMenu")
+        : title === 0xffff ? entries.find((item) => item.kind === "firstPlay")
+          : entries.filter((item) => item.kind === "title")[title - 1];
+    };
+    const setServerHdmvMode = (active: boolean): void => {
+      serverHdmvMode = active;
+      const javaCanvas = document.querySelector<HTMLCanvasElement>("#bdj-runtime-root canvas");
+      if (javaCanvas) javaCanvas.hidden = active;
+      if (active) {
+        removeBdjKeyboard?.(); removeBdjKeyboard = undefined;
+        removeBdjPointer?.(); removeBdjPointer = undefined;
+      } else if (bdjRuntimeHandle) {
+        removeKeyboard?.(); removePointer?.();
+        const javaRoot = document.getElementById("bdj-runtime-root");
+        if (javaRoot) {
+          removeBdjKeyboard?.(); removeBdjPointer?.();
+          const bdjClient = globalThis.__BDMV_BDJ_CLIENT__;
+          if (!bdjClient) return;
+          removeBdjKeyboard = bdjClient.installKeyboardInput(window, bdjRuntimeHandle);
+          removeBdjPointer = bdjClient.installPointerInput(javaRoot, bdjRuntimeHandle);
+        }
+      }
+    };
+    const applyServerHdmvActions = (actions: ReturnType<HdmvVm["drainActions"]>, origin: "user" | "system" = "user"): void => {
+      if (!actions.length) return;
+      setServerHdmvMode(true);
+      for (const action of actions) {
+        if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {
+          bdjRuntimeHandle?.sendTitle(action.payload.title, false, undefined, origin);
+        } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number") {
+          const playlist = action.payload.playlist;
+          const playItem = requestedPlayItem(playlist, action);
+          const target = (data.menuScenes ?? []).find((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem)
+            ?? (data.menuScenes ?? []).find((item) => item.playlistId === playlist);
+          if (!target) { showStatus(`HDMV menu playlist ${playlist} PlayItem ${playItem} has no packaged IGS scene.`, { persist: true }); continue; }
+          activeMenuPlaylist = playlist;
+          activateMenuScene(target);
+          menuLog(`${action.type} playlist ${playlist} PlayItem ${playItem} → ${sceneLabel(target.scene)}`);
+        } else if (["LINK_PLAY_ITEM", "LINK_PLAY_MARK"].includes(action.type) && activeMenuPlaylist !== null) {
+          const playItem = requestedPlayItem(activeMenuPlaylist, action);
+          const target = (data.menuScenes ?? []).find((item) => item.playlistId === activeMenuPlaylist && (item.playItem ?? 0) === playItem);
+          if (target) activateMenuScene(target);
+        } else if (action.type === "SET_BUTTON_PAGE" && typeof action.payload.packed === "number") {
+          controller?.applySetButtonPage(action.payload.packed);
+        } else if (action.type === "ENABLE_BUTTON" && typeof action.payload.button === "number") {
+          controller?.setButtonEnabled(action.payload.button, true);
+        } else if (action.type === "DISABLE_BUTTON" && typeof action.payload.button === "number") {
+          controller?.setButtonEnabled(action.payload.button, false);
+        } else if (action.type === "POPUP_OFF") closePopup();
+      }
+    };
+    const launchBdj = (bdjoId: string): void => {
+      if (bdjRuntimeHandle) { activeBdjoId = bdjoId; return; }
+      const root = document.getElementById("bdj-runtime-root");
+      if (!root) throw new Error("The menu page has no BD-J Java window root.");
+      removeKeyboard?.(); removeKeyboard = undefined;
+      removePointer?.(); removePointer = undefined;
+      removePopupPointer?.(); removePopupPointer = undefined;
+      activeBdjoId = bdjoId;
+      const bdjClient = globalThis.__BDMV_BDJ_CLIENT__;
+      if (!bdjClient) throw new Error("The native BD-J client script is missing from this package.");
+      bdjRuntimeHandle = bdjClient.start(data, root, {
+        request: (request) => handleBdjHostRequest(request),
+        report: (message, error) => { if (error === true) bdjPersistentError = true; showStatus(message, { persist: error === true, error: error === true }); },
+        trace: (message) => { console.info(`[BDMV BD-J] ${message}`); menuLog(message); },
+        hdmvMode: setServerHdmvMode,
+        hdmvActions: applyServerHdmvActions,
+        frameReady: () => { if (!bdjPersistentError) showStatus(`BD-J application from BDJO ${activeBdjoId} is running.`); },
+        playerHandoff: (result) => {
+          if (result.status !== "unavailable" && result.status !== "error") return;
+          bdjPersistentError = true;
+          const source = result.source ? ` (${result.source.path}${result.source.offset ? ` at ${result.source.offset}` : ""})` : "";
+          showStatus(`${result.message ?? `Feature playback ${result.status}.`}${source}`, { persist: true, error: true });
+        },
+        playerMenuMedia: (event) => {
+          if (!video) { bdjRuntimeHandle?.sendPlayerEvent(event.playerId, "error"); return; }
+          bdjMenuVideos.get(event.playerId)?.stop();
+          const handle = startBdjMenuMedia(event, video, audio, (playerId, mediaEvent) => {
+          if (mediaEvent === "ended" || mediaEvent.startsWith("missing-ended|") || mediaEvent === "error" || mediaEvent === "stopped") bdjMenuVideos.delete(playerId);
+            bdjRuntimeHandle?.sendPlayerEvent(playerId, mediaEvent);
+          }, (message, error) => {
+            if (error) bdjPersistentError = true;
+            showStatus(message, { persist: true, ...(error ? { error: true } : {}) });
+          });
+          if (handle) bdjMenuVideos.set(event.playerId, handle);
+        },
+        menuMediaUnavailable: (result) => {
+          bdjPersistentError = true;
+          const source = result.source ? ` (${result.source.path}${result.source.offset ? ` at ${result.source.offset}` : ""})` : "";
+          showStatus(`BD-J menu media playlist ${String(result.playlist ?? "").padStart(5, "0")} is unavailable: ${result.message}${source}`, { persist: true, error: true });
+        },
+        retryMenuMedia: () => {
+          for (const player of bdjMenuVideos.values()) player.retry();
+        },
+        playerResource: (playerId, path) => {
+          const file = data.bdjFiles?.find((item) => item.packagePath === path);
+          if (!file) { bdjPersistentError = true; showStatus(`BD-J media resource ${path} is not in the packaged application files.`, { persist: true, error: true }); bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"); return; }
+          const player = new Audio(new URL(file.packagePath, document.baseURI).href);
+          player.preload = "auto";
+          bdjAudioPlayers.get(playerId)?.pause();
+          bdjAudioPlayers.set(playerId, player);
+          player.addEventListener("ended", () => { if (bdjAudioPlayers.get(playerId) === player) bdjAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended"); }, { once: true });
+          player.addEventListener("error", () => { if (bdjAudioPlayers.get(playerId) === player) bdjAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"); }, { once: true });
+          void player.play().then(() => {
+            if (bdjAudioPlayers.get(playerId) === player) bdjRuntimeHandle?.sendPlayerEvent(playerId, "started");
+          }).catch((error: unknown) => {
+            if (bdjAudioPlayers.get(playerId) === player) bdjRuntimeHandle?.sendPlayerEvent(playerId, error instanceof Error && error.name === "NotAllowedError" ? "blocked" : "error");
+            showStatus(`BD-J media resource could not start: ${error instanceof Error ? error.message : String(error)}`, { persist: true, error: true });
+          });
+        },
+        playerStop: (playerId) => {
+          const player = bdjAudioPlayers.get(playerId);
+          if (player) { player.pause(); player.currentTime = 0; bdjAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "stopped"); }
+          const menuPlayer = bdjMenuVideos.get(playerId);
+          if (menuPlayer) { menuPlayer.stop(); bdjMenuVideos.delete(playerId); }
+        },
+      }, bdjoId);
+      removeBdjKeyboard = bdjClient.installKeyboardInput(window, bdjRuntimeHandle);
+      removeBdjPointer = bdjClient.installPointerInput(root, bdjRuntimeHandle);
+      showStatus(`Starting BD-J application from BDJO ${bdjoId}.`);
+    };
+    routeDiscTitle = (title: number, origin: "user" | "startup" | "system" | "authored" = "user"): string => {
+      const entry = entryForTitle(title);
+      if (!entry) return `ERROR: Title ${title} has no INDEX entry.`;
+      if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") {
+        const bdjoId = entry.target.target.replace(/\.bdjo$/i, "");
+        try { launchBdj(bdjoId); }
+        catch (error) { return `ERROR: ${error instanceof Error ? error.message : String(error)}`; }
+        bdjRuntimeHandle?.sendTitle(title, true, bdjoId, origin);
+        menuLog(`TITLE_SEARCH ${title} → BDJO ${bdjoId}`);
+        return "requested";
+      }
+      if (activeBdjoId && bdjRuntimeHandle) {
+        bdjRuntimeHandle.sendTitle(title, false, activeBdjoId, origin);
+        removeBdjKeyboard?.(); removeBdjKeyboard = undefined;
+        removeBdjPointer?.(); removeBdjPointer = undefined;
+        activeBdjoId = null;
+      }
+      const selected = vm.selectTitle(title);
+      if (selected.diagnostic) return `ERROR: ${selected.diagnostic.message}`;
+      pendingActions.push(...vm.drainActions());
+      if (inputStarted && controller) {
+        removeKeyboard?.(); removePointer?.();
+        removePointer = installCanvasPointerInput(canvas, viewport, controller, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
+        removeKeyboard = installKeyboardInput(window, controller);
+      }
+      void dispatchActions().completion;
+      return "requested";
+    };
+    handleBdjHostRequest = async ({ operation, arguments: args }): Promise<string> => {
+      const numberAt = (index: number, name: string): number => {
+        const value = Number(args[index]);
+        if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer.`);
+        return value;
+      };
+      const bdjo = packagedBdjEntries().find((item) => item.path.toLocaleLowerCase("en-US").endsWith(`/bdjo/${String(activeBdjoId ?? "").padStart(5, "0")}.bdjo`));
+      const source = bdjo ? { path: bdjo.source.path, origin: bdjo.source.origin, offset: bdjo.source.byteOffset } as Parameters<HdmvVm["requestHostAction"]>[2] : undefined;
+      switch (operation) {
+        case "discId": return "00000000000000000000000000000000";
+        case "readGPR": return String(vm.registers.read({ kind: "gpr", index: numberAt(0, "GPR index") }));
+        case "writeGPR": vm.registers.write({ kind: "gpr", index: numberAt(0, "GPR index") }, numberAt(1, "GPR value")); return "written";
+        case "readPSR": return String(vm.registers.read({ kind: "psr", index: numberAt(0, "PSR index") }));
+        case "writePSR": vm.registers.systemWrite(numberAt(0, "PSR index"), numberAt(1, "PSR value")); return "written";
+        case "selectTitle": {
+          if (!bdjo?.terminalInfo.titleSearchMask) throw new Error(`BDJO ${activeBdjoId} does not permit title-search calls.`);
+          return routeDiscTitle(numberAt(0, "Title number"), "authored");
+        }
+        case "topMenu": {
+          if (!bdjo?.terminalInfo.menuCallMask) throw new Error(`BDJO ${activeBdjoId} does not permit menu-call requests.`);
+          return routeDiscTitle(0);
+        }
+        case "selectPlaylist": {
+          const playlist = numberAt(0, "Playlist number");
+          if (!bdjo || !source) throw new Error("The active BDJO descriptor has no playlist access record.");
+          const allowed = bdjo.accessiblePlaylists.accessToAll || bdjo.accessiblePlaylists.playlistIds.some((id) => Number(id) === playlist);
+          if (!allowed) throw new Error(`BDJO ${activeBdjoId} cannot access playlist ${String(playlist).padStart(5, "0")}.`);
+          const action = vm.requestHostAction("PLAY_PLAYLIST", { playlist }, source);
+          pendingActions.push(...vm.drainActions());
+          await dispatchActions().completion;
+          return action.id;
+        }
+        case "selectPlaylistItem": {
+          const playlist = numberAt(0, "Playlist number"); const playItem = numberAt(1, "PlayItem");
+          if (!bdjo || !source) throw new Error("The active BDJO descriptor has no playlist access record.");
+          const allowed = bdjo.accessiblePlaylists.accessToAll || bdjo.accessiblePlaylists.playlistIds.some((id) => Number(id) === playlist);
+          if (!allowed) throw new Error(`BDJO ${activeBdjoId} cannot access playlist ${String(playlist).padStart(5, "0")}.`);
+          const action = vm.requestHostAction("PLAY_PLAYLIST_ITEM", { playlist, playItem }, source);
+          pendingActions.push(...vm.drainActions());
+          await dispatchActions().completion;
+          return action.id;
+        }
+        case "playerStart": {
+          const playerId = args[0] ?? "";
+          if (args[1] === "playlist") {
+            const playlist = bdjPlayerPlaylists.get(playerId) ?? numberAt(2, "Playlist number");
+            const result = await handleBdjHostRequest({ operation: "selectPlaylist", arguments: [String(playlist)] });
+            if (result.startsWith("ERROR:")) throw new Error(result.slice(6).trim());
+            const playback = vm.snapshot().playback;
+            if (playback.status === "playing" && playback.playlist === playlist && video && !video.paused && !video.ended) {
+              bdjActiveVideoPlayer = playerId;
+              return "started";
+            }
+            return "unavailable";
+          }
+          if (args[1] === "resource") {
+            const path = args[2] ?? "";
+            const filePath = path.match(/\/bdj\/(BDMV\/JAR\/[^?#]+)/i)?.[1];
+            const file = data.bdjFiles?.find((item) => item.path.toLocaleLowerCase("en-US") === filePath?.toLocaleLowerCase("en-US"));
+            if (!file) throw new Error(`BD-J media resource '${path}' is not packaged.`);
+            const player = new Audio(new URL(file.packagePath, document.baseURI).href);
+            player.preload = "auto";
+            await player.play();
+            player.addEventListener("ended", () => bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended"), { once: true });
+            player.addEventListener("error", () => bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"), { once: true });
+            bdjAudioPlayers.set(playerId, player);
+            return "started";
+          }
+          throw new Error(`BD-J player ${playerId} has no playlist or media resource.`);
+        }
+        case "playerStop": {
+          const playerId = args[0] ?? "";
+          const player = bdjAudioPlayers.get(playerId);
+          if (player) { player.pause(); player.currentTime = 0; bdjAudioPlayers.delete(playerId); return "stopped"; }
+          if (bdjActiveVideoPlayer !== playerId) return "stopped";
+          if (!bdjo || !source) throw new Error("The active BDJO descriptor has no playback source.");
+          vm.requestHostAction("PLAY_STOP", {}, source);
+          pendingActions.push(...vm.drainActions());
+          await dispatchActions().completion;
+          bdjActiveVideoPlayer = null;
+          return "stopped";
+        }
+        case "playerPlaylist": {
+          const playerId = args[0] ?? "";
+          const playlist = numberAt(1, "Playlist number");
+          if (!bdjo) throw new Error("The active BDJO descriptor has no playlist access record.");
+          const allowed = bdjo.accessiblePlaylists.accessToAll || bdjo.accessiblePlaylists.playlistIds.some((id) => Number(id) === playlist);
+          if (!allowed) throw new Error(`BDJO ${activeBdjoId} cannot access playlist ${String(playlist).padStart(5, "0")}.`);
+          bdjPlayerPlaylists.set(playerId, playlist);
+          return "selected";
+        }
+        case "playerListAudioStreams": {
+          const playerId = args[0] ?? "";
+          const playlist = bdjPlayerPlaylists.get(playerId) ?? activeMenuPlaylist;
+          const media = [data.media, ...(data.menuMedia ?? [])].filter((item): item is PackageMenuMedia => !!item && item.playlist === playlist);
+          const streams = [...new Set(media.flatMap((item) => item.audioTracks.map((track) => track.psrStreamNumber ?? track.streamNumber + 1)))].sort((a, b) => a - b);
+          return streams.join(",");
+        }
+        case "playerCurrentAudioStream": {
+          return String(playbackBridge.selectedPrimaryAudioStream ?? vm.registers.read({ kind: "psr", index: 1 }));
+        }
+        case "playerNavigate": {
+          const [playerId = "", kind = "", value = ""] = args;
+          if (kind === "nextMark" || kind === "previousMark") return "false";
+          const playlist = bdjPlayerPlaylists.get(playerId) ?? activeMenuPlaylist;
+          if (!bdjo || !source || playlist === null) throw new Error(`BD-J player ${playerId} has no active playlist.`);
+          const number = Number(value);
+          if (!Number.isSafeInteger(number) || number < 0) throw new Error(`BD-J ${kind} operand must be a non-negative integer.`);
+          const action = vm.requestHostAction(kind === "mark" ? "PLAY_PLAYLIST_MARK" : "PLAY_PLAYLIST_ITEM", kind === "mark" ? { playlist, playMark: number } : { playlist, playItem: number }, source);
+          pendingActions.push(...vm.drainActions());
+          await dispatchActions().completion;
+          return action.id;
+        }
+        case "playerStream": {
+          const [playerId = "", kind = "", value = ""] = args;
+          if (kind !== "audio") throw new Error(`BD-J ${kind || "stream"} selection is unsupported.`);
+          if (!bdjo || !source) throw new Error(`BD-J player ${playerId} has no active BDJO.`);
+          const number = Number(value);
+          if (!Number.isSafeInteger(number) || number < 0) throw new Error("BD-J audio stream number must be a non-negative integer.");
+          vm.requestHostAction("SET_STREAM", { primaryAudioStream: number }, source);
+          pendingActions.push(...vm.drainActions());
+          await dispatchActions().completion;
+          if (playbackBridge.selectedPrimaryAudioStream !== number) throw new Error(`BD-J player ${playerId} audio stream ${number} was not confirmed by the active package media.`);
+          return "confirmed";
+        }
+        case "playerGain": {
+          const [playerId = "", kind = "", value = ""] = args;
+          const volume = kind === "mute" ? (value === "true" ? 0 : 1) : Math.max(0, Math.min(1, Number(value)));
+          const player = bdjAudioPlayers.get(playerId);
+          if (player) { player.volume = volume; player.muted = kind === "mute" && value === "true"; }
+          else { if (audio) audio.volume = volume; if (video) video.volume = volume; }
+          return "updated";
+        }
+        case "xletEvent": menuLog(`BD-J ${args[0] ?? "event"} ${args[1] ?? ""}`); return "recorded";
+        default: throw new Error(`BD-J host operation '${operation}' is unsupported.`);
+      }
+    };
+    video?.addEventListener("ended", () => {
+      const playerId = bdjActiveVideoPlayer;
+      if (!playerId) return;
+      bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended");
+      bdjActiveVideoPlayer = null;
+    });
+    video?.addEventListener("error", () => {
+      const playerId = bdjActiveVideoPlayer;
+      if (!playerId) return;
+      bdjRuntimeHandle?.sendPlayerEvent(playerId, "error");
+      bdjActiveVideoPlayer = null;
+    });
     let menuMuted = false;
     let manualMuted = false;
     let removeAutoMuteRestore: (() => void) | null = null;
@@ -511,13 +839,14 @@ async function boot(): Promise<void> {
     };
     muteToggle.addEventListener("click", () => setMenuMuted(!menuMuted, true));
     const redraw = () => {
-      if (!controller) return;
+      if (!controller || !scene) return;
       const rect = canvas.getBoundingClientRect(); const context = canvas.getContext("2d");
       if (context) drawMenu(context, scene, controller, viewport, rect.width, rect.height, window.devicePixelRatio || 1);
       ensureAnimationLoop();
     };
-    controller = new MenuController(scene, vm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; }, activateButton: (pageId, button) => { logState.button = `button ${button.id} (page ${pageId})`; } }, data.inputConfig);
-    start.hidden = false; start.disabled = false; showStatus("Images decoded. Select Start menu preview to enable input.");
+    if (scene) controller = new MenuController(scene, controllerVm, { render: redraw, dispatchActions, diagnostic: (message) => { showStatus(message); }, playSound: (soundId, buttonId) => soundPlayer.play(soundId, buttonId), invalidateSound: () => { soundPlayer.invalidate(); retrySound = null; start.hidden = true; }, activateButton: (pageId, button) => { logState.button = `button ${button.id} (page ${pageId})`; } }, data.inputConfig);
+    start.textContent = data.bdjRuntime ? "Start or reconnect BD-J session" : "Start menu preview";
+    start.hidden = false; start.disabled = false; showStatus(data.bdjRuntime ? "Select Start or reconnect to the live BD-J session." : "Images decoded. Select Start menu preview to enable input.");
     let removePointer: (() => void) | undefined;
     // The test host awaits fired listeners, so the handler returns its completion promise.
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -528,7 +857,7 @@ async function boot(): Promise<void> {
       inputStarted = true; start.disabled = true; start.hidden = true;
       let menuMediaStarted: boolean | undefined;
       let pending = { menuPlaylistRequested: false, completion: Promise.resolve() };
-      if (data.vmInitialProgramId !== undefined) {
+      if (!data.bdjRuntime && data.vmInitialProgramId !== undefined) {
         if (data.vmFirstPlayProgramId !== undefined && data.vmEntries?.some((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV")) {
           vm.reset(data.vmFirstPlayProgramId);
           const initial = vm.runTurn();
@@ -539,6 +868,20 @@ async function boot(): Promise<void> {
         } else vm.runTurn();
         pending = dispatchActions();
       }
+      if (data.bdjRuntime && !bdjRuntimeHandle) {
+        const firstPlay = data.vmEntries?.find((entry) => entry.kind === "firstPlay");
+        const topMenu = data.vmEntries?.find((entry) => entry.kind === "topMenu");
+        const initialBdj = firstPlay?.target.objectType === "BDJ" ? { title: 0xffff, target: firstPlay.target.target }
+          : firstPlay?.target.objectType === "HDMV" && topMenu?.target.objectType === "BDJ" ? { title: 0xffff, target: topMenu.target.target }
+            : !firstPlay && topMenu?.target.objectType === "BDJ" ? { title: 0, target: topMenu.target.target } : undefined;
+        if (initialBdj && typeof initialBdj.target === "string") {
+          const result = routeDiscTitle(initialBdj.title, "startup");
+          if (result.startsWith("ERROR:")) { showStatus(result.slice("ERROR: ".length), { persist: true, error: true }); return; }
+        } else {
+          showStatus("BD-J package has no First Play or Top Menu entry for the local service.", { persist: true, error: true });
+          return;
+        }
+      }
       if (!pending.menuPlaylistRequested && playbackBridge.startMenuBackground && !["faulted", "stopped"].includes(vm.snapshot().status)) {
         const backgroundStart = playbackBridge.startMenuBackground();
         const [, started] = await Promise.all([pending.completion, backgroundStart]); menuMediaStarted = started;
@@ -548,22 +891,27 @@ async function boot(): Promise<void> {
       if (retryMedia) return;
       const vmStatus = vm.snapshot().status;
       if (vmStatus === "faulted" || vmStatus === "stopped" || (vmStatus === "suspended" && !pending.menuPlaylistRequested)) return;
-      if (menuMediaStarted !== false) showStatus("Menu preview ready. Use arrow keys and Enter, or select a visible button.");
-      const initialRect = canvas.getBoundingClientRect();
-      viewport.resize(canvas, initialRect.width, initialRect.height, window.devicePixelRatio || 1);
-      controller!.start();
+      if (!data.bdjRuntime && menuMediaStarted !== false) showStatus("Menu preview ready. Use arrow keys and Enter, or select a visible button.");
+      if (controller) {
+        const initialRect = canvas.getBoundingClientRect();
+        viewport.resize(canvas, initialRect.width, initialRect.height, window.devicePixelRatio || 1);
+        controller.start();
+      }
       void dispatchActions().completion;
       // The dispatch above can switch scenes synchronously and install input
       // for the switched controller; remove those listeners before installing
       // the final set so one input event reaches one controller.
       removeKeyboard?.();
       removePointer?.();
-      removeKeyboard = installKeyboardInput(window, popupController ?? controller!);
-      removePointer = installCanvasPointerInput(canvas, viewport, controller!, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
+      if (controller && !bdjRuntimeHandle) {
+        removeKeyboard = installKeyboardInput(window, popupController ?? controller);
+        removePointer = installCanvasPointerInput(canvas, viewport, controller, () => { const rect = canvas.getBoundingClientRect(); return { width: rect.width, height: rect.height }; });
+      }
       redraw();
     });
     window.addEventListener("pagehide", () => {
       removeKeyboard?.(); removePointer?.();
+      removeBdjKeyboard?.(); removeBdjPointer?.(); bdjRuntimeHandle?.close();
       disarmAutoMuteRestore();
     }, { once: true });
   } catch (error) { visibleError(error); }
@@ -579,6 +927,19 @@ function validateEmbeddedDiscIR(value: unknown): void {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+
+function readBdjDescriptors(value: unknown): RuntimeBdjoDescriptor[] {
+  if (!isRecord(value) || !Array.isArray(value["bdjos"])) return [];
+  return value["bdjos"].filter((item): item is RuntimeBdjoDescriptor => isRecord(item)
+    && typeof item["path"] === "string"
+    && isRecord(item["source"]) && typeof item["source"]["path"] === "string"
+    && (item["source"]["origin"] === "primary" || item["source"]["origin"] === "backup")
+    && typeof item["source"]["byteOffset"] === "string"
+    && isRecord(item["accessiblePlaylists"]) && typeof item["accessiblePlaylists"]["accessToAll"] === "boolean"
+    && Array.isArray(item["accessiblePlaylists"]["playlistIds"])
+    && isRecord(item["terminalInfo"]) && typeof item["terminalInfo"]["menuCallMask"] === "boolean"
+    && typeof item["terminalInfo"]["titleSearchMask"] === "boolean");
+}
 
 function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageElement>): MenuScene {
   if (!source || !Number.isSafeInteger(source.width) || source.width <= 0 || !Number.isSafeInteger(source.height) || source.height <= 0 || !Array.isArray(source.pages) || source.pages.length === 0) throw new Error("Invalid menu scene dimensions or pages.");

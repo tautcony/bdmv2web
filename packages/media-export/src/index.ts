@@ -103,6 +103,8 @@ export interface MenuLoopMediaInput {
   inTime45k: number;
   /** Optional nonzero source mark used as the repeated menu segment's start. */
   loopStart45k?: number;
+  /** Encode the initial presentation from inTime45k before entering the loop segment. */
+  includeIntro?: boolean;
   outTime45k: number;
   stillMode: number;
   repeatCount: number;
@@ -174,6 +176,7 @@ export interface MediaPlan {
   sourceIn45k: number;
   sourceOut45k: number;
   loopStart45k?: number;
+  includeIntro?: boolean;
   durationSeconds: number;
   repeatCount: number;
   backgroundMode: "single-clip" | "loop-one-clip" | "still-last-frame";
@@ -196,8 +199,8 @@ export interface MenuLoopMediaResult {
   plan: MediaPlan;
   outputSize: { beforeBytes: string; afterBytes: string };
   tools: { ffmpeg: string; ffprobe: string; invocations: MediaToolInvocation[] };
-  background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: boolean };
-  audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number }>;
+  background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: boolean; loopStartSeconds?: number };
+  audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number; loopStartSeconds?: number }>;
   files: Array<{ path: string; absolutePath: string; byteLength: number }>;
   /** Colour-pipeline warnings that did not block the export. */
   warnings: ColorWarning[];
@@ -289,7 +292,11 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     containerOverheadPercent: options.containerOverheadPercent ?? 5,
   };
   validateBudgetRates(rates);
-  const estimate = estimateMenuLoopBudget(input.outTime45k - (input.loopStart45k ?? input.inTime45k), input.audioTracks.length, rates);
+  const exportStart45k = input.includeIntro ? input.inTime45k : input.loopStart45k ?? input.inTime45k;
+  const exportDuration45k = input.outTime45k - exportStart45k;
+  const exportDuration = exportDuration45k / 45_000;
+  const loopStartSeconds = loopBackground(input) ? ((input.loopStart45k ?? input.inTime45k) - exportStart45k) / 45_000 : undefined;
+  const estimate = estimateMenuLoopBudget(exportDuration45k, input.audioTracks.length, rates);
   const backgroundPath = `${assetDirectory}/background.mp4`;
   const audioPaths = input.audioTracks.map((track) => `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`);
   for (const [path, bytes] of [[backgroundPath, estimate.videoBytes] as const, ...audioPaths.map((path, index) => [path, estimate.audioBytes[index]!] as const)]) {
@@ -318,7 +325,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const sourceProbe = parseProbe((await invoke(ffprobe, probeArgs(input.sourcePath, true), timeoutMs)).stdout, input.sourcePath);
   const sourceStart = Number(sourceProbe.format?.start_time);
   if (!Number.isFinite(sourceStart)) throw new Error(`ffprobe did not report the source timeline start for '${input.sourcePath}'.`);
-  const rawSeekSeconds = (input.loopStart45k ?? input.inTime45k) / 45_000 - sourceStart;
+  const rawSeekSeconds = exportStart45k / 45_000 - sourceStart;
   const seekSeconds = rawSeekSeconds < 0.000001 ? 0 : rawSeekSeconds;
   const videoStream = findPidStream(sourceProbe, input.videoPid, "video", input.sourcePath);
   if (!new Set(["h264", "hevc"]).has(videoStream.codec_name ?? "")) throw new Error(`Top Menu Clip ${input.clipId} video PID ${input.videoPid} uses unsupported codec ${videoStream.codec_name ?? "unknown"}; H.264 and HEVC inputs are supported.`);
@@ -337,11 +344,11 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     created.push(backgroundAbsolute);
     await runWithBudget(ffmpeg, [
       "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n", "-i", input.sourcePath,
-      "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(durationSeconds(input)),
+      "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(exportDuration),
       "-vf", colorPlan.videoFilter, ...videoEncoderArgs(colorPlan, codec, crf, preset), "-aspect", aspectRatio, "-fps_mode", "passthrough",
       "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
     ], timeoutMs, backgroundAbsolute, options.maxAssetBytes, invoke, options.signal,
-    (progress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: durationSeconds(input), source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid } }));
+    (progress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: exportDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid } }));
     const backgroundProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
     let outputVideo: ProbeStream;
     let videoDuration: number;
@@ -351,9 +358,9 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       assertEncodedColor(outputVideo, colorPlan, codec, backgroundPath);
       if (!sameAspectRatio(displayAspectRatio(outputVideo), aspectRatio)) throw new Error(`Encoded background video '${backgroundPath}' display aspect ratio differs from source ratio ${aspectRatio}.`);
       videoDuration = streamDuration(outputVideo, backgroundProbe);
-      assertDuration(videoDuration, durationSeconds(input), backgroundPath);
+      assertDuration(videoDuration, exportDuration, backgroundPath);
     } catch (error) { throw outputInvalid(backgroundAbsolute, ffprobe, error); }
-    const expectedDuration = durationSeconds(input);
+    const expectedDuration = exportDuration;
     const backgroundStat = await stat(backgroundAbsolute);
 
     const audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number }> = [];
@@ -381,7 +388,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       const audioStat = await stat(absolutePath);
       const asset = { path: relativePath, absolutePath, byteLength: audioStat.size };
       files.push(asset);
-      audioTracks.push({ ...asset, codec: "aac", pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: audioDuration });
+      audioTracks.push({ ...asset, codec: "aac", pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: audioDuration, ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) });
     }
 
     const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, encoding);
@@ -391,7 +398,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return {
       plan, outputSize, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
-      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec, pid: input.videoPid, width: outputVideo.width, height: outputVideo.height, durationSeconds: videoDuration, loop: loopBackground(input) },
+      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec, pid: input.videoPid, width: outputVideo.width, height: outputVideo.height, durationSeconds: videoDuration, loop: loopBackground(input), ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) },
       audioTracks, files, warnings: colorPlan.warnings,
     };
   } catch (error) {
@@ -447,7 +454,7 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     containerOverheadPercent: options.containerOverheadPercent ?? 5,
   };
   validateBudgetRates(rates);
-  const estimate = estimateMenuLoopBudget(input.outTime45k - (input.loopStart45k ?? input.inTime45k), input.audioTracks.length, rates);
+  const estimate = estimateMenuLoopBudget(durationSeconds(input) * 45_000, input.audioTracks.length, rates);
   for (const path of sourceFiles) assertActualWithinLimit({ scope: "asset", actualBytes: BigInt(sourceSizes.get(path)!), limitBytes: options.maxAssetBytes, message: `Reused media asset '${path}' exceeds maxAssetBytes.` });
   const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
   await mkdir(mediaDirectory, { recursive: true });
@@ -464,7 +471,7 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     const backgroundFile = files[0]!;
     const audioTracks = audioRecords.map((record, index) => {
       const file = files[index + 1]!;
-      return { ...file, codec: "aac" as const, pid: record!.track.pid, streamNumber: record!.track.streamNumber, language: record!.track.language, durationSeconds: record!.previous.durationSeconds as number };
+      return { ...file, codec: "aac" as const, pid: record!.track.pid, streamNumber: record!.track.streamNumber, language: record!.track.language, durationSeconds: record!.previous.durationSeconds as number, ...(typeof priorBackground.loopStartSeconds === "number" ? { loopStartSeconds: priorBackground.loopStartSeconds } : {}) };
     });
     const planAbsolute = resolve(output, planPath);
     await writeFile(planAbsolute, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
@@ -473,7 +480,7 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return {
       plan, outputSize, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
-      background: { ...backgroundFile, codec: encoding.codec, pid: input.videoPid, width: priorBackground.width, height: priorBackground.height, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input) },
+      background: { ...backgroundFile, codec: encoding.codec, pid: input.videoPid, width: priorBackground.width, height: priorBackground.height, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input), ...(typeof priorBackground.loopStartSeconds === "number" ? { loopStartSeconds: priorBackground.loopStartSeconds } : {}) },
       audioTracks, files,
       warnings: [
         ...(priorPlan.encoding.video.color.filterChain === "hdr-passthrough-fallback"
@@ -492,7 +499,7 @@ function matchesReusablePlan(plan: MediaPlan, input: MenuLoopMediaInput, encodin
   const mode = input.stillMode === 2 ? "still-last-frame" : loop ? "loop-one-clip" : "single-clip";
   return plan.playlistId === input.playlistId && plan.playItemIndex === input.playItemIndex && plan.clipId === input.clipId
     && plan.sourceFile === input.sourceFile && plan.sourceIn45k === input.inTime45k && plan.sourceOut45k === input.outTime45k
-    && plan.loopStart45k === input.loopStart45k && plan.repeatCount === input.repeatCount && plan.backgroundMode === mode
+    && plan.loopStart45k === input.loopStart45k && plan.includeIntro === input.includeIntro && plan.repeatCount === input.repeatCount && plan.backgroundMode === mode
     && plan.videoPid === input.videoPid && plan.encoding?.video?.codec === encoding.codec && plan.encoding.video.preset === encoding.preset && plan.encoding.video.crf === encoding.crf
     && plan.encoding.video.color?.policy === encoding.hdrMode
     && plan.audioTracks.length === input.audioTracks.length && plan.audioTracks.every((track, index) => {
@@ -505,7 +512,9 @@ export function pidSpecifier(pid: number): string { validatePid(pid); return `0:
 function loopBackground(input: Pick<MenuLoopMediaInput, "stillMode" | "repeatCount" | "loopBackground">): boolean {
   return input.loopBackground ?? (input.stillMode !== 2 && input.repeatCount > 1);
 }
-export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "outTime45k" | "loopStart45k">): number { return (input.outTime45k - (input.loopStart45k ?? input.inTime45k)) / 45_000; }
+export function durationSeconds(input: Pick<MenuLoopMediaInput, "inTime45k" | "outTime45k" | "loopStart45k" | "includeIntro">): number {
+  return (input.outTime45k - (input.includeIntro ? input.inTime45k : input.loopStart45k ?? input.inTime45k)) / 45_000;
+}
 
 export function resolveMenuLoopStart45k(playItemIndex: number, inTime45k: number, outTime45k: number, marks: readonly { type: number; playItemRef: number; time45k: number }[]): number | undefined {
   return marks.filter((mark) => mark.type === 1 && mark.playItemRef === playItemIndex && mark.time45k > inTime45k && mark.time45k < outTime45k).at(-1)?.time45k;
@@ -671,7 +680,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
   return {
     status: "partial", playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId,
     sourceFile: input.sourceFile, sourceIn45k: input.inTime45k, sourceOut45k: input.outTime45k,
-    ...(input.loopStart45k !== undefined ? { loopStart45k: input.loopStart45k } : {}),
+    ...(input.loopStart45k !== undefined ? { loopStart45k: input.loopStart45k } : {}), ...(input.includeIntro ? { includeIntro: true } : {}),
     durationSeconds: durationSeconds(input), repeatCount: input.repeatCount,
     backgroundMode: input.stillMode === 2 ? "still-last-frame" : loopBackground(input) ? "loop-one-clip" : "single-clip", videoPid: input.videoPid,
     audioTracks: input.audioTracks.map((track) => ({ ...track })),

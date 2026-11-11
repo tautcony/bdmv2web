@@ -18,6 +18,29 @@ const png1x1 = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAA
 function compactCss(css: string): string { return css.replace(/\s*([{}:;,])\s*/g, "$1").trim(); }
 
 describe("menu package primitives", () => {
+  it("loads the BD-J transport as a separate local-jvm package script", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv2web-bdj-client-"));
+    const outputDirectory = resolve(parent, "native package");
+    try {
+      await buildMenuPackage({
+        outputDirectory, title: "Native menu", ir, scene, graphics: [],
+        bdjFiles: [{ path: "BDMV/JAR/00000.jar", sourcePath: "BDMV/JAR/00000.jar", bytes: new Uint8Array([0]) }],
+        bdjLaunch: { discId: "00000000000000000000000000000000", initialBdjoId: "00000", applications: [{ bdjoId: "00000", controlCode: 1, binding: 1, organizationId: 1, applicationId: 1, initialClass: "fixture.Menu", basePath: "00000", classPath: "", parameters: [] }] },
+      });
+      const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");
+      const appBundle = await readFile(resolve(outputDirectory, "runtime/app.bundle.js"), "utf8");
+      const bdjClient = await readFile(resolve(outputDirectory, "runtime/bdj-client.js"), "utf8");
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { launchMode: string; files: Array<{ path: string }> };
+      expect(manifest.launchMode).toBe("local-jvm");
+      expect(manifest.files.map((file) => file.path)).toContain("runtime/bdj-client.js");
+      expect(html.indexOf("runtime/bdj-client.js")).toBeLessThan(html.indexOf("runtime/app.bundle.js"));
+      expect(appBundle).not.toMatch(/\bfetch\s*\(|new EventSource/);
+      expect(bdjClient).toContain('fetch("/api/bdj/start"');
+      expect(bdjClient).toContain('new EventSource("/api/bdj/events")');
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
   it("describes looped and infinite-still menu backgrounds accurately", () => {
     expect(createReadme("Loop", true, false)).toContain("repeated single-clip background loop");
     expect(createReadme("Still", false, false)).toContain("holds the final video frame after its single PlayItem");
@@ -74,6 +97,13 @@ describe("menu package primitives", () => {
     const report = createCompatibility({ schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Preview", status: "partial", diagnostics: [] });
     expect(report.status).toBe("partial"); expect(report).not.toHaveProperty("browserEvidence"); expect(report.coverage).toEqual({ igs: "unverified" });
     expect(report.notVerified).toEqual(expect.arrayContaining(["offline directory relocation", "real-disc rendering", "media timeline and seek accuracy"]));
+  });
+  it("reports player requirements for the selected package launch mode", () => {
+    const metadata = { schemaVersion: "1.0" as const, runtimeVersion: "0.1.0", title: "Preview", status: "partial" as const, diagnostics: [] };
+    expect(createCompatibility(metadata, true).externalDependencies).toEqual(["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"]);
+    expect(createCompatibility(metadata, true, true).externalDependencies).toEqual(["configured BDMV STREAM files", "an operating-system file association for whole-file playback or a configured mpv executable for bounded playlists"]);
+    expect(createReadme("Preview", undefined, true, "partial", true)).toContain("bdmv2web serve <package-directory> --player system");
+    expect(createReadme("Preview", undefined, true)).toContain("IINA 1.4.4 or later on macOS and PotPlayer on Windows");
   });
   it("converts only M1-declared 48 kHz 16-bit PCM ranges into WAV and reports affected sound references", () => {
     const bytes = new Uint8Array(70); bytes.set([0x12, 0x34, 0xab, 0xcd], 64);

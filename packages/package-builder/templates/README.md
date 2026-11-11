@@ -6,8 +6,19 @@ Run `bdmv2web validate <package-directory> --offline` to refresh `compatibility.
 
 Open index.html in a browser while offline. Use the mute button at the lower right to control menu audio.
 
-{{#EXTERNAL_PLAYBACK}}
-External playback requests mute menu audio automatically, and the next key or click restores that automatic mute. A manual mute stays until the mute button is used again. Edit runtime/bdmv-config.js and reload to change the BDMV path. External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows.
+{{#BDJ_RUNTIME}}
+BD-J packages run through the local Java service. Use Java 21 or a compatible runtime with `java.desktop`, then run `bdmv2web serve <package-directory> [--java <executable>]` and open the loopback URL printed by the command. The package contains the BD-J host JAR, application JARs, authored resources and session data. A `file://` page displays the local service command; it does not start Java.
 
-The menu runs First Play initialization and then enters Top Menu. IINA 1.4.4 or later receives the selected chapter position through `mpv_start`; Windows opens the selected M2TS in PotPlayer.
+The Java process can access the files and network resources available to the invoking user. BD-J file and network access is not isolated by the service.
+{{/BDJ_RUNTIME}}
+
+{{#EXTERNAL_PLAYBACK}}
+{{#BDJ_EXTERNAL_PLAYBACK}}
+External playback requests use `bdmv2web serve <package-directory> --player system` to open supported whole-file targets with the operating system's default player. Use `--player mpv --player-executable <path>` for bounded or multi-item playlists. The mpv adapter passes the complete playlist and source-time bounds. A process launch is reported as requested; playback state is not observed for external players.
+
+Edit `runtime/bdmv-config.js` and reload to change the BDMV path for browser playback.
+{{/BDJ_EXTERNAL_PLAYBACK}}
+{{#STATIC_EXTERNAL_PLAYBACK}}
+External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows. Configure the BDMV path in `runtime/bdmv-config.js` and reload.
+{{/STATIC_EXTERNAL_PLAYBACK}}
 {{/EXTERNAL_PLAYBACK}}

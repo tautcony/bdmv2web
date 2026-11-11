@@ -54,6 +54,7 @@ describe("external source playlist boundaries", () => {
     const { disc, closure } = fixture(); disc.graph.nodes[1]!.state = "missing";
     const map = createExternalMediaTargets(disc, closure);
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 1 })).toMatchObject({ status: "unavailable", code: "EXTERNAL_STREAM_MISSING" });
+    expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 1 }, { allowMissing: true })).toMatchObject({ status: "available", item: { index: 1, present: false }, clipTime90k: "180000" });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_ITEM", playlist: 1, playItem: 9 })).toMatchObject({ status: "unavailable", code: "EXTERNAL_PLAYITEM_UNKNOWN" });
     expect(resolveExternalPlayTarget(map, { type: "PLAY_PLAYLIST_MARK", playlist: 1, playMark: 9 })).toMatchObject({ status: "unavailable", code: "EXTERNAL_MARK_UNKNOWN" });
     map.playlists[0]!.marks[0]!.sourceTime90k = "450000";

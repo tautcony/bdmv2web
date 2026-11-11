@@ -1,5 +1,6 @@
 import { decodeInstruction, type ButtonCommandContext, type ButtonProgramResult, type HdmvVm, type NavigationAction, type RawCommand, type VmEvent, type VmSnapshot } from "@bdmv2web/hdmv";
 import type { SourceLocation } from "@bdmv2web/bdmv-parser";
+import { replayMediaAtLoopPoint } from "./media-loop.js";
 export { adaptIgsScene, selectPopupScene } from "./igs-adapter.js";
 export type { IgsAdapterDiagnostic, IgsSceneAdapterResult, PopupSceneSelection, SerializedMenuButton, SerializedMenuPage, SerializedMenuState, SerializedScene } from "./igs-adapter.js";
 export { LinearPlaybackBridge } from "./linear-playback.js";
@@ -70,6 +71,8 @@ function discardPlaybackResponse(vm: HdmvVm, action: PlaybackAction, event: VmEv
 export interface PlaybackBridge {
   dispatch(action: PlaybackAction): void | Promise<void>;
   isCurrent(generation: number): boolean;
+  /** Primary audio stream number confirmed by the active package media element. */
+  readonly selectedPrimaryAudioStream?: number | null;
   startMenuBackground?(): Promise<boolean>;
   /** Switch the background to a packaged PlayItem without a VM playback wait.
    * `LinkPI` moves inside the current playlist and never emits a media response,
@@ -694,7 +697,7 @@ export interface MenuLoopMediaPackage {
   /** Source PlayItem inside that playlist. A menu playlist can hold several
    * sub-menu PlayItems that `LinkPI` switches between without changing playlist. */
   playItem?: number;
-  background: { path: string; durationSeconds?: number; loop: boolean };
+  background: { path: string; durationSeconds?: number; loop: boolean; loopStartSeconds?: number };
   /** Each entry is one source audio lane. Same-language lanes remain distinct. */
   audioTracks: Array<{ streamNumber: number; psrStreamNumber?: number; path: string; language: string; durationSeconds?: number; pid?: number; variantId?: string }>;
 }
@@ -741,7 +744,15 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     this.confirmedPrimaryAudioStream = vm.registers.read({ kind: "psr", index: 1 });
     this.selectedAudioStream = media ? this.pickAudioStream(media) : 0;
     this.video.addEventListener?.("ended", () => {
-      if (this.activeMedia?.background.loop) return;
+      const media = this.activeMedia;
+      if (media?.background.loop) {
+        const loopStart = media.background.loopStartSeconds;
+        if (loopStart !== undefined) {
+          const audioTrack = this.findAudioTrack(this.selectedAudioStream);
+          void replayMediaAtLoopPoint(this.video, audioTrack ? this.audio : null, loopStart).catch((error: unknown) => this.report(`Menu loop could not resume: ${error instanceof Error ? error.message : String(error)}`));
+        }
+        return;
+      }
       const response = this.activePlaylistResponse;
       if (!response) return;
       this.activePlaylistResponse = null;
@@ -886,14 +897,14 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     if (!this.startPromise) {
       if (!media) return false;
       const audioTrack = this.findAudioTrack(this.selectedAudioStream);
-      this.video.loop = media.background.loop;
+      this.video.loop = media.background.loop && media.background.loopStartSeconds === undefined;
       if (this.video.src !== media.background.path) {
         this.activePlaylistResponse = null;
         this.video.src = media.background.path;
       }
       if (response) this.activePlaylistResponse = response;
       if (audioTrack) {
-        this.audio.loop = media.background.loop;
+        this.audio.loop = media.background.loop && media.background.loopStartSeconds === undefined;
         this.audio.src = audioTrack.path;
       }
       const attempt = Promise.resolve().then(() => Promise.all([this.video.play(), ...(audioTrack ? [this.audio.play()] : [])])).then(() => {
@@ -1063,6 +1074,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       if (!this.isCurrentTrackSwitch(generation, sequence)) return;
       this.selectedAudioStream = track.streamNumber;
       this.confirmedPrimaryAudioStream = psrStreamNumber;
+      this.vm.registers.systemWrite(1, psrStreamNumber);
       this.hooks.audioTrackChanged?.(track);
     } catch (error) {
       if (!this.isCurrentTrackSwitch(generation, sequence)) return;

@@ -11,4 +11,4 @@
 | `BDA-BDMV-SPECS` | 访问边界 | BDA [FAQ](https://blu-raydisc.info/format-spec/faq-info.php), [ROM 格式获取页](https://blu-raydisc.info/format-spec/rom2-spec.php), [授权办公室](https://blu-raydisc.info/). | 记录授权规格书的访问状态；不把获取授权正文设为解析实现前置。 |
 | `ECMA-167` | 可选背景 | [ECMA-167 page](https://ecma-international.org/publications-and-standards/standards/ecma-167/). | 可作为未来镜像/容器工作的文件系统背景；首期目录解析不依赖它，也不能据此确定 BDMV 语义。 |
 
-M1 结构报告包含被 INDEX 引用的 BDJO 记录、本地 META/DL 清单、MPLS/CLPI ExtensionData 条目、PlayItem 替代角度、STN 类别、CLPI ClipMark 和 CPI coarse/fine 记录。BD-J 执行状态为 `unsupported`。XML 只读取已登记的 BDMV 文件；DTD 和外部实体声明产生诊断。结构字段实现状态与协议证据状态分别记录；候选版本状态见[协议支持矩阵](../../support/protocol-support.md)。具体固定来源、许可和获取命令见 [`sources.json`](../sources.json)。
+M1 结构报告包含被 INDEX 引用的 BDJO 记录、本地 META/DL 清单、MPLS/CLPI ExtensionData 条目、PlayItem 替代角度、STN 类别、CLPI ClipMark 和 CPI coarse/fine 记录。BD-J 浏览器执行路径见[BD-J 支持说明](../../support/bdj-support.md)。XML 只读取已登记的 BDMV 文件；DTD 和外部实体声明产生诊断。结构字段实现状态与协议证据状态分别记录；候选版本状态见[协议支持矩阵](../../support/protocol-support.md)。具体固定来源、许可和获取命令见 [`sources.json`](../sources.json)。

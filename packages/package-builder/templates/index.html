@@ -10,6 +10,7 @@
   {{#HAS_ASSET_BATCHES}}
   {{ASSET_SCRIPTS}}
   {{/HAS_ASSET_BATCHES}}
+  {{#BDJ_RUNTIME}}<script defer src="runtime/bdj-client.js"></script>{{/BDJ_RUNTIME}}
   <script defer src="runtime/app.bundle.js"></script>
 </head>
 <body>
@@ -19,8 +20,9 @@
       <audio id="menu-audio"></audio>
       <canvas id="menu-canvas" aria-label="Blu-ray menu preview"></canvas>
       <canvas id="popup-canvas" aria-label="Blu-ray popup menu" hidden></canvas>
+      {{#BDJ_RUNTIME}}<div id="bdj-runtime-root" aria-label="Blu-ray Java menu"></div>{{/BDJ_RUNTIME}}
     </div>
-    <button id="start-menu" type="button" hidden>Start menu preview</button>
+    <button id="start-menu" type="button" hidden>Start or reconnect BD-J session</button>
     <button id="audio-mute-toggle" class="audio-mute-toggle" type="button" aria-label="Mute menu audio" aria-pressed="false" title="Mute menu audio">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path class="sound-on" d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6"/>

@@ -79,7 +79,7 @@ export async function extract(): Promise<void> {
       await writeFile(resolve(transaction.stagingPath, "sup/tracks.json"), `${JSON.stringify({ schemaVersion: "1.0", tracks: trackRecords }, null, 2)}\n`, { flag: "wx" });
       generatedFiles.push(await generatedFileRecord(transaction.stagingPath, "sup/tracks.json", "sup-track-index"));
     }
-    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", selectedTypes: [includeHdmv ? "hdmv" : null, includeIgs ? "igs" : null, includeSup ? "sup" : null].filter(Boolean), igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only", "dynamic MovieObject command targets are unresolved", "BD-J execution is unsupported"] };
+    const manifest = { schemaVersion: "1.0", stageStatus: outcome.status, analysisStage: "structural", selectedTypes: [includeHdmv ? "hdmv" : null, includeIgs ? "igs" : null, includeSup ? "sup" : null].filter(Boolean), igs: { status: igs.status, support: igs.support }, files: generatedFiles, limitations: ["IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only", "dynamic MovieObject command targets are unresolved", "extract writes structural artifacts and does not start the browser BD-J runtime"] };
     await writeFile(resolve(transaction.stagingPath, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
     process.stdout.write(`${JSON.stringify({ stageStatus: outcome.status, output: roots.output })}\n`);

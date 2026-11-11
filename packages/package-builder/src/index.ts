@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
@@ -30,6 +30,7 @@ export interface PngPayload { id: string; bytes: Uint8Array }
 export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
 export interface SoundMetadata { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number }
 export interface SoundPayload { index: number; path: string; byteLength: number; format: "wav-pcm" }
+export interface BdjPackageFile { path: string; sourcePath: string; bytes: Uint8Array }
 export interface PgsTrackPackageInput { playlistId: string; playlistNumber: number; playItemIndex: number; clipId: string; pid: number; streamNumber: number; language: string; sourceIn90k: string; sourceOut90k: string; source: string; path: string; displaySets: PgsDisplaySet[] }
 /** Delivery status as decided by the caller; the package must not invent one. */
 export type MenuPackageStatus = "failed" | "partial" | "complete";
@@ -45,6 +46,19 @@ export function serializeSafeScriptData(value: unknown): string {
 function menuRuntimeBundlePath(): string {
   const besideEntry = fileURLToPath(new URL("runtime/app.bundle.js", import.meta.url));
   return existsSync(besideEntry) ? besideEntry : createRequire(import.meta.url).resolve("@bdmv2web/runtime-web/browser-bundle");
+}
+
+function bdjClientBundlePath(): string {
+  const besideEntry = fileURLToPath(new URL("runtime/bdj-client.bundle.js", import.meta.url));
+  return existsSync(besideEntry) ? besideEntry : createRequire(import.meta.url).resolve("@bdmv2web/runtime-web/bdj-client-bundle");
+}
+
+function bdjHostApiPath(): string {
+  const workspacePath = fileURLToPath(new URL("../../runtime-web/bdj-host/bdj-host-api.jar", import.meta.url));
+  if (existsSync(workspacePath)) return workspacePath;
+  const bundledPath = fileURLToPath(new URL("runtime/bdj-host-api.jar", import.meta.url));
+  if (existsSync(bundledPath)) return bundledPath;
+  throw new Error("The native BD-J host JAR is missing. Build the runtime-web Java host before packaging.");
 }
 
 export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number } = {}): PngBatch[] {
@@ -73,7 +87,7 @@ function isPng(bytes: Uint8Array): boolean {
 /** The stage fills the viewport and letterboxes the scene inside itself: the
  * page shows no chrome of its own, and the disc title is only the document title.
  * The inline aspect-ratio is a fallback hint if the full-viewport sizing is disabled. */
-export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSize?: { width: number; height: number }, externalPlayback = false): string {
+export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSize?: { width: number; height: number }, externalPlayback = false, bdjRuntime = false): string {
   const safeTitle = escapeHtml(title);
   const assets = Array.from({ length: assetBatchCount }, (_, i) => `<script defer src="runtime/assets-data-${String(i).padStart(3, "0")}.js"></script>`).join("\n  ");
   return renderTemplate(PACKAGE_TEMPLATES.menuIndex, {
@@ -82,6 +96,7 @@ export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSiz
     SCENE_ASPECT_RATIO: sceneSize ? `${sceneSize.width} / ${sceneSize.height}` : "",
   }, {
     EXTERNAL_PLAYBACK: externalPlayback,
+    BDJ_RUNTIME: bdjRuntime,
     HAS_ASSET_BATCHES: assetBatchCount > 0,
     HAS_SCENE_SIZE: sceneSize !== undefined,
   }).replace(/\n{3,}/g, "\n\n");
@@ -95,12 +110,12 @@ export function createAssetBatchScript(batch: PngBatch): string {
   return `globalThis.__BDMV_MENU_ASSETS__=globalThis.__BDMV_MENU_ASSETS__||[];globalThis.__BDMV_MENU_ASSETS__[${batch.index}]=${serializeSafeScriptData(batch.assets)};\n`;
 }
 
-export function createCompatibility(metadata: MenuPackageMetadata, externalPlayback = false): Record<string, unknown> {
+export function createCompatibility(metadata: MenuPackageMetadata, externalPlayback = false, bdjRuntime = false): Record<string, unknown> {
   return {
     ...metadata,
     profile: "portable",
     coverage: { igs: "unverified" },
-    externalDependencies: externalPlayback ? ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] : [],
+    externalDependencies: externalPlayback ? ["configured BDMV STREAM files", bdjRuntime ? "an operating-system file association for whole-file playback or a configured mpv executable for bounded playlists" : "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] : [],
     notVerified: ["offline directory relocation", "real-disc rendering", "media timeline and seek accuracy"],
   };
 }
@@ -144,6 +159,10 @@ export interface MenuPackageInput {
   vmFirstPlayProgramId?: number;
   inputConfig?: { escapeMapping?: "popup" | "topMenu" | "custom" | "none" };
   graphics: PngPayload[];
+  /** BD-J application JARs and authored resources mapped into the Java virtual filesystem. */
+  bdjFiles?: BdjPackageFile[];
+  /** Native Java startup record for the packaged BDJO applications. */
+  bdjLaunch?: { discId: string; initialBdjoId: string; applications: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>; session?: { vmPrograms: VmProgram[]; vmEntries: VmOptions["entries"]; playerProfile: PlayerProfile; vmLimits: Limits; externalTargets?: ExternalMediaTargets; bdjMenuMediaInputs?: Array<Omit<MenuLoopMediaInput, "sourcePath">>; menuMediaEncoding?: MenuMediaEncoding; bdmvPath?: string; bdjoDescriptors?: unknown[] } };
   soundEntries?: SoundMetadata[];
   soundBytes?: Uint8Array | null;
   runtimeVersion?: string;
@@ -172,6 +191,17 @@ export interface MenuPackageResult { diagnostics: MenuPackageDiagnostic[] }
 /** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
 export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
   const ir = parseDiscIR(input.ir);
+  const bdjFiles = input.bdjFiles ?? [];
+  const bdjRuntime = bdjFiles.length > 0;
+  if (bdjRuntime && (!input.bdjLaunch || !input.bdjLaunch.applications.length)) throw new TypeError("BD-J packages require native Java launch data and application files.");
+  const bdjFilePaths = new Set<string>();
+  for (const file of bdjFiles) {
+    const segments = file.path.split("/");
+    if (!file.path.startsWith("BDMV/JAR/") || segments.some((segment) => segment === "" || segment === "." || segment === "..")) throw new TypeError(`BD-J package file path '${file.path}' must remain under BDMV/JAR.`);
+    const key = file.path.toLocaleLowerCase("en-US");
+    if (bdjFilePaths.has(key)) throw new TypeError(`Duplicate BD-J package file path '${file.path}'.`);
+    bdjFilePaths.add(key);
+  }
   const sceneSize = getSceneSize(input.scene);
   const batches = makePngBatches(input.graphics, input.pngLimits);
   const soundResult = convertSounds(input.soundEntries ?? [], input.soundBytes ?? null, input.scene);
@@ -184,6 +214,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   if (pgsPayloadBytes > maxPgsRuntimeBytes) throw new RangeError(`Serialized PGS payload exceeds maxPgsRuntimeBytes (${pgsPayloadBytes} > ${maxPgsRuntimeBytes} bytes).`);
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
+  if (bdjRuntime) await mkdir(resolve(runtimeDirectory, "bdj"), { recursive: true });
   input.onPhase?.("media");
   const mediaEncoding = input.mediaEncoding ?? {};
   const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
@@ -226,7 +257,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   const runtimeMenuMedia = additionalMedia.map(({ input: media, result }) => ({
     playlist: Number(media.playlistId),
     playItem: media.playItemIndex,
-    background: { path: result.background.path, durationSeconds: result.background.durationSeconds, loop: result.background.loop },
+    background: { path: result.background.path, durationSeconds: result.background.durationSeconds, loop: result.background.loop, ...(result.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: result.background.loopStartSeconds }) },
     audioTracks: result.audioTracks.map(runtimeAudioTrackMetadata),
   }));
   const metadata: MenuPackageMetadata = { schemaVersion: "1.0", runtimeVersion: input.runtimeVersion ?? "0.1.0", title: input.title, status: input.status ?? "partial", diagnostics };
@@ -237,6 +268,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     { path: "README.md", kind: "readme", required: true },
     { path: "compatibility.json", kind: "compatibility", required: true },
     { path: "runtime/app.bundle.js", kind: "runtime", required: true },
+    ...(bdjRuntime ? [{ path: "runtime/bdj-client.js", kind: "runtime", required: true }] : []),
     ...batches.map((batch) => ({ path: `runtime/assets-data-${String(batch.index).padStart(3, "0")}.js`, kind: "runtime", required: true })),
     ...sounds.map((sound) => ({ path: sound.path, kind: "audio", required: true })),
     ...(exportedMedia?.files.map((file) => ({ path: file.path, kind: "media", required: true })) ?? []),
@@ -244,33 +276,43 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...[...new Set((input.pgsTracks ?? []).map((track) => track.path))].map((path) => ({ path, kind: "subtitle", required: true })),
     ...[...new Set([...(exportedMedia ? ["media-plan.json"] : []), ...additionalMedia.map(({ planPath }) => planPath)])].map((path) => ({ path, kind: "media-plan", required: true })),
     ...(input.externalTargets ? [{ path: "runtime/bdmv-config.js", kind: "external-config", required: true }, { path: "external-targets.json", kind: "runtime", required: true }] : []),
+    ...(bdjRuntime ? [{ path: "runtime/bdj/bdj-host-api.jar", kind: "bdj-host", required: true }, { path: "runtime/bdj/session.json", kind: "bdj-session", required: true }] : []),
+    ...bdjFiles.map((file) => ({ path: `bdj/${file.path}`, kind: "bdj", required: true })),
   ];
   input.onPhase?.("assets");
   await Promise.all([
-    writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize, !!input.externalTargets)),
-    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(input.menuScenes?.length ? { menuScenes: input.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), playItem: exportedMedia.plan.playItemIndex, background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
+    writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize, !!input.externalTargets, bdjRuntime)),
+    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(bdjRuntime ? { bdjRuntime: true, bdjFiles: bdjFiles.map(({ path }) => ({ path, packagePath: `bdj/${path}` })), bdjHostApiPath: "runtime/bdj/bdj-host-api.jar" } : {}), ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(input.menuScenes?.length ? { menuScenes: input.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), playItem: exportedMedia.plan.playItemIndex, background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop, ...(exportedMedia.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: exportedMedia.background.loopStartSeconds }) }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
     ...(input.externalTargets ? [writeFile(resolve(runtimeDirectory, "bdmv-config.js"), `globalThis.__BDMV_BDMV_PATH__=${serializeSafeScriptData(input.bdmvPath ?? "../BDMV")};\n`)] : []),
+    ...bdjFiles.map(async (file) => {
+      const target = resolve(output, "bdj", file.path);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, file.bytes);
+    }),
+    ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/bdj-host-api.jar"), await readFile(bdjHostApiPath()))] : []),
+    ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/session.json"), `${JSON.stringify(input.bdjLaunch)}\n`)] : []),
     writeFile(resolve(runtimeDirectory, "style.css"), PACKAGE_TEMPLATES.style),
-    writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status)),
+    writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status, bdjRuntime)),
     ...(input.externalTargets ? [writeFile(resolve(output, "external-targets.json"), `${JSON.stringify(input.externalTargets)}\n`)] : []),
     ...batches.map((batch) => writeFile(resolve(runtimeDirectory, `assets-data-${String(batch.index).padStart(3, "0")}.js`), createAssetBatchScript(batch))),
     ...soundResult.files.map(async ({ path, bytes }) => { await mkdir(resolve(output, "assets/audio"), { recursive: true }); await writeFile(resolve(output, path), bytes); }),
-    writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
+    writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, bdjFiles: bdjFiles.map(({ bytes, ...file }) => ({ ...file, packagePath: `bdj/${file.path}`, byteLength: String(bytes.byteLength) })), ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
   ]);
   // The menu runtime bundle is built by runtime-web during the workspace build, so packaging only copies it.
   input.onPhase?.("bundle");
   await writeFile(resolve(runtimeDirectory, "app.bundle.js"), await readFile(menuRuntimeBundlePath()));
+  if (bdjRuntime) await writeFile(resolve(runtimeDirectory, "bdj-client.js"), await readFile(bdjClientBundlePath()));
   input.onPhase?.("manifest");
-  await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility(metadata, !!input.externalTargets), null, 2)}\n`);
+  await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility(metadata, !!input.externalTargets, bdjRuntime), null, 2)}\n`);
   // M6 reserves compatibility.json and asset-manifest.json as report metadata and rejects them in manifest.files.
   const manifestFiles = await Promise.all(files.filter((file) => file.path !== "compatibility.json" && file.path !== "asset-manifest.json").map(async (file) => {
     const fileInfo = await stat(resolve(output, file.path));
     return { ...file, byteLength: String(fileInfo.size) };
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  const menuMediaLimitation = input.externalTargets ? "External playback uses IINA on macOS and PotPlayer on Windows; IINA chapter positions use `mpv_start`; PotPlayer opens the selected M2TS." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
+  const menuMediaLimitation = input.externalTargets ? "External player handoff reports process launch requests; playback state remains unobserved. Use a configured mpv executable for bounded or multi-item playlists." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
-  const manifest = { schemaVersion: "1.0", status: metadata.status, ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
+  const manifest = { schemaVersion: "1.0", status: metadata.status, launchMode: bdjRuntime ? "local-jvm" : "hdmv", ...(bdjRuntime ? { runtimeRequirements: ["bdmv2web serve <package-directory>", "Java 21 or a compatible Java runtime with java.desktop", "loopback HTTP connection"] } : {}), ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, ...(bdjRuntime ? ["BD-J packages run through the local bdmv2web service and native Java process."] : []), "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   // Return post-encoding media warnings in diagnostics. The caller supplies package status.
   return { diagnostics: metadata.diagnostics };
@@ -316,12 +358,13 @@ function getSoundReferences(scene: unknown): Map<number, Array<{ pageId: number;
   return result;
 }
 
-function getSceneSize(scene: unknown): { width: number; height: number } {
+function getSceneSize(scene: unknown): { width: number; height: number } | undefined {
+  if (scene === null) return undefined;
   if (typeof scene !== "object" || scene === null || !Number.isSafeInteger((scene as { width?: unknown }).width) || !Number.isSafeInteger((scene as { height?: unknown }).height) || (scene as { width: number }).width <= 0 || (scene as { height: number }).height <= 0) throw new TypeError("Menu scene must declare positive integer width and height");
   return { width: (scene as { width: number }).width, height: (scene as { height: number }).height };
 }
 
-export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean, status: MenuPackageStatus = "partial"): string {
+export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean, status: MenuPackageStatus = "partial", bdjRuntime = false): string {
   const rendered = renderTemplate(PACKAGE_TEMPLATES.readme, {
     TITLE: title.replace(/[\r\n]/g, " "),
     STATUS: status,
@@ -329,7 +372,10 @@ export function createReadme(title: string, backgroundLoops: boolean | undefined
     BACKGROUND_LOOP: backgroundLoops === true,
     BACKGROUND_SINGLE_PLAY_ITEM: backgroundLoops === false,
     BACKGROUND_UNAVAILABLE: backgroundLoops === undefined,
+    BDJ_RUNTIME: bdjRuntime,
     EXTERNAL_PLAYBACK: externalPlayback,
+    STATIC_EXTERNAL_PLAYBACK: externalPlayback && !bdjRuntime,
+    BDJ_EXTERNAL_PLAYBACK: externalPlayback && bdjRuntime,
   });
   return rendered.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
@@ -404,7 +450,7 @@ export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMen
   return {
     plan: media.plan,
     outputSize: media.outputSize,
-    background: { path: media.background.path, byteLength: media.background.byteLength, codec: media.background.codec, pid: media.background.pid, width: media.background.width, height: media.background.height, durationSeconds: media.background.durationSeconds, loop: media.background.loop },
+    background: { path: media.background.path, byteLength: media.background.byteLength, codec: media.background.codec, pid: media.background.pid, width: media.background.width, height: media.background.height, durationSeconds: media.background.durationSeconds, loop: media.background.loop, ...(media.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: media.background.loopStartSeconds }) },
     audioTracks: media.audioTracks.map((track) => ({ ...runtimeAudioTrackMetadata(track), byteLength: track.byteLength, codec: track.codec, pid: track.pid, durationSeconds: track.durationSeconds })),
   };
 }
@@ -418,6 +464,7 @@ function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncodin
     clipId: media.clipId,
     inTime45k: media.inTime45k,
     loopStart45k: media.loopStart45k ?? null,
+    includeIntro: media.includeIntro ?? false,
     outTime45k: media.outTime45k,
     stillMode: media.stillMode,
     repeatCount: media.repeatCount,

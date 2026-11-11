@@ -98,15 +98,9 @@ media-plan.json
 
 `createExternalMediaTargets(disc, closure)` 建立播放列表/PlayItem/章节 Mark → 源 M2TS 的映射，写 `external-targets.json`。
 
-浏览器侧 `resolveExternalPlayTarget` 解析 VM 动作：
+`bdmv2web serve <package-directory> --player system` requests the operating system's default player for a whole-file target. `--player mpv --player-executable <path>` requests mpv with every playlist item, source-time bound and initial seek position. Unsupported targets include the source playlist or PlayItem. Process launch does not confirm external playback.
 
-| 平台 | URL |
-| --- | --- |
-| macOS | `iina://open?url=<file url>&mpv_start=<seconds>` |
-| Windows | `potplayer://<file url>` |
-| 其它 | 明确报“External playback is available on macOS and Windows.” |
-
-章节位置缺失时 macOS 不打开（避免复用播放器核心时沿用上一章位置）。`runtime/bdmv-config.js` 决定 BDMV 根路径，支持绝对路径、盘符路径与相对包路径，中文/空格按段编码。
+`runtime/bdmv-config.js` sets the source BDMV path for browser playback. The configured path can be absolute or relative to the package.
 
 ## 7. 能力边界
 

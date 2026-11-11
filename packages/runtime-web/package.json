@@ -10,7 +10,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./browser-bundle": "./dist/browser.bundle.js"
+    "./browser-bundle": "./dist/browser.bundle.js",
+    "./bdj-client-bundle": "./dist/bdj-client.bundle.js"
   },
   "files": [
     "dist"

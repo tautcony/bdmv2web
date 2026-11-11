@@ -22,6 +22,15 @@ function expectFailureReportSchema(report: Record<string, unknown>, code: string
 }
 
 describe("M4 build output", () => {
+  it("documents and validates the BD-J disc ID override", () => {
+    const help = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "serve", "--help"]);
+    expect(help.status).toBe(0);
+    expect(help.stdout.toString()).toContain("--disc-id <32hex>");
+    const invalid = spawnSync(process.execPath, [resolve(root, "dist/index.js"), "serve", ".", "--disc-id", "abc"]);
+    expect(invalid.status).toBe(1);
+    expect(invalid.stderr.toString()).toContain("CLI_INVALID_DISC_ID");
+  });
+
   async function makeMenuDisc(parent: string, options: { includeMenuStream?: boolean; topMenuObject?: number; menuCueMode?: "mpls" | "clpi-only"; multipleMenuScenes?: boolean; duplicateMenuSceneIds?: boolean; explicitIgPriority?: boolean; repeatedMenuPlayItemWithoutIg?: boolean; menuUiModel?: 0 | 1; logoUiModel?: 0 | 1; preMenuChain?: boolean } = {}): Promise<string> {
     const disc = join(parent, "BDMV");
     await mkdir(join(disc, "PLAYLIST"), { recursive: true });
@@ -63,7 +72,7 @@ describe("M4 build output", () => {
         const readme = await readFile(join(output, "README.md"), "utf8");
         const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
         const html = await readFile(join(output, "index.html"), "utf8");
-        expect(compatibility).toMatchObject({ status: "complete", externalDependencies: ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] });
+        expect(compatibility).toMatchObject({ status: "complete", externalDependencies: ["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] });
         expect(manifest).toMatchObject({ status: "complete", declaredEntryCount: 2, hdmvEntryCount: 2 });
         expect(manifest).not.toHaveProperty("mode");
         expect(compatibility).not.toHaveProperty("mode");
@@ -1060,7 +1069,7 @@ describe("offline validate CLI (M6)", () => {
         "index.html": "<main>ready</main>",
         "external-targets.json": targets("STREAM/00002.m2ts"),
         "runtime/bdmv-config.js": 'globalThis.__BDMV_BDMV_PATH__="/fake/BDMV";\n',
-        "compatibility.json": JSON.stringify({ externalDependencies: ["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"] }),
+        "compatibility.json": JSON.stringify({ externalDependencies: ["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] }),
       });
       const declaredManifestPath = join(declared, "manifest.json");
       const declaredManifest = JSON.parse(await readFile(declaredManifestPath, "utf8"));
@@ -1077,7 +1086,7 @@ describe("offline validate CLI (M6)", () => {
       expect(audit.checks.some((check: { checkId: string; path?: string }) => check.checkId === "PACKAGE_MISSING_ASSET" && check.path === "STREAM/00002.m2ts")).toBe(false);
       expect(audit.releaseSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_SOURCE_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
       expect(audit.releaseSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified", path: "runtime/bdmv-config.js" }));
-      expect(audit.releaseSummary.compatibility.externalDependencies).toEqual(["configured BDMV STREAM files", "IINA or PotPlayer URL Protocol"]);
+      expect(audit.releaseSummary.compatibility.externalDependencies).toEqual(["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"]);
       expect(audit.releaseSummary.compatibility.notVerified).toEqual(expect.arrayContaining(["EXTERNAL_SOURCE_UNVERIFIED", "EXTERNAL_CONFIG", "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED"]));
       const savedSummary = JSON.parse(await readFile(join(declared, "reports", "release-summary.json"), "utf8"));
       expect(savedSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));

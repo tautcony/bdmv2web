@@ -71,7 +71,7 @@ rg '"CODE_NAME"' packages apps
 | `BDMV_MISSING_STREAM` / `BDMV_MISSING_CLPI` / `BDMV_MISSING_BDJO` | error | 引用的 STREAM/CLPI/BDJO 不存在 | `STREAM/`、`CLIPINF/`、`BDJO/` |
 | `BDMV_STN_CLPI_PID_CONFLICT` / `BDMV_STN_CLPI_CODING_CONFLICT` | warning | STN 与 CLPI 声明冲突，双方保留 | 下游按哪个声明取轨道 |
 | `BDMV_DECLARED_LENGTH_MISMATCH` | warning | 声明长度与实际不符，按文件边界继续 | 可忽略；确认不是截断 |
-| `BDMV_BDJ_UNSUPPORTED` | warning | BD-J 入口保留但不可执行 | 混合碟片属预期 |
+| `BDMV_BDJ_UNSUPPORTED` | warning | 结构解析保留 BD-J 入口；parser 阶段不执行 Java | `build` 打包 Java host 和 BDJO 文件；`serve` 启动本地 Java；详情见 BD-J 本地 Java 运行说明 |
 | `BDMV_OPTIONAL_SOUND_MISSING` | info | 没有 `sound.bdmv` | 无音效菜单 |
 | `BDMV_PARSE_ERROR` | warning（可选文件）/ error（必需文件） | 解析异常且非 `ContractError` 时的兜底码 | 原始 `message`；可选文件失败会被记录后跳过 |
 | `BDMV_UNKNOWN_OBJECT_TYPE` | warning | 入口对象类型未知 | index 入口表 |

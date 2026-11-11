@@ -45,7 +45,7 @@
 | 术语 | 含义 |
 | --- | --- |
 | HDMV | 基于指令的导航（区别于 BD-J） |
-| BD-J | Java 导航；本仓库保留入口、标 `unsupported` |
+| BD-J | BDJO 选择 Java Xlet；浏览器通过独立于 HDMV VM 的 BD-J runtime 执行 |
 | GPR | 4096 个通用寄存器，程序可读写 |
 | PSR | 128 个播放器状态寄存器，程序只读；系统可写子集 |
 | MovieObject 上下文 | `runTurn` 执行对象指令的上下文 |

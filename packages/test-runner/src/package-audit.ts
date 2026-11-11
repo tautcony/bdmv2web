@@ -3,7 +3,7 @@ import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { AuditCheck, DeliveryManifest, ManifestFile, OfflinePackageAudit } from "./types.js";
 
-const PAYLOAD_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".png", ".wav", ".mp4", ".webm", ".vtt"]);
+const PAYLOAD_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".png", ".wav", ".mp4", ".webm", ".vtt", ".jar", ".wasm", ".gz"]);
 const REPORT_FILES = new Set(["compatibility.json", "dependency-audit.json", "asset-manifest.json", "report.json"]);
 const NON_RUNTIME_KINDS = new Set(["parsed-disc", "raw-command-table", "readme", "report", "evidence", "compatibility", "dependency-audit", "asset-manifest"]);
 const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
@@ -246,7 +246,7 @@ function auditCss(text: string, source: string, checks: AuditCheck[], refs: Runt
   for (const m of text.matchAll(/@import\s+(?:url\()?\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s;]+))/gi)) addUrlCheck(checks, refs, source, m[1] ?? m[2] ?? m[3] ?? "");
 }
 
-function auditScript(text: string, source: string, checks: AuditCheck[], refs: RuntimeUrlRef[]): void {
+function auditScript(text: string, source: string, checks: AuditCheck[], refs: RuntimeUrlRef[], allowLocalSessionTransport = false): void {
   const codeOnly = text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*|(['"`])(?:\\.|(?!\1)[^\\])*?\1/g, " ");
   const forbidden: Array<[RegExp, string, string]> = [
     [/\bimport\b/, "BUNDLE_IMPORT", "Module imports are not permitted"],
@@ -254,7 +254,13 @@ function auditScript(text: string, source: string, checks: AuditCheck[], refs: R
     [/\b(?:eval|Function)\s*\(/, "BUNDLE_EVAL", "Dynamic code evaluation is not permitted"],
     [/\bfetch\s*\(|\bnew\s+(?:XMLHttpRequest|WebSocket|EventSource)\s*\(|\bXMLHttpRequest\b|\b(?:window|globalThis|self)\s*\.\s*(?:fetch|WebSocket|EventSource)\b/, "BUNDLE_NETWORK_API", "Network-capable API reference found in runtime script"],
   ];
-  for (const [pattern, code, message] of forbidden) if (pattern.test(codeOnly)) add(checks, code, "fail", message, source);
+  for (const [pattern, code, message] of forbidden) if (!(allowLocalSessionTransport && code === "BUNDLE_NETWORK_API") && pattern.test(codeOnly)) add(checks, code, "fail", message, source);
+  if (allowLocalSessionTransport) {
+    const callCount = [...codeOnly.matchAll(/\b(?:fetch|EventSource)\s*\(/g)].length;
+    const localCallCount = [...text.matchAll(/\b(?:fetch|EventSource)\s*\(\s*(["'])\/(?:api\/bdj\/)[^"']*\1/g)].length;
+    if (callCount !== localCallCount) add(checks, "BUNDLE_NETWORK_API", "fail", "BD-J runtime transport must use the same-origin local session API", source, { calls: callCount, localCalls: localCallCount });
+  }
+  for (const match of text.matchAll(/\b(?:fetch|open)\s*\([^,)]*(?:,\s*)?(['"])(https?:\/\/|\/\/)/gi)) add(checks, "BUNDLE_EXTERNAL_RUNTIME_URL", "fail", "Browser JVM runtime code contains an external URL literal", source, { expression: match[0] });
   const dynamicNetworkAccess = /\b(?:window|globalThis|self)\s*\[\s*(?:[^\]]+)\s*\]/g;
   for (const match of text.matchAll(dynamicNetworkAccess)) {
     const access = match[0];
@@ -297,7 +303,7 @@ function auditJsonUrls(text: string, source: string, checks: AuditCheck[], refs:
   walk(value, "");
 }
 
-async function auditRuntimeFiles(root: string, files: string[], checks: AuditCheck[]): Promise<void> {
+async function auditRuntimeFiles(root: string, files: string[], checks: AuditCheck[], allowLocalSessionTransport: boolean): Promise<void> {
   const refs: RuntimeUrlRef[] = [];
   for (const path of files) {
     const ext = extname(path).toLowerCase();
@@ -309,7 +315,7 @@ async function auditRuntimeFiles(root: string, files: string[], checks: AuditChe
     } catch (error) { add(checks, "RUNTIME_FILE_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), path); continue; }
     if (ext === ".html" || ext === ".htm") auditHtml(text, path, checks, refs);
     if (ext === ".css") auditCss(text, path, checks, refs);
-    if (ext === ".js" || ext === ".mjs") auditScript(text, path, checks, refs);
+    if (ext === ".js" || ext === ".mjs") auditScript(text, path, checks, refs, allowLocalSessionTransport && path === "runtime/bdj-client.js");
     if (ext === ".json" && !["manifest.json", "compatibility.json", "dependency-audit.json"].includes(path)) auditJsonUrls(text, path, checks, refs);
   }
   for (const ref of refs) {
@@ -423,7 +429,7 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   const unlisted = files.filter((path) => path !== manifestRel && !isReportPath(path) && !seen.has(path));
   const unlistedRuntime = unlisted.filter((path) => isPayloadEntry(path));
   for (const path of unlistedRuntime) add(checks, "PACKAGE_UNLISTED_PAYLOAD", "fail", "Runtime payload file is absent from manifest files", path);
-  await auditRuntimeFiles(root, files, checks);
+  await auditRuntimeFiles(root, files, checks, isRecord(parsed) && parsed.launchMode === "local-jvm");
   const staticChecks = checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
   if (staticChecks.some((check) => check.result === "fail")) add(checks, "OFFLINE_STATIC_AUDIT", "fail", "One or more disallowed static URL, data payload, or bundle entrypoints were found");
   else if (staticChecks.some((check) => check.result === "not-verified")) add(checks, "OFFLINE_STATIC_AUDIT", "not-verified", "One or more static runtime files could not be fully audited");

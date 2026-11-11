@@ -5,7 +5,7 @@
 | 阶段 | 运行环境 | 允许 | 禁止 |
 | --- | --- | --- | --- |
 | 转换 | Node.js ≥ 24.18.0 且 < 25 | 读源盘、`ffmpeg`/`ffprobe`、写输出事务 | 把解密/DRM 当能力 |
-| 交付 | 浏览器 `file://` | 同目录静态文件、Canvas、`HTMLMediaElement`、键鼠/触摸 | 网络、后台、ES module、`fetch`、动态 `import` |
+| 交付 | 静态 HDMV/IGS 包通过 `file://`；BD-J 包通过 `bdmv2web serve` | 静态文件、Canvas、`HTMLMediaElement`、键鼠/触摸；BD-J 使用本地 Java 进程和回环会话 API | BD-J Java 进程按启动账户权限访问本机资源 |
 | 校验 | Node.js | 只读包目录、重算报告 | 改写 `manifest.status`、读原盘 |
 
 `packages/core` 同时服务两端：Node 侧用 `dist/index.js`，浏览器侧用 `dist/browser.js`（ES2020 IIFE，构建脚本拒绝 Node 内建）。

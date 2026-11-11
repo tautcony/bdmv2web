@@ -23,7 +23,7 @@ interface DiscIR {
 ```ts
 type NavigationDescriptor =
   | { type: "HDMV"; movieObjectId: number }
-  | { type: "BDJ"; bdjoId: string; status: "unsupported" };
+  | { type: "BDJ"; bdjoId: string; status: "unsupported" | "local-jvm" };
 ```
 
 `parseDiscIR(value)` 做三层校验：

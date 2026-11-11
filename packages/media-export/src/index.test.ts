@@ -65,6 +65,20 @@ describe("menu-loop media export", () => {
     expect(durationSeconds({ ...input, loopStart45k: 85_522 })).toBeCloseTo((input.outTime45k - 85_522) / 45_000, 8);
   });
 
+  it("exports the intro once and preserves the loop mark as output-relative metadata", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bdmv-media-intro-loop-"));
+    try {
+      const markedInput = { ...input, loopStart45k: input.inTime45k + 45_000, includeIntro: true };
+      const calls: Array<{ executable: string; args: string[] }> = [];
+      const result = await exportMenuLoopMedia(markedInput, { outputDirectory: root, runProcess: mediaRunner(markedInput, calls) });
+      expect(result.plan).toMatchObject({ includeIntro: true, loopStart45k: markedInput.loopStart45k, durationSeconds: durationSeconds(input) });
+      expect(result.background).toMatchObject({ loop: true, loopStartSeconds: 1, durationSeconds: durationSeconds(input) });
+      const videoEncode = calls.find((call) => call.executable === "ffmpeg" && call.args.includes("0:i:0x1011"))!.args;
+      expect(Number(videoEncode[videoEncode.indexOf("-ss") + 1])).toBeCloseTo(0, 5);
+      expect(Number(videoEncode[videoEncode.indexOf("-t") + 1])).toBeCloseTo(durationSeconds(input), 5);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("exports one looping H.264 background and separate AAC files for each declared language", async () => {
     const root = await mkdtemp(join(tmpdir(), "bdmv-media-export-"));
     const calls: Array<{ executable: string; args: string[] }> = [];

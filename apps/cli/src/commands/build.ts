@@ -5,6 +5,8 @@ import { loadLimits, loadPlayerProfile } from "../cli/profile.js";
 import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { ProgressReporter } from "../progress.js";
 import { buildMediaClosure } from "../shared/media.js";
+import { collectBdjApplicationFiles } from "../shared/bdj-files.js";
+import { normalizeDiscId, readBdmvDiscId } from "../shared/disc-id.js";
 import { referencedAssetIds, safeDiagnosticMessage } from "./extract.js";
 import { readJsonObject } from "../cli/output.js";
 import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";
@@ -12,7 +14,7 @@ import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { parseDiscIR } from "@bdmv2web/core";
 import { HdmvVm, type VmProgram } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "@bdmv2web/igs";
-import { createExternalMediaTargets, resolveMenuLoopStart45k } from "@bdmv2web/media-export";
+import { createExternalMediaTargets, resolveMenuLoopStart45k, type MenuLoopMediaInput } from "@bdmv2web/media-export";
 import { buildMenuPackage, type MenuMediaEncoding } from "@bdmv2web/package-builder";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 import { classifyDiagnostics, decideDelivery } from "@bdmv2web/test-runner";
@@ -76,8 +78,9 @@ export function createVmPrograms(disc: ParsedDisc): VmProgram[] {
   return disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }));
 }
 
-export function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; clipId: string }>, exportsMenuMedia: boolean): DiscIR {
-  const diagnostics: DiscIR["diagnostics"] = disc.diagnostics.map((item) => ({
+export function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: string; clipId: string }>, exportsMenuMedia: boolean, bdjRuntimeAvailable = false): DiscIR {
+  const sourceRef = (source: { path: string; origin: "primary" | "backup"; offset: string }) => ({ path: source.path, origin: source.origin, byteOffset: source.offset });
+  const diagnostics: DiscIR["diagnostics"] = disc.diagnostics.filter((item) => !(bdjRuntimeAvailable && item.code === "BDMV_BDJ_UNSUPPORTED")).map((item) => ({
     severity: item.severity === "fatal" ? "fatal" : item.severity === "error" ? "error" : item.severity === "warning" ? "warning" : "info",
     code: item.code, message: safeDiagnosticMessage(item.message, disc.root), sourcePath: item.sourcePath, offset: item.offset,
     entityId: null, action: null, recoverable: item.recoverable, stage: "structural", affectedEntryIds: [],
@@ -86,7 +89,7 @@ export function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: str
   for (const entry of disc.entries) {
     const source = { path: entry.source.path, origin: entry.source.origin, byteOffset: entry.source.offset };
     if (entry.target.objectType === "HDMV" && typeof entry.target.target === "number") entries.push({ id: entry.id, navigation: { type: "HDMV", movieObjectId: entry.target.target }, source });
-    else if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") entries.push({ id: entry.id, navigation: { type: "BDJ", bdjoId: entry.target.target, status: "unsupported" }, source });
+    else if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") entries.push({ id: entry.id, navigation: { type: "BDJ", bdjoId: entry.target.target, status: bdjRuntimeAvailable ? "local-jvm" : "unsupported" }, source });
     else diagnostics.push({ severity: "warning", code: "M4_ENTRY_NOT_PROJECTED", message: `Entry ${entry.id} has no supported navigation target and was omitted.`, sourcePath: null, offset: null, entityId: null, action: null, recoverable: true, stage: "structural", affectedEntryIds: [] });
   }
   if (!exportsMenuMedia) diagnostics.push({ severity: "warning", code: "M4_MEDIA_METADATA_NOT_PROJECTED", message: "Source video stream and playback metadata are not included in the menu package.", sourcePath: null, offset: null, entityId: null, action: null, recoverable: true, stage: "structural", affectedEntryIds: [] });
@@ -99,7 +102,18 @@ export function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: str
     ].map((clipId) => clipId.toLocaleLowerCase("en-US")));
     return { id: `playlist-${index}`, programIds: [`program-${index}`], menuIds: sceneRecords.flatMap((scene, sceneIndex) => clipIds.has(scene.clipId.toLocaleLowerCase("en-US")) ? [`menu-${sceneIndex}`] : []) };
   });
-  return parseDiscIR({ schemaVersion: "1.0", entries, programs, menus, playlists, mediaAssets: [], diagnostics });
+  const bdjos = disc.bdjos?.map((bdjo) => ({
+    path: bdjo.path,
+    version: bdjo.version,
+    terminalInfo: { ...bdjo.terminalInfo, source: sourceRef(bdjo.terminalInfo.source) },
+    appCache: bdjo.appCache.map((item) => ({ ...item, source: sourceRef(item.source) })),
+    accessiblePlaylists: { ...bdjo.accessiblePlaylists, source: sourceRef(bdjo.accessiblePlaylists.source) },
+    applications: bdjo.applications.map((application) => ({ ...application, source: sourceRef(application.source) })),
+    keyInterest: { ...bdjo.keyInterest, source: sourceRef(bdjo.keyInterest.source) },
+    fileAccessPaths: bdjo.fileAccessPaths.map((item) => ({ ...item, source: sourceRef(item.source) })),
+    source: sourceRef(bdjo.source),
+  }));
+  return parseDiscIR({ schemaVersion: "1.0", entries, programs, menus, playlists, mediaAssets: [], diagnostics, ...(bdjos?.length ? { bdjos } : {}) });
 }
 
 export interface MenuPlaylistTarget {
@@ -162,7 +176,7 @@ export function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, li
   return fallbackTarget;
 }
 
-export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined, options: { playItemIndex?: number } = {}): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
+export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined, options: { playItemIndex?: number; purpose?: "static-background" | "bdj-playback" } = {}): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
   if (!playlist || playlist.playItems.length === 0) return null;
   const playItems = options.playItemIndex === undefined ? playlist.playItems : playlist.playItems.filter((item) => item.index === options.playItemIndex);
   if (playItems.length === 0) return null;
@@ -174,7 +188,7 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
     if (item.clipId !== last.clipId || item.inTime45k !== last.inTime45k || item.outTime45k !== last.outTime45k || item.multiAngle) break;
     repeatCount++;
   }
-  const repeatedTail = repeatCount >= 2;
+  const repeatedTail = options.purpose !== "bdj-playback" && repeatCount >= 2;
   const tailStart = playItems.length - (repeatedTail ? repeatCount : 1);
   const timelineItems = repeatedTail ? [last] : playItems;
   const loopItem = repeatedTail ? last : first;
@@ -188,7 +202,7 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   if (!oneTimelineSpan || (repeatedTail && tailStart > 0)) return null;
   const spanStart = repeatedTail ? last.inTime45k : first.inTime45k;
   const spanEnd = last.outTime45k;
-  const loopStart45k = (repeatedTail ? [last] : timelineItems)
+  const loopStart45k = options.purpose === "bdj-playback" ? undefined : (repeatedTail ? [last] : timelineItems)
     .map((item) => resolveMenuLoopStart45k(item.index, item.inTime45k, item.outTime45k, playlist.marks))
     .filter((time): time is number => time !== undefined)
     .at(-1);
@@ -207,7 +221,7 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
   return {
     sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: repeatedTail ? last.index : first.index, clipId: first.clipId,
-    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: Math.max(1, repeatCount), loopBackground: loopItem.stillMode === 2 || (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
+    inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: options.purpose === "bdj-playback" ? 1 : Math.max(1, repeatCount), loopBackground: options.purpose === "bdj-playback" ? false : loopItem.stillMode === 2 || (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
     audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
   };
 }
@@ -280,6 +294,10 @@ export async function build(): Promise<void> {
   const outOption = optionValue("--out");
   const titleOption = optionValue("--title");
   const overwrite = flagEnabled("--overwrite");
+  const discIdOption = optionValue("--disc-id");
+  let discIdOverride: string | undefined;
+  try { if (discIdOption !== undefined) discIdOverride = normalizeDiscId(discIdOption); }
+  catch (error) { fail("CLI_INVALID_DISC_ID", error instanceof Error ? error.message : String(error)); }
   const limits = await loadLimits(optionValue("--limits"));
   const profile = await loadPlayerProfile(optionValue("--player-profile"));
   // Best effort: the header names the output only for inputs that resolve to a BDMV
@@ -304,6 +322,39 @@ export async function build(): Promise<void> {
 
   progress.start(CONVERT_STEPS.structure);
   const disc = await parseBdmv(input);
+  const bdjFiles = await collectBdjApplicationFiles(disc);
+  const hasBdjEntries = disc.entries.some((entry) => entry.target.objectType === "BDJ");
+  const initialBdjTarget = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "BDJ")?.target
+    ?? disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "BDJ")?.target
+    ?? disc.entries.find((entry) => entry.target.objectType === "BDJ")?.target;
+  const initialBdjoId = initialBdjTarget?.target == null ? "00000" : String(initialBdjTarget.target).padStart(5, "0");
+  const nativeDiscId = hasBdjEntries ? await readBdmvDiscId(disc.root) : undefined;
+  if (hasBdjEntries && !discIdOverride && !nativeDiscId) console.warn("BD-J disc ID is unknown; provide the original CERTIFICATE/id.bdmv or --disc-id <32hex>.");
+  const bdjLaunch = hasBdjEntries ? {
+    discId: discIdOverride ?? nativeDiscId ?? "00000000000000000000000000000000",
+    initialBdjoId,
+    applications: (disc.bdjos ?? []).flatMap((bdjo) => bdjo.applications.map((application) => ({
+      bdjoId: basename(bdjo.path).replace(/\.[^.]+$/, "").padStart(5, "0"),
+      controlCode: application.controlCode, binding: application.binding,
+      organizationId: application.organizationId, applicationId: application.applicationId,
+      initialClass: application.initialClass, basePath: application.basePath,
+      classPath: application.classPath, parameters: application.parameters,
+    }))),
+  } : undefined;
+  const bdjAccessiblePlaylists = new Set((disc.bdjos ?? []).flatMap((bdjo) => bdjo.accessiblePlaylists.accessToAll
+    ? disc.playlists.map((playlist) => playlist.id)
+    : bdjo.accessiblePlaylists.playlistIds.map((id) => id.padStart(5, "0"))));
+  const bdjMenuMediaInputs: Array<Omit<MenuLoopMediaInput, "sourcePath">> = [];
+  if (hasBdjEntries) for (const playlist of disc.playlists) {
+    if (!bdjAccessiblePlaylists.has(playlist.id)) continue;
+    for (const playItem of playlist.playItems) {
+      const input = await menuLoopMediaInput(disc, playlist, { playItemIndex: playItem.index, purpose: "bdj-playback" }).catch(() => null);
+      if (input) {
+        const { sourcePath: _sourcePath, ...packagedInput } = input;
+        bdjMenuMediaInputs.push(packagedInput);
+      }
+    }
+  }
   const fatalDiagnostics = classifyDiagnostics(disc.diagnostics);
   if (fatalDiagnostics.hasFatal) {
     progress.fail(CONVERT_STEPS.structure, firstBlockingCode(fatalDiagnostics.blocking));
@@ -350,6 +401,82 @@ export async function build(): Promise<void> {
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
     };
+    const firstPlayEntry = disc.entries.find((entry) => entry.kind === "firstPlay");
+    const topMenuEntry = disc.entries.find((entry) => entry.kind === "topMenu");
+    const initialBdjEntry = firstPlayEntry?.target.objectType === "BDJ" ? firstPlayEntry
+      : topMenuEntry?.target.objectType === "BDJ" ? topMenuEntry
+        : undefined;
+    if (!menuTarget && initialBdjEntry && hasBdjEntries && bdjFiles.files.length) {
+      const missingApplication = bdjFiles.diagnostics.find((item) => item.code === "BDJ_APPLICATION_BASE_PATH_INVALID" || item.code === "BDJ_APPLICATION_JAR_MISSING");
+      if (missingApplication) { await failMenuConversion(missingApplication.code, missingApplication.message); return; }
+      const vmPrograms = createVmPrograms(disc);
+      const firstPlayHdmv = firstPlayEntry?.target.objectType === "HDMV" && typeof firstPlayEntry.target.target === "number" ? firstPlayEntry.target.target : undefined;
+      const topMenuHdmv = topMenuEntry?.target.objectType === "HDMV" && typeof topMenuEntry.target.target === "number" ? topMenuEntry.target.target : undefined;
+      const vmInitialProgramId = firstPlayEntry?.target.objectType === "BDJ" ? undefined : topMenuHdmv ?? firstPlayHdmv;
+      const mediaClosure = buildMediaClosure(disc, extraction.scenes);
+      const externalTargets = createExternalMediaTargets(disc, mediaClosure);
+      const mixedPlaylistSceneResults = disc.playlists.flatMap((playlist) => playlist.playItems.flatMap((playItem) => {
+        const result = findMenuScene(disc, playlist, extraction.scenes, playItem.index);
+        return result.status === "found" ? [{ playlistId: Number(playlist.id), playItem: playItem.index, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }] : [];
+      }));
+      const mixedMenuSceneResults = mixedPlaylistSceneResults.filter((item) => item.scene.uiModel === 0);
+      const mixedMenuScenes = mixedMenuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
+      const mixedMenuPlaylistIds = [...new Set(mixedMenuScenes.map((item) => item.playlistId))];
+      const mixedMenuPlaylistMarks = mixedMenuPlaylistIds.flatMap((playlistId) => {
+        const playlist = disc.playlists.find((item) => Number(item.id) === playlistId);
+        return playlist?.marks.length ? [{ playlistId, marks: playlist.marks.map((mark) => ({ index: mark.index, playItemRef: mark.playItemRef })) }] : [];
+      });
+      const mixedPopupScenes = extraction.scenes.filter((item) => item.uiModel === 1).map((item) => adaptIgsScene(item, extraction.assets).scene);
+      const mixedReferencedAssets = referencedAssetIds([...mixedPopupScenes, ...mixedMenuScenes.map((item) => item.scene)]);
+      const mixedGraphics = extraction.assets.filter((asset) => mixedReferencedAssets.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
+      const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
+        ...disc.diagnostics.filter((item) => item.code !== "BDMV_BDJ_UNSUPPORTED").map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+        ...bdjFiles.diagnostics,
+        ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+        { code: "BDJ_RUNTIME_EXECUTION_UNVERIFIED", message: "Browser execution, Java API host calls, AWT rendering, and disc playback callbacks have not been verified with this runtime package.", severity: "warning" },
+      ];
+      const decisionFacts = deliveryDiagnostics(diagnostics);
+      const decision = decideDelivery({
+        checks: [], diagnostics: decisionFacts,
+        declaredEntryCount: disc.entries.length,
+        hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
+        hasMissingRequiredAsset: false,
+        limitations: ["BD-J menu background and playlist media depend on the browser playback bridge."],
+      }, strictDefault());
+      const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
+      progress.done(CONVERT_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
+      const mediaEncoding = menuMediaEncoding();
+      const packaged = await buildMenuPackage({
+        outputDirectory: transaction.stagingPath, title, ir: createMenuDiscIR(disc, mixedMenuScenes.map((item) => ({ id: item.scene.id ?? `playlist-${item.playlistId}-pi-${item.playItem}`, clipId: item.scene.clipId ?? "" })), false, true), scene: null, graphics: mixedGraphics,
+        status: decision.status, entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
+        vmPrograms, vmEntries: disc.entries, externalTargets, menuScenes: mixedMenuScenes, menuPlaylistIds: mixedMenuPlaylistIds,
+        ...(mixedMenuPlaylistMarks.length ? { menuPlaylistMarks: mixedMenuPlaylistMarks } : {}), popupScenes: mixedPopupScenes,
+        bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
+        ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
+        ...(firstPlayHdmv === undefined ? {} : { vmFirstPlayProgramId: firstPlayHdmv }),
+        ...(mediaEncoding ? { mediaEncoding } : {}),
+        soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
+        bdjFiles: bdjFiles.files, ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdjMenuMediaInputs, ...(mediaEncoding ? { menuMediaEncoding: mediaEncoding } : {}), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
+        diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
+        onPhase: (phase) => {
+          if (phase === "assets") { progress.skip(CONVERT_STEPS.media, "no HDMV menu loop"); progress.start(CONVERT_STEPS.package); return; }
+          if (phase === "bundle") { progress.note("bundling BD-J and HDMV runtime"); return; }
+          if (phase === "manifest") { progress.done(CONVERT_STEPS.package, "manifest written"); progress.start(CONVERT_STEPS.report); }
+        },
+      });
+      for (const { code, message, severity } of packaged.diagnostics) {
+        if (severity !== "warning" || decisionFacts.some((fact) => fact.code === code)) continue;
+        decisionFacts.push({ severity, code, message: safeDiagnosticMessage(message, roots.input) });
+      }
+      const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
+      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
+      await transaction.commit();
+      progress.done(CONVERT_STEPS.report, `status ${decision.status}`);
+      const packageText = await packageSummary(roots.output);
+      progress.finish(decision.status, [["output", roots.output], ...(packageText === undefined ? [] : [["package", packageText] as const]), ["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"], ["report", `report.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`]]);
+      process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" })}\n`);
+      return;
+    }
     if (!extraction.scenes.length) {
       await failMenuConversion("MENU_SCENE_NOT_FOUND", "Conversion did not produce a runnable package because no IGS scene was found in the BDMV input.");
       return;
@@ -434,7 +561,8 @@ export async function build(): Promise<void> {
     const referenced = referencedAssetIds([scene, ...popupScenes, ...menuScenes.map((item) => item.scene)]);
     const graphics = extraction.assets.filter((asset) => referenced.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
     const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
-      ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+      ...disc.diagnostics.filter((item) => !(hasBdjEntries && item.code === "BDMV_BDJ_UNSUPPORTED")).map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
+      ...bdjFiles.diagnostics,
       ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
       ...adapted.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
       ...popupAdaptations.flatMap((result) => result.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity }))),
@@ -460,7 +588,7 @@ export async function build(): Promise<void> {
         diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(error instanceof Error ? error.message : String(error), roots.input) });
       }
     }
-    const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null);
+    const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null, hasBdjEntries);
     // Delivery status is decided from facts that are all known before packaging.
     // The package records the same conclusion (D-2R).
     const decisionFacts = deliveryDiagnostics(diagnostics);
@@ -496,6 +624,8 @@ export async function build(): Promise<void> {
       ...(overwrite ? { reuseMediaFromDirectory: roots.output } : {}),
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
+      ...(bdjFiles.files.length ? { bdjFiles: bdjFiles.files } : {}),
+      ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
       onMediaProgress: ({ outTimeSeconds, durationSeconds, state, source }) => {
         const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
         const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;
@@ -533,9 +663,10 @@ export async function build(): Promise<void> {
     progress.finish(decision.status, [
       ["output", roots.output],
       ...(packageText === undefined ? [] : [["package", packageText] as const]),
+    ...(hasBdjEntries ? [["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"] as const] : []),
       ["report", `report.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`],
     ]);
-    process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, ...(hasBdjEntries ? { launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" } : {}) })}\n`);
     if (decision.exitCode !== 0) process.exitCode = decision.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }

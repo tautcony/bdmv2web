@@ -21,6 +21,8 @@ await build({
 });
 await mkdir(resolve(cliDist, "runtime"), { recursive: true });
 await cp(resolve(root, "packages/runtime-web/dist/browser.bundle.js"), resolve(cliDist, "runtime/app.bundle.js"));
+await cp(resolve(root, "packages/runtime-web/dist/bdj-client.bundle.js"), resolve(cliDist, "runtime/bdj-client.bundle.js"));
+await cp(resolve(root, "packages/runtime-web/bdj-host/bdj-host-api.jar"), resolve(cliDist, "runtime/bdj-host-api.jar"));
 await cp(resolve(root, "packages/package-builder/templates"), resolve(cliDist, "templates"), { recursive: true });
 await chmod(resolve(cliDist, "index.js"), 0o755);
 await writeBuildMode(cliDist, profilingBuild);

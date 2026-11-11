@@ -1,6 +1,6 @@
 # 功能：离线菜单包
 
-`build` 把解析和提取结果写成一个目录，双击 `index.html` 就能在 `file://` 下运行。本文描述产物结构、场景选择、启动顺序与交互边界。
+`build` 把解析和提取结果写成一个目录。静态 HDMV/IGS 包可从 `file://` 运行；含 BD-J 包使用 `bdmv2web serve <package-directory>` 和 Java 21 或兼容的 `java.desktop` 运行环境。服务管理本地 Java 进程和回环会话 API。
 
 ## 产物形态
 
@@ -20,16 +20,20 @@ BDMV-menu/
 │   ├── assets-data-001.js
 │   ├── app.bundle.js              # IIFE
 │   ├── style.css
-│   └── bdmv-config.js             # __BDMV_BDMV_PATH__
+│   ├── bdmv-config.js             # __BDMV_BDMV_PATH__
+│   └── bdj/                      # 含 BD-J 时：host JAR 与 session.json
 ├── assets/
 │   ├── audio/sound-1.wav
 │   ├── media/background.mp4
 │   └── media/audio-1100-eng.m4a
-├── report.json                    # convert 成功与失败路径都写
+├── bdj/BDMV/JAR/                 # 含 BD-J 时：应用 JAR 与 authored 文件
+├── report.json                    # build 成功与失败路径都写
 └── reports/                       # validate 之后
 ```
 
-脚本顺序固定：`bdmv-config.js`（可选）→ `disc-data.js` → `assets-data-*.js` → `app.bundle.js`，全部 `defer`、全部 classic script。
+`runtime/bdj/session.json` stores Java application launch records and the HDMV session program, entries, profile, and limits. `runtime/bdj/bdj-host-api.jar` contains the native host. `bdj/BDMV/JAR/` contains packaged Java application JARs and authored files.
+
+静态脚本顺序固定：`bdmv-config.js`（可选）→ `disc-data.js` → `assets-data-*.js` → `app.bundle.js`，全部 `defer`、全部 classic script。
 
 ## 场景选择
 

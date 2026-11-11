@@ -1,6 +1,6 @@
 # 功能：CLI 命令
 
-八个命令中七个已实现，`compare` 未实现。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`render` 也接受独立的 `.mnu`/`.sup` 文件。
+九个命令中八个已实现，`compare` 未实现。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`render` 也接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
@@ -11,7 +11,8 @@
 | `list` | 列 IGS/SUP 资源 | stdout 表/JSON；可选 `--out` | 已实现 |
 | `export` | 导出 `.mnu`/`.sup` 原始资源 | `assets-manifest.json` + 资产 | 已实现 |
 | `render` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
-| `build` | 生成离线菜单包 | `BDMV-menu/` 整目录 | 已实现 |
+| `build` | 生成离线菜单包；BD-J 包内含 Java host、应用文件和 session 数据 | `BDMV-menu/` 整目录 | 已实现 |
+| `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；支持 `--java <executable>` | 本地 URL | 已实现 |
 | `validate` | 重算离线包审计 | `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` | 已实现 |
 | `compare` | 参考对照 | — | 未实现，返回 `E_NOT_IMPLEMENTED` |
 

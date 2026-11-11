@@ -45,7 +45,7 @@ traverseGraph(graph, roots: readonly string[], maxNodes?: number): GraphTraversa
 5. 逐个 MPLS / CLPI 解析，单文件失败只产生 `error` 诊断，其余继续。
 6. `sound.bdmv` 可选：缺失 → `info BDMV_OPTIONAL_SOUND_MISSING`，读取时只读前 `min(maxReadWindowBytes, maxSegmentBytes)` 字节。
 7. `buildGraph` 汇总节点与边；CLI/`media-export` 用 `traverseGraph` 从入口出发找可达集。
-8. BD-J 入口保留并标 `unsupported`，同时 `warning BDMV_BDJ_UNSUPPORTED`；不从统计里删除。
+8. BD-J 入口保留并记录 `warning BDMV_BDJ_UNSUPPORTED`；该 parser 诊断表示结构解析阶段不执行 Java。`build` 收集 BDJO 描述符和应用文件，`serve` 通过本地 Java host 执行 Xlet，详情见[BD-J 本地 Java 运行支持](../../support/bdj-support.md)。
 
 ## 主备选择（`choose`）
 
@@ -83,7 +83,7 @@ traverseGraph(graph, roots: readonly string[], maxNodes?: number): GraphTraversa
 | `BDMV_INVALID_MAGIC` / `BDMV_INVALID_TIME_RANGE` / `BDMV_INVALID_REFERENCE` | error | 文件头、时间区间、引用非法 |
 | `BDMV_MISSING_STREAM` / `BDMV_MISSING_CLPI` / `BDMV_MISSING_BDJO` | error | 引用目标缺失 |
 | `BDMV_STN_CLPI_PID_CONFLICT` / `BDMV_STN_CLPI_CODING_CONFLICT` | warning | STN 与 CLPI 声明冲突，双方保留 |
-| `BDMV_BDJ_UNSUPPORTED` | warning | BD-J 入口保留但不可执行 |
+| `BDMV_BDJ_UNSUPPORTED` | warning | 结构解析保留 BD-J 入口；Java 执行由 `bdmv2web serve` 的本地 Java 服务负责 |
 | `BDMV_OPTIONAL_SOUND_MISSING` | info | 没有 `sound.bdmv` |
 | `BDMV_UNKNOWN_OBJECT_TYPE` | warning | 入口对象类型未知 |
 

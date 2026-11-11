@@ -73,7 +73,7 @@ export function createExternalMediaTargets(disc: ParsedDisc, closure: MediaClosu
 }
 
 /** Resolve one VM request to its exact first source file and retain subsequent boundaries. */
-export function resolveExternalPlayTarget(targets: ExternalMediaTargets, request: ExternalPlayRequest): ExternalPlayTarget {
+export function resolveExternalPlayTarget(targets: ExternalMediaTargets, request: ExternalPlayRequest, options: { allowMissing?: boolean } = {}): ExternalPlayTarget {
   const unavailable = (code: string, message: string, source?: SourceLocation): ExternalPlayTarget => ({ status: "unavailable", code, message, ...(source ? { source } : {}) });
   if (!Number.isInteger(request.playlist) || request.playlist < 0 || request.playlist > 99999) return unavailable("EXTERNAL_PLAYLIST_INVALID", "Playlist number is invalid.");
   const playlistId = String(request.playlist).padStart(5, "0");
@@ -88,7 +88,7 @@ export function resolveExternalPlayTarget(targets: ExternalMediaTargets, request
   if (!isDeclaredExternalStreamPath(item.clipId, item.streamPath)) return unavailable("EXTERNAL_TARGET_UNDECLARED", `External target for Clip '${item.clipId}' must use STREAM/${item.clipId}.m2ts; received '${item.streamPath}'.`, item.source);
   const start = BigInt(mark?.sourceTime90k ?? item.sourceIn90k); const end = BigInt(item.sourceOut90k);
   if (end <= BigInt(item.sourceIn90k) || start < BigInt(item.sourceIn90k) || start >= end) return unavailable("EXTERNAL_TIME_INVALID", `Playlist ${playlistId} PlayItem ${itemIndex} has an invalid interval or mark.`);
-  if (!item.present) return unavailable("EXTERNAL_STREAM_MISSING", `Source ${item.streamPath} is missing.`);
+  if (!item.present && !options.allowMissing) return unavailable("EXTERNAL_STREAM_MISSING", `Source ${item.streamPath} is missing.`);
   const remainingItems = playlist.items.slice(position + 1);
   const sourceOrigin = item.sourceOrigin90k === null ? null : BigInt(item.sourceOrigin90k);
   if (sourceOrigin !== null && start < sourceOrigin) return unavailable("EXTERNAL_TIME_BEFORE_STC", `Playlist ${playlistId} target time precedes the selected Clip STC start time.`);

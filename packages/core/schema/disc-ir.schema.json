@@ -12,7 +12,8 @@
     "menus": { "type": "array", "items": { "$ref": "#/$defs/Menu" } },
     "playlists": { "type": "array", "items": { "$ref": "#/$defs/Playlist" } },
     "mediaAssets": { "type": "array", "items": { "$ref": "#/$defs/AssetReference" } },
-    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/Diagnostic" } }
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/Diagnostic" } },
+    "bdjos": { "type": "array", "items": { "$ref": "#/$defs/BdjoInfo" } }
   },
   "$defs": {
     "Time90k": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
@@ -29,10 +30,57 @@
         "instructionIndex": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
+    "BdjoInfo": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "version", "terminalInfo", "appCache", "accessiblePlaylists", "applications", "keyInterest", "fileAccessPaths", "source"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "terminalInfo": {
+          "type": "object", "additionalProperties": false,
+          "required": ["defaultFont", "initialHaviConfigId", "menuCallMask", "titleSearchMask", "source"],
+          "properties": {
+            "defaultFont": { "type": "string" },
+            "initialHaviConfigId": { "type": "integer", "minimum": 0 },
+            "menuCallMask": { "type": "boolean" },
+            "titleSearchMask": { "type": "boolean" },
+            "source": { "$ref": "#/$defs/SourceRef" }
+          }
+        },
+        "appCache": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["type", "reference", "language", "source"], "properties": { "type": { "type": "integer", "minimum": 0 }, "reference": { "type": "string" }, "language": { "type": "string" }, "source": { "$ref": "#/$defs/SourceRef" } } } },
+        "accessiblePlaylists": { "type": "object", "additionalProperties": false, "required": ["accessToAll", "autostartFirst", "playlistIds", "source"], "properties": { "accessToAll": { "type": "boolean" }, "autostartFirst": { "type": "boolean" }, "playlistIds": { "type": "array", "items": { "type": "string" } }, "source": { "$ref": "#/$defs/SourceRef" } } },
+        "applications": { "type": "array", "items": { "$ref": "#/$defs/BdjoApplication" } },
+        "keyInterest": { "type": "object", "additionalProperties": false, "required": ["play", "stop", "fastForward", "rewind", "nextTrack", "previousTrack", "pause", "stillOff", "secondaryAudioToggle", "secondaryVideoToggle", "textSubtitleToggle", "source"], "properties": { "play": { "type": "boolean" }, "stop": { "type": "boolean" }, "fastForward": { "type": "boolean" }, "rewind": { "type": "boolean" }, "nextTrack": { "type": "boolean" }, "previousTrack": { "type": "boolean" }, "pause": { "type": "boolean" }, "stillOff": { "type": "boolean" }, "secondaryAudioToggle": { "type": "boolean" }, "secondaryVideoToggle": { "type": "boolean" }, "textSubtitleToggle": { "type": "boolean" }, "source": { "$ref": "#/$defs/SourceRef" } } },
+        "fileAccessPaths": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["path", "source"], "properties": { "path": { "type": "string", "minLength": 1 }, "source": { "$ref": "#/$defs/SourceRef" } } } },
+        "source": { "$ref": "#/$defs/SourceRef" }
+      }
+    },
+    "BdjoApplication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["organizationId", "applicationId", "controlCode", "type", "profiles", "priority", "binding", "visibility", "names", "iconLocator", "iconFlags", "basePath", "classPath", "initialClass", "parameters", "source"],
+      "properties": {
+        "organizationId": { "type": "integer", "minimum": 0 },
+        "applicationId": { "type": "integer", "minimum": 0 },
+        "controlCode": { "type": "integer", "minimum": 0 },
+        "type": { "type": "integer", "minimum": 0 },
+        "profiles": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["number", "major", "minor", "micro"], "properties": { "number": { "type": "integer", "minimum": 0 }, "major": { "type": "integer", "minimum": 0 }, "minor": { "type": "integer", "minimum": 0 }, "micro": { "type": "integer", "minimum": 0 } } } },
+        "priority": { "type": "integer", "minimum": 0 },
+        "binding": { "type": "integer", "minimum": 0 },
+        "visibility": { "type": "integer", "minimum": 0 },
+        "names": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["language", "name"], "properties": { "language": { "type": "string" }, "name": { "type": "string" } } } },
+        "iconLocator": { "type": "string" },
+        "iconFlags": { "type": "integer", "minimum": 0 },
+        "basePath": { "type": "string" },
+        "classPath": { "type": "string" },
+        "initialClass": { "type": "string" },
+        "parameters": { "type": "array", "items": { "type": "string" } },
+        "source": { "$ref": "#/$defs/SourceRef" }
+      }
+    },
     "NavigationDescriptor": {
       "oneOf": [
         { "type": "object", "additionalProperties": false, "required": ["type", "movieObjectId"], "properties": { "type": { "const": "HDMV" }, "movieObjectId": { "type": "integer", "minimum": 0 } } },
-        { "type": "object", "additionalProperties": false, "required": ["type", "bdjoId", "status"], "properties": { "type": { "const": "BDJ" }, "bdjoId": { "type": "string", "minLength": 1 }, "status": { "const": "unsupported" } } }
+        { "type": "object", "additionalProperties": false, "required": ["type", "bdjoId", "status"], "properties": { "type": { "const": "BDJ" }, "bdjoId": { "type": "string", "minLength": 1 }, "status": { "enum": ["unsupported", "local-jvm"] } } }
       ]
     },
     "DiscEntry": { "type": "object", "additionalProperties": false, "required": ["id", "navigation", "source"], "properties": { "id": { "type": "string", "minLength": 1 }, "navigation": { "$ref": "#/$defs/NavigationDescriptor" }, "source": { "$ref": "#/$defs/SourceRef" } } },
