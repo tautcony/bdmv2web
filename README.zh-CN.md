@@ -6,13 +6,15 @@
 [![node](https://img.shields.io/node/v/bdmv2web)](https://nodejs.org)
 [![许可](https://img.shields.io/badge/license-GPL--3.0--only-blue)](LICENSE)
 
-检查 Blu-ray BDMV 光盘结构并生成可离线打开的菜单包。
+检查 Blu-ray BDMV 光盘结构，并为 HDMV 和 BD-J 光盘生成离线菜单包。
 
-`bdmv2web` 读取 Blu-ray BDMV 目录，输出自带全部资源的浏览器菜单包。菜单包包含菜单导航、背景视频、音轨、按钮图形和音效，直接从本地文件系统打开即可运行，不需要 Web 服务器或网络访问。原始 M2TS 文件保留在原位置，可从菜单中调用系统播放器播放。
+`bdmv2web` 读取 Blu-ray BDMV 目录，输出包含菜单导航、媒体、图形和音效的菜单包。HDMV 菜单包可直接通过 `file://` 打开。BD-J 菜单包通过本地 `serve` 命令、Java 运行时和 loopback HTTP 地址运行。两种模式均可离线使用。
 
 - 生成包含菜单导航、背景视频、音轨、按钮图形和音效的离线菜单包。
+- 从打包的应用 JAR 运行 BD-J Xlet，并使用本地 Java 进程。
+- 将 BD-J 可访问 Playlist 的视频和音轨打包为浏览器播放资产。`build --overwrite` 会复用匹配的媒体资产。
 - 检查 BDMV 结构，导出 HDMV、IGS、SUP 数据与菜单资源。
-- 通过播放器打开菜单关联的原始 M2TS 文件。
+- 将受支持的整文件正片播放交给系统播放器。
 - 校验菜单包的离线依赖并生成兼容性报告。
 
 ## 目录
@@ -42,6 +44,7 @@
 | pnpm | `11.25.0`，通过 `corepack pnpm` 调用 | 安装依赖和运行脚本 |
 | ffmpeg | 可从 `PATH` 调用，需含 `libx265`、`libx264`、`aac` | 编码菜单背景视频与音轨 |
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
+| Java 运行时 | Java 21 或兼容 `java.desktop`；仅 BD-J 包需要 | 通过 `serve` 运行打包的 BD-J Xlet |
 
 默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）；缺该滤镜时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
 
@@ -81,6 +84,20 @@ bdmv2web build /path/to/BDMV --out ./BDMV-menu
 bdmv2web validate ./BDMV-menu --offline
 ```
 
+### HDMV 与 BD-J 播放
+
+直接打开 `BDMV-menu/index.html` 可运行 HDMV 菜单包。菜单媒体保存在输出包内。正片播放由配置的外部播放器适配器处理。
+
+构建阶段会将 BD-J 可访问 Playlist 的 PlayItem 导出为 MP4 视频和 AAC 音频，并写入输出目录。等价媒体引用共用资产。使用 `--overwrite` 时，匹配媒体计划的资产会复用；源区间或编码设置变化时会重新导出。
+
+使用本地 Java 运行时启动 BD-J 菜单包：
+
+```sh
+bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
+```
+
+打开 `serve` 打印的 loopback 地址。通过 `file://` 打开 BD-J 页面时，页面会显示启动命令。`--player system` 会打开受支持的整文件目标；系统播放器不支持有边界和多片段播放。外部播放器启动结果为 `requested`；菜单运行时不观察正片播放状态。
+
 ### CLI
 
 `<BDMV>` 可指向 BDMV 目录，也可指向包含 `BDMV/` 的父目录。
@@ -94,6 +111,7 @@ bdmv2web validate ./BDMV-menu --offline
 | `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG`、`--png-level 0-9` |
 | `build <BDMV>` | 生成离线菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--png-level 0-9`、`--overwrite`、`--strict` |
 | `validate <菜单包目录> --offline` | 校验菜单包并更新审计报告 | `--format json`、`--strict` |
+| `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
 `build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。影片 PGS 字幕通过 `export --type sup` 导出。
 
@@ -177,7 +195,7 @@ python3 scripts/fetch-reference-cache.py
 
 ## 文档
 
-工具链、CLI 详情和构建流程见[开发指南](docs/guides/development.md)。协议支持边界见[支持范围文档](docs/support/protocol-support.md)。
+工具链、CLI 详情和构建流程见[开发指南](docs/guides/development.md)。BD-J 运行要求和已实现操作见[BD-J 支持指南](docs/support/bdj-support.md)。协议支持边界见[支持范围文档](docs/support/protocol-support.md)。
 
 全部指南、支持矩阵与归档的设计和审查记录见[文档索引](docs/README.md)。
 
