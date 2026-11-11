@@ -1,4 +1,4 @@
-import { BinaryCursor, ContractError, DEFAULT_LIMITS, serializeOffset, type Limits } from "@bdmv2web/core";
+import { BinaryCursor, ContractError, DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
 import { discoverBdmvInput, locateBdmvRoot, readRegisteredFile } from "@bdmv2web/bdmv-io";
 import type { AtcSequence, BdjoInfo, ClipHeader, ClipInfo, CpiMapEntry, DiscAppInfo, EntryTarget, ExtensionDataEntry, GraphEdge, GraphNode, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, Playlist, PlaylistAppInfo, PlayMark, SoundEntry, SourceLocation, StcSequence, StreamDeclaration, SubPath, UhdMetadata } from "./model.js";
 
@@ -38,7 +38,7 @@ class Bits {
   sub(byteLength: number): Bits { this.align(); const start = this.offset; if (!Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > this.data.length - start) throw new ContractError("TRUNCATED_INPUT", "/offset", `Section length ${byteLength} exceeds file`); this.bit += byteLength * 8; return new Bits(this.data.subarray(start, start + byteLength), this.base + start); }
   checkMagic(value: string): void { const at = this.offset; const actual = this.text(value.length); if (actual !== value) throw new ContractError("BDMV_INVALID_MAGIC", `/offset/${at}`, `Expected ${value}, got ${actual}`); }
   version(): string { const at = this.offset; const v = this.text(4); if (!SUPPORTED_VERSIONS.has(v)) throw new ContractError("BDMV_UNSUPPORTED_VERSION", `/offset/${at}`, `Unsupported version ${JSON.stringify(v)}`); return v; }
-  source(path: string, origin: "primary" | "backup"): SourceLocation { return { path: bdmvRelativePath(path), origin, offset: serializeOffset(BigInt(this.absolute)) }; }
+  source(path: string, origin: "primary" | "backup"): SourceLocation { return { path: bdmvRelativePath(path), origin, offset: String(this.absolute) }; }
 }
 
 interface FileEntry { rel: string; abs: string; size: number; }
@@ -46,7 +46,14 @@ interface LocatedFile { primary?: FileEntry; backup?: FileEntry; }
 
 function normCase(s: string): string { return s.toLocaleLowerCase("en-US"); }
 function fileName(s: string): string { return s.split("/").pop() ?? s; }
-function bdmvRelativePath(path: string): string { return path.replace(/^BDMV\//i, ""); }
+let relativePathInput = "";
+let relativePathOutput = "";
+function bdmvRelativePath(path: string): string {
+  if (path === relativePathInput) return relativePathOutput;
+  relativePathInput = path;
+  relativePathOutput = path.replace(/^BDMV\//i, "");
+  return relativePathOutput;
+}
 export async function discoverBdmvRoot(inputPath: string): Promise<string> { return locateBdmvRoot(inputPath); }
 
 function diagnose(diagnostics: ParseDiagnostic[], code: string, message: string, file?: FileEntry, offset?: number, severity: ParseDiagnostic["severity"] = "warning", recoverable = true, entityId: string | null = null): void {
