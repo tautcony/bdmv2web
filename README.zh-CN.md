@@ -156,13 +156,16 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 ```sh
 corepack pnpm build                              # 编译运行时代码
 corepack pnpm run cli:dev inspect /path/to/BDMV  # 直接运行 CLI
-corepack pnpm lint                               # ESLint 检查
+corepack pnpm lint                               # ESLint 和 Java 检查
 corepack pnpm lint:fix                           # 应用 ESLint 自动修复
+corepack pnpm lint:java                          # 检查 BD-J 主机 Java 样式和 Java 8 编译
 corepack pnpm typecheck                          # 类型检查
 corepack pnpm test                               # 运行测试
 corepack pnpm test:all                           # 运行全部测试并收集失败结果
 bash scripts/ci.sh                               # 运行完整 CI 检查
 ```
+
+`corepack pnpm lint:java` 需要 JDK 21 或更新版本；首次运行时会下载固定版本的 Checkstyle。
 
 运行单个包的测试：
 

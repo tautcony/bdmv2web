@@ -53,6 +53,11 @@ jobs:
           node-version-file: .node-version
       - name: Enable pnpm
         run: corepack enable
+      - name: Install JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Download dist from the build job
         uses: actions/download-artifact@v4
         with:

@@ -160,13 +160,16 @@ Use `build --player-profile FILE` to set menu language, audio language, subtitle
 ```sh
 corepack pnpm build                              # Compile runtime code
 corepack pnpm run cli:dev inspect /path/to/BDMV  # Run the CLI directly
-corepack pnpm lint                               # ESLint
+corepack pnpm lint                               # ESLint and Java lint
 corepack pnpm lint:fix                           # Apply ESLint fixes
+corepack pnpm lint:java                          # Check BD-J host Java style and Java 8 compilation
 corepack pnpm typecheck                          # Type checking
 corepack pnpm test                               # Run tests
 corepack pnpm test:all                           # Run all tests and collect failures
 bash scripts/ci.sh                               # Run the full CI check
 ```
+
+`corepack pnpm lint:java` requires JDK 21 or newer and downloads the pinned Checkstyle release on first use.
 
 Run tests for a single package:
 
