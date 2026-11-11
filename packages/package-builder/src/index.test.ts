@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, packagedMediaMetadata, runtimeAudioTrackMetadata } from "./index.js";
+import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, menuMediaPaths, packagedMediaMetadata, priorMenuMediaPaths, runtimeAudioTrackMetadata } from "./index.js";
 import type { MediaProcessRunner } from "@bdmv2web/media-export";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
 
@@ -16,6 +16,7 @@ const ir = {
 const scene = { width: 1920, height: 1080, pages: [{ id: 0, defaultButtonId: 1, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1" }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1" } }, commands: [] as Array<{ bytes: string; sourceOffset: string; source: { path: string; origin: "primary"; offset: string } }> }] }] };
 const png1x1 = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=", "base64"));
 function compactCss(css: string): string { return css.replace(/\s*([{}:;,])\s*/g, "$1").trim(); }
+const mediaOutputs = (args: string[]): string[] => args.filter((arg) => arg.endsWith(".mp4") || arg.endsWith(".m4a"));
 
 describe("menu package primitives", () => {
   it("loads the BD-J transport as a separate local-jvm package script", async () => {
@@ -184,18 +185,23 @@ describe("menu package primitives", () => {
     const sourcePath = resolve(parent, "00004.m2ts");
     await writeFile(sourcePath, new Uint8Array([0x47]));
     const encodeOutputs: string[] = [];
+    let ffmpegCalls = 0;
     const durations = new Map<string, string>();
     const mediaProcessRunner: MediaProcessRunner = async (executable, args) => {
       if (args[0] === "-version") return { stdout: `${executable} version test`, stderr: "" };
       if (args.includes("-encoders")) return { stdout: " V....D libx264\n V....D libx265\n A....D aac\n", stderr: "" };
       if (args.includes("-filters")) return { stdout: "", stderr: "" };
       if (executable === "ffmpeg") {
-        const outputPath = args.at(-1)!;
+        ffmpegCalls += 1;
         const durationIndex = args.indexOf("-t");
-        if (durationIndex >= 0) durations.set(outputPath, args[durationIndex + 1]!);
-        encodeOutputs.push(outputPath);
-        await mkdir(dirname(outputPath), { recursive: true });
-        await writeFile(outputPath, new Uint8Array([0x42, 0x44, 0x4d, 0x56]));
+        // One process writes the background and every audio track, so the stub
+        // has to answer all of its outputs instead of the last argument only.
+        for (const outputPath of mediaOutputs(args)) {
+          if (durationIndex >= 0) durations.set(outputPath, args[durationIndex + 1]!);
+          encodeOutputs.push(outputPath);
+          await mkdir(dirname(outputPath), { recursive: true });
+          await writeFile(outputPath, new Uint8Array([0x42, 0x44, 0x4d, 0x56]));
+        }
         return { stdout: "", stderr: "" };
       }
       const outputPath = args.at(-1)!;
@@ -231,6 +237,9 @@ describe("menu package primitives", () => {
       runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), runtime);
       const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string }> };
       const physicalMediaFiles = manifest.files.filter((file) => file.kind === "media");
+      // Two media sets, one ffmpeg process each: the clip is demuxed once and
+      // every declared audio track is written by the same run as the video.
+      expect(ffmpegCalls).toBe(2);
       expect(encodeOutputs).toHaveLength(6);
       expect(encodeOutputs.filter((path) => path.endsWith(".mp4"))).toHaveLength(2);
       expect(encodeOutputs.filter((path) => path.endsWith(".m4a"))).toHaveLength(4);
@@ -329,5 +338,94 @@ describe("menu package primitives", () => {
       expect(compactStyle).toMatch(/#runtime-status\.is-visible #runtime-status-copy\{display:grid/);
       expect(compactStyle).toMatch(/#runtime-status-copy\{[^}]*pointer-events:auto/);
     } finally { if (!preserveOutput) await rm(parent, { recursive: true, force: true }); }
+  });
+});
+
+describe("menu media package paths", () => {
+  it("names each exported clip after its playlist, PlayItem, and source clip", () => {
+    expect(menuMediaPaths({ playlistId: "00001", playItemIndex: 2, clipId: "00377" })).toEqual({
+      directory: "assets/media/playlist-00001-pi02-clip-00377",
+      planPath: "media-plans/playlist-00001-pi02-clip-00377.json",
+    });
+  });
+
+  it("pads the PlayItem so a listing follows playback order", () => {
+    const paths = [0, 2, 10].map((playItemIndex) => menuMediaPaths({ playlistId: "00003", playItemIndex, clipId: "00004" }).directory);
+    expect(paths).toEqual([
+      "assets/media/playlist-00003-pi00-clip-00004",
+      "assets/media/playlist-00003-pi02-clip-00004",
+      "assets/media/playlist-00003-pi10-clip-00004",
+    ]);
+    expect([...paths].sort()).toEqual(paths);
+  });
+
+  it("lists the layouts an older run wrote, so its assets stay reusable", () => {
+    expect(priorMenuMediaPaths({ playlistId: "00001", playItemIndex: 2 })).toEqual([
+      { assetDirectory: "assets/media/playlist-00001-pi2", planPath: "media-plans/playlist-00001-pi2.json" },
+      { assetDirectory: "assets/media", planPath: "media-plan.json" },
+    ]);
+  });
+
+  it("keeps an unexpected id from escaping the media directory", () => {
+    const { directory, planPath } = menuMediaPaths({ playlistId: "00001", playItemIndex: 0, clipId: "../00002" });
+    expect(directory).toBe("assets/media/playlist-00001-pi00-clip-.._00002");
+    expect(planPath.startsWith("media-plans/")).toBe(true);
+  });
+});
+
+describe("menu media layout", () => {
+  const encoders = " V....D libx264 H.264\n V....D libx265 H.265\n A....D aac AAC\n";
+  const runner = (durations: Map<string, string>): MediaProcessRunner => async (executable, args) => {
+    if (args[0] === "-version") return { stdout: `${executable} version test\n`, stderr: "" };
+    if (args.includes("-encoders")) return { stdout: encoders, stderr: "" };
+    if (args.includes("-filters")) return { stdout: "", stderr: "" };
+    const path = args.at(-1)!;
+    if (args[0] === "-v") {
+      const audio = path.endsWith(".m4a");
+      const duration = [...durations].find(([source]) => path.includes(source))?.[1] ?? "10";
+      const source = durations.has(path) ? path : undefined;
+      if (source !== undefined) return { stdout: JSON.stringify({ streams: [
+        { index: 0, id: "0x1011", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration: "10" },
+        { index: 1, id: "0x1100", codec_type: "audio", codec_name: "ac3", duration: "10" },
+      ], format: { start_time: "0", duration: "10" } }), stderr: "" };
+      return { stdout: JSON.stringify({ streams: [audio
+        ? { index: 0, id: "0x0", codec_type: "audio", codec_name: "aac", duration }
+        : { index: 0, id: "0x0", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" }], format: { duration } }), stderr: "" };
+    }
+    for (const output of mediaOutputs(args)) await writeFile(output, "encoded media");
+    return { stdout: "", stderr: "" };
+  };
+
+  it("names the Top Menu background and extra menu clips after their playlist, PlayItem, and clip", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv2web-media-layout-"));
+    const outputDirectory = resolve(parent, "package");
+    const media = (playlistId: string, playItemIndex: number, clipId: string) => ({
+      sourcePath: resolve(parent, `BDMV/STREAM/${clipId}.m2ts`), sourceFile: `BDMV/STREAM/${clipId}.m2ts`,
+      playlistId, playItemIndex, clipId, inTime45k: 0, outTime45k: 450_000, stillMode: 0, repeatCount: 1,
+      videoPid: 0x1011, audioTracks: [{ streamNumber: 0, pid: 0x1100, language: "eng" }],
+    });
+    const top = media("00003", 0, "00004");
+    const extra = media("00001", 2, "00377");
+    try {
+      await buildMenuPackage({
+        outputDirectory, title: "Layout", ir, scene, graphics: [],
+        menuLoopMedia: top, additionalMenuMedia: [extra],
+        mediaEncoding: { codec: "h264" },
+        mediaProcessRunner: runner(new Map([[top.sourcePath, "10"], [extra.sourcePath, "10"]])),
+      });
+      const topDirectory = resolve(outputDirectory, "assets/media/playlist-00003-pi00-clip-00004");
+      expect((await readdir(topDirectory)).sort()).toEqual(["audio-1100-eng.m4a", "background.mp4"]);
+      const extraDirectory = resolve(outputDirectory, "assets/media/playlist-00001-pi02-clip-00377");
+      expect((await readdir(extraDirectory)).sort()).toEqual(["audio-1100-eng.m4a", "background.mp4"]);
+      expect(JSON.parse(await readFile(resolve(outputDirectory, "media-plans/playlist-00003-pi00-clip-00004.json"), "utf8"))).toMatchObject({ playlistId: "00003", clipId: "00004" });
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string }> };
+      expect(manifest.files.filter((file) => file.kind === "media-plan").map((file) => file.path).sort()).toEqual([
+        "media-plans/playlist-00001-pi02-clip-00377.json",
+        "media-plans/playlist-00003-pi00-clip-00004.json",
+      ]);
+      const data = await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8");
+      expect(data).toContain('"path":"assets/media/playlist-00003-pi00-clip-00004/background.mp4"');
+      expect(data).toContain('"path":"assets/media/playlist-00001-pi02-clip-00377/background.mp4"');
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

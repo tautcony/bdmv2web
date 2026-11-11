@@ -31,9 +31,9 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 | `asset-manifest.json` | 是 | 音效、媒体、PGS 轨道细节（不入 `manifest.files`） |
 | `compatibility.json` | 是 | profile、覆盖范围、未验证项（不入 `manifest.files`） |
 | `external-targets.json` | 有外部播放时 | 播放列表/PlayItem/Mark → 源 M2TS 目标 |
-| `media-plan.json` / `media-plans/playlist-*.json` | 有本地媒体时 | 每次 `exportMenuLoopMedia` 的计划 |
+| `media-plans/playlist-<id>-pi<n>-clip-<clipId>.json` | 有本地媒体时 | 每次 `exportMenuLoopMedia` 的计划 |
 | `assets/audio/sound-N.wav` | 被引用时 | 由 `sound.bdmv` 采样区间转 WAV |
-| `assets/media/background.mp4`、`audio-*.m4a` | 有本地媒体时 | ffmpeg 产物 |
+| `assets/media/playlist-<id>-pi<n>-clip-<clipId>/background.mp4`、`audio-*.m4a` | 有本地媒体时 | ffmpeg 产物 |
 
 `manifest.files` 排序按路径 `localeCompare("en")`；`compatibility.json` 与 `asset-manifest.json` 被显式排除（它们是报告元数据，不是载荷）。
 
@@ -76,8 +76,9 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 
 ## 媒体
 
-- `menuLoopMedia` → `exportMenuLoopMedia`，输出 `assets/media/background.mp4` 与音轨，写 `media-plan.json`。
-- `additionalMenuMedia` → 每个播放列表一个目录 `assets/media/playlist-<id>/`，计划写 `media-plans/playlist-<id>.json`。
+- 两种输入都走 `menuMediaPaths()`：目录 `assets/media/playlist-<id>-pi<n>-clip-<clipId>/`，计划 `media-plans/<同一名字>.json`。
+- `menuLoopMedia` → `exportMenuLoopMedia`，写 `background.mp4` 与音轨计划；`additionalMenuMedia` → 每个播放列表 PlayItem 一份，共用同一模板。目录名里的 `<id>` 是 `<id>.mpls` 的编号、`<clipId>` 是 `BDMV/STREAM/<clipId>.m2ts` 的编号，PlayItem 补零到两位。
+- 等价引用（同一 Playlist/PlayItem/clip/区间/流）共用一次转码，后来的输入引用先前的目录，不再单开一份；被引用的一方没有编码动作，所以 Builder 为它补一个 `state: "end"` 的 `onMediaProgress` 事件（`reused: true`），使进度按计划里的 clip 数推进。
 - `reuseMediaFromDirectory` 只在旧计划与本次输入完全匹配时复用，否则重编码（由 `media-export` 判定）。
 - 编码参数由 `mediaEncoding` 透传给两次导出调用，Builder 不写死 `preset`/`crf`。
 - 每个导出结果里的 `warnings`（HDR 色调映射缺失、H.264 + HDR 等）转成 `diagnostics` 条目，`severity: "warning"`，按 `code` 去重后写进 `manifest.json`。警告不改变 `status`，出包视为完成。

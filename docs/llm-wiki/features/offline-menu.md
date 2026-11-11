@@ -12,8 +12,9 @@ BDMV-menu/
 ├── asset-manifest.json
 ├── compatibility.json
 ├── external-targets.json          # 有外部播放目标
-├── media-plan.json                # Top Menu 背景媒体
-├── media-plans/playlist-00003.json
+├── media-plans/                  # 每个导出单元一份计划
+│   ├── playlist-00003-pi00-clip-00004.json
+│   └── ...
 ├── runtime/
 │   ├── disc-data.js               # __BDMV_MENU_DATA__
 │   ├── assets-data-000.js         # __BDMV_MENU_ASSETS__[0]
@@ -97,7 +98,7 @@ BDMV-menu/
 
 | 场景 | 行为 |
 | --- | --- |
-| Top Menu 背景 | `background.mp4` 循环；循环标志来自 `media-plan.json` |
+| Top Menu 背景 | `background.mp4` 循环；循环标志来自该素材对应的 `media-plans/*.json` |
 | 额外菜单播放列表 | 切到对应 `menuMedia`，独立音轨 |
 | `SET_STREAM` 主音频 | 切换 `<audio>` 的 source 到对应 `audio-*.m4a` |
 | 正片播放 | 通过 `iina://` / `potplayer://` 交接到系统播放器；菜单侧不接管视频 |

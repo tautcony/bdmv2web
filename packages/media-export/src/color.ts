@@ -73,10 +73,10 @@ export function hasDolbyVision(configuration: ColorProbeFields): boolean {
  */
 export function readSourceColor(stream: ColorProbeFields): SourceColor {
   const bitDepth = pixelFormatBitDepth(stream.pix_fmt);
-  const transfer = normalise(stream.color_transfer);
-  const primaries = normalise(stream.color_primaries);
-  const matrix = normalise(stream.color_space);
-  const range = normalise(stream.color_range);
+  const transfer = normalizeColorTag(stream.color_transfer);
+  const primaries = normalizeColorTag(stream.color_primaries);
+  const matrix = normalizeColorTag(stream.color_space);
+  const range = normalizeColorTag(stream.color_range);
   const wideGamut = primaries === "bt2020";
   const highBitDepth = bitDepth !== null && bitDepth > 8;
 
@@ -168,7 +168,8 @@ function encoderColorParams(output: OutputColor): string {
   return `colorprim=${output.primaries}:transfer=${output.transfer}:colormatrix=${output.matrix}:range=${output.range}`;
 }
 
-function normalise(value: string | null | undefined): string | null {
+/** Normalise an FFmpeg colour tag, treating the unspecified values as untagged. */
+export function normalizeColorTag(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim().toLowerCase();
   return trimmed === "" || trimmed === "unknown" || trimmed === "unspecified" ? null : trimmed;
@@ -196,7 +197,7 @@ export function assertEncodedColor(stream: ColorProbeFields & { codec_name?: str
     ["color_space", stream.color_space, plan.output.matrix],
   ];
   for (const [field, value, expected] of actual) {
-    const normalized = normalise(value);
+    const normalized = normalizeColorTag(value);
     if (normalized !== expected) throw new Error(`Encoded media '${subject}' has ${field} ${normalized ?? "unspecified"}; expected ${expected} for the ${plan.filterChain} colour pipeline.`);
   }
   const bitDepth = pixelFormatBitDepth(stream.pix_fmt);

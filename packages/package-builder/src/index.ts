@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, type VideoExportMode, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
 
 const templateDirectory = existsSync(new URL("./templates/index.html", import.meta.url)) ? "./templates/" : "../templates/";
 const RESERVED_REPORT_FILES = new Set(["compatibility.json", "asset-manifest.json"]);
@@ -119,6 +119,8 @@ export interface MenuMediaEncoding {
   preset?: "medium" | "fast" | "veryfast" | "ultrafast";
   codec?: VideoCodec;
   hdrMode?: HdrMode;
+  /** `copy` remuxes the source H.264 stream instead of re-encoding it; see `exportMenuLoopMedia`. */
+  videoMode?: VideoExportMode;
 }
 
 export interface MenuPackageInput {
@@ -183,6 +185,35 @@ export interface MenuPackageInput {
 /** What the caller can act on after the package is written: the diagnostics recorded in its manifest. */
 export interface MenuPackageResult { diagnostics: MenuPackageDiagnostic[] }
 
+/**
+ * Package-relative directory and plan file for one exported menu media unit.
+ *
+ * The BD-J and HDMV export paths both hand over the same unit — one Playlist
+ * PlayItem read from one STREAM clip — so the name carries all three ids the
+ * source files are named after: the playlist (`<playlistId>.mpls`), the
+ * zero-based PlayItem, and the clip (`<clipId>.m2ts`). A folder therefore
+ * points back at its source without opening the media plan.
+ */
+export function menuMediaPaths(input: Pick<MenuLoopMediaInput, "playlistId" | "playItemIndex" | "clipId">): { directory: string; planPath: string } {
+  const id = `playlist-${input.playlistId}-pi${String(input.playItemIndex).padStart(2, "0")}-clip-${input.clipId}`.replace(/[^0-9A-Za-z._-]/g, "_");
+  return { directory: `assets/media/${id}`, planPath: `media-plans/${id}.json` };
+}
+
+/**
+ * Where earlier versions stored the same unit: one folder per playlist
+ * PlayItem (`playlist-<id>-pi<n>`, no clip in the name), and the Top Menu
+ * background at the media root. Reuse tries these after the current names, so
+ * a package or unfinished staging directory from an older run still resumes
+ * instead of re-encoding every clip.
+ */
+export function priorMenuMediaPaths(input: Pick<MenuLoopMediaInput, "playlistId" | "playItemIndex">): Array<{ assetDirectory: string; planPath: string }> {
+  const id = `playlist-${input.playlistId}-pi${input.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
+  return [
+    { assetDirectory: `assets/media/${id}`, planPath: `media-plans/${id}.json` },
+    { assetDirectory: "assets/media", planPath: "media-plan.json" },
+  ];
+}
+
 /** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
 export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
   const ir = parseDiscIR(input.ir);
@@ -212,25 +243,28 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   if (bdjRuntime) await mkdir(resolve(runtimeDirectory, "bdj"), { recursive: true });
   input.onPhase?.("media");
   const mediaEncoding = input.mediaEncoding ?? {};
-  const exportedMedia = input.menuLoopMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
+  const primaryMedia = input.menuLoopMedia === undefined ? undefined : menuMediaPaths(input.menuLoopMedia);
+  const exportedMedia = input.menuLoopMedia && primaryMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, assetDirectory: primaryMedia.directory, planPath: primaryMedia.planPath, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(input.menuLoopMedia) } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
   const mediaByKey = new Map<string, { result: MenuLoopMediaResult; planPath: string }>();
-  if (input.menuLoopMedia && exportedMedia) mediaByKey.set(menuMediaReuseKey(input.menuLoopMedia, mediaEncoding), { result: exportedMedia, planPath: "media-plan.json" });
+  if (input.menuLoopMedia && exportedMedia && primaryMedia) mediaByKey.set(menuMediaReuseKey(input.menuLoopMedia, mediaEncoding), { result: exportedMedia, planPath: primaryMedia.planPath });
   const additionalMedia: Array<{ input: MenuLoopMediaInput; result: MenuLoopMediaResult; planPath: string }> = [];
   for (const media of input.additionalMenuMedia ?? []) {
-    const sanitizedId = `${media.playlistId}-pi${media.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
     const key = menuMediaReuseKey(media, mediaEncoding);
     const existing = mediaByKey.get(key);
     if (existing) {
+      // The clip shares its bytes with one already exported: nothing is encoded,
+      // but it is still one of the plan's clips, so it reports as finished.
+      input.onMediaProgress?.({ state: "end", outTimeSeconds: existing.result.background.durationSeconds, durationSeconds: existing.result.background.durationSeconds, assetPath: existing.result.background.path, source: { playlistId: media.playlistId, playItemIndex: media.playItemIndex, clipId: media.clipId, kind: "background", pid: media.videoPid, videoMode: existing.result.plan.encoding.video.mode, reused: true } });
       additionalMedia.push({ input: media, result: referenceMenuMediaResult(existing.result, media), planPath: existing.planPath });
       continue;
     }
-    const planPath = `media-plans/playlist-${sanitizedId}.json`;
+    const { directory, planPath } = menuMediaPaths(media);
     const result = await exportMenuLoopMedia(media, {
       outputDirectory: output,
       ...mediaEncoding,
-      assetDirectory: `assets/media/playlist-${sanitizedId}`,
+      assetDirectory: directory,
       planPath,
-      ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}),
+      ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(media) } : {}),
       ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}),
       ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}),
     });
@@ -267,7 +301,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...(exportedMedia?.files.map((file) => ({ path: file.path, kind: "media", required: true })) ?? []),
     ...additionalMedia.flatMap(({ result }) => result.files.map((file) => ({ path: file.path, kind: "media", required: true }))),
     ...[...new Set((input.pgsTracks ?? []).map((track) => track.path))].map((path) => ({ path, kind: "subtitle", required: true })),
-    ...[...new Set([...(exportedMedia ? ["media-plan.json"] : []), ...additionalMedia.map(({ planPath }) => planPath)])].map((path) => ({ path, kind: "media-plan", required: true })),
+    ...[...new Set([...(exportedMedia && primaryMedia ? [primaryMedia.planPath] : []), ...additionalMedia.map(({ planPath }) => planPath)])].map((path) => ({ path, kind: "media-plan", required: true })),
     ...(input.externalTargets ? [{ path: "runtime/bdmv-config.js", kind: "external-config", required: true }, { path: "external-targets.json", kind: "runtime", required: true }] : []),
     ...(bdjRuntime ? [{ path: "runtime/bdj/bdj-host-api.jar", kind: "bdj-host", required: true }, { path: "runtime/bdj/session.json", kind: "bdj-session", required: true }] : []),
     ...bdjFiles.map((file) => ({ path: `bdj/${file.path}`, kind: "bdj", required: true })),
@@ -463,6 +497,7 @@ function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncodin
       crf: encoding.crf ?? (codec === "hevc" ? 24 : 18),
       preset: encoding.preset ?? "veryfast",
       hdrMode: encoding.hdrMode ?? "tonemap",
+      videoMode: encoding.videoMode ?? "encode",
     },
   });
 }

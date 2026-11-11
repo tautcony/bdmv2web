@@ -6,7 +6,7 @@ import { M2tsPacketReader, PesAssembler } from "@bdmv2web/igs";
 import { directoryBytesExcluding } from "./directory-bytes.js";
 import { parsePgsSup } from "./pgs.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates } from "./budget.js";
-import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type ColorWarning, type ColorFilterChain, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color.js";
+import { assertEncodedColor, isHdrDynamicRange, normalizeColorTag, pixelFormatBitDepth, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type ColorWarning, type ColorFilterChain, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color.js";
 
 export * from "./closure.js";
 export * from "./external-targets.js";
@@ -94,6 +94,8 @@ function concatBytes(chunks: readonly Uint8Array[], byteLength: number): Uint8Ar
 }
 
 export interface MediaAudioTrackInput { streamNumber: number; pid: number; language: string; }
+/** How the background video reaches MP4: encoded here, or copied from the source stream. */
+export type VideoExportMode = "encode" | "copy";
 export interface MenuLoopMediaInput {
   sourcePath: string;
   sourceFile: string;
@@ -105,6 +107,12 @@ export interface MenuLoopMediaInput {
   loopStart45k?: number;
   /** Encode the initial presentation from inTime45k before entering the loop segment. */
   includeIntro?: boolean;
+  /**
+   * Presentation time (45 kHz) of the clip entry point at or before the export
+   * start. A player seeks here, decodes, and drops everything before the declared
+   * start, so a stream copy may begin here when the start names this entry point.
+   */
+  copyStart45k?: number;
   outTime45k: number;
   stillMode: number;
   repeatCount: number;
@@ -123,6 +131,14 @@ export interface MediaAssetSource {
   kind: "background" | "audio";
   pid: number;
   language?: string;
+  /**
+   * Video pipeline in use for this background asset. A copy that fails
+   * verification is re-encoded, so later reports for the same asset change
+   * from `copy` to `encode`.
+   */
+  videoMode?: VideoExportMode;
+  /** The clip was taken from a previous package instead of being exported again. */
+  reused?: boolean;
 }
 /** One encoded asset's progress, named by package path and by its source stream. */
 export type MediaAssetProgress = MediaProcessProgress & { assetPath: string; durationSeconds: number; source: MediaAssetSource };
@@ -149,6 +165,13 @@ export interface MenuLoopMediaOptions {
   assetDirectory?: string;
   /** Package-relative path for this playlist's media plan. */
   planPath?: string;
+  /**
+   * Older package-relative layouts to read reused assets from, tried in order
+   * after `assetDirectory`/`planPath`. A renamed layout keeps its assets
+   * reusable: the prior plan is read where it was written and its files are
+   * copied to the current names.
+   */
+  reuseAlternatives?: ReadonlyArray<{ assetDirectory: string; planPath: string }>;
   ffmpegPath?: string;
   ffprobePath?: string;
   timeoutMs?: number;
@@ -158,6 +181,13 @@ export interface MenuLoopMediaOptions {
   codec?: VideoCodec;
   /** Dynamic-range policy for HDR sources. Defaults to `tonemap` (SDR BT.709). */
   hdrMode?: HdrMode;
+  /**
+   * `copy` writes the source H.264 stream into MP4 without re-encoding it.
+   * A copy is only possible when the export starts on the clip's first frame and
+   * the source is 8-bit 4:2:0 SDR H.264; every other clip is encoded as usual
+   * and the plan records the reason. Defaults to `encode`.
+   */
+  videoMode?: VideoExportMode;
   /** Maximum bytes for one encoded media asset. Null disables the per-asset cap. */
   maxAssetBytes?: number | null;
   estimatedVideoBitsPerSecond?: number;
@@ -184,6 +214,8 @@ export interface MediaPlan {
   audioTracks: MediaAudioTrackInput[];
   encoding: {
     video: {
+      /** `copy` keeps the source bitstream; `encode` runs the configured encoder. */
+      mode: VideoExportMode;
       codec: VideoCodec; pixelFormat: string; preset: string; crf: number;
       aspectRatioPolicy: "preserve-source-display-aspect"; frameRatePolicy: "passthrough"; evenDimensions: true;
       color: { policy: HdrMode; source: SourceColor; output: OutputColor; filterChain: ColorFilterChain };
@@ -195,6 +227,8 @@ export interface MediaPlan {
   limitations: string[];
 }
 export interface ExportedMediaAsset { path: string; absolutePath: string; byteLength: number; codec: VideoCodec | "aac"; pid: number; streamNumber?: number; language?: string; }
+/** A non-blocking export note: colour-pipeline advice or a refused stream copy. */
+export type MediaWarning = ColorWarning | { code: "MEDIA_REMUX_UNAVAILABLE"; message: string };
 export interface MenuLoopMediaResult {
   plan: MediaPlan;
   outputSize: { beforeBytes: string; afterBytes: string };
@@ -202,11 +236,12 @@ export interface MenuLoopMediaResult {
   background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: boolean; loopStartSeconds?: number };
   audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number; loopStartSeconds?: number }>;
   files: Array<{ path: string; absolutePath: string; byteLength: number }>;
-  /** Colour-pipeline warnings that did not block the export. */
-  warnings: ColorWarning[];
+  /** Colour-pipeline and stream-copy warnings that did not block the export. */
+  warnings: MediaWarning[];
 }
 
 export interface MenuLoopEncoding {
+  mode: VideoExportMode;
   codec: VideoCodec;
   crf: number;
   preset: string;
@@ -214,10 +249,40 @@ export interface MenuLoopEncoding {
 }
 
 /** Encoding choices known before the source is probed; the colour plan comes from the reused media plan. */
-interface ReuseEncoding { codec: VideoCodec; crf: number; preset: string; hdrMode: HdrMode; }
+interface ReuseEncoding { codec: VideoCodec; crf: number; preset: string; hdrMode: HdrMode; videoMode: VideoExportMode; }
 
 interface ProbeStream extends ColorProbeFields { index?: number; id?: string; codec_type?: string; codec_name?: string; width?: number; height?: number; display_aspect_ratio?: string; duration?: string; }
 interface ProbeResult { streams?: ProbeStream[]; format?: { start_time?: string; duration?: string }; }
+interface MediaToolFacts { ffmpegVersion: string; ffprobeVersion: string; encoders: string; filters: string; }
+
+/**
+ * `ffmpeg -version`/`-encoders`/`-filters` and `ffprobe -version` describe the
+ * installed tools, not the clip, so one probe per runner serves a whole package
+ * instead of four extra processes per clip. The cache is keyed by the runner so
+ * a host that supplies its own runner never reads facts collected from another,
+ * and a failed probe is dropped so the next clip retries rather than inheriting
+ * the error.
+ */
+const toolFactCache = new WeakMap<MediaProcessRunner, Map<string, Promise<MediaToolFacts>>>();
+function toolFacts(run: MediaProcessRunner, invoke: MediaProcessRunner, ffmpeg: string, ffprobe: string, timeoutMs: number): Promise<MediaToolFacts> {
+  let perRunner = toolFactCache.get(run);
+  if (perRunner === undefined) { perRunner = new Map(); toolFactCache.set(run, perRunner); }
+  const key = `${ffmpeg}\u0000${ffprobe}`;
+  const cached = perRunner.get(key);
+  if (cached !== undefined) return cached;
+  const pending = probeToolFacts(invoke, ffmpeg, ffprobe, timeoutMs);
+  perRunner.set(key, pending);
+  void pending.catch(() => { if (perRunner.get(key) === pending) perRunner.delete(key); });
+  return pending;
+}
+
+async function probeToolFacts(invoke: MediaProcessRunner, ffmpeg: string, ffprobe: string, timeoutMs: number): Promise<MediaToolFacts> {
+  const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"], timeoutMs)).stdout);
+  const ffprobeVersion = firstLine((await invoke(ffprobe, ["-version"], timeoutMs)).stdout);
+  const encoderList = await invoke(ffmpeg, ["-hide_banner", "-encoders"], timeoutMs);
+  const filterList = await invoke(ffmpeg, ["-hide_banner", "-filters"], timeoutMs);
+  return { ffmpegVersion, ffprobeVersion, encoders: `${encoderList.stdout}\n${encoderList.stderr}`, filters: `${filterList.stdout}\n${filterList.stderr}` };
+}
 
 /** Export one validated menu-loop clip as a local video asset and per-track AAC files. */
 export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): Promise<MenuLoopMediaResult> {
@@ -225,7 +290,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   if (!options.outputDirectory) throw new TypeError("outputDirectory is required");
   const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive safe integer");
-  const codec = options.codec ?? "hevc";
+  const codec = options.codec ?? (options.videoMode === "copy" ? "h264" : "hevc");
   if (codec !== "h264" && codec !== "hevc") throw new RangeError(`codec must be 'h264' or 'hevc', received '${String(codec)}'`);
   const hdrMode = options.hdrMode ?? "tonemap";
   if (hdrMode !== "tonemap" && hdrMode !== "preserve") throw new RangeError(`hdrMode must be 'tonemap' or 'preserve', received '${String(hdrMode)}'`);
@@ -281,8 +346,12 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   await ensureAbsent(planAbsolute);
   await mkdir(dirname(planAbsolute), { recursive: true });
   if (options.reuseFromDirectory) {
-    const reused = await reuseMenuLoopMedia(input, options, resolve(options.reuseFromDirectory), output, mediaDirectory, planPath, { codec, crf, preset, hdrMode });
-    if (reused) return reused;
+    const sourceDirectory = resolve(options.reuseFromDirectory);
+    for (const prior of [undefined, ...(options.reuseAlternatives ?? [])]) {
+      const videoMode: VideoExportMode = options.videoMode === "copy" ? "copy" : "encode";
+      const reused = await reuseMenuLoopMedia(input, options, sourceDirectory, output, mediaDirectory, planPath, prior, { codec, crf, preset, hdrMode, videoMode }, { invoke, ffprobe, timeoutMs });
+      if (reused) return reused;
+    }
   }
 
   validateOptionalByteLimit("maxAssetBytes", options.maxAssetBytes);
@@ -299,28 +368,27 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const estimate = estimateMenuLoopBudget(exportDuration45k, input.audioTracks.length, rates);
   const backgroundPath = `${assetDirectory}/background.mp4`;
   const audioPaths = input.audioTracks.map((track) => `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`);
-  for (const [path, bytes] of [[backgroundPath, estimate.videoBytes] as const, ...audioPaths.map((path, index) => [path, estimate.audioBytes[index]!] as const)]) {
+  for (const path of [backgroundPath, ...audioPaths]) await ensureAbsent(resolve(output, path));
+  for (const [path, bytes] of audioPaths.map((path, index) => [path, estimate.audioBytes[index]!] as const)) {
     assertEstimateWithinLimit({ scope: "asset", estimateBytes: BigInt(bytes), limitBytes: options.maxAssetBytes, message: `Estimated media asset '${path}' exceeds maxAssetBytes before encoding.` });
-    await ensureAbsent(resolve(output, path));
   }
 
   const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
 
-  const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"], timeoutMs)).stdout);
-  const ffprobeVersion = firstLine((await invoke(ffprobe, ["-version"], timeoutMs)).stdout);
+  // Tool versions and build capabilities do not change while a package is being
+  // built, so they are probed once per runner instead of once per clip.
+  const facts = await toolFacts(run, invoke, ffmpeg, ffprobe, timeoutMs);
+  const ffmpegVersion = facts.ffmpegVersion;
+  const ffprobeVersion = facts.ffprobeVersion;
   const encoderArgs = ["-hide_banner", "-encoders"];
-  const encoderList = await invoke(ffmpeg, encoderArgs, timeoutMs);
-  const availableEncoders = `${encoderList.stdout}\n${encoderList.stderr}`;
-  const missingEncoders = [videoEncoderName(codec), "aac"].filter((name) => !hasEncoder(availableEncoders, name));
+  const missingEncoders = [videoEncoderName(codec), "aac"].filter((name) => !hasEncoder(facts.encoders, name));
   if (missingEncoders.length) throw new MediaToolError({
     code: "MEDIA_ENCODER_UNAVAILABLE", executable: ffmpeg, args: encoderArgs,
     message: `FFmpeg does not advertise required encoder${missingEncoders.length > 1 ? "s" : ""} ${missingEncoders.join(", ")}.`,
   });
   // Tone mapping needs zscale (libzimg); the export keeps HDR signalling and
   // reports a warning when the filter is not compiled in.
-  const filterArgs = ["-hide_banner", "-filters"];
-  const filterList = await invoke(ffmpeg, filterArgs, timeoutMs);
-  const availableFilters = `${filterList.stdout}\n${filterList.stderr}`;
+  const availableFilters = facts.filters;
   const sourceProbe = parseProbe((await invoke(ffprobe, probeArgs(input.sourcePath, true), timeoutMs)).stdout, input.sourcePath);
   const sourceStart = Number(sourceProbe.format?.start_time);
   if (!Number.isFinite(sourceStart)) throw new Error(`ffprobe did not report the source timeline start for '${input.sourcePath}'.`);
@@ -328,54 +396,111 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const seekSeconds = rawSeekSeconds < 0.000001 ? 0 : rawSeekSeconds;
   const videoStream = findPidStream(sourceProbe, input.videoPid, "video", input.sourcePath);
   if (!new Set(["h264", "hevc"]).has(videoStream.codec_name ?? "")) throw new Error(`Top Menu Clip ${input.clipId} video PID ${input.videoPid} uses unsupported codec ${videoStream.codec_name ?? "unknown"}; H.264 and HEVC inputs are supported.`);
-  const audioStreams = input.audioTracks.map((track) => ({ track, stream: findPidStream(sourceProbe, track.pid, "audio", input.sourcePath) }));
+  // Every declared track is checked against the probe before anything is written.
+  for (const track of input.audioTracks) findPidStream(sourceProbe, track.pid, "audio", input.sourcePath);
   const aspectRatio = displayAspectRatio(videoStream);
   const colorPlan = planVideoColor(readSourceColor(videoStream), {
     policy: hdrMode, codec,
     hasZscale: hasFilter(availableFilters, "zscale"),
   });
-  const encoding: MenuLoopEncoding = { codec, crf, preset, color: colorPlan };
+  // A stream copy keeps the source bitstream, so nothing may be filtered and the
+  // copy has to begin where a player begins decoding. libbluray seeks to the entry
+  // point at or before the PlayItem in-time (`clpi_lookup_spn(in_time, before=1)`
+  // in navigation.c) and then wipes packets until the first PES with `pts >=
+  // in_time` (m2ts_filter.c), so the first presented frame is the one holding the
+  // start. Entry-point times are stored as `coarse << 18 | fine << 8`, i.e. the
+  // frame time floored to a 256-tick grid, so a start within that grid names that
+  // same frame; a later start would copy leading frames the player never shows.
+  const copyRequested = options.videoMode === "copy";
+  const copyHeadroom45k = input.copyStart45k === undefined ? undefined : exportStart45k - input.copyStart45k;
+  // An input seek is measured from the container start and lands on the last
+  // keyframe at or before it. Seeking to the declared start therefore selects the
+  // keyframe that holds it — the one a player decodes first — while the entry
+  // point sits below that keyframe by up to 256 ticks and would step back one.
+  const copySeekSeconds = seekSeconds;
+  const copyDurationSeconds = exportDuration + (copyHeadroom45k ?? 0) / 45_000;
+  let copyRefusal = copyRequested ? copyRefusalReason(videoStream, colorPlan, copyHeadroom45k, codec) : undefined;
+  let videoMode: VideoExportMode = copyRequested && copyRefusal === undefined ? "copy" : "encode";
+  const warnings: MediaWarning[] = [...colorPlan.warnings];
+  if (copyRefusal !== undefined) warnings.push({ code: "MEDIA_REMUX_UNAVAILABLE", message: `Video stream copy was not used: ${copyRefusal}. The clip is encoded instead.` });
   await mkdir(mediaDirectory, { recursive: true });
 
   const backgroundAbsolute = resolve(output, backgroundPath);
   const created: string[] = [];
+  // One ffmpeg process demuxes the clip once and writes the background plus one
+  // AAC file per declared track. A pass per track re-read the whole clip from the
+  // disc (a six-track 2 GB menu cost seven reads of the same bytes), and because
+  // a process ends when its slowest output does, the audio never serializes
+  // behind the video.
+  const reportBackground = (progress: MediaProcessProgress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: exportDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid, videoMode } });
+  const audioOutputs = input.audioTracks.map((track) => {
+    const relativePath = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
+    return { track, relativePath, absolutePath: resolve(output, relativePath) };
+  });
+  // The copy seeks the input to the declared start, so every audio output already
+  // begins there; an encoded start is seeked per output and needs the same offset.
+  const audioStartSeconds = videoMode === "copy" ? 0 : seekSeconds;
+  const audioArgs = audioOutputs.flatMap(({ track, absolutePath }) => [
+    ...(audioStartSeconds > 0.000001 ? ["-ss", String(audioStartSeconds)] : []),
+    "-map", pidSpecifier(track.pid), "-vn", "-sn", "-dn", "-t", String(exportDuration),
+    "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+    "-metadata:s:a:0", `language=${safeLanguage(track.language)}`, "-f", "ipod", absolutePath,
+  ]);
   try {
     created.push(backgroundAbsolute);
-    await runWithBudget(ffmpeg, [
-      "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n", "-i", input.sourcePath,
-      "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(exportDuration),
-      "-vf", colorPlan.videoFilter, ...videoEncoderArgs(colorPlan, codec, crf, preset), "-aspect", aspectRatio, "-fps_mode", "passthrough",
-      "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
-    ], timeoutMs, backgroundAbsolute, options.maxAssetBytes, invoke, options.signal,
-    (progress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: exportDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid } }));
-    const backgroundProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
-    let outputVideo: ProbeStream;
-    let videoDuration: number;
-    try {
-      outputVideo = requireOneStream(backgroundProbe, "video", backgroundAbsolute);
-      if (!positive(outputVideo.width) || !positive(outputVideo.height) || outputVideo.width % 2 !== 0 || outputVideo.height % 2 !== 0) throw new Error(`Encoded background video '${backgroundPath}' failed even-dimension verification.`);
-      assertEncodedColor(outputVideo, colorPlan, codec, backgroundPath);
-      if (!sameAspectRatio(displayAspectRatio(outputVideo), aspectRatio)) throw new Error(`Encoded background video '${backgroundPath}' display aspect ratio differs from source ratio ${aspectRatio}.`);
-      videoDuration = streamDuration(outputVideo, backgroundProbe);
-      assertDuration(videoDuration, exportDuration, backgroundPath);
-    } catch (error) { throw outputInvalid(backgroundAbsolute, ffprobe, error); }
+    for (const { absolutePath } of audioOutputs) created.push(absolutePath);
+    let background: { duration: number; width: number; height: number } | undefined;
+    let audioWritten = false;
+    if (videoMode === "copy") {
+      try {
+        await runWithBudget(ffmpeg, [
+          "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n",
+          ...(copySeekSeconds > 0 ? ["-ss", String(copySeekSeconds)] : []), "-i", input.sourcePath,
+          "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(copyDurationSeconds),
+          "-c:v", "copy", "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
+          ...audioArgs,
+        ], timeoutMs, [backgroundAbsolute, ...audioOutputs.map(({ absolutePath }) => absolutePath)], options.maxAssetBytes, invoke, options.signal, reportBackground);
+        audioWritten = audioOutputs.length > 0;
+        const copiedProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
+        try { background = verifyCopiedVideo(copiedProbe, videoStream, aspectRatio, copyDurationSeconds, backgroundPath); }
+        catch (error) { throw outputInvalid(backgroundAbsolute, ffprobe, error); }
+      } catch (error) {
+        if (!(error instanceof MediaJobError) || error.diagnostic.code !== "MEDIA_OUTPUT_INVALID") throw error;
+        await unlink(backgroundAbsolute).catch(() => undefined);
+        copyRefusal = error instanceof Error ? error.message : String(error);
+        videoMode = "encode";
+        warnings.push({ code: "MEDIA_REMUX_UNAVAILABLE", message: `Copied video was discarded after verification and the clip is encoded instead: ${copyRefusal}` });
+      }
+    }
+    if (background === undefined) {
+      assertEstimateWithinLimit({ scope: "asset", estimateBytes: BigInt(estimate.videoBytes), limitBytes: options.maxAssetBytes, message: `Estimated media asset '${backgroundPath}' exceeds maxAssetBytes before encoding.` });
+      await runWithBudget(ffmpeg, [
+        "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n", "-i", input.sourcePath,
+        "-ss", String(seekSeconds), "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(exportDuration),
+        "-vf", colorPlan.videoFilter, ...videoEncoderArgs(colorPlan, codec, crf, preset), "-aspect", aspectRatio, "-fps_mode", "passthrough",
+        "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
+        // A copy that only failed verification on the video already left its
+        // audio on disk, so the re-encode writes the video alone.
+        ...(audioWritten ? [] : audioArgs),
+      ], timeoutMs, [backgroundAbsolute, ...audioOutputs.map(({ absolutePath }) => absolutePath)], options.maxAssetBytes, invoke, options.signal, reportBackground);
+      const backgroundProbe = await probeEncodedOutput(ffprobe, backgroundAbsolute, timeoutMs, invoke);
+      try {
+        const stream = requireOneStream(backgroundProbe, "video", backgroundAbsolute);
+        if (!positive(stream.width) || !positive(stream.height) || stream.width % 2 !== 0 || stream.height % 2 !== 0) throw new Error(`Encoded background video '${backgroundPath}' failed even-dimension verification.`);
+        assertEncodedColor(stream, colorPlan, codec, backgroundPath);
+        if (!sameAspectRatio(displayAspectRatio(stream), aspectRatio)) throw new Error(`Encoded background video '${backgroundPath}' display aspect ratio differs from source ratio ${aspectRatio}.`);
+        const duration = streamDuration(stream, backgroundProbe);
+        assertDuration(duration, exportDuration, backgroundPath);
+        background = { duration, width: stream.width, height: stream.height };
+      } catch (error) { throw outputInvalid(backgroundAbsolute, ffprobe, error); }
+    }
+    const videoDuration = background.duration;
     const expectedDuration = exportDuration;
     const backgroundStat = await stat(backgroundAbsolute);
 
     const audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number }> = [];
     const files = [{ path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size }];
-    for (const { track } of audioStreams) {
-      const stem = `audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}`;
-      const relativePath = `${assetDirectory}/${stem}.m4a`;
-      const absolutePath = resolve(output, relativePath);
-      created.push(absolutePath);
-      await runWithBudget(ffmpeg, [
-        "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n", "-i", input.sourcePath,
-        "-ss", String(seekSeconds), "-map", pidSpecifier(track.pid), "-vn", "-sn", "-dn", "-t", String(expectedDuration),
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
-        "-metadata:s:a:0", `language=${safeLanguage(track.language)}`, "-f", "ipod", absolutePath,
-      ], timeoutMs, absolutePath, options.maxAssetBytes, invoke, options.signal,
-      (progress) => options.onProgress?.({ ...progress, assetPath: relativePath, durationSeconds: expectedDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "audio", pid: track.pid, language: track.language } }));
+    for (const { track, relativePath, absolutePath } of audioOutputs) {
       const audioProbe = await probeEncodedOutput(ffprobe, absolutePath, timeoutMs, invoke);
       let audioDuration: number;
       try {
@@ -390,15 +515,23 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       audioTracks.push({ ...asset, codec: "aac", pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: audioDuration, ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) });
     }
 
-    const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, encoding);
+    const encoding: MenuLoopEncoding = { mode: videoMode, codec, crf, preset, color: colorPlan };
+    const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, encoding, false, [
+      ...(videoMode === "copy" ? ["The background video is a bit-exact copy of the source H.264 stream; only its dimensions, colour signalling, and duration are verified."] : []),
+      ...(copyRefusal === undefined ? [] : [`Video stream copy is unavailable for this clip: ${copyRefusal}`]),
+    ]);
     created.push(planAbsolute);
-    await writeFile(planAbsolute, `${JSON.stringify(plan, null, 2)}\n`, { flag: "wx" });
-    const actualOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
+    const planText = `${JSON.stringify(plan, null, 2)}\n`;
+    await writeFile(planAbsolute, planText, { flag: "wx" });
+    // The package size is carried forward from the walk taken before this clip
+    // instead of walking the growing package a second time.
+    const wroteBytes = files.reduce((total, file) => total + BigInt(file.byteLength), 0n) + BigInt(Buffer.byteLength(planText));
+    const actualOutputBytes = existingOutputBytes + wroteBytes;
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return {
       plan, outputSize, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
-      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec, pid: input.videoPid, width: outputVideo.width, height: outputVideo.height, durationSeconds: videoDuration, loop: loopBackground(input), ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) },
-      audioTracks, files, warnings: colorPlan.warnings,
+      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec, pid: input.videoPid, width: background.width, height: background.height, durationSeconds: videoDuration, loop: loopBackground(input), ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) },
+      audioTracks, files, warnings,
     };
   } catch (error) {
     await Promise.all(created.map((path) => unlink(path).catch(() => undefined)));
@@ -406,16 +539,15 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   }
 }
 
-async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions, sourceDirectory: string, output: string, mediaDirectory: string, planPath: string, encoding: ReuseEncoding): Promise<MenuLoopMediaResult | null> {
+async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions, sourceDirectory: string, output: string, mediaDirectory: string, planPath: string, prior: { assetDirectory: string; planPath: string } | undefined, encoding: ReuseEncoding, probe: ReuseProbe): Promise<MenuLoopMediaResult | null> {
   const assetDirectory = normalizePackageDirectory(options.assetDirectory ?? "assets/media");
-  let priorPlan: MediaPlan;
-  let priorManifest: Record<string, unknown>;
-  try {
-    priorPlan = JSON.parse(await readFile(resolve(sourceDirectory, planPath), "utf8")) as MediaPlan;
-    priorManifest = JSON.parse(await readFile(resolve(sourceDirectory, "asset-manifest.json"), "utf8")) as Record<string, unknown>;
-  } catch { return null; }
-  if (!matchesReusablePlan(priorPlan, input, encoding)) return null;
-  const reusableEncoding: MenuLoopEncoding = { codec: encoding.codec, crf: encoding.crf, preset: encoding.preset, color: priorPlan.encoding.video.color };
+  const priorDirectory = prior?.assetDirectory ?? assetDirectory;
+  const priorPlanPath = prior?.planPath ?? planPath;
+  const priorPlan = await readPriorPlan(resolve(sourceDirectory, priorPlanPath));
+  if (priorPlan === null || !matchesReusablePlan(priorPlan, input, encoding)) return null;
+  const priorManifest = await readPriorManifest(sourceDirectory) ?? await probePriorManifest(sourceDirectory, input, priorDirectory, priorPlan, probe);
+  if (priorManifest === null) return null;
+  const reusableEncoding: MenuLoopEncoding = { mode: priorPlan.encoding.video.mode, codec: encoding.codec, crf: encoding.crf, preset: encoding.preset, color: priorPlan.encoding.video.color };
   type PriorPackagedMedia = { plan?: { playlistId?: string; playItemIndex?: number }; background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> };
   const priorMenuMedia = Array.isArray(priorManifest.menuMedia) ? priorManifest.menuMedia as PriorPackagedMedia[] : [];
   // One menu playlist can carry several packaged PlayItems; the plan must match
@@ -424,25 +556,30 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     .find((candidate) => candidate?.plan?.playlistId === input.playlistId && (candidate.plan.playItemIndex ?? 0) === input.playItemIndex);
   const priorBackground = media?.background;
   const priorAudioTracks = media?.audioTracks;
+  const priorBackgroundPath = `${priorDirectory}/background.mp4`;
   const backgroundPath = `${assetDirectory}/background.mp4`;
-  if (!priorBackground || priorBackground.path !== backgroundPath || priorBackground.codec !== encoding.codec || priorBackground.pid !== input.videoPid
+  if (!priorBackground || priorBackground.path !== priorBackgroundPath || priorBackground.codec !== encoding.codec || priorBackground.pid !== input.videoPid
     || !positive(priorBackground.width) || !positive(priorBackground.height)
     || typeof priorBackground.durationSeconds !== "number" || !Number.isFinite(priorBackground.durationSeconds)
     || priorBackground.loop !== loopBackground(input) || !Array.isArray(priorAudioTracks) || priorAudioTracks.length !== input.audioTracks.length) return null;
   const audioRecords = input.audioTracks.map((track) => {
-    const path = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
-    const previous = priorAudioTracks.find((candidate) => candidate.pid === track.pid && candidate.streamNumber === track.streamNumber && candidate.language === track.language && candidate.path === path && candidate.codec === "aac");
+    const name = `audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
+    const priorPath = `${priorDirectory}/${name}`;
+    const previous = priorAudioTracks.find((candidate) => candidate.pid === track.pid && candidate.streamNumber === track.streamNumber && candidate.language === track.language && candidate.path === priorPath && candidate.codec === "aac");
     if (!previous || typeof previous.durationSeconds !== "number" || !Number.isFinite(previous.durationSeconds)) return null;
-    return { track, path, previous };
+    return { track, priorPath, path: `${assetDirectory}/${name}`, previous };
   });
   if (audioRecords.some((record) => record === null)) return null;
-  const sourceFiles = [backgroundPath, ...audioRecords.map((record) => record!.path)];
+  const transfers = [
+    { source: priorBackgroundPath, destination: backgroundPath },
+    ...audioRecords.map((record) => ({ source: record!.priorPath, destination: record!.path })),
+  ];
   const sourceSizes = new Map<string, number>();
   try {
-    for (const path of sourceFiles) {
-      const info = await stat(resolve(sourceDirectory, path));
+    for (const { source } of transfers) {
+      const info = await stat(resolve(sourceDirectory, source));
       if (!info.isFile()) return null;
-      sourceSizes.set(path, info.size);
+      sourceSizes.set(source, info.size);
     }
   } catch { return null; }
 
@@ -453,20 +590,22 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     containerOverheadPercent: options.containerOverheadPercent ?? 5,
   };
   validateBudgetRates(rates);
-  const estimate = estimateMenuLoopBudget(durationSeconds(input) * 45_000, input.audioTracks.length, rates);
-  for (const path of sourceFiles) assertActualWithinLimit({ scope: "asset", actualBytes: BigInt(sourceSizes.get(path)!), limitBytes: options.maxAssetBytes, message: `Reused media asset '${path}' exceeds maxAssetBytes.` });
+  const reuseStart45k = input.includeIntro ? input.inTime45k : input.loopStart45k ?? input.inTime45k;
+  // The span stays in 45 kHz ticks; a seconds round trip can land one tick short.
+  const estimate = estimateMenuLoopBudget(input.outTime45k - reuseStart45k, input.audioTracks.length, rates);
+  for (const { source } of transfers) assertActualWithinLimit({ scope: "asset", actualBytes: BigInt(sourceSizes.get(source)!), limitBytes: options.maxAssetBytes, message: `Reused media asset '${source}' exceeds maxAssetBytes.` });
   const existingOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
   await mkdir(mediaDirectory, { recursive: true });
   const copied: string[] = [];
   try {
-    for (const path of sourceFiles) {
-      const destination = resolve(output, path);
-      await ensureAbsent(destination);
-      await copyFile(resolve(sourceDirectory, path), destination);
-      copied.push(destination);
+    for (const { source, destination } of transfers) {
+      const target = resolve(output, destination);
+      await ensureAbsent(target);
+      await copyFile(resolve(sourceDirectory, source), target);
+      copied.push(target);
     }
     const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, reusableEncoding, true);
-    const files = sourceFiles.map((path) => ({ path, absolutePath: resolve(output, path), byteLength: sourceSizes.get(path)! }));
+    const files = transfers.map(({ destination, source }) => ({ path: destination, absolutePath: resolve(output, destination), byteLength: sourceSizes.get(source)! }));
     const backgroundFile = files[0]!;
     const audioTracks = audioRecords.map((record, index) => {
       const file = files[index + 1]!;
@@ -477,6 +616,10 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     copied.push(planAbsolute);
     const actualOutputBytes = await directoryBytesExcluding(output, resolve(input.sourcePath));
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
+    // A reused clip is finished before it starts. Reporting it keeps the plan's
+    // progress in step with the clip counter instead of leaving the bar parked at
+    // the reused fraction while the remaining clips encode.
+    options.onProgress?.({ state: "end", outTimeSeconds: priorBackground.durationSeconds, durationSeconds: priorBackground.durationSeconds, assetPath: backgroundPath, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid, videoMode: reusableEncoding.mode, reused: true } });
     return {
       plan, outputSize, tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
       background: { ...backgroundFile, codec: encoding.codec, pid: input.videoPid, width: priorBackground.width, height: priorBackground.height, durationSeconds: priorBackground.durationSeconds, loop: loopBackground(input), ...(typeof priorBackground.loopStartSeconds === "number" ? { loopStartSeconds: priorBackground.loopStartSeconds } : {}) },
@@ -493,6 +636,56 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
   }
 }
 
+interface ReuseProbe { readonly invoke: MediaProcessRunner; readonly ffprobe: string; readonly timeoutMs: number }
+
+type StoredVideoEncoding = Omit<MediaPlan["encoding"]["video"], "mode"> & { mode?: VideoExportMode };
+type StoredPlan = Omit<MediaPlan, "encoding"> & { encoding: Omit<MediaPlan["encoding"], "video"> & { video: StoredVideoEncoding } };
+
+async function readPriorPlan(path: string): Promise<MediaPlan | null> {
+  let stored: StoredPlan;
+  try { stored = JSON.parse(await readFile(path, "utf8")) as StoredPlan; } catch { return null; }
+  const video: MediaPlan["encoding"]["video"] = { ...stored.encoding.video, mode: stored.encoding.video.mode ?? "encode" };
+  return { ...stored, encoding: { ...stored.encoding, video } };
+}
+
+async function readPriorManifest(sourceDirectory: string): Promise<Record<string, unknown> | null> {
+  try { return JSON.parse(await readFile(resolve(sourceDirectory, "asset-manifest.json"), "utf8")) as Record<string, unknown>; } catch { return null; }
+}
+
+/**
+ * Manifest facts for a directory that has none.
+ *
+ * A committed package records stream identity and duration in `asset-manifest.json`.
+ * A run that stopped before its commit leaves the media plan beside its assets, so
+ * those facts are read back from the files. Each asset must hold one stream of the
+ * planned kind and match the plan's duration, which keeps a partly written file out
+ * of the reuse path and sends that clip back through the encoder.
+ */
+async function probePriorManifest(sourceDirectory: string, input: MenuLoopMediaInput, assetDirectory: string, planned: MediaPlan, probe: ReuseProbe): Promise<Record<string, unknown> | null> {
+  const backgroundPath = `${assetDirectory}/background.mp4`;
+  try {
+    const backgroundProbe = await probeEncodedOutput(probe.ffprobe, resolve(sourceDirectory, backgroundPath), probe.timeoutMs, probe.invoke);
+    const background = requireOneStream(backgroundProbe, "video", backgroundPath);
+    if (!positive(background.width) || !positive(background.height)) return null;
+    const backgroundDuration = streamDuration(background, backgroundProbe);
+    assertDuration(backgroundDuration, planned.durationSeconds, backgroundPath);
+    const audioTracks: Array<Record<string, unknown>> = [];
+    for (const track of input.audioTracks) {
+      const path = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
+      const audioProbe = await probeEncodedOutput(probe.ffprobe, resolve(sourceDirectory, path), probe.timeoutMs, probe.invoke);
+      const audio = requireOneStream(audioProbe, "audio", path);
+      const duration = streamDuration(audio, audioProbe);
+      assertDuration(duration, planned.durationSeconds, path);
+      audioTracks.push({ path, codec: audio.codec_name, pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: duration });
+    }
+    return { media: {
+      plan: { playlistId: planned.playlistId, playItemIndex: planned.playItemIndex },
+      background: { path: backgroundPath, codec: background.codec_name, pid: planned.videoPid, width: background.width, height: background.height, durationSeconds: backgroundDuration, loop: loopBackground(input) },
+      audioTracks,
+    } };
+  } catch { return null; }
+}
+
 function matchesReusablePlan(plan: MediaPlan, input: MenuLoopMediaInput, encoding: ReuseEncoding): boolean {
   const loop = loopBackground(input);
   const mode = input.stillMode === 2 ? "still-last-frame" : loop ? "loop-one-clip" : "single-clip";
@@ -501,6 +694,7 @@ function matchesReusablePlan(plan: MediaPlan, input: MenuLoopMediaInput, encodin
     && plan.loopStart45k === input.loopStart45k && plan.includeIntro === input.includeIntro && plan.repeatCount === input.repeatCount && plan.backgroundMode === mode
     && plan.videoPid === input.videoPid && plan.encoding?.video?.codec === encoding.codec && plan.encoding.video.preset === encoding.preset && plan.encoding.video.crf === encoding.crf
     && plan.encoding.video.color?.policy === encoding.hdrMode
+    && plan.encoding.video.mode === encoding.videoMode
     && plan.audioTracks.length === input.audioTracks.length && plan.audioTracks.every((track, index) => {
       const current = input.audioTracks[index]!;
       return track.streamNumber === current.streamNumber && track.pid === current.pid && track.language === current.language;
@@ -508,6 +702,47 @@ function matchesReusablePlan(plan: MediaPlan, input: MenuLoopMediaInput, encodin
 }
 
 export function pidSpecifier(pid: number): string { validatePid(pid); return `0:i:0x${pid.toString(16)}`; }
+
+/**
+ * Entry-point times have a 256-tick grid at 45 kHz (`coarse << 18 | fine << 8`),
+ * so the recorded PTS is the frame's presentation time floored by up to
+ * 5.689 ms. A start inside that window is that frame.
+ */
+const ENTRY_POINT_QUANTUM_45K = 256;
+
+function copyRefusalReason(stream: ProbeStream, plan: VideoColorPlan, headroom45k: number | undefined, codec: VideoCodec): string | undefined {
+  if (codec !== "h264") return `the requested codec is ${codec}`;
+  if (stream.codec_name !== "h264") return `the source video is ${stream.codec_name ?? "an unknown codec"}`;
+  if (isHdrDynamicRange(plan.source.dynamicRange)) return `the source is ${plan.source.dynamicRange} and needs tone mapping`;
+  if (plan.filterChain !== "passthrough") return `the colour plan needs the ${plan.filterChain} pipeline`;
+  const bitDepth = pixelFormatBitDepth(stream.pix_fmt);
+  if (bitDepth !== 8 || stream.pix_fmt?.includes("420") !== true) return `the source pixel format is ${stream.pix_fmt ?? "unknown"}`;
+  if (!positive(stream.width) || !positive(stream.height) || stream.width % 2 !== 0 || stream.height % 2 !== 0) return `the source frame is ${stream.width ?? "?"}x${stream.height ?? "?"}`;
+  if (headroom45k === undefined) return "the clip entry point for the segment is unknown";
+  if (headroom45k < 0) return `the segment starts ${(-headroom45k / 45_000).toFixed(3)}s before its clip entry point`;
+  if (headroom45k > ENTRY_POINT_QUANTUM_45K) return `the segment starts ${(headroom45k / 45_000).toFixed(3)}s after the covering keyframe`;
+  return undefined;
+}
+
+function verifyCopiedVideo(probe: ProbeResult, source: ProbeStream, aspectRatio: string, expectedDuration: number, path: string): { duration: number; width: number; height: number } {
+  const stream = requireOneStream(probe, "video", path);
+  if (stream.codec_name !== source.codec_name) throw new Error(`Copied video '${path}' uses codec ${stream.codec_name ?? "unknown"}; expected ${source.codec_name ?? "unknown"}.`);
+  if (!positive(stream.width) || !positive(stream.height) || stream.width % 2 !== 0 || stream.height % 2 !== 0) throw new Error(`Copied video '${path}' failed even-dimension verification.`);
+  const width = stream.width;
+  const height = stream.height;
+  if (!sameAspectRatio(displayAspectRatio(stream), aspectRatio)) throw new Error(`Copied video '${path}' display aspect ratio differs from source ratio ${aspectRatio}.`);
+  for (const [field, actual, expected] of [
+    ["color_primaries", stream.color_primaries, source.color_primaries],
+    ["color_transfer", stream.color_transfer, source.color_transfer],
+    ["color_space", stream.color_space, source.color_space],
+  ] as const) {
+    if (normalizeColorTag(actual) !== normalizeColorTag(expected)) throw new Error(`Copied video '${path}' changed ${field} from ${normalizeColorTag(expected) ?? "unspecified"} to ${normalizeColorTag(actual) ?? "unspecified"}.`);
+  }
+  const duration = streamDuration(stream, probe);
+  assertDuration(duration, expectedDuration, path);
+  return { duration, width, height };
+}
+
 function loopBackground(input: Pick<MenuLoopMediaInput, "stillMode" | "repeatCount" | "loopBackground">): boolean {
   return input.loopBackground ?? (input.stillMode !== 2 && input.repeatCount > 1);
 }
@@ -673,7 +908,7 @@ function normalizePackagePath(value: string): string {
   return normalized;
 }
 
-function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, maxAssetBytes: number | null, encoding: MenuLoopEncoding, reused = false): MediaPlan {
+function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, maxAssetBytes: number | null, encoding: MenuLoopEncoding, reused = false, notes: readonly string[] = []): MediaPlan {
   const fallback = encoding.color.filterChain === "hdr-passthrough-fallback";
   const hdrWithoutHevc = encoding.codec === "h264" && encoding.color.output.bitDepth === 10;
   return {
@@ -685,6 +920,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
     audioTracks: input.audioTracks.map((track) => ({ ...track })),
     encoding: {
       video: {
+        mode: encoding.mode,
         codec: encoding.codec, pixelFormat: `yuv420p${encoding.color.output.bitDepth === 10 ? "10le" : ""}`, preset: encoding.preset, crf: encoding.crf,
         aspectRatioPolicy: "preserve-source-display-aspect", frameRatePolicy: "passthrough", evenDimensions: true,
         color: { policy: encoding.color.policy, source: encoding.color.source, output: encoding.color.output, filterChain: encoding.color.filterChain },
@@ -698,16 +934,23 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
       "Multi-PlayItem linear precomposition and branch-specific feature media are unsupported by this menu background export contract.",
       ...(fallback ? ["No tone mapping filter is available; HDR source signalling is preserved and SDR displays render this asset with reduced contrast. Install an FFmpeg build with libzimg to convert HDR to SDR."] : []),
       ...(hdrWithoutHevc ? ["HDR signalling is written into an H.264 stream, which browsers decode as SDR; use --codec hevc to keep HDR playback."] : []),
+      ...notes,
       reused ? "Encoded assets are reused from a prior package when its media plan matches; source content changes at the same path are not fingerprinted." : "On overwrite, prior media assets are reused when playlist, clip, time bounds, stream declarations, and encoding settings match; source content changes at the same path are not fingerprinted.",
     ],
   };
 }
 
-async function runWithBudget(executable: string, args: string[], timeoutMs: number, assetPath: string, maxAssetBytes: number | null | undefined, run: MediaProcessRunner, externalSignal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
+async function runWithBudget(executable: string, args: string[], timeoutMs: number, assetPaths: readonly string[], maxAssetBytes: number | null | undefined, run: MediaProcessRunner, externalSignal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
   const controller = new AbortController();
   let stopMonitor: (() => void) | undefined;
   let externalAbortHandler: (() => void) | undefined;
   const processPromise = run(executable, args, timeoutMs, controller.signal, onProgress);
+  // One process can write several assets, so the cap is enforced on each of them.
+  const assertAssetsWithinLimit = async (phase: "during encoding" | "at process completion") => {
+    for (const assetPath of assetPaths) {
+      assertActualWithinLimit({ scope: "asset", actualBytes: await pathBytes(assetPath), limitBytes: maxAssetBytes, message: `Encoded media asset '${assetPath}' exceeded maxAssetBytes ${phase}.` });
+    }
+  };
   const monitorPromise = new Promise<never>((_resolve, reject) => {
     let checkingAsset = false;
     const fail = (error: unknown) => {
@@ -717,10 +960,7 @@ async function runWithBudget(executable: string, args: string[], timeoutMs: numb
     const checkAsset = async () => {
       if (checkingAsset) return;
       checkingAsset = true;
-      try {
-        const assetBytes = await pathBytes(assetPath);
-        assertActualWithinLimit({ scope: "asset", actualBytes: assetBytes, limitBytes: maxAssetBytes, message: `Encoded media asset '${assetPath}' exceeded maxAssetBytes during encoding.` });
-      } catch (error) { fail(error); }
+      try { await assertAssetsWithinLimit("during encoding"); } catch (error) { fail(error); }
       finally { checkingAsset = false; }
     };
     const assetTimer = setInterval(() => { void checkAsset(); }, 10);
@@ -737,7 +977,7 @@ async function runWithBudget(executable: string, args: string[], timeoutMs: numb
   });
   try {
     const result = await Promise.race([processPromise, monitorPromise, externalAbortPromise]);
-    assertActualWithinLimit({ scope: "asset", actualBytes: await pathBytes(assetPath), limitBytes: maxAssetBytes, message: `Encoded media asset '${assetPath}' exceeded maxAssetBytes at process completion.` });
+    await assertAssetsWithinLimit("at process completion");
     return result;
   } catch (error) {
     controller.abort();
