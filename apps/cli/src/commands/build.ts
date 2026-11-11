@@ -6,6 +6,7 @@ import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/sta
 import { ProgressReporter } from "../progress.js";
 import { buildMediaClosure } from "../shared/media.js";
 import { collectBdjApplicationFiles } from "../shared/bdj-files.js";
+import { buildBdjHostApiJar } from "../shared/bdj-host.js";
 import { normalizeDiscId, readBdmvDiscId } from "../shared/disc-id.js";
 import { referencedAssetIds, safeDiagnosticMessage } from "./extract.js";
 import { readJsonObject } from "../cli/output.js";
@@ -362,6 +363,7 @@ export async function build(): Promise<void> {
     return;
   }
   progress.done(CONVERT_STEPS.structure, `${countOf(disc.entries.length, "entry", "entries")} · ${countOf(disc.playlists.length, "playlist", "playlists")} · ${countOf(disc.clips.length, "clip", "clips")}`);
+  const bdjHostApiJar = bdjFiles.files.length ? await buildBdjHostApiJar() : undefined;
   const out = plannedOut ?? resolve(dirname(disc.root), "BDMV-menu");
   const title = plannedTitle ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
@@ -456,7 +458,7 @@ export async function build(): Promise<void> {
         ...(firstPlayHdmv === undefined ? {} : { vmFirstPlayProgramId: firstPlayHdmv }),
         ...(mediaEncoding ? { mediaEncoding } : {}),
         soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
-        bdjFiles: bdjFiles.files, ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdjMenuMediaInputs, ...(mediaEncoding ? { menuMediaEncoding: mediaEncoding } : {}), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
+        bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdjMenuMediaInputs, ...(mediaEncoding ? { menuMediaEncoding: mediaEncoding } : {}), bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
         diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
         onPhase: (phase) => {
           if (phase === "assets") { progress.skip(CONVERT_STEPS.media, "no HDMV menu loop"); progress.start(CONVERT_STEPS.package); return; }
@@ -625,7 +627,7 @@ export async function build(): Promise<void> {
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
       ...(bdjFiles.files.length ? { bdjFiles: bdjFiles.files } : {}),
-      ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
+      ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjHostApiJar: bdjHostApiJar!, bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
       onMediaProgress: ({ outTimeSeconds, durationSeconds, state, source }) => {
         const ratio = state === "end" ? 1 : durationSeconds > 0 ? Math.min(0.99, outTimeSeconds / durationSeconds) : 0;
         const seconds = `${Math.min(outTimeSeconds, durationSeconds).toFixed(1)}/${durationSeconds.toFixed(1)}s`;

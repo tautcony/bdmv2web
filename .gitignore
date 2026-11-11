@@ -16,3 +16,4 @@ __pycache__/
 .DS_Store
 **/.DS_Store
 build/
+packages/runtime-web/bdj-host/bdj-host-api.jar

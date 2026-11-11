@@ -25,6 +25,7 @@ describe("menu package primitives", () => {
       await buildMenuPackage({
         outputDirectory, title: "Native menu", ir, scene, graphics: [],
         bdjFiles: [{ path: "BDMV/JAR/00000.jar", sourcePath: "BDMV/JAR/00000.jar", bytes: new Uint8Array([0]) }],
+        bdjHostApiJar: new Uint8Array([0x50, 0x4b]),
         bdjLaunch: { discId: "00000000000000000000000000000000", initialBdjoId: "00000", applications: [{ bdjoId: "00000", controlCode: 1, binding: 1, organizationId: 1, applicationId: 1, initialClass: "fixture.Menu", basePath: "00000", classPath: "", parameters: [] }] },
       });
       const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");

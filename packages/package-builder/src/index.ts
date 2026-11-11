@@ -53,14 +53,6 @@ function bdjClientBundlePath(): string {
   return existsSync(besideEntry) ? besideEntry : createRequire(import.meta.url).resolve("@bdmv2web/runtime-web/bdj-client-bundle");
 }
 
-function bdjHostApiPath(): string {
-  const workspacePath = fileURLToPath(new URL("../../runtime-web/bdj-host/bdj-host-api.jar", import.meta.url));
-  if (existsSync(workspacePath)) return workspacePath;
-  const bundledPath = fileURLToPath(new URL("runtime/bdj-host-api.jar", import.meta.url));
-  if (existsSync(bundledPath)) return bundledPath;
-  throw new Error("The native BD-J host JAR is missing. Build the runtime-web Java host before packaging.");
-}
-
 export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number } = {}): PngBatch[] {
   const maxAssetBytes = options.maxAssetBytes ?? 1024 * 1024;
   const maxBatchBytes = options.maxBatchBytes ?? 4 * 1024 * 1024;
@@ -163,6 +155,8 @@ export interface MenuPackageInput {
   bdjFiles?: BdjPackageFile[];
   /** Native Java startup record for the packaged BDJO applications. */
   bdjLaunch?: { discId: string; initialBdjoId: string; applications: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>; session?: { vmPrograms: VmProgram[]; vmEntries: VmOptions["entries"]; playerProfile: PlayerProfile; vmLimits: Limits; externalTargets?: ExternalMediaTargets; bdjMenuMediaInputs?: Array<Omit<MenuLoopMediaInput, "sourcePath">>; menuMediaEncoding?: MenuMediaEncoding; bdmvPath?: string; bdjoDescriptors?: unknown[] } };
+  /** Compiled BD-J host bytes copied into this package's runtime directory. */
+  bdjHostApiJar?: Uint8Array;
   soundEntries?: SoundMetadata[];
   soundBytes?: Uint8Array | null;
   runtimeVersion?: string;
@@ -193,7 +187,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   const ir = parseDiscIR(input.ir);
   const bdjFiles = input.bdjFiles ?? [];
   const bdjRuntime = bdjFiles.length > 0;
-  if (bdjRuntime && (!input.bdjLaunch || !input.bdjLaunch.applications.length)) throw new TypeError("BD-J packages require native Java launch data and application files.");
+  if (bdjRuntime && (!input.bdjLaunch || !input.bdjLaunch.applications.length || !input.bdjHostApiJar?.byteLength)) throw new TypeError("BD-J packages require native Java launch data, application files, and a compiled host JAR.");
   const bdjFilePaths = new Set<string>();
   for (const file of bdjFiles) {
     const segments = file.path.split("/");
@@ -289,7 +283,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, file.bytes);
     }),
-    ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/bdj-host-api.jar"), await readFile(bdjHostApiPath()))] : []),
+    ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/bdj-host-api.jar"), input.bdjHostApiJar!)] : []),
     ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/session.json"), `${JSON.stringify(input.bdjLaunch)}\n`)] : []),
     writeFile(resolve(runtimeDirectory, "style.css"), PACKAGE_TEMPLATES.style),
     writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status, bdjRuntime)),

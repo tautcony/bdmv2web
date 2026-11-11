@@ -4,6 +4,8 @@
 
 `bdmv2web build <BDMV-or-parent>` packages the Java host, BDJO application JARs, authored files under `BDMV/JAR`, and Java launch/session data. The package stores launch data at `runtime/bdj/session.json`, the host at `runtime/bdj/bdj-host-api.jar`, and disc files under `bdj/BDMV/JAR/`.
 
+Workspace builds compile the Java host with `javac` and `jar` and place it directly in the generated package. The published CLI includes its compiled host for package generation.
+
 Use Java 21 or a compatible Java runtime with `java.desktop`:
 
 ```sh
