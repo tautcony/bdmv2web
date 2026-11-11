@@ -467,7 +467,11 @@ export class MenuController {
     this.hooks.render?.();
   }
   hit(x: number, y: number): number | null {
-    return this.buttonsInBogScanOrder().find((button) => this.isUsable(button) && contains(button.states.selected?.bounds ?? button.states.normal?.bounds, x, y))?.id ?? null;
+    // libbluray selects a pointer target only from BOGs whose active button has
+    // a selected-object visual, and tests that visual's geometry. A normal-only
+    // button is display content; making it the pointer target would move focus
+    // to a button that cannot show a selected state.
+    return this.buttonsInBogScanOrder().find((button) => this.isUsable(button) && contains(button.states.selected?.bounds, x, y))?.id ?? null;
   }
   // libbluray scans BOGs in page order.
   private buttonsInBogScanOrder(): MenuButton[] {

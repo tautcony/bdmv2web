@@ -364,7 +364,7 @@ describe("menu primitives", () => {
     menu.setButtonEnabled(2, false);
     expect(menu.hit(15, 15)).toBeNull();
   });
-  it("uses normal bounds when selected geometry is unavailable and resolves overlaps by BOG order", () => {
+  it("uses selected geometry for pointer hits and resolves overlaps by BOG order", () => {
     const overlap = bounds(10);
     const button = (id: number, bog: number, selected: boolean) => ({
       id, bog, enabled: true, neighbors: { up: id, down: id, left: id, right: id },
@@ -379,16 +379,46 @@ describe("menu primitives", () => {
     expect(menu.hit(15, 15)).toBe(1);
 
     testScene.pages[0]!.buttons[1]!.states = { normal: { bounds: overlap } };
+    expect(menu.hit(15, 15)).toBe(2);
+
+    testScene.pages[0]!.buttons[1]!.states = { normal: { bounds: overlap }, selected: { bounds: overlap } };
     expect(menu.hit(15, 15)).toBe(1);
+
     testScene.pages[0]!.buttons[0]!.states = { normal: { bounds: overlap } };
-    expect(menu.hit(15, 15)).toBe(1);
+    testScene.pages[0]!.buttons[1]!.states = { normal: { bounds: overlap } };
+    expect(menu.hit(15, 15)).toBeNull();
   });
-  it("hits an enabled button that only defines normal geometry", () => {
+  it("does not hit a normal-only display button", () => {
     const testScene: MenuScene = { width: 100, height: 60, pages: [{
       id: 5, defaultButtonId: 3, buttons: [{ id: 3, bog: 0, enabled: true, neighbors: { up: 3, down: 3, left: 3, right: 3 }, states: { normal: { bounds: bounds(10) } }, commands: [] }],
     }] };
     const menu = new MenuController(testScene, { handleEvent: vi.fn() });
+    expect(menu.hit(15, 15)).toBeNull();
+    expect(menu.selectFromPointer(15, 15)).toBe(false);
+    expect(menu.selectedButtonId).toBe(3);
+
+    testScene.pages[0]!.buttons[0]!.states.selected = { bounds: bounds(10) };
     expect(menu.hit(15, 15)).toBe(3);
+  });
+  it("keeps a normal-only BOG label and keyboard focus when the pointer moves over the label", () => {
+    const testScene: MenuScene = { width: 100, height: 60, pages: [{
+      id: 3, defaultButtonId: 0, bogDefaults: [{ bog: 0, defaultButtonId: 0 }, { bog: 1, defaultButtonId: 1 }, { bog: 2, defaultButtonId: 2 }], buttons: [
+        { id: 0, bog: 0, enabled: true, neighbors: { up: 0, down: 0, left: 0, right: 1 }, states: { selected: { bounds: { x: 10, y: 10, width: 9, height: 34 } } }, commands: [] },
+        { id: 1, bog: 1, enabled: true, neighbors: { up: 1, down: 1, left: 0, right: 1 }, states: { selected: { bounds: { x: 19, y: 10, width: 9, height: 34 } } }, commands: [] },
+        { id: 2, bog: 2, enabled: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: { normal: { bounds: { x: 10, y: 10, width: 109, height: 34 } } }, commands: [] },
+      ],
+    }] };
+    const menu = new MenuController(testScene, { handleEvent: vi.fn() });
+    expect(menu.selectedButtonId).toBe(0);
+
+    expect(menu.selectFromPointer(60, 20)).toBe(false);
+    expect(menu.selectedButtonId).toBe(0);
+    expect(menu.visualState(menu.page.buttons[2]!)).toBe(menu.page.buttons[2]!.states.normal);
+
+    menu.handle("right");
+    expect(menu.selectedButtonId).toBe(1);
+    menu.handle("left");
+    expect(menu.selectedButtonId).toBe(0);
   });
   it("uses selected geometry when it differs from normal geometry", () => {
     const testScene: MenuScene = { width: 100, height: 60, pages: [{

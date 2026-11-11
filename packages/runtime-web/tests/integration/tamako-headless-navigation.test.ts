@@ -127,7 +127,7 @@ describe("Tamako current-source headless navigation", () => {
         const button = menu.page.buttons.find((item) => item.id === step.button);
         if (!button || !button.enabled || !menu.isDisplayed(button)) { routeErrors.push(`page ${step.page} button ${step.button} is hidden or disabled`); break; }
         if (step.via === "pointer") {
-          const bounds = button.states.selected?.bounds ?? button.states.normal?.bounds;
+          const bounds = button.states.selected?.bounds;
           if (!bounds) { routeErrors.push(`page ${step.page} button ${step.button} has no hit bounds`); break; }
           const x = bounds.x + bounds.width / 2; const y = bounds.y + bounds.height / 2;
           const hit = menu.hit(x, y);
@@ -140,7 +140,7 @@ describe("Tamako current-source headless navigation", () => {
           } else if (button.autoAction && menu.button?.id === button.id) {
             // The target's autoAction ran on focus; do not invoke it twice.
           } else if (menu.button?.id !== button.id) {
-            const bounds = button.states.selected?.bounds ?? button.states.normal?.bounds;
+            const bounds = button.states.selected?.bounds;
             const x = bounds ? bounds.x + bounds.width / 2 : Number.NaN;
             const y = bounds ? bounds.y + bounds.height / 2 : Number.NaN;
             const hit = bounds ? menu.hit(x, y) : null;
@@ -189,7 +189,7 @@ describe("Tamako current-source headless navigation", () => {
         try { focusPath(current.menu.page, focus, button.id); }
         catch {
           via = "pointer";
-          const bounds = button.states.selected?.bounds ?? button.states.normal?.bounds;
+          const bounds = button.states.selected?.bounds;
           expect(bounds, `visible button ${from}/${button.id} has pointer bounds`).toBeDefined();
           expect(current.menu.hit(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2), `visible button ${from}/${button.id} pointer hit`).toBe(button.id);
         }
@@ -248,7 +248,7 @@ describe("Tamako current-source headless navigation", () => {
 });
 
 function hitEvidence(page: MenuPage, button: MenuPage["buttons"][number], bounds: { x: number; y: number; width: number; height: number } | null, hit: number | null, x: number, y: number, displayed: MenuPage["buttons"]): string {
-  const overlaps = displayed.filter((item) => contains(item.states.selected?.bounds ?? item.states.normal?.bounds, x, y)).map((item) => ({ id: item.id, bog: item.bog, bounds: item.states.selected?.bounds ?? item.states.normal?.bounds }));
+  const overlaps = displayed.filter((item) => contains(item.states.selected?.bounds, x, y)).map((item) => ({ id: item.id, bog: item.bog, bounds: item.states.selected?.bounds }));
   return `page ${page.id} button ${button.id} is neither keyboard nor pointer reachable; target=${JSON.stringify({ bog: button.bog, neighbors: button.neighbors, bounds })}; hit=${String(hit)}; overlapping=${JSON.stringify(overlaps)}; bogDefaults=${JSON.stringify(page.bogDefaults)}`;
 }
 

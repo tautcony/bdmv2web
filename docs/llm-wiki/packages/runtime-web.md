@@ -54,7 +54,7 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 - 每页 UO mask 不是规范十进制时记入 `invalidUoMaskPages`，该页输入全部阻断并报一次诊断；不按“全部允许”放行。
 - `MenuInputConfig.escapeMapping`：`popup`（默认）/`topMenu`/`custom`/`none`。
 - 键盘映射：方向键、`Enter`/`Space`、`Escape`、`T`（Top Menu）、`P`（Popup）。按住不重复触发，`blur` 清空按住集合。
-- 指针：`CanvasViewport.toSource` 做 letterbox 逆变换；黑边点击返回 `null`，不命中按钮。
+- 指针：`CanvasViewport.toSource` 做 letterbox 逆变换；黑边点击返回 `null`，不命中按钮。`hit()` 只把 BOG 内存在选择态图形的可用按钮作为指针目标（libbluray 1.5.0 的鼠标选择规则），仅有常态图形的显示按钮不会因指针移动被选中或消失。
 
 渲染：`drawMenu(context, scene, controller, viewport, cssWidth, cssHeight, dpr)` 只画菜单层（按钮三态、效果帧），背景是独立的 `<video id="menu-background">`。
 
