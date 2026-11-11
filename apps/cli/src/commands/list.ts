@@ -40,7 +40,9 @@ async function rawPidPayloadSizes(path: string, pids: ReadonlySet<number>): Prom
   let pending = new Uint8Array();
   let packetSize: 188 | 192 | undefined;
   let syncOffset = 0;
-  for await (const chunk of createReadStream(path, { highWaterMark: 256 * 1024 })) {
+  for await (const rawChunk of createReadStream(path, { highWaterMark: 256 * 1024 })) {
+    if (!Buffer.isBuffer(rawChunk)) throw new TypeError("M2TS input stream returned a non-Buffer chunk.");
+    const chunk: Buffer = rawChunk;
     const joined = new Uint8Array(pending.byteLength + chunk.byteLength);
     joined.set(pending); joined.set(chunk, pending.byteLength);
     if (!packetSize && joined.byteLength >= 384) {

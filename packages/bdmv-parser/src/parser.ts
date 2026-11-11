@@ -342,7 +342,7 @@ function parseBdjo(data: Uint8Array, file: FileEntry, origin: "primary" | "backu
   if (playlistCount > Math.floor(playlistSection.length / 6)) throw new ContractError("BDMV_INVALID_COUNT", `/offset/${playlistOffset}`, "BDJO accessible playlist count exceeds section");
   const playlistIds: string[] = []; for (let index = 0; index < playlistCount; index++) { playlistIds.push(playlistSection.text(5)); playlistSection.skip(1); }
   const accessiblePlaylists = { accessToAll, autostartFirst, playlistIds, source: sourceFor(file, "", origin, playlistOffset) };
-  const appSection = lengthSection("application management"); const appOffset = appSection.absolute; const applicationCount = appSection.u8(); appSection.skip(1);
+  const appSection = lengthSection("application management"); const applicationCount = appSection.u8(); appSection.skip(1);
   const applications: NonNullable<ParsedDisc["bdjos"]>[number]["applications"] = [];
   const readAppString = (): string => { const length = appSection.u8(); const result = utf8(appSection, length); if ((length & 1) === 0) appSection.skip(1); return result; };
   for (let appIndex = 0; appIndex < applicationCount; appIndex++) {
@@ -406,7 +406,7 @@ function parseXmlDocument(bytes: Uint8Array): XmlNode {
   const byteOffsets = xmlByteOffsets(xml); const stack: XmlNode[] = []; let root: XmlNode | null = null; let nodeCount = 0; let cursor = xml.startsWith("\uFEFF") ? 1 : 0;
   const fail = (message: string, at = cursor): never => { throw new ContractError("BDMV_INVALID_XML", `/xml/${byteOffsets[at] ?? 0}`, message); };
   const readName = (text: string, start: number): { name: string; end: number } => {
-    const match = /^[A-Za-z_:][A-Za-z0-9_.:-]*/.exec(text.slice(start)); if (match === null) return fail("XML name is missing", start); return { name: match[0]!, end: start + match[0]!.length };
+    const match = /^[A-Za-z_:][A-Za-z0-9_.:-]*/.exec(text.slice(start)); if (match === null) return fail("XML name is missing", start); return { name: match[0], end: start + match[0].length };
   };
   const appendText = (text: string, at: number): void => {
     if (!stack.length) { if (text.trim() !== "" && text !== "\uFEFF") fail("Text appears outside the XML root", at); return; }
@@ -698,7 +698,11 @@ export function parseClpi(data: Uint8Array, file: FileEntry, origin: "primary" |
           videoAttributes = { videoFormat: formatFrame >>> 4, frameRate: formatFrame & 0x0f, aspectRatio, ocFlag, crFlag, hdrPlus, dynamicRangeType, colorSpace };
         }
         if (r.offset > attrEnd) throw new ContractError("BDMV_INVALID_RECORD", `/offset/${streamOffset}`, "CLPI stream attribute exceeds record");
-        if (attrEnd - r.offset >= 12) isrc = r.text(12).replace(/[\u0000 ]+$/g, "");
+        if (attrEnd - r.offset >= 12) {
+          const value = r.text(12); let end = value.length;
+          while (end > 0 && (value.charCodeAt(end - 1) === 0 || value.charCodeAt(end - 1) === 0x20)) end--;
+          isrc = value.slice(0, end);
+        }
         r.seek(attrEnd);
         streams.push({ pid, codingType, language, dynamicRangeType, colorSpace, ...(videoAttributes ? { videoAttributes } : {}), ...(charCode === undefined ? {} : { charCode }), ...(isrc === undefined ? {} : { isrc }), source: sourceFor(file, "", origin, streamOffset) });
       }

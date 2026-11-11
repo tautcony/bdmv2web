@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { m3Fixtures } from "@bdmv2web/hdmv";
 import { expect, it } from "vitest";
 
@@ -44,6 +44,17 @@ async function readEvent(reader: ReadableStreamDefaultReader<Uint8Array>, name: 
   }
 }
 
+async function waitForText(path: string, expected: string): Promise<string> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      const value = await readFile(path, "utf8");
+      if (value.includes(expected)) return value;
+    } catch { /* wait for the child process to write the log */ }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 10));
+  }
+  return readFile(path, "utf8");
+}
+
 async function fixture(parent: string, args: Array<{ bdjoId: string; controlCode: number; binding: number; organizationId: number; applicationId: number; initialClass: string; basePath: string; classPath: string; parameters: string[] }>, script: string, runtimeSession: Record<string, unknown> = {}): Promise<{ root: string; java: string }> {
   const root = join(parent, "package");
   await mkdir(join(root, "runtime", "bdj"), { recursive: true });
@@ -69,16 +80,7 @@ const playlist100 = {
   playlists: [{ id: "00100", source: { path: "BDMV/PLAYLIST/00100.mpls", origin: "primary", offset: "70" }, routes: [], marks: [], items: [{ index: 0, stcId: 0, clipId: "00100", streamPath: "STREAM/00100.m2ts", present: true, sourceOrigin90k: "0", sourceIn90k: "0", sourceOut90k: "90000", playlistStart90k: "0", playlistEnd90k: "90000", source: { path: "BDMV/PLAYLIST/00100.mpls", origin: "primary", offset: "70" } }] }], unknown: [], complete: true,
 };
 
-const hasMediaTools = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0 && spawnSync("ffprobe", ["-version"], { stdio: "ignore" }).status === 0;
-
-async function writeSyntheticStream(path: string): Promise<void> {
-  await new Promise<void>((resolveProcess, rejectProcess) => {
-    const child = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=320x180:r=24", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "1", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "ac3", "-b:a", "192k", "-streamid", "0:4113", "-streamid", "1:4352", "-f", "mpegts", path], { stdio: "ignore" });
-    child.once("error", rejectProcess); child.once("exit", (code) => code === 0 ? resolveProcess() : rejectProcess(new Error(`Fixture FFmpeg exited ${String(code)}.`)));
-  });
-}
-
-it.skipIf(process.platform === "win32" || !hasMediaTools)("routes the startup BD-J playlist to local menu media and keeps its real interval", async () => {
+it.skipIf(process.platform === "win32")("routes the startup BD-J playlist to packaged menu media and keeps its real interval", async () => {
   const parent = await mkdtemp(join(tmpdir(), "bdmv2web menu media "));
   const responseLog = join(parent, "rpc-response.log"); const b64 = (value: string) => Buffer.from(value).toString("base64");
   const fakeJava = [
@@ -105,9 +107,14 @@ it.skipIf(process.platform === "win32" || !hasMediaTools)("routes the startup BD
         ],
       }],
     };
-    const audioTracks = [{ streamNumber: 0, pid: 0x1100, language: "eng" }];
-    const packageData = await fixture(parent, application, fakeJava, { externalTargets: markedPlaylist, bdjMenuMediaInputs: [0, 1].map((playItemIndex) => ({ playlistId: "00100", playItemIndex, clipId: "00100", sourceFile: "BDMV/STREAM/00100.m2ts", inTime45k: 500, outTime45k: 2500, stillMode: 0, repeatCount: 100, loopBackground: true, loopStart45k: 1137, videoPid: 0x1011, audioTracks })) });
-    await writeSyntheticStream(join(packageData.root, "BDMV", "STREAM", "00100.m2ts"));
+    const packageData = await fixture(parent, application, fakeJava, { externalTargets: markedPlaylist });
+    await mkdir(join(packageData.root, "assets", "media"), { recursive: true });
+    await writeFile(join(packageData.root, "assets", "media", "playlist-00100.mp4"), "fixture mp4");
+    await writeFile(join(packageData.root, "assets", "media", "playlist-00100.m4a"), "fixture m4a");
+    await writeFile(join(packageData.root, "asset-manifest.json"), JSON.stringify({ menuMedia: [0, 1].map((playItemIndex) => ({
+      plan: { playlistId: "00100", playItemIndex, clipId: "00100", sourceIn45k: 500, sourceOut45k: 2500 },
+      background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
+    })) }));
     const port = await freePort();
     serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
@@ -159,7 +166,7 @@ it.skipIf(process.platform === "win32")("publishes a contextual warning and miss
   }
 });
 
-it.skipIf(process.platform === "win32" || !hasMediaTools)("cancels a menu media export when its Java player closes before preparation completes", async () => {
+it.skipIf(process.platform === "win32")("stops prepared BD-J media after a playlist request", async () => {
   const parent = await mkdtemp(join(tmpdir(), "bdmv2web menu media close race "));
   const responseLog = join(parent, "rpc-response.log"); const b64 = (value: string) => Buffer.from(value).toString("base64");
   const fakeJava = [
@@ -172,16 +179,24 @@ it.skipIf(process.platform === "win32" || !hasMediaTools)("cancels a menu media 
   ].join("\n");
   let serverProcess: ChildProcess | undefined;
   try {
-    const packageData = await fixture(parent, application, fakeJava, { externalTargets: playlist100, bdjMenuMediaInputs: [{ playlistId: "00100", playItemIndex: 0, clipId: "00100", sourceFile: "BDMV/STREAM/00100.m2ts", inTime45k: 0, outTime45k: 45_000, stillMode: 0, repeatCount: 1, loopBackground: false, videoPid: 0x1011, audioTracks: [{ streamNumber: 0, pid: 0x1100, language: "eng" }] }] });
-    await writeSyntheticStream(join(packageData.root, "BDMV", "STREAM", "00100.m2ts"));
+    const localPlaylist = { ...playlist100, playlists: playlist100.playlists.map((playlist) => ({ ...playlist, items: playlist.items.map((item) => ({ ...item, present: false })) })) };
+    const packageData = await fixture(parent, application, fakeJava, { externalTargets: localPlaylist });
+    await mkdir(join(packageData.root, "assets", "media"), { recursive: true });
+    await writeFile(join(packageData.root, "assets", "media", "playlist-00100.mp4"), "fixture mp4");
+    await writeFile(join(packageData.root, "assets", "media", "playlist-00100.m4a"), "fixture m4a");
+    await writeFile(join(packageData.root, "asset-manifest.json"), JSON.stringify({ menuMedia: [{
+      plan: { playlistId: "00100", playItemIndex: 0, clipId: "00100", sourceIn45k: 0, sourceOut45k: 45000 },
+      background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
+    }] }));
     const port = await freePort();
     serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
-    await expect(readEvent(reader, "player-cancelled")).resolves.toMatchObject({ playerId: "token-cancel", status: "stopped" });
-    await expect(readEvent(reader, "player-media-cancelled")).resolves.toMatchObject({ playerId: "token-cancel", playlist: 100 });
-    expect(await readFile(responseLog, "utf8")).toBe("start:pending\nstop:stopped\n");
+    await expect(readEvent(reader, "rpc")).resolves.toMatchObject({ operation: "playerStart", status: "ok" });
+    await expect(readEvent(reader, "player-menu-media")).resolves.toMatchObject({ playerId: "token-cancel", playlistId: "00100" });
+    await expect(readEvent(reader, "player-stop")).resolves.toMatchObject({ playerId: "token-cancel" });
+    expect(await waitForText(responseLog, "stop:pending\n")).toBe("start:pending\nstop:pending\n");
     await reader.cancel();
   } finally {
     if (serverProcess && serverProcess.exitCode === null) serverProcess.kill("SIGTERM");
