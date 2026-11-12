@@ -72,7 +72,7 @@ describe("M4 build output", () => {
         const readme = await readFile(join(output, "README.md"), "utf8");
         const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
         const html = await readFile(join(output, "index.html"), "utf8");
-        expect(compatibility).toMatchObject({ status: "complete", externalDependencies: ["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] });
+        expect(compatibility).toMatchObject({ status: "complete", externalDependencies: ["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"] });
         expect(manifest).toMatchObject({ status: "complete", declaredEntryCount: 2, hdmvEntryCount: 2 });
         expect(manifest).not.toHaveProperty("mode");
         expect(compatibility).not.toHaveProperty("mode");
@@ -83,7 +83,7 @@ describe("M4 build output", () => {
         expect(report.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS"]));
         expect(assetManifest.schemaVersion).toBe("1.0");
         expect(readme).toMatch(/Menu preview\. Delivery status: \*\*complete\*\*/);
-        expect(readme).toContain("External playback uses IINA 1.4.4 or later on macOS and PotPlayer on Windows.");
+        expect(readme).toContain("External playback opens declared BDMV STREAM targets");
         const localReferences = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((match) => match[1]!);
         expect(localReferences.length).toBeGreaterThan(0);
         for (const path of localReferences) {
@@ -1069,7 +1069,7 @@ describe("validate CLI (M6)", () => {
         "index.html": "<main>ready</main>",
         "external-targets.json": targets("STREAM/00002.m2ts"),
         "runtime/bdmv-config.js": 'globalThis.__BDMV_BDMV_PATH__="/fake/BDMV";\n',
-        "compatibility.json": JSON.stringify({ externalDependencies: ["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] }),
+        "compatibility.json": JSON.stringify({ externalDependencies: ["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"] }),
       });
       const declaredManifestPath = join(declared, "manifest.json");
       const declaredManifest = JSON.parse(await readFile(declaredManifestPath, "utf8"));
@@ -1086,7 +1086,7 @@ describe("validate CLI (M6)", () => {
       expect(audit.checks.some((check: { checkId: string; path?: string }) => check.checkId === "PACKAGE_MISSING_ASSET" && check.path === "STREAM/00002.m2ts")).toBe(false);
       expect(audit.releaseSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_SOURCE_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
       expect(audit.releaseSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified", path: "runtime/bdmv-config.js" }));
-      expect(audit.releaseSummary.compatibility.externalDependencies).toEqual(["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"]);
+      expect(audit.releaseSummary.compatibility.externalDependencies).toEqual(["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"]);
       expect(audit.releaseSummary.compatibility.notVerified).toEqual(expect.arrayContaining(["EXTERNAL_SOURCE_UNVERIFIED", "EXTERNAL_CONFIG", "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED"]));
       const savedSummary = JSON.parse(await readFile(join(declared, "reports", "release-summary.json"), "utf8"));
       expect(savedSummary.release.gaps).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));

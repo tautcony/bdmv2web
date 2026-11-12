@@ -46,7 +46,7 @@ describe("menu package primitives", () => {
   it("describes looped and infinite-still menu backgrounds accurately", () => {
     expect(createReadme("Loop", true, false)).toContain("repeated single-clip background loop");
     expect(createReadme("Still", false, false)).toContain("holds the final video frame after its single PlayItem");
-    expect(createReadme("No media", undefined, false)).toContain("No menu background media was exported");
+    expect(createReadme("No media", undefined, false)).toContain("Menu background media is omitted from this package");
   });
   it("writes each audio variant with its explicit one-based PSR stream in runtime data and manifest metadata", () => {
     const audioTracks = [
@@ -102,10 +102,10 @@ describe("menu package primitives", () => {
   });
   it("reports player requirements for the selected package launch mode", () => {
     const metadata = { schemaVersion: "1.0" as const, runtimeVersion: "0.1.0", title: "Preview", status: "partial" as const, diagnostics: [] };
-    expect(createCompatibility(metadata, true).externalDependencies).toEqual(["configured BDMV STREAM files", "IINA 1.4.4 or later on macOS or PotPlayer on Windows"]);
-    expect(createCompatibility(metadata, true, true).externalDependencies).toEqual(["configured BDMV STREAM files", "an operating-system file association for whole-file playback or a configured mpv executable for bounded playlists"]);
+    expect(createCompatibility(metadata, true).externalDependencies).toEqual(["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"]);
+    expect(createCompatibility(metadata, true, true).externalDependencies).toEqual(["configured BDMV STREAM files", "an operating-system file association for whole-file playback"]);
     expect(createReadme("Preview", undefined, true, "partial", true)).toContain("bdmv2web serve <package-directory> --player system");
-    expect(createReadme("Preview", undefined, true)).toContain("IINA 1.4.4 or later on macOS and PotPlayer on Windows");
+    expect(createReadme("Preview", undefined, true)).toContain("operating system URL handler");
   });
   it("converts only M1-declared 48 kHz 16-bit PCM ranges into WAV and reports affected sound references", () => {
     const bytes = new Uint8Array(70); bytes.set([0x12, 0x34, 0xab, 0xcd], 64);

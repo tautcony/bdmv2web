@@ -38,7 +38,7 @@ export function createCompatibility(metadata: MenuPackageMetadata, externalPlayb
     ...metadata,
     profile: "portable",
     coverage: { igs: "unverified" },
-    externalDependencies: externalPlayback ? ["configured BDMV STREAM files", bdjRuntime ? "an operating-system file association for whole-file playback or a configured mpv executable for bounded playlists" : "IINA 1.4.4 or later on macOS or PotPlayer on Windows"] : [],
+    externalDependencies: externalPlayback ? ["configured BDMV STREAM files", bdjRuntime ? "an operating-system file association for whole-file playback" : "an operating-system URL handler for declared BDMV STREAM targets"] : [],
     notVerified: ["package directory relocation", "real-disc rendering", "media timeline and seek accuracy"],
   };
 }
@@ -269,7 +269,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     return { ...file, byteLength: String(fileInfo.size) };
   }));
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
-  const menuMediaLimitation = input.externalTargets ? "External player handoff reports process launch requests; playback state remains unobserved. Use a configured mpv executable for bounded or multi-item playlists." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
+  const menuMediaLimitation = input.externalTargets ? "External player handoff reports process launch requests; external players own playback state." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
   const manifest = { schemaVersion: "1.0", status: metadata.status, launchMode: bdjRuntime ? "local-jvm" : "hdmv", ...(bdjRuntime ? { runtimeRequirements: ["bdmv2web serve <package-directory>", "Java 21 or a compatible Java runtime with java.desktop", "loopback HTTP connection"] } : {}), ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, ...(bdjRuntime ? ["BD-J packages run through the local bdmv2web service and native Java process."] : []), "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
