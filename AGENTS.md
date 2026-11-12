@@ -67,6 +67,16 @@ Keep disc content out of the cache and out of release output.
 - Format commit messages as `<type>(<scope>): <imperative summary>` with lowercase type, scope, and summary, following the repository history.
 - When reporting progress, keep checklists current and separate completed implementation, verified results, pending work, and blocked work. Do not mark work complete based only on code being present.
 
+## Module organization
+
+- Organize source files around cohesive domain responsibilities. Keep each module's public surface, state ownership, and behavior clear.
+- Name files after the responsibility they contain, such as `menu-playback.ts`, and follow the package's existing directory conventions.
+- Keep `src/index.ts` as the stable package entry point. Export consumer-facing APIs from it; keep implementation details and package-internal types in their owning modules.
+- Split a file when its contents form distinct responsibilities with clear boundaries. Use responsibility and dependency boundaries to guide splits; line count alone does not determine a split.
+- Keep tightly coupled state transitions with their owning state. Preserve complete checkpoint capture and restoration when moving checkpoint-related code.
+- During structural refactors, preserve public signatures and observable behavior. Move implementation with its focused tests, and keep tests beside a module or in the established integration and end-to-end directories.
+- Use domain-specific module names and avoid general-purpose catch-all files such as `helpers.ts`, `misc.ts`, and `common.ts`.
+
 <!-- CODEGRAPH_START -->
 ## CodeGraph
 
