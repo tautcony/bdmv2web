@@ -2,7 +2,7 @@ import { optionNumber, optionValue } from "../cli/context.js";
 import { resolveInputFile } from "@bdmv2web/bdmv-io";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
-import { HdmvVm, type VmProgram } from "@bdmv2web/hdmv";
+import { HdmvVm, PSR, type VmProgram } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { resolveMenuLoopStart45k } from "@bdmv2web/media-export";
 import type { MenuMediaEncoding } from "@bdmv2web/package-builder";
@@ -48,34 +48,48 @@ export function menuMediaScopedOut(playlist: ParsedDisc["playlists"][number], sc
   return scope === "auto" && playlistDurationSeconds(playlist) > maxSeconds;
 }
 
-export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], playItemIndex?: number): Array<{ clipId: string; pid: number }> {
-  const targets: Array<{ clipId: string; pid: number }> = [];
-  for (const item of playlist.playItems) {
-    if (playItemIndex !== undefined && item.index !== playItemIndex) continue;
-    const mplsDeclaresPrimaryIg = item.streams.some((stream) => stream.codingType === 0x91 && stream.streamType === 1 && stream.pid !== null);
-    for (const stream of item.streams) {
-      if (stream.codingType !== 0x91 || stream.pid === null) continue;
-      if (stream.streamType === 1) {
-        targets.push({ clipId: item.clipId, pid: stream.pid });
-      } else if (stream.streamType === 2 && stream.subPathId !== null && stream.subClipId !== null) {
-        const clip = playlist.subPaths[stream.subPathId]?.items[stream.subClipId];
-        if (clip) targets.push({ clipId: clip.clipId, pid: stream.pid });
-      }
-    }
-    if (!mplsDeclaresPrimaryIg) targets.push(...clpiPrimaryIgsTargets(disc, item.clipId));
-  }
-  return [...new Map(targets.map((target) => [`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`, target])).values()];
+export interface MenuIgsSceneTarget { clipId: string; pid: number; igStreamNumber: number; }
+
+export function menuIgsSceneStreamCount(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], playItemIndex?: number): number {
+  return playlist.playItems.filter((item) => playItemIndex === undefined || item.index === playItemIndex).reduce((maximum, item) => {
+    const declared = item.streams.filter((stream) => stream.codingType === 0x91).length;
+    return Math.max(maximum, declared || clpiPrimaryIgsTargets(disc, item.clipId).length);
+  }, 0);
 }
 
-function clpiPrimaryIgsTargets(disc: ParsedDisc, clipId: string): Array<{ clipId: string; pid: number }> {
+export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], playItemIndex?: number, igStreamNumber?: number): MenuIgsSceneTarget[] {
+  const targets: MenuIgsSceneTarget[] = [];
+  for (const item of playlist.playItems) {
+    if (playItemIndex !== undefined && item.index !== playItemIndex) continue;
+    const igStreams = item.streams.filter((stream) => stream.codingType === 0x91);
+    for (const [index, stream] of igStreams.entries()) {
+      const streamNumber = index + 1;
+      if (igStreamNumber !== undefined && streamNumber !== igStreamNumber) continue;
+      if (stream.pid === null) continue;
+      if (stream.streamType === 1) {
+        targets.push({ clipId: item.clipId, pid: stream.pid!, igStreamNumber: streamNumber });
+      } else if (stream.streamType === 2 && stream.subPathId !== null && stream.subClipId !== null) {
+        const clip = playlist.subPaths[stream.subPathId]?.items[stream.subClipId];
+        if (clip) targets.push({ clipId: clip.clipId, pid: stream.pid!, igStreamNumber: streamNumber });
+      }
+    }
+    if (igStreams.length === 0) {
+      const fallback = clpiPrimaryIgsTargets(disc, item.clipId);
+      targets.push(...fallback.filter((target) => igStreamNumber === undefined || target.igStreamNumber === igStreamNumber));
+    }
+  }
+  return [...new Map(targets.map((target) => [`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}\0${target.igStreamNumber}`, target])).values()];
+}
+
+function clpiPrimaryIgsTargets(disc: ParsedDisc, clipId: string): MenuIgsSceneTarget[] {
   const clipInfo = disc.clips.find((clip) => clip.id.toLocaleLowerCase("en-US") === clipId.toLocaleLowerCase("en-US"));
   return (clipInfo?.programs.flatMap((program) => program.streams) ?? [])
     .filter((stream) => stream.codingType === 0x91 && stream.pid !== null)
-    .map((stream) => ({ clipId, pid: stream.pid }));
+    .map((stream, index) => ({ clipId, pid: stream.pid!, igStreamNumber: index + 1 }));
 }
 
-export function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], playItemIndex?: number) {
-  const targets = menuIgsSceneTargets(disc, playlist, playItemIndex);
+export function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], playItemIndex?: number, igStreamNumber?: number) {
+  const targets = menuIgsSceneTargets(disc, playlist, playItemIndex, igStreamNumber);
   const matches = scenes.filter((scene) => targets.some((target) => target.clipId.toLocaleLowerCase("en-US") === scene.clipId.toLocaleLowerCase("en-US") && target.pid === scene.pid));
   const unique = [...new Map(matches.map((scene) => [`${scene.clipId.toLocaleLowerCase("en-US")}\0${scene.pid}\0${scene.source.segmentFileOffset}`, scene])).values()];
   if (unique.length === 1) return { status: "found" as const, scene: unique[0]! };
@@ -132,6 +146,7 @@ export function createMenuDiscIR(disc: ParsedDisc, sceneRecords: Array<{ id: str
 export interface MenuPlaylistTarget {
   playlist: ParsedDisc["playlists"][number];
   playItem: number;
+  igStreamNumber?: number;
   playMark?: number;
   /** Playlists the Top Menu chain completes before the menu surface. */
   preMenuPlaylistIds?: number[];
@@ -143,8 +158,11 @@ export function findTopMenuPlaylist(disc: ParsedDisc, profile: PlayerProfile, li
   if (typeof firstPlay?.target.target !== "number" || typeof topMenu?.target.target !== "number") return undefined;
   const menuSceneKeys = new Set(scenes.filter((scene) => scene.uiModel === 0).map((scene) => `${scene.clipId.toLocaleLowerCase("en-US")}\0${scene.pid}`));
   const menuTarget = (playlist: ParsedDisc["playlists"][number], playItem: number): MenuPlaylistTarget | undefined => {
-    const hasScene = menuIgsSceneTargets(disc, playlist, playItem).some((target) => menuSceneKeys.has(`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`));
-    return hasScene ? { playlist, playItem } : undefined;
+    const requestedStream = vm.registers.read({ kind: "psr", index: PSR.igStream });
+    const streamCount = menuIgsSceneStreamCount(disc, playlist, playItem);
+    const igStreamNumber = streamCount === 0 ? undefined : requestedStream > 0 && requestedStream <= streamCount ? requestedStream : 1;
+    const hasScene = menuIgsSceneTargets(disc, playlist, playItem, igStreamNumber).some((target) => menuSceneKeys.has(`${target.clipId.toLocaleLowerCase("en-US")}\0${target.pid}`));
+    return hasScene ? { playlist, playItem, ...(igStreamNumber === undefined ? {} : { igStreamNumber }) } : undefined;
   };
   const vm = new HdmvVm(disc.movieObjects, { entries: disc.entries, profile, limits });
   // First Play may initialize PSRs/GPRs before it jumps to a feature title.

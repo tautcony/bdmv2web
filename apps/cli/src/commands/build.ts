@@ -22,7 +22,7 @@ import { errorText } from "@bdmv2web/utils";
 import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import type { ProgressMode } from "../progress.js";
-import { createVmPrograms, createMenuDiscIR, findTopMenuPlaylist, findMenuScene, isMenuSurfaceScene, menuIgsSceneTargets, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, menuMediaEncoding, menuPlaylistMarks as collectMenuPlaylistMarks, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS } from "./menu-planning.js";
+import { createVmPrograms, createMenuDiscIR, findTopMenuPlaylist, findMenuScene, isMenuSurfaceScene, menuIgsSceneStreamCount, menuIgsSceneTargets, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, menuMediaEncoding, menuPlaylistMarks as collectMenuPlaylistMarks, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS } from "./menu-planning.js";
 
 export {
   createMenuDiscIR, createVmPrograms, findMenuScene, findTopMenuPlaylist,
@@ -202,7 +202,7 @@ export async function build(): Promise<void> {
   const out = plannedOut ?? resolve(dirname(disc.root), "BDMV-menu");
   const title = plannedTitle ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
-  const bdmvPath = dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root;
+  const bdmvPath = dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root).replace(/\\/g, "/") : disc.root;
   const bdjSession = (vmPrograms: ReturnType<typeof createVmPrograms>, externalTargets: ReturnType<typeof createExternalMediaTargets>) => ({
     vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath,
   });
@@ -337,7 +337,7 @@ export async function build(): Promise<void> {
       await failMenuConversion("MENU_PLAYLIST_NOT_RESOLVED", "The HDMV Top Menu playlist could not be resolved from the disc navigation entries; no IGS scene was selected.");
       return;
     }
-    const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes, menuTarget?.playItem);
+    const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes, menuTarget?.playItem, menuTarget?.igStreamNumber);
     if (menuSceneResult.status === "not-found") {
       await failMenuConversion("MENU_SCENE_NOT_FOUND", `No extracted IGS scene matches the stream and clip declarations in Top Menu playlist ${menuPlaylist.id}; no other scene was selected.`);
       return;
@@ -358,10 +358,15 @@ export async function build(): Promise<void> {
       const isMenuPlaylist = Number(playlist.id) === menuPlaylistNumber;
       const playItemIndexes = isMenuPlaylist ? playlist.playItems.map((item) => item.index) : [undefined];
       return playItemIndexes.flatMap((playItem) => {
-        const result = findMenuScene(disc, playlist, extraction.scenes, playItem);
-        return result.status === "found"
-          ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
-          : [];
+        const targets = menuIgsSceneTargets(disc, playlist, playItem);
+        const streamCount = menuIgsSceneStreamCount(disc, playlist, playItem);
+        const streamNumbers = [...new Set(targets.map((target) => target.igStreamNumber))];
+        return streamNumbers.flatMap((igStreamNumber) => {
+          const result = findMenuScene(disc, playlist, extraction.scenes, playItem, igStreamNumber);
+          return result.status === "found"
+            ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, igStreamNumber, igStreamCount: streamCount, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
+            : [];
+        });
       });
     });
     const menuSceneResults = playlistSceneResults.filter((item) => isMenuSurfaceScene(item.scene.uiModel, item.playlistId, menuPlaylistNumber));
@@ -369,7 +374,7 @@ export async function build(): Promise<void> {
     // PLAY_PLAYLIST_MARK names a play mark; the runtime needs the mark-to-
     // PlayItem mapping to select the packaged scene for the marked PlayItem.
     const menuPlaylistMarks = collectMenuPlaylistMarks(disc, [...new Set([...menuPlaylistIds, Number(menuPlaylist.id)])]);
-    const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
+    const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, igStreamNumber: item.igStreamNumber, igStreamCount: item.igStreamCount, scene: item.adapted.scene }));
     const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
     const popupContentPlaylists: number[] = [];
     const missingPlayItemMedia: number[] = [];

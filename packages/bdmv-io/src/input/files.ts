@@ -49,7 +49,12 @@ export interface InputFileTable {
  * without walking the tree, so callers can name paths before a full discovery.
  */
 export async function locateBdmvRoot(inputPath: string): Promise<string> {
-  const requested = resolve(inputPath);
+  // A UNC path needs exactly two leading separators on Windows. Extra leading
+  // separators make path.resolve treat it as rooted on the current drive.
+  const normalizedInput = process.platform === "win32"
+    ? inputPath.replace(/^[\\/]{2,}(?=[^\\/])/, "\\\\")
+    : inputPath;
+  const requested = resolve(normalizedInput);
   if ((await lstat(requested)).isSymbolicLink()) throw new ContractError("SYMLINK_REJECTED", inputPath, "Input root symlinks are not accepted");
   const canonical = await realpath(requested);
   if (!(await stat(canonical)).isDirectory()) throw new ContractError("PATH_NOT_DIRECTORY", inputPath, "Expected a BDMV root or its direct parent");

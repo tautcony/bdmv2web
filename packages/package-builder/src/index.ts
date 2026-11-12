@@ -64,7 +64,7 @@ export interface MenuPackageInput {
   /** Extracted title popup IGS compositions, retained with their source clip/PID. */
   popupScenes?: unknown[];
   /** Extracted IGS compositions keyed by their owning HDMV menu playlist number. */
-  menuScenes?: Array<{ playlistId: number; playItem?: number; scene: unknown }>;
+  menuScenes?: Array<{ playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; scene: unknown }>;
   /** HDMV playlist numbers that carry a menu IGS stream. */
   menuPlaylistIds?: number[];
   /** Play mark to PlayItem mapping per menu playlist, so a `PLAY_PLAYLIST_MARK` request selects the right packaged scene. */

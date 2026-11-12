@@ -13,7 +13,7 @@ import type { BdjPackageData, BdjRuntimeHandle, BdjRuntimeCallbacks } from "./bd
 import { startBdjMenuMedia, type BdjMenuMediaHandle } from "./bdj-menu-media.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
-export interface PackageData extends BdjPackageData { title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
+export interface PackageData extends BdjPackageData { title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; var __BDMV_BDJ_CLIENT__: { start: (data: BdjPackageData, root: HTMLElement, callbacks: BdjRuntimeCallbacks, requestedBdjoId?: string) => BdjRuntimeHandle; installKeyboardInput: (target: Window, runtime: BdjRuntimeHandle) => () => void; installPointerInput: (root: HTMLElement, runtime: BdjRuntimeHandle) => () => void } | undefined; }
 
@@ -83,6 +83,23 @@ async function boot(): Promise<void> {
       }
       return 0;
     };
+    const effectiveMenuIgStreamNumber = (playlist: number, playItem: number, requestedStream: number, fallbackToFirst = true): number | undefined => {
+      const candidates = (data.menuScenes ?? []).filter((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem);
+      if (!candidates.length) return undefined;
+      const streamCount = Math.max(0, ...candidates.map((item) => item.igStreamCount ?? item.igStreamNumber ?? 0));
+      if (!streamCount) return undefined;
+      if (requestedStream > 0 && requestedStream <= streamCount) return requestedStream;
+      return fallbackToFirst ? 1 : undefined;
+    };
+    const menuSceneTarget = (playlist: number, playItem: number, requestedStream: number, fallbackToFirst = true) => {
+      const candidates = (data.menuScenes ?? []).filter((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem);
+      if (!candidates.length) return undefined;
+      const hasStreamMetadata = candidates.some((item) => item.igStreamCount !== undefined || item.igStreamNumber !== undefined);
+      const selectedStream = effectiveMenuIgStreamNumber(playlist, playItem, requestedStream, fallbackToFirst);
+      if (!hasStreamMetadata) return candidates[0];
+      if (selectedStream === undefined) return undefined;
+      return candidates.find((item) => item.igStreamNumber === selectedStream);
+    };
     const playbackBridge: PlaybackBridge = (data.media || data.menuMedia?.length) && video && audio
       ? new MenuLoopPlaybackBridge(vm, video, audio, data.media, (message) => { showStatus(message); }, {
         offerRetry: (retry) => { retryMedia = retry; start.textContent = "Retry menu media"; start.hidden = false; start.disabled = false; },
@@ -135,6 +152,9 @@ async function boot(): Promise<void> {
     // The playlist the VM is currently playing. `LinkPI`/`LinkMK` address a
     // PlayItem inside it and carry no playlist operand of their own.
     let activeMenuPlaylist: number | null = data.media?.playlist ?? data.menuPlaylistIds?.[0] ?? null;
+    let activeMenuPlayItem = data.media?.playItem ?? 0;
+    let activeIgStreamNumber = 1;
+    const currentIgStreamNumber = (): number => serverHdmvMode ? activeIgStreamNumber : vm.snapshot().registers.psr[0] ?? 1;
     const missingMenuMedia = new Set<string>();
     const controllerVm = {
       handleEvent: (...args: Parameters<HdmvVm["handleEvent"]>) => { if (serverHdmvMode) bdjRuntimeHandle?.sendHdmv({ kind: "event", event: args[0] }); else vm.handleEvent(...args); },
@@ -182,7 +202,19 @@ async function boot(): Promise<void> {
       while (pendingActions.length) {
         const action = pendingActions.shift()!;
         const inputController = popupController ?? controller;
-        if (action.type === "SET_BUTTON_PAGE") {
+        if (action.type === "SET_STREAM") {
+          if (typeof action.payload.interactiveGraphicsStream === "number") activeIgStreamNumber = currentIgStreamNumber();
+          if (typeof action.payload.interactiveGraphicsStream === "number" && activeMenuPlaylist !== null && data.menuPlaylistIds?.includes(activeMenuPlaylist)) {
+            const target = menuSceneTarget(activeMenuPlaylist, activeMenuPlayItem, currentIgStreamNumber(), false);
+            if (target) {
+              activateMenuScene(target);
+              report(`SET_STREAM IG ${currentIgStreamNumber()} → ${sceneLabel(target.scene)}`);
+            } else {
+              showStatus(`IG stream ${currentIgStreamNumber()} has no packaged scene for menu playlist ${activeMenuPlaylist} PlayItem ${activeMenuPlayItem}.`, { persist: true });
+            }
+          }
+          mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
+        } else if (action.type === "SET_BUTTON_PAGE") {
           const packed = action.payload.packed;
           if (typeof packed === "number") {
             const before = inputController ? `${inputController.page.id}:${inputController.selectedButtonId ?? "none"}` : "";
@@ -230,8 +262,12 @@ async function boot(): Promise<void> {
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number" && data.menuPlaylistIds?.includes(action.payload.playlist)) {
           const playlist = action.payload.playlist;
           const playItem = requestedPlayItem(playlist, action);
-          const menuScenesForPlaylist = data.menuScenes?.filter((item) => item.playlistId === playlist) ?? [];
-          const target = menuScenesForPlaylist.find((item) => (item.playItem ?? 0) === playItem) ?? menuScenesForPlaylist[0];
+          const selectedStream = effectiveMenuIgStreamNumber(playlist, playItem, currentIgStreamNumber());
+          if (selectedStream !== undefined) {
+            if (serverHdmvMode) activeIgStreamNumber = selectedStream;
+            else if (vm.snapshot().registers.psr[0] !== selectedStream) vm.registers.systemWrite(0, selectedStream);
+          }
+          const target = menuSceneTarget(playlist, playItem, currentIgStreamNumber());
           if (!target) {
             report(`${action.type} playlist ${playlist} has no packaged IGS composition; released the VM wait`);
             showStatus(`Menu playlist ${playlist} has no packaged IGS composition.`);
@@ -239,6 +275,7 @@ async function boot(): Promise<void> {
             continue;
           }
           activeMenuPlaylist = playlist;
+          activeMenuPlayItem = playItem;
           activateMenuScene(target);
           report(`${action.type} playlist ${playlist}${playItem ? ` PlayItem ${playItem}` : ""} → ${sceneLabel(target.scene)} · background ${backgroundLabel(packagedMenuMedia(playlist, playItem)?.background.path)}`);
           if (playlistHasMedia(playlist)) mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
@@ -255,12 +292,15 @@ async function boot(): Promise<void> {
           const playlist = activeMenuPlaylist;
           const playItem = requestedPlayItem(playlist, action);
           const jump = `${action.type === "LINK_PLAY_MARK" ? `LINK_MK ${action.payload.playMark}` : `LINK_PI ${playItem}`} → playlist ${playlist} PlayItem ${playItem}`;
-          const entry = (data.menuScenes ?? []).find((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem);
+          const selectedStream = effectiveMenuIgStreamNumber(playlist, playItem, currentIgStreamNumber());
+          if (selectedStream !== undefined && vm.snapshot().registers.psr[0] !== selectedStream) vm.registers.systemWrite(0, selectedStream);
+          const entry = menuSceneTarget(playlist, playItem, currentIgStreamNumber());
           if (!entry) {
             report(`${jump} is not packaged; stayed on ${logState.scene}`);
             showStatus(`Menu playlist ${playlist} PlayItem ${playItem} is not packaged; the menu stayed on the current page.`, { persist: true });
             continue;
           }
+          activeMenuPlayItem = playItem;
           activateMenuScene(entry);
           const shown = playbackBridge.showMenuItem?.(playlist, playItem);
           if (!shown) {
@@ -346,21 +386,29 @@ async function boot(): Promise<void> {
       const titleOrigin = ["user", "startup", "system", "authored"].includes(origin) ? origin : "authored";
       setServerHdmvMode(true);
       for (const action of actions) {
-        if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {
+        if (action.type === "SET_STREAM" && typeof action.payload.interactiveGraphicsStream === "number") {
+          activeIgStreamNumber = action.payload.interactiveGraphicsStream;
+          const target = activeMenuPlaylist === null ? undefined : menuSceneTarget(activeMenuPlaylist, activeMenuPlayItem, activeIgStreamNumber, false);
+          if (target) activateMenuScene(target);
+        } else if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {
           bdjRuntimeHandle?.sendTitle(action.payload.title, false, undefined, titleOrigin);
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number") {
           const playlist = action.payload.playlist;
           const playItem = requestedPlayItem(playlist, action);
-          const target = (data.menuScenes ?? []).find((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem)
-            ?? (data.menuScenes ?? []).find((item) => item.playlistId === playlist);
+          const selectedStream = effectiveMenuIgStreamNumber(playlist, playItem, activeIgStreamNumber);
+          if (selectedStream !== undefined) activeIgStreamNumber = selectedStream;
+          const target = menuSceneTarget(playlist, playItem, activeIgStreamNumber);
           if (!target) { showStatus(`HDMV menu playlist ${playlist} PlayItem ${playItem} has no packaged IGS scene.`, { persist: true }); continue; }
           activeMenuPlaylist = playlist;
+          activeMenuPlayItem = playItem;
           activateMenuScene(target);
           menuLog(`${action.type} playlist ${playlist} PlayItem ${playItem} → ${sceneLabel(target.scene)}`);
         } else if (["LINK_PLAY_ITEM", "LINK_PLAY_MARK"].includes(action.type) && activeMenuPlaylist !== null) {
           const playItem = requestedPlayItem(activeMenuPlaylist, action);
-          const target = (data.menuScenes ?? []).find((item) => item.playlistId === activeMenuPlaylist && (item.playItem ?? 0) === playItem);
-          if (target) activateMenuScene(target);
+          const selectedStream = effectiveMenuIgStreamNumber(activeMenuPlaylist, playItem, activeIgStreamNumber);
+          if (selectedStream !== undefined) activeIgStreamNumber = selectedStream;
+          const target = menuSceneTarget(activeMenuPlaylist, playItem, activeIgStreamNumber);
+          if (target) { activeMenuPlayItem = playItem; activateMenuScene(target); }
         } else if (action.type === "SET_BUTTON_PAGE" && typeof action.payload.packed === "number") {
           controller?.applySetButtonPage(action.payload.packed);
         } else if (action.type === "ENABLE_BUTTON" && typeof action.payload.button === "number") {
