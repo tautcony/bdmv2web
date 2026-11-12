@@ -12,7 +12,7 @@ import { referencedAssetIds, safeDiagnosticMessage } from "./extract.js";
 import { mediaExportProgress } from "./media-progress.js";
 import { readJsonObject } from "../cli/output.js";
 import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";
-import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { createExternalMediaTargets, type MenuLoopMediaInput } from "@bdmv2web/media-export";
 import { buildMenuPackage } from "@bdmv2web/package-builder";
@@ -153,7 +153,7 @@ export async function build(): Promise<void> {
   });
 
   progress.start(CONVERT_STEPS.structure);
-  const disc = await parseBdmv(input);
+  const { disc, table } = await parseBdmvWithInputTable(input);
   const bdjFiles = await collectBdjApplicationFiles(disc);
   const hasBdjEntries = disc.entries.some((entry) => entry.target.objectType === "BDJ");
   const initialBdjTarget = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "BDJ")?.target
@@ -209,7 +209,7 @@ export async function build(): Promise<void> {
   if (plannedResume === undefined && resumeDirectory !== undefined) progress.info("resume", resumeDirectory);
 
   progress.start(CONVERT_STEPS.scenes);
-  const extraction = await extractIgsScenes(disc, { pngLevel: pngLevelOption() });
+  const extraction = await extractIgsScenes(disc, { pngLevel: pngLevelOption(), table });
   progress.done(CONVERT_STEPS.scenes, `${countOf(extraction.scenes.length, "scene", "scenes")} · ${countOf(extraction.assets.length, "image", "images")} · ${countOf(extraction.streams.length, "stream", "streams")}`);
 
   progress.start(CONVERT_STEPS.playlist);

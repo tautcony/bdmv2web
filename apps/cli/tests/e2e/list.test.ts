@@ -12,6 +12,15 @@ function runList(args: string[]): ReturnType<typeof spawnSync> {
 }
 
 describe("list command", () => {
+  it("reports M2TS sizes and stream payloads in the table view", () => {
+    const result = runList([]);
+    expect(result.status, String(result.stderr)).toBe(0);
+    expect(String(result.stderr)).toBe("");
+    expect(String(result.stdout)).toContain("M2TS 00001 · 6.0 KB");
+    expect(String(result.stdout)).toContain("IGS PID 0x1400 · payload 429 B");
+    expect(String(result.stdout)).toContain("SUP PID 0x1200 · eng · Stream 1 · payload 180 B · Playlist 00003 / PlayItem 0");
+  });
+
   it("reports structural IGS streams, image elements, and SUP tracks", () => {
     const result = runList(["--format", "json"]);
     expect(result.status, String(result.stderr)).toBe(0);

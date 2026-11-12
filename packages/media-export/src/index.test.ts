@@ -524,6 +524,23 @@ describe("menu-loop media export", () => {
     }
   });
 
+  it("reuses source probes when clip exports share a source cache", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bdmv-media-source-probe-cache-"));
+    const calls: Array<{ executable: string; args: string[] }> = [];
+    const run = mediaRunner(input, calls);
+    const sourceProbeCache = new Map<string, Promise<{ stdout: string; stderr: string }>>();
+    const sourceProbeCount = () => calls.filter((call) => call.executable === "ffprobe" && call.args.includes("-probesize") && call.args.at(-1) === input.sourcePath).length;
+    try {
+      await exportMenuLoopMedia(input, { outputDirectory: join(root, "first"), runProcess: run, sourceProbeCache });
+      await exportMenuLoopMedia({ ...input, playlistId: "00002", playItemIndex: 1 }, { outputDirectory: join(root, "second"), runProcess: run, sourceProbeCache });
+      expect(sourceProbeCount()).toBe(1);
+
+      const freshBuildCache = new Map<string, Promise<{ stdout: string; stderr: string }>>();
+      await exportMenuLoopMedia({ ...input, playlistId: "00003", playItemIndex: 2 }, { outputDirectory: join(root, "third"), runProcess: run, sourceProbeCache: freshBuildCache });
+      expect(sourceProbeCount()).toBe(2);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("reports the output directory size before and after export", async () => {
     const root = await mkdtemp(join(tmpdir(), "bdmv-media-output-size-threshold-"));
     await writeFile(join(root, "existing.txt"), "keep");

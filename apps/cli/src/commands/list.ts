@@ -5,7 +5,7 @@ import { printTable, writeJsonFile } from "../cli/output.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { reachablePgsReferences } from "../shared/pgs.js";
 import { assertDisjointRoots } from "@bdmv2web/bdmv-io";
-import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { classifyDiagnostics } from "@bdmv2web/test-runner";
 import { createReadStream } from "node:fs";
@@ -74,55 +74,57 @@ export async function listAssets(): Promise<void> {
   const selection = assetSelection();
   const format = outputFormat("list-assets");
   const out = optionValue("--out");
-  const disc = await parseBdmv(input);
+  const { disc, table } = await parseBdmvWithInputTable(input);
   const fatal = classifyDiagnostics(disc.diagnostics);
   if (fatal.hasFatal) { stageFailure(firstBlockingCode(fatal.blocking), fatal.blocking); return; }
-  const extraction = await extractIgsScenes(disc, { renderAssets: false });
+  const extraction = await extractIgsScenes(disc, { renderAssets: false, table });
   const scenes = extraction.scenes.filter((scene) => selectedClip(scene.clipId, selection) && selectedPid(scene.pid, selection));
   const igsStreams = type === "sup" ? [] : extraction.streams.filter((stream) => selectedClip(stream.clipId, selection) && selectedPid(stream.pid, selection)).map((stream) => ({ type: "igs", format: "mnu", path: igsMnuPath(stream.clipId, stream.pid), clipId: stream.clipId, pid: stream.pid, byteLength: stream.byteLength }));
   const igsElements = type === "sup" ? [] : scenes.flatMap((scene) => scene.objects.map((object) => ({ type: "igs-image-element", clipId: scene.clipId, pid: scene.pid, sceneId: scene.id, compositionNumber: scene.compositionNumber, objectId: object.id, objectVersion: object.version, width: object.width, height: object.height })));
   const references = type === "igs" ? [] : uniquePgsReferences(reachablePgsReferences(disc, extraction.scenes)).filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection));
   const trackSuffixes = pgsTrackEntrySuffixes(references);
   const subtitles = references.map((item, index) => ({ type: "sup", path: supTrackPath(item.clipId, item.pid, index, trackSuffixes[index]), clipId: item.clipId, pid: item.pid, language: item.language, streamNumber: item.streamNumber, playlistId: item.playlistId, playItemIndex: item.playItemIndex }));
-  const perM2ts = [...new Set(subtitles.map((asset) => asset.clipId))].map((clipId) => ({ clipId, subtitleTrackCount: subtitles.filter((asset) => asset.clipId === clipId).length }));
+  const subtitleTrackCounts = new Map<string, number>();
+  for (const subtitle of subtitles) subtitleTrackCounts.set(subtitle.clipId, (subtitleTrackCounts.get(subtitle.clipId) ?? 0) + 1);
+  const perM2ts = [...subtitleTrackCounts].map(([clipId, subtitleTrackCount]) => ({ clipId, subtitleTrackCount }));
   const assets = [...igsStreams, ...subtitles];
-  const clipIds = [...new Set([...igsStreams, ...subtitles].map((asset) => asset.clipId))].sort((a, b) => a.localeCompare(b, "en"));
-  const tree: AssetTreeNode[] = [];
-  for (const clipId of clipIds) {
-    const clipNode = disc.graph.nodes.find((node) => node.id === `clip:${clipId}`);
-    const source = clipNode?.state === "present" ? clipNode.source?.path : undefined;
-    const relativeSource = source?.replace(/^BDMV\//i, "");
-    const hasM2tsSource = relativeSource !== undefined && new RegExp(`^STREAM/${clipId}\\.m2ts$`, "i").test(relativeSource);
-    let rawBytes: number | undefined;
-    let rawPidSizes = new Map<number, number>();
-    if (hasM2tsSource) {
-      const sourcePath = resolve(disc.root, relativeSource);
-      try { rawBytes = (await stat(sourcePath)).size; }
-      catch { rawBytes = undefined; }
-      if (rawBytes !== undefined) {
-        const pids = new Set([...igsStreams.filter((item) => item.clipId === clipId), ...subtitles.filter((item) => item.clipId === clipId)].map((item) => item.pid));
-        try { rawPidSizes = await rawPidPayloadSizes(sourcePath, pids); }
-        catch { rawPidSizes = new Map(); }
-      }
-    }
-    const children: AssetTreeNode[] = [];
-    for (const stream of igsStreams.filter((item) => item.clipId === clipId)) {
-      const streamScenes = scenes.filter((scene) => scene.clipId === clipId && scene.pid === stream.pid);
-      children.push({
-        label: `IGS PID 0x${stream.pid.toString(16)} · payload ${formatOptionalBytes(rawPidSizes.get(stream.pid))}`,
-        children: streamScenes.map((scene) => ({ label: `Scene ${scene.id} · composition ${scene.compositionNumber} · ${scene.objects.length} objects` })),
-      });
-    }
-    children.push(...subtitles.filter((item) => item.clipId === clipId).map((asset) => ({
-      label: `SUP PID 0x${asset.pid.toString(16)} · ${asset.language} · Stream ${asset.streamNumber} · payload ${formatOptionalBytes(rawPidSizes.get(asset.pid))} · Playlist ${asset.playlistId} / PlayItem ${asset.playItemIndex}`,
-    })));
-    const size = rawBytes === undefined ? "source unavailable" : formatBytes(rawBytes);
-    tree.push({ label: `M2TS ${clipId} · ${size}`, children });
-  }
   const report = { schemaVersion: "1.0", summary: { igsScenes: type === "sup" ? 0 : scenes.length, igsStreams: igsStreams.length, igsImageElements: igsElements.length, supTracks: subtitles.length, m2tsWithSup: perM2ts.length, perM2ts }, assets, igsImageElements: igsElements };
   if (out) { await assertDisjointRoots(disc.root, resolve(out)); await writeJsonFile(out, `${JSON.stringify(report, null, 2)}\n`); }
   if (format === "json") process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   else {
+    const clipIds = [...new Set(assets.map((asset) => asset.clipId))].sort((a, b) => a.localeCompare(b, "en"));
+    const tree: AssetTreeNode[] = [];
+    for (const clipId of clipIds) {
+      const clipNode = disc.graph.nodes.find((node) => node.id === `clip:${clipId}`);
+      const source = clipNode?.state === "present" ? clipNode.source?.path : undefined;
+      const relativeSource = source?.replace(/^BDMV\//i, "");
+      const hasM2tsSource = relativeSource !== undefined && new RegExp(`^STREAM/${clipId}\\.m2ts$`, "i").test(relativeSource);
+      let rawBytes: number | undefined;
+      let rawPidSizes = new Map<number, number>();
+      if (hasM2tsSource) {
+        const sourcePath = resolve(disc.root, relativeSource);
+        try { rawBytes = (await stat(sourcePath)).size; }
+        catch { rawBytes = undefined; }
+        if (rawBytes !== undefined) {
+          const pids = new Set(assets.filter((item) => item.clipId === clipId).map((item) => item.pid));
+          try { rawPidSizes = await rawPidPayloadSizes(sourcePath, pids); }
+          catch { rawPidSizes = new Map(); }
+        }
+      }
+      const children: AssetTreeNode[] = [];
+      for (const stream of igsStreams.filter((item) => item.clipId === clipId)) {
+        const streamScenes = scenes.filter((scene) => scene.clipId === clipId && scene.pid === stream.pid);
+        children.push({
+          label: `IGS PID 0x${stream.pid.toString(16)} · payload ${formatOptionalBytes(rawPidSizes.get(stream.pid))}`,
+          children: streamScenes.map((scene) => ({ label: `Scene ${scene.id} · composition ${scene.compositionNumber} · ${scene.objects.length} objects` })),
+        });
+      }
+      children.push(...subtitles.filter((item) => item.clipId === clipId).map((asset) => ({
+        label: `SUP PID 0x${asset.pid.toString(16)} · ${asset.language} · Stream ${asset.streamNumber} · payload ${formatOptionalBytes(rawPidSizes.get(asset.pid))} · Playlist ${asset.playlistId} / PlayItem ${asset.playItemIndex}`,
+      })));
+      const size = rawBytes === undefined ? "source unavailable" : formatBytes(rawBytes);
+      tree.push({ label: `M2TS ${clipId} · ${size}`, children });
+    }
     printTable("Asset summary", ["Type", "Count"], [["IGS streams", report.summary.igsStreams], ["IGS scenes", report.summary.igsScenes], ["IGS image elements", report.summary.igsImageElements], ["SUP tracks", report.summary.supTracks], ["M2TS with SUP", report.summary.m2tsWithSup]]);
     process.stdout.write(`Assets by M2TS\n${formatAssetTree(tree).join("\n")}\n`);
   }

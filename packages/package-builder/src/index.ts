@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, type VideoExportMode, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessResult, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, type VideoExportMode, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
 import { makePngBatches, type PngPayload } from "./asset-batches.js";
 import { convertSounds, type SoundMetadata } from "./sounds.js";
 import { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, packagedStyle, serializeSafeScriptData } from "./scripts.js";
@@ -173,8 +173,9 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   if (bdjRuntime) await mkdir(resolve(runtimeDirectory, "bdj"), { recursive: true });
   input.onPhase?.("media");
   const mediaEncoding = input.mediaEncoding ?? {};
+  const sourceProbeCache = new Map<string, Promise<MediaProcessResult>>();
   const primaryMedia = input.menuLoopMedia === undefined ? undefined : menuMediaPaths(input.menuLoopMedia);
-  const exportedMedia = input.menuLoopMedia && primaryMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, assetDirectory: primaryMedia.directory, planPath: primaryMedia.planPath, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(input.menuLoopMedia) } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
+  const exportedMedia = input.menuLoopMedia && primaryMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, sourceProbeCache, assetDirectory: primaryMedia.directory, planPath: primaryMedia.planPath, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(input.menuLoopMedia) } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
   const mediaByKey = new Map<string, { result: MenuLoopMediaResult; planPath: string }>();
   if (input.menuLoopMedia && exportedMedia && primaryMedia) mediaByKey.set(menuMediaReuseKey(input.menuLoopMedia, mediaEncoding), { result: exportedMedia, planPath: primaryMedia.planPath });
   const additionalMedia: Array<{ input: MenuLoopMediaInput; result: MenuLoopMediaResult; planPath: string }> = [];
@@ -196,6 +197,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     const result = await exportMenuLoopMedia(media, {
       outputDirectory: output,
       ...mediaEncoding,
+      sourceProbeCache,
       assetDirectory: directory,
       planPath,
       ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(media) } : {}),

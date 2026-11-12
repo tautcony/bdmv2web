@@ -1,26 +1,32 @@
 import { buildMediaClosure } from "./media.js";
 import { resolveInputFile } from "@bdmv2web/bdmv-io";
 import { extractIgsScenes } from "@bdmv2web/igs";
-import { extractPgsTrack } from "@bdmv2web/media-export";
+import { extractPgsTracks } from "@bdmv2web/media-export";
 import { resolve } from "node:path";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 
 export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], outputDirectory: string, pathForReference?: (reference: ReturnType<typeof reachablePgsReferences>[number], index: number) => string, selectedReferences?: ReturnType<typeof reachablePgsReferences>) {
   const references = selectedReferences ?? reachablePgsReferences(disc, scenes);
-  const extracted = new Map<string, Awaited<ReturnType<typeof extractPgsTrack>> & { packagePath: string }>();
-  const result = [];
+  const extracted = new Map<string, { packagePath: string; displaySets: Awaited<ReturnType<typeof extractPgsTracks>>[number]["displaySets"] }>();
+  const byClip = new Map<string, Array<{ key: string; relativePath: string; reference: typeof references[number] }>>();
+  const scheduled = new Set<string>();
   for (const [index, reference] of references.entries()) {
     const key = trackIdentityBySourceIn(reference);
-    let track = extracted.get(key);
-    if (!track) {
-      const sourcePath = await resolveInputFile(disc.root, `STREAM/${reference.clipId}.m2ts`);
-      const relativePath = pathForReference?.(reference, index) ?? `assets/subtitles/${reference.clipId}-${reference.pid.toString(16)}.sup`;
-      track = { ...await extractPgsTrack(sourcePath, reference.pid, resolve(outputDirectory, relativePath), { timestampOffset90k: BigInt(reference.sourceIn90k) }), packagePath: relativePath };
-      extracted.set(key, track);
-    }
-    result.push({ ...reference, path: track.packagePath, displaySets: track.displaySets });
+    if (scheduled.has(key)) continue;
+    scheduled.add(key);
+    const tracks = byClip.get(reference.clipId.toLocaleLowerCase("en-US")) ?? [];
+    tracks.push({ key, reference, relativePath: pathForReference?.(reference, index) ?? `assets/subtitles/${reference.clipId}-${reference.pid.toString(16)}.sup` });
+    byClip.set(reference.clipId.toLocaleLowerCase("en-US"), tracks);
   }
-  return result;
+  for (const tracks of byClip.values()) {
+    const sourcePath = await resolveInputFile(disc.root, `STREAM/${tracks[0]!.reference.clipId}.m2ts`);
+    const outputs = await extractPgsTracks(sourcePath, tracks.map(({ reference, relativePath }) => ({ pid: reference.pid, outputPath: resolve(outputDirectory, relativePath), timestampOffset90k: BigInt(reference.sourceIn90k) })));
+    for (const [index, track] of outputs.entries()) extracted.set(tracks[index]!.key, { packagePath: tracks[index]!.relativePath, displaySets: track.displaySets });
+  }
+  return references.map((reference) => {
+    const track = extracted.get(trackIdentityBySourceIn(reference))!;
+    return { ...reference, path: track.packagePath, displaySets: track.displaySets };
+  });
 }
 
 function trackIdentityBySourceIn(reference: { clipId: string; pid: number; sourceIn90k: string }): string {

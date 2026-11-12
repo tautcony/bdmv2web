@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_LIMITS } from "@bdmv2web/core";
 import { buildM1ClipInfoProgramAndCpi, buildM1ClipInfoWithHevcVideo, buildM1ClipInfoWithSequence, buildM1EmptyClipInfo, buildM1EmptyPlaylist, buildM1Index, buildM1MovieObject, buildM1PlaylistGolden, buildM1PlaylistWithAppInfo, buildM1PlaylistWithAudioPid, buildM1PlaylistWithHevcVideo, buildM1PlaylistWithMultiClipSubPlayItem, buildM1PlaylistWithSubPlayItem, buildM1Sound, buildM1SoundTwoRanges, m1MovieObjectExpected } from "@bdmv2web/test-fixtures";
-import { discoverBdmvRoot, parseBdmv, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
+import { discoverBdmvRoot, parseBdmv, parseBdmvWithInputTable, traverseGraph, type GraphEdge, type GraphNode } from "./index.js";
 
 async function temp(): Promise<string> { return mkdtemp(join(tmpdir(), "bdmv m1 中文 ")); }
 async function skeleton(parent: string, index = buildM1Index()): Promise<string> {
@@ -55,6 +55,17 @@ function buildMinimalBdjo(withApplication = false): Uint8Array {
 }
 
 describe("M1 BDMV discovery and structure", () => {
+  it("returns the validated input table with the parsed disc for downstream stages", async () => {
+    const parent = await temp(); const root = await skeleton(parent);
+    try {
+      const { disc, table } = await parseBdmvWithInputTable(root);
+      expect(disc.root).toBe(root);
+      expect(table.root).toBe(root);
+      expect(table.files.get("index.bdmv")).toBe(join(root, "index.bdmv"));
+      expect(table.files.get("MovieObject.bdmv")).toBe(join(root, "MovieObject.bdmv"));
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
   it("traverses resolved graph cycles once and reports unresolved and missing targets", () => {
     const node = (id: string, state: GraphNode["state"] = "present"): GraphNode => ({ id, type: "entry", state, source: null });
     const edge = (from: string, to: string, resolution: GraphEdge["resolution"]): GraphEdge => ({ from, to, kind: "reference", resolution, source: { path: "index.bdmv", origin: "primary", offset: "0" } });

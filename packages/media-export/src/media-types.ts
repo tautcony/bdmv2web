@@ -91,6 +91,8 @@ export interface MenuLoopMediaOptions {
   containerOverheadPercent?: number;
   signal?: AbortSignal;
   runProcess?: MediaProcessRunner;
+  /** Reuse source metadata probes across clip exports in one package build. */
+  sourceProbeCache?: Map<string, Promise<MediaProcessResult>>;
   onProgress?: (progress: MediaAssetProgress) => void;
 }
 export interface MediaPlan {

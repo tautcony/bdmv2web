@@ -4,7 +4,7 @@ import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { extractReachablePgsTracks, reachablePgsReferences } from "../shared/pgs.js";
 import { assertDisjointRoots, beginOutputTransaction } from "@bdmv2web/bdmv-io";
-import { parseBdmv } from "@bdmv2web/bdmv-parser";
+import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { pgsDisplaySetEnd90k, renderPgsDisplaySet } from "@bdmv2web/media-export";
 import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
@@ -17,11 +17,11 @@ export async function exportAssets(): Promise<void> {
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "export requires --out DIR");
   const type = assetTypeOption();
   const selection = assetSelection();
-  const disc = await parseBdmv(input);
+  const { disc, table } = await parseBdmvWithInputTable(input);
   const facts = classifyDiagnostics(disc.diagnostics);
   if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
   const roots = await assertDisjointRoots(disc.root, resolve(out));
-  const igs = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", captureStreams: type !== "sup", pngLevel: pngLevelOption() });
+  const igs = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", captureStreams: type !== "sup", pngLevel: pngLevelOption(), table });
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
   if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
   const transaction = await beginOutputTransaction(roots.output);

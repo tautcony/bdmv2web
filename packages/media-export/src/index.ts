@@ -156,7 +156,20 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   // Tone mapping needs zscale (libzimg); the export keeps HDR signalling and
   // reports a warning when the filter is not compiled in.
   const availableFilters = facts.filters;
-  const sourceProbe = parseProbe((await invoke(ffprobe, probeArgs(input.sourcePath, true), timeoutMs)).stdout, input.sourcePath);
+  const sourceProbeArguments = probeArgs(input.sourcePath, true);
+  const sourceProbeKey = JSON.stringify([ffprobe, timeoutMs, sourceProbeArguments]);
+  const sourceProbeCache = options.sourceProbeCache;
+  let sourceProbePromise = sourceProbeCache?.get(sourceProbeKey);
+  if (sourceProbePromise === undefined) {
+    sourceProbePromise = invoke(ffprobe, sourceProbeArguments, timeoutMs);
+    if (sourceProbeCache !== undefined) {
+      sourceProbeCache.set(sourceProbeKey, sourceProbePromise);
+      void sourceProbePromise.catch(() => {
+        if (sourceProbeCache.get(sourceProbeKey) === sourceProbePromise) sourceProbeCache.delete(sourceProbeKey);
+      });
+    }
+  }
+  const sourceProbe = parseProbe((await sourceProbePromise).stdout, input.sourcePath);
   const sourceStart = Number(sourceProbe.format?.start_time);
   if (!Number.isFinite(sourceStart)) throw new Error(`ffprobe did not report the source timeline start for '${input.sourcePath}'.`);
   const rawSeekSeconds = exportStart45k / 45_000 - sourceStart;

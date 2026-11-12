@@ -1,5 +1,5 @@
 import { BinaryCursor, ContractError, DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
-import { discoverBdmvInput, locateBdmvRoot, readRegisteredFile } from "@bdmv2web/bdmv-io";
+import { discoverBdmvInput, locateBdmvRoot, readRegisteredFile, type InputFileTable } from "@bdmv2web/bdmv-io";
 import { buildDiscGraph } from "./graph-builder.js";
 import type { AtcSequence, BdjoInfo, ClipHeader, ClipInfo, CpiMapEntry, DiscAppInfo, EntryTarget, ExtensionDataEntry, MovieObject, ParseDiagnostic, ParsedDisc, PlayItem, Playlist, PlaylistAppInfo, PlayMark, SoundEntry, SourceLocation, StcSequence, StreamDeclaration, SubPath, UhdMetadata } from "./model.js";
 
@@ -783,7 +783,7 @@ export function buildGraph(entries: ParsedDisc["entries"], objects: MovieObject[
   return buildDiscGraph(entries, objects, playlists, clips, sounds, files, diagnostics, diagnose, bdjos, metadata);
 }
 
-export async function parseBdmv(inputPath: string, options: { limits?: Limits } = {}): Promise<ParsedDisc> {
+export async function parseBdmvWithInputTable(inputPath: string, options: { limits?: Limits } = {}): Promise<{ disc: ParsedDisc; table: InputFileTable }> {
   const limits = options.limits ?? DEFAULT_LIMITS; const { root, table } = await discoverBdmvInput(inputPath);
   const files: FileEntry[] = [...table.files.entries()].map(([rel, abs]) => ({ rel: `BDMV/${rel}`, abs, size: 0 })).sort((a, b) => a.rel.localeCompare(b.rel, "en"));
   const index = pathIndex(files); const allBytes = new Map<string, Uint8Array>();
@@ -846,5 +846,9 @@ export async function parseBdmv(inputPath: string, options: { limits?: Limits } 
     "sound.bdmv fields without independent field comparisons",
     "unknown ExtensionData payload semantics",
   ];
-  return { schemaVersion: "1.0", analysisStage: "structural", root, discInfo: { appInfo: parsedIndex?.value.appInfo ?? null, uhd: parsedIndex?.value.uhd ?? null }, entries, movieObjects: objects, bdjos, metadata, playlists, clips, sounds, graph, declarations, diagnostics, supportPrediction: { status: "partial", supported: [], unsupported: ["BD-J execution", "MPLS multi-angle playback", "SubPath playback", "media decoding"], unverified } };
+  return { disc: { schemaVersion: "1.0", analysisStage: "structural", root, discInfo: { appInfo: parsedIndex?.value.appInfo ?? null, uhd: parsedIndex?.value.uhd ?? null }, entries, movieObjects: objects, bdjos, metadata, playlists, clips, sounds, graph, declarations, diagnostics, supportPrediction: { status: "partial", supported: [], unsupported: ["BD-J execution", "MPLS multi-angle playback", "SubPath playback", "media decoding"], unverified } }, table };
+}
+
+export async function parseBdmv(inputPath: string, options: { limits?: Limits } = {}): Promise<ParsedDisc> {
+  return (await parseBdmvWithInputTable(inputPath, options)).disc;
 }

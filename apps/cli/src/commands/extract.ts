@@ -5,7 +5,7 @@ import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { buildExternalTargets } from "../shared/media.js";
 import { extractReachablePgsTracks } from "../shared/pgs.js";
 import { assertDisjointRoots, beginOutputTransaction } from "@bdmv2web/bdmv-io";
-import { parseBdmv, type ParsedDisc } from "@bdmv2web/bdmv-parser";
+import { parseBdmvWithInputTable, type ParsedDisc } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
 import { lstat, mkdir, stat, unlink, writeFile } from "node:fs/promises";
@@ -22,13 +22,13 @@ export async function extract(): Promise<void> {
   const includeIgs = all || selectedType === "igs";
   const includeSup = all || selectedType === "sup";
   const strict = strictDefault();
-  const disc = await parseBdmv(input);
+  const { disc, table } = await parseBdmvWithInputTable(input);
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   // Fail on fatal parse diagnostics before scanning STREAM data (P2-INFO-3).
   const parseFacts = classifyDiagnostics(disc.diagnostics);
   if (parseFacts.hasFatal) { stageFailure(firstBlockingCode(parseFacts.blocking), parseFacts.blocking); return; }
   const needsIgs = includeIgs || includeSup;
-  const igs = needsIgs ? await extractIgsScenes(disc, { renderAssets: false }) : { scenes: [], assets: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
+  const igs = needsIgs ? await extractIgsScenes(disc, { renderAssets: false, table }) : { scenes: [], assets: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
   const stageDiagnostics = [...disc.diagnostics, ...(includeIgs || includeSup ? igs.diagnostics : [])];
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: stageDiagnostics, strict });
   if (outcome.status === "failed") {

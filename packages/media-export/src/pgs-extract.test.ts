@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractPgsTrack } from "./pgs-extract.js";
+import { extractPgsTrack, extractPgsTracks } from "./pgs-extract.js";
 
 const roots: string[] = [];
 async function temp(): Promise<string> {
@@ -14,6 +14,42 @@ async function temp(): Promise<string> {
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 
 describe("PGS transport extraction", () => {
+  it("extracts multiple PIDs and source intervals from one clip scan", async () => {
+    const root = await temp();
+    const sourcePath = join(root, "source.m2ts");
+    const outputPaths = [join(root, "one.sup"), join(root, "two.sup"), join(root, "three.sup")];
+    await writeFile(sourcePath, concat(
+      m2tsPacket(0x1200, pesPacket(pgsDisplaySet(), 90_000n, 88_000n)),
+      m2tsPacket(0x1201, pesPacket(pgsDisplaySet(), 90_000n, 88_000n)),
+    ));
+
+    const tracks = await extractPgsTracks(sourcePath, [
+      { pid: 0x1200, outputPath: outputPaths[0]!, timestampOffset90k: 10_000n },
+      { pid: 0x1200, outputPath: outputPaths[1]!, timestampOffset90k: 200_000n },
+      { pid: 0x1201, outputPath: outputPaths[2]!, timestampOffset90k: 10_000n },
+    ]);
+    const [anchored, unanchored] = await Promise.all(outputPaths.slice(0, 2).map((path) => readFile(path)));
+
+    expect(tracks.map(({ pid, displaySets }) => [pid, displaySets[0]?.pts90k])).toEqual([[0x1200, 2_000], [0x1200, 4_294_857_296], [0x1201, 2_000]]);
+    expect([...anchored!.subarray(0, 6)]).toEqual([0x50, 0x47, 0, 0, 7, 0xd0]);
+    expect([...unanchored!.subarray(0, 6)]).toEqual([0x50, 0x47, 0xff, 0xfe, 0x52, 0x50]);
+  });
+
+  it("extracts a valid track larger than 64 MiB by default and enforces an explicit limit", async () => {
+    const root = await temp();
+    const sourcePath = join(root, "large-source.m2ts");
+    const outputPath = join(root, "large.sup");
+    const existingOutput = join(root, "bounded.sup");
+    await writeLargeValidPgsClip(sourcePath);
+    await writeFile(existingOutput, "preserve this output on failure");
+
+    const result = await extractPgsTrack(sourcePath, 0x1200, outputPath);
+    expect(result.byteLength).toBeGreaterThan(64 * 1024 * 1024);
+    expect(result.displaySets).toMatchObject([{ pts90k: 0, width: 4, height: 3, placements: [] }]);
+    await expect(extractPgsTrack(sourcePath, 0x1200, existingOutput, { maxBytes: 64 * 1024 * 1024 })).rejects.toThrow(/exceeds maxBytes/);
+    expect(await readFile(existingOutput, "utf8")).toBe("preserve this output on failure");
+  }, 120_000);
+
   it("extracts one PID to SUP with anchored timestamps and parsed display sets", async () => {
     const root = await temp();
     const sourcePath = join(root, "source.m2ts");
@@ -54,6 +90,16 @@ describe("PGS transport extraction", () => {
     await expect(readFile(outputPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("rejects the source clip as an output path", async () => {
+    const root = await temp();
+    const sourcePath = join(root, "source.m2ts");
+    const original = m2tsPacket(0x1200, pesPacket(pgsDisplaySet(), 90_000n, null));
+    await writeFile(sourcePath, original);
+
+    await expect(extractPgsTrack(sourcePath, 0x1200, sourcePath)).rejects.toThrow(/must differ from the source clip path/);
+    expect([...await readFile(sourcePath)]).toEqual([...original]);
+  });
+
   it("removes output when the extracted track exceeds its configured byte limit", async () => {
     const root = await temp();
     const sourcePath = join(root, "source.m2ts");
@@ -75,7 +121,7 @@ describe("PGS transport extraction", () => {
   });
 });
 
-function pgsSegment(type: number, payload: number[]): Uint8Array {
+function pgsSegment(type: number, payload: number[] | Uint8Array): Uint8Array {
   const segment = new Uint8Array(3 + payload.length);
   segment.set([type, payload.length >>> 8, payload.length], 0);
   segment.set(payload, 3);
@@ -131,4 +177,61 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   let offset = 0;
   for (const part of parts) { result.set(part, offset); offset += part.byteLength; }
   return result;
+}
+
+async function writeLargeValidPgsClip(path: string): Promise<void> {
+  const file = await open(path, "w");
+  let continuity = 0;
+  try {
+    const writeSegment = async (type: number, payload: number[] | Uint8Array) => {
+      continuity = await writePes(file, 0x1200, pgsSegment(type, payload), continuity);
+    };
+    await writeSegment(0x16, [0, 4, 0, 3, 0, 1, 0, 0, 0, 0, 0]);
+    for (let version = 0; version < 1_025; version++) {
+      const palette = new Uint8Array(65_522);
+      palette[0] = 0;
+      palette[1] = version & 0xff;
+      for (let offset = 2; offset < palette.length; offset += 5) {
+        palette[offset] = ((offset - 2) / 5) & 0xff;
+        palette[offset + 1] = (version + offset) & 0xff;
+        palette[offset + 2] = 128;
+        palette[offset + 3] = 128;
+        palette[offset + 4] = 255;
+      }
+      await writeSegment(0x14, palette);
+    }
+    await writeSegment(0x80, []);
+  } finally {
+    await file.close();
+  }
+}
+
+async function writePes(file: Awaited<ReturnType<typeof open>>, pid: number, payload: Uint8Array, continuity: number): Promise<number> {
+  const pes = new Uint8Array(9 + payload.byteLength);
+  pes.set([0, 0, 1, 0xbd, 0, 0, 0x80, 0, 0]);
+  pes.set(payload, 9);
+  const packets = new Uint8Array(Math.ceil(pes.byteLength / 184) * 192);
+  let offset = 0;
+  let packetOffset = 0;
+  while (offset < pes.byteLength) {
+    const payloadLength = Math.min(184, pes.byteLength - offset);
+    const packet = packets.subarray(packetOffset, packetOffset + 192);
+    packet[4] = 0x47;
+    packet[5] = (offset === 0 ? 0x40 : 0) | (pid >>> 8);
+    packet[6] = pid & 0xff;
+    packet[7] = (payloadLength === 184 ? 0x10 : 0x30) | (continuity & 0x0f);
+    const payloadOffset = payloadLength === 184 ? 8 : 9 + (183 - payloadLength);
+    if (payloadLength !== 184) packet[8] = 183 - payloadLength;
+    packet.set(pes.subarray(offset, offset + payloadLength), payloadOffset);
+    offset += payloadLength;
+    packetOffset += packet.byteLength;
+    continuity++;
+  }
+  let written = 0;
+  while (written < packets.byteLength) {
+    const result = await file.write(packets, written, packets.byteLength - written, null);
+    if (result.bytesWritten === 0) throw new Error("Test fixture write made no progress.");
+    written += result.bytesWritten;
+  }
+  return continuity;
 }

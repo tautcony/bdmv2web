@@ -424,4 +424,36 @@ describe("menu media layout", () => {
       expect(data).toContain('"path":"assets/media/playlist-00001-pi02-clip-00377/background.mp4"');
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
+
+  it("shares source probes across media exports within one package build", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv2web-shared-source-probe-"));
+    const sourcePath = resolve(parent, "BDMV/STREAM/00004.m2ts");
+    const media = (playlistId: string, playItemIndex: number, inTime45k: number, outTime45k: number) => ({
+      sourcePath, sourceFile: "BDMV/STREAM/00004.m2ts", playlistId, playItemIndex, clipId: "00004",
+      inTime45k, outTime45k, stillMode: 0, repeatCount: 1, videoPid: 0x1011,
+      audioTracks: [{ streamNumber: 0, pid: 0x1100, language: "eng" }],
+    });
+    const top = media("00003", 0, 0, 450_000);
+    const extra = media("00003", 1, 450_000, 900_000);
+    const calls: Array<{ executable: string; args: string[] }> = [];
+    const baseRunner = runner(new Map([[sourcePath, "10"]]));
+    const mediaProcessRunner: MediaProcessRunner = async (executable, args, ...rest) => {
+      calls.push({ executable, args });
+      return baseRunner(executable, args, ...rest);
+    };
+    const sourceProbeCount = () => calls.filter((call) => call.executable === "ffprobe" && call.args.includes("-probesize") && call.args.at(-1) === sourcePath).length;
+    try {
+      await buildMenuPackage({
+        outputDirectory: resolve(parent, "first"), title: "Shared source", ir, scene, graphics: [],
+        menuLoopMedia: top, additionalMenuMedia: [extra], mediaEncoding: { codec: "h264" }, mediaProcessRunner,
+      });
+      expect(sourceProbeCount()).toBe(1);
+
+      await buildMenuPackage({
+        outputDirectory: resolve(parent, "second"), title: "Fresh source probe", ir, scene, graphics: [],
+        menuLoopMedia: top, additionalMenuMedia: [extra], mediaEncoding: { codec: "h264" }, mediaProcessRunner,
+      });
+      expect(sourceProbeCount()).toBe(2);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
 });
