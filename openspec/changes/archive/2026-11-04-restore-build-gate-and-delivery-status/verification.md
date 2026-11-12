@@ -261,7 +261,7 @@ $ report.json: status=partial、mode=menu-only、blockingDiagnostics=37（首条
 
 ## 记录口径说明
 
-- 所有命令在 Node `24.18.0` / pnpm `11.25.0` 下执行。本机 shell 默认 `node` 为 v22（`node -v` = 22.22.2），而 `engines` 要求 `>=24.18.0 <25`，故门禁命令统一把 `~/.nvm/versions/node/v24.18.0/bin` 放到 PATH 前面。
+- 所有命令在 Node `24.18.0` / pnpm `11.25.0` 下执行。本机 shell 默认 `node` 为 v22（`node -v` = 22.22.2），而 `engines` 要求 `>=24.18.0`，故门禁命令统一把 `~/.nvm/versions/node/v24.18.0/bin` 放到 PATH 前面。
 - 该环境下 `pnpm` 未安装为独立可执行文件（只有 `corepack pnpm` 可用），而根 `package.json` 的脚本内部会调用 `pnpm`，因此用一个临时的 `pnpm → corepack pnpm` shim 目录满足脚本内部调用。这是环境差异，不涉及仓库改动。
 
 

@@ -2,7 +2,7 @@
 
 ## Pinned toolchain
 
-- Node.js: `24.18.0` (`.node-version`; supported engine range is `>=24.18.0 <25`).
+- Node.js: `24.18.0` (`.node-version`; supported engine range is `>=24.18.0`).
 - pnpm: `11.25.0` (`packageManager` in the root `package.json`), selected through `corepack pnpm`. A globally installed `pnpm` is not required.
 - TypeScript: `5.9.3`.
 - Vitest: `4.0.8`.
