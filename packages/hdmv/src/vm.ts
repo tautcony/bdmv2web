@@ -1,54 +1,23 @@
-import type { MovieObject, MovieInstruction, ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
-import { DEFAULT_PLAYER_PROFILE } from "@bdmv2web/core/defaults";
+import type { MovieObject, SourceLocation } from "@bdmv2web/bdmv-parser";
 import { DEFAULT_LIMITS, validateLimits, type Limits } from "@bdmv2web/core/limits";
-import type { PlayerProfile as CorePlayerProfile } from "@bdmv2web/core";
-import { decodeInstruction, type DecodedInstruction, type Operand, type RawCommand } from "./decode.js";
+import { decodeInstruction, type DecodedInstruction, type Operand } from "./decode.js";
 import { RegisterFile, RegisterFault, type PlayerProfile } from "./registers.js";
-
-export type VmStatus = "idle" | "running" | "suspended" | "stopped" | "faulted";
-export type ActionType = "PLAY_PLAYLIST" | "PLAY_PLAYLIST_ITEM" | "PLAY_PLAYLIST_MARK" | "LINK_PLAY_ITEM" | "LINK_PLAY_MARK" | "PLAY_STOP" | "SET_STREAM" | "SET_SECONDARY_STREAM" | "SET_BUTTON_PAGE" | "ENABLE_BUTTON" | "DISABLE_BUTTON" | "POPUP_OFF" | "STILL_ON" | "STILL_OFF" | "SET_NV_TIMER" | "SET_OUTPUT_MODE" | "SET_STREAM_SS" | "TOP_MENU" | "TITLE_SEARCH" | "MENU_CALL" | "MENU_RETURN";
-export type WaitFor = "started" | "seeked" | "ended" | "still-completed";
-export interface NavigationAction { id: string; type: ActionType; generation: number; payload: Record<string, number | string | boolean | null>; source: SourceLocation; waitFor?: WaitFor; }
-export type MediaEventType = "MEDIA_STARTED" | "MEDIA_SEEKED" | "PLAYITEM_CHANGED" | "TIME_UPDATED" | "MEDIA_ENDED" | "MEDIA_ERROR" | "MEDIA_UNAVAILABLE" | "STILL_COMPLETED" | "MENU_INPUT" | "TOP_MENU" | "POPUP_MENU" | "RETURN";
-export interface VmEvent { type: MediaEventType; generation?: number; responseTo?: string; payload?: Record<string, unknown>; input?: string | number; channel?: "keyboard" | "pointer" | "system"; }
-export interface VmDiagnostic { code: string; message: string; source: SourceLocation | null; }
-export interface PlaybackContext { status: "idle" | "requested" | "playing" | "ended" | "error" | "unavailable"; playlist: number | null; playItem: number | null; presentationTime: number | null; pendingActionId: string | null; }
-export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; limits: Readonly<Limits>; status: VmStatus; diagnostic?: VmDiagnostic; }
-export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
-export interface HdmvVmCheckpoint {
-  status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>;
-  callStack: Array<{ programId: number; pc: number }>; continuation: Continuation | null;
-  suspendedPlaylistContinuation: Continuation | null; suspendedPlaylistPlayback: PlaybackContext | null;
-  pendingTitleCall: number | null; titleTransition: boolean; menuCheckpoint: MenuCheckpoint | null; playback: PlaybackContext;
-  generation: number; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; sequence: number;
-  profile: PlayerProfile; lastAction: NavigationAction | undefined; resumeAfterPlaylistStop: boolean;
-  randomSeed: number; randomState: bigint;
-  consumedResponses: string[]; eventQueue: VmEvent[]; actionQueue: NavigationAction[];
-  trace: TraceEntry[]; actions: NavigationAction[]; diagnostics: VmDiagnostic[];
-}
-export interface VmOptions { limits?: Limits; maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; }
-export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
-export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
-export type ButtonCommandContext = "object" | "ig_object";
-export type ButtonCommandResult = VmSnapshot & { buttonCommandTerminated: boolean };
-export type ButtonProgramResult = VmSnapshot & { actions: NavigationAction[]; terminated: boolean; buttonCommandTerminated: boolean; fault: VmDiagnostic | null };
-type Continuation = { action: NavigationAction; nextProgramId: number; nextPc: number; };
-type MenuCheckpoint = {
-  programId: number; pc: number; status: VmStatus; registers: ReturnType<RegisterFile["snapshot"]>;
-  callStack: Array<{ programId: number; pc: number }>; continuation: Continuation | null;
-  suspendedPlaylistContinuation: Continuation | null; suspendedPlaylistPlayback: PlaybackContext | null;
-  pendingTitleCall: number | null; titleTransition: boolean; playback: PlaybackContext; queuedActionIds: Set<string>;
-  diagnostic: VmDiagnostic | null; firstAction: number; firstDiagnostic: number; randomState: bigint;
-};
-type VmTuning = { maxInstructionsPerTurn: number; maxCallDepth: number; maxQueueDepth: number };
-const EMPTY_DELTA: TraceEntry["registerDelta"] = { gpr: {}, psr: {} };
-const WAIT_BY_ACTION: Partial<Record<ActionType, WaitFor>> = { PLAY_PLAYLIST: "ended", PLAY_PLAYLIST_ITEM: "ended", PLAY_PLAYLIST_MARK: "ended" };
-const COMPARE_OPCODES = new Set(["BC", "EQ", "NE", "GE", "GT", "LE", "LT"]);
-const PSR_TIME_TICKS_PER_SECOND = 45_000;
-const RANDOM_MULTIPLIER = 6_364_136_223_846_793_005n;
-const RANDOM_MASK = 0xffff_ffff_ffff_ffffn;
-
-function textInstruction(d: DecodedInstruction): string { return `${d.opcode ?? "UNKNOWN"} ${d.operands.filter((x) => x !== null).map((x) => x.kind === "immediate" ? `#${x.value}` : `${x.kind}[${x.value}]`).join(",")}`.trim(); }
+import {
+  COMPARE_OPCODES, EMPTY_DELTA, RANDOM_MASK, RANDOM_MULTIPLIER, WAIT_BY_ACTION,
+  comparisonSkips, delta, eventMatches, normalizeProfile, normalizeRandomSeed,
+  playbackTicks, stableProfile, textInstruction,
+} from "./vm-semantics.js";
+import type {
+  ActionType, ButtonCommand, ButtonCommandContext, ButtonCommandResult, ButtonProgramResult,
+  Continuation, HdmvVmCheckpoint, MenuCheckpoint, NavigationAction,
+  PlaybackContext, TraceEntry, VmDiagnostic, VmEvent, VmOptions, VmProgram, VmSnapshot,
+  VmStatus, VmTuning,
+} from "./vm-types.js";
+export type {
+  ActionType, ButtonCommand, ButtonCommandContext, ButtonCommandResult, ButtonProgramResult,
+  HdmvVmCheckpoint, MediaEventType, NavigationAction, PlaybackContext, TraceEntry,
+  VmDiagnostic, VmEvent, VmOptions, VmProgram, VmSnapshot, VmStatus, WaitFor,
+} from "./vm-types.js";
 
 export class HdmvVm {
   readonly limits: Readonly<Limits>;
@@ -1013,50 +982,3 @@ export class HdmvVm {
     try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }
 }
-function playbackTicks(event: VmEvent): number | null {
-  const presentationTime = event.payload?.presentationTime;
-  if (typeof presentationTime === "number" && Number.isFinite(presentationTime) && presentationTime >= 0) return Math.min(0xffffffff, Math.floor(presentationTime));
-  const seconds = event.payload?.mediaTimeSeconds;
-  if (typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0) return Math.min(0xffffffff, Math.round(seconds * PSR_TIME_TICKS_PER_SECOND));
-  return null;
-}
-function delta(before: ReturnType<RegisterFile["snapshot"]>, after: ReturnType<RegisterFile["snapshot"]>): TraceEntry["registerDelta"] {
-  const gpr: Record<number, number> = {}, psr: Record<number, number> = {};
-  before.gpr.forEach((v, i) => { if (v !== after.gpr[i]) gpr[i] = after.gpr[i]!; }); before.psr.forEach((v, i) => { if (v !== after.psr[i]) psr[i] = after.psr[i]!; }); return { gpr, psr };
-}
-function eventMatches(wait: WaitFor | undefined, event: MediaEventType): boolean { return wait === "started" ? event === "MEDIA_STARTED" : wait === "seeked" ? event === "MEDIA_SEEKED" : wait === "ended" ? event === "MEDIA_ENDED" : wait === "still-completed" ? event === "STILL_COMPLETED" : false; }
-function comparisonSkips(opcode: string, a: number, b: number): boolean {
-  switch (opcode) {
-    case "BC": return (a & ~b) !== 0;
-    case "EQ": return a !== b;
-    case "NE": return a === b;
-    case "GE": return a < b;
-    case "GT": return a <= b;
-    case "LE": return a > b;
-    case "LT": return a >= b;
-    default: return false;
-  }
-}
-function stableProfile(profile: PlayerProfile): string {
-  const normalized: Record<string, unknown> = Object.fromEntries(Object.entries(profile).filter(([key]) => key !== "capabilityValues").sort(([a], [b]) => a.localeCompare(b)));
-  if (profile.capabilityValues) normalized.capabilityValues = Object.fromEntries(Object.entries(profile.capabilityValues).sort(([a], [b]) => Number(a) - Number(b)));
-  return JSON.stringify(normalized);
-}
-
-function normalizeProfile(profile: PlayerProfile | undefined): PlayerProfile {
-  const defaults: CorePlayerProfile = DEFAULT_PLAYER_PROFILE;
-  return {
-    ...defaults,
-    ...profile,
-    videoProfiles: [...(profile?.videoProfiles ?? defaults.videoProfiles)],
-    audioProfiles: [...(profile?.audioProfiles ?? defaults.audioProfiles)],
-    ...(profile?.capabilityValues ? { capabilityValues: { ...profile.capabilityValues } } : {}),
-  };
-}
-
-function normalizeRandomSeed(value: number | undefined): number {
-  const seed = value ?? 1;
-  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) throw new TypeError("randomSeed must be an unsigned 32-bit integer");
-  return seed;
-}
-

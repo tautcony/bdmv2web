@@ -1,12 +1,8 @@
-import { spawn } from "node:child_process";
 import { access, copyFile, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { createReadStream } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { M2tsPacketReader, PesAssembler } from "@bdmv2web/igs";
 import { directoryBytesExcluding } from "./directory-bytes.js";
-import { parsePgsSup } from "./pgs.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates } from "./budget.js";
-import { assertEncodedColor, isHdrDynamicRange, normalizeColorTag, pixelFormatBitDepth, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type ColorWarning, type ColorFilterChain, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color.js";
+import { assertEncodedColor, isHdrDynamicRange, normalizeColorTag, pixelFormatBitDepth, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type HdrMode, type VideoCodec, type VideoColorPlan } from "./color.js";
 
 export * from "./closure.js";
 export * from "./external-targets.js";
@@ -19,237 +15,17 @@ export * from "./color.js";
 export * from "./pgs.js";
 export * from "./pgs-render.js";
 
-export interface ExtractedPgsTrack { pid: number; sourcePath: string; path: string; byteLength: number; displaySets: ReturnType<typeof parsePgsSup>; }
+export * from "./pgs-extract.js";
+export type {
+  MediaProcessResult, MediaProcessProgress, MediaProcessRunner, MediaToolInvocation,
+  MediaAudioTrackInput, VideoExportMode, MenuLoopMediaInput, MediaAssetSource,
+  MediaAssetProgress, MenuLoopMediaOptions, MediaPlan, ExportedMediaAsset,
+  MediaWarning, MenuLoopMediaResult, MenuLoopEncoding,
+} from "./media-types.js";
+export * from "./process.js";
+import type { MediaProcessProgress, MediaProcessResult, MediaProcessRunner, MediaToolInvocation, VideoExportMode, MenuLoopMediaInput, MenuLoopMediaOptions, MediaPlan, MenuLoopMediaResult, MenuLoopEncoding, MediaWarning, ExportedMediaAsset } from "./media-types.js";
+import { MediaJobError, MediaToolError, runMediaProcess as runProcess } from "./process.js";
 
-/** Extract one declared Blu-ray PGS PID as SUP, then parse and validate every display set. */
-export async function extractPgsTrack(sourcePath: string, pid: number, outputPath: string, options: { maxBytes?: number; timestampOffset90k?: bigint } = {}): Promise<ExtractedPgsTrack> {
-  if (!Number.isSafeInteger(pid) || pid < 0x20 || pid > 0x1ffe) throw new RangeError("PGS PID must be a valid 13-bit transport PID.");
-  const maxBytes = options.maxBytes ?? 64 * 1024 * 1024;
-  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new RangeError("maxBytes must be a positive safe integer.");
-  const timestampOffset90k = options.timestampOffset90k ?? 0n;
-  if (timestampOffset90k < 0n) throw new RangeError("timestampOffset90k must be non-negative.");
-  const output = resolve(outputPath);
-  await mkdir(resolve(output, ".."), { recursive: true });
-  try {
-    const reader = new M2tsPacketReader("pgs-extraction");
-    const assembler = new PesAssembler("pgs-extraction");
-    const segments: Uint8Array[] = [];
-    let byteLength = 0;
-    let effectiveTimestampOffset90k = timestampOffset90k;
-    let hasTimestampAnchor = false;
-    let hasDtsAnchor = false;
-    const accept = (pesPackets: ReturnType<PesAssembler["push"]>) => {
-      for (const pes of pesPackets) {
-        if (!hasTimestampAnchor) {
-          hasTimestampAnchor = true;
-          const pts = pes.pts?.raw;
-          // The reference SUP timestamp convention anchors a PGS stream near
-          // the source interval to its first DTS, then keeps all later deltas.
-          if (pts !== undefined && pes.dtsRaw !== null && pts > timestampOffset90k && pts - timestampOffset90k <= 180_000n) effectiveTimestampOffset90k = pes.dtsRaw;
-        }
-        let offset = 0;
-        while (offset < pes.payload.length) {
-          if (offset + 3 > pes.payload.length) throw new TypeError(`PGS PID ${pid} contains a truncated PES segment header.`);
-          const length = (pes.payload[offset + 1]! << 8) | pes.payload[offset + 2]!;
-          const end = offset + 3 + length;
-          if (end > pes.payload.length) throw new TypeError(`PGS PID ${pid} contains a truncated PES segment payload.`);
-          const pts = Number(((pes.pts?.raw ?? 0n) - effectiveTimestampOffset90k) & 0xffff_ffffn);
-          const dts = pes.dtsRaw !== null
-            ? Number((pes.dtsRaw - effectiveTimestampOffset90k) & 0xffff_ffffn)
-            : hasDtsAnchor ? Number(((pes.pts?.raw ?? 0n) - effectiveTimestampOffset90k) & 0xffff_ffffn) : 0;
-          if (pes.dtsRaw !== null) hasDtsAnchor = true;
-          const record = new Uint8Array(13 + length);
-          record.set([0x50, 0x47, pts >>> 24, pts >>> 16, pts >>> 8, pts, dts >>> 24, dts >>> 16, dts >>> 8, dts], 0);
-          record.set(pes.payload.subarray(offset, end), 10);
-          segments.push(record); byteLength += record.byteLength;
-          if (byteLength > maxBytes) throw new RangeError(`Extracted PGS PID ${pid} exceeds maxBytes.`);
-          offset = end;
-        }
-      }
-    };
-    for await (const chunk of createReadStream(resolve(sourcePath), { highWaterMark: 256 * 1024 }) as AsyncIterable<Uint8Array>) {
-      for (const packet of reader.feed(chunk)) if (packet.pid === pid) accept(assembler.push(packet));
-    }
-    reader.end();
-    accept(assembler.end());
-    const transportError = reader.diagnostics.find((item) => item.source?.pid === pid && item.severity === "error");
-    const pesError = assembler.diagnostics.find((item) => item.source?.pid === pid && item.severity === "error");
-    if (transportError) throw new TypeError(`PGS PID ${pid} transport stream is invalid: ${transportError.message}`);
-    if (pesError) throw new TypeError(`PGS PID ${pid} PES stream is invalid: ${pesError.message}`);
-    const bytes = concatBytes(segments, byteLength);
-    const displaySets = parsePgsSup(bytes);
-    if (displaySets.length === 0) throw new TypeError(`Extracted PGS PID ${pid} contains no complete display sets.`);
-    await writeFile(output, bytes);
-    return { pid, sourcePath: resolve(sourcePath), path: output, byteLength: bytes.byteLength, displaySets };
-  } catch (error) {
-    await unlink(output).catch(() => undefined);
-    throw error;
-  }
-}
-
-function concatBytes(chunks: readonly Uint8Array[], byteLength: number): Uint8Array {
-  const output = new Uint8Array(byteLength); let offset = 0;
-  for (const chunk of chunks) { output.set(chunk, offset); offset += chunk.byteLength; }
-  return output;
-}
-
-export interface MediaAudioTrackInput { streamNumber: number; pid: number; language: string; }
-/** How the background video reaches MP4: encoded here, or copied from the source stream. */
-export type VideoExportMode = "encode" | "copy";
-export interface MenuLoopMediaInput {
-  sourcePath: string;
-  sourceFile: string;
-  playlistId: string;
-  playItemIndex: number;
-  clipId: string;
-  inTime45k: number;
-  /** Optional nonzero source mark used as the repeated menu segment's start. */
-  loopStart45k?: number;
-  /** Encode the initial presentation from inTime45k before entering the loop segment. */
-  includeIntro?: boolean;
-  /**
-   * Presentation time (45 kHz) of the clip entry point at or before the export
-   * start. A player seeks here, decodes, and drops everything before the declared
-   * start, so a stream copy may begin here when the start names this entry point.
-   */
-  copyStart45k?: number;
-  outTime45k: number;
-  stillMode: number;
-  repeatCount: number;
-  /** Whether the declared menu segment repeats; ordinary single PlayItems play once. */
-  loopBackground?: boolean;
-  videoPid: number;
-  audioTracks: MediaAudioTrackInput[];
-}
-export interface MediaProcessResult { stdout: string; stderr: string; }
-export interface MediaProcessProgress { outTimeSeconds: number; state: "continue" | "end"; }
-/** The menu clip and stream whose encoding an asset progress report describes. */
-export interface MediaAssetSource {
-  playlistId: string;
-  playItemIndex: number;
-  clipId: string;
-  kind: "background" | "audio";
-  pid: number;
-  language?: string;
-  /**
-   * Video pipeline in use for this background asset. A copy that fails
-   * verification is re-encoded, so later reports for the same asset change
-   * from `copy` to `encode`.
-   */
-  videoMode?: VideoExportMode;
-  /** The clip was taken from a previous package instead of being exported again. */
-  reused?: boolean;
-}
-/** One encoded asset's progress, named by package path and by its source stream. */
-export type MediaAssetProgress = MediaProcessProgress & { assetPath: string; durationSeconds: number; source: MediaAssetSource };
-export type MediaProcessRunner = (executable: string, args: string[], timeoutMs: number, signal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void) => Promise<MediaProcessResult>;
-export interface MediaToolInvocation { executable: string; args: string[]; }
-export class MediaToolError extends Error {
-  constructor(readonly diagnostic: { code: "MEDIA_TOOL_UNAVAILABLE" | "MEDIA_TOOL_COMMAND_FAILED" | "MEDIA_ENCODER_UNAVAILABLE"; executable: string; args: string[]; message: string }) {
-    super(diagnostic.message);
-    this.name = "MediaToolError";
-  }
-}
-export type MediaJobErrorCode = "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID";
-export class MediaJobError extends Error {
-  constructor(readonly diagnostic: { code: MediaJobErrorCode; executable?: string; args?: string[]; message: string }) {
-    super(diagnostic.message);
-    this.name = "MediaJobError";
-  }
-}
-export interface MenuLoopMediaOptions {
-  outputDirectory: string;
-  /** Reuse encoded assets only when the previous package media plan matches this input. */
-  reuseFromDirectory?: string;
-  /** Package-relative directory for this playlist's encoded video and audio. */
-  assetDirectory?: string;
-  /** Package-relative path for this playlist's media plan. */
-  planPath?: string;
-  /**
-   * Older package-relative layouts to read reused assets from, tried in order
-   * after `assetDirectory`/`planPath`. A renamed layout keeps its assets
-   * reusable: the prior plan is read where it was written and its files are
-   * copied to the current names.
-   */
-  reuseAlternatives?: ReadonlyArray<{ assetDirectory: string; planPath: string }>;
-  ffmpegPath?: string;
-  ffprobePath?: string;
-  timeoutMs?: number;
-  crf?: number;
-  preset?: "medium" | "fast" | "veryfast" | "ultrafast";
-  /** Output video encoder. Defaults to `hevc`. */
-  codec?: VideoCodec;
-  /** Dynamic-range policy for HDR sources. Defaults to `tonemap` (SDR BT.709). */
-  hdrMode?: HdrMode;
-  /**
-   * `copy` writes the source H.264 stream into MP4 without re-encoding it.
-   * A copy requires an entry point no more than 256 ticks before the export
-   * start, even dimensions, and 8-bit 4:2:0 SDR H.264; other clips are encoded
-   * and the plan records the reason. Defaults to `encode`.
-   */
-  videoMode?: VideoExportMode;
-  /** Maximum bytes for one encoded media asset. Null disables the per-asset cap. */
-  maxAssetBytes?: number | null;
-  estimatedVideoBitsPerSecond?: number;
-  estimatedAudioBitsPerSecond?: number;
-  containerOverheadPercent?: number;
-  signal?: AbortSignal;
-  runProcess?: MediaProcessRunner;
-  onProgress?: (progress: MediaAssetProgress) => void;
-}
-export interface MediaPlan {
-  status: "partial";
-  playlistId: string;
-  playItemIndex: number;
-  clipId: string;
-  sourceFile: string;
-  sourceIn45k: number;
-  sourceOut45k: number;
-  loopStart45k?: number;
-  includeIntro?: boolean;
-  durationSeconds: number;
-  repeatCount: number;
-  backgroundMode: "single-clip" | "loop-one-clip" | "still-last-frame";
-  videoPid: number;
-  audioTracks: MediaAudioTrackInput[];
-  assetPaths?: { background: string; audioTracks: string[] };
-  encoding: {
-    video: {
-      /** `copy` keeps the source bitstream; `encode` runs the configured encoder. */
-      mode: VideoExportMode;
-      codec: VideoCodec; pixelFormat: string; preset: string; crf: number;
-      aspectRatioPolicy: "preserve-source-display-aspect"; frameRatePolicy: "passthrough"; evenDimensions: true;
-      color: { policy: HdrMode; source: SourceColor; output: OutputColor; filterChain: ColorFilterChain };
-    };
-    audio: { codec: "aac"; bitrate: "192k" };
-    container: { video: "mp4"; audio: "m4a"; faststart: true };
-  };
-  budget: MenuLoopBudgetEstimate & { existingOutputBytes: string; maxAssetBytes: number | null };
-  limitations: string[];
-}
-export interface ExportedMediaAsset { path: string; absolutePath: string; byteLength: number; codec: VideoCodec | "aac"; pid: number; streamNumber?: number; language?: string; }
-/** A non-blocking export note: colour-pipeline advice or a refused stream copy. */
-export type MediaWarning = ColorWarning | { code: "MEDIA_REMUX_UNAVAILABLE"; message: string };
-export interface MenuLoopMediaResult {
-  plan: MediaPlan;
-  outputSize: { beforeBytes: string; afterBytes: string };
-  tools: { ffmpeg: string; ffprobe: string; invocations: MediaToolInvocation[] };
-  background: ExportedMediaAsset & { width: number; height: number; durationSeconds: number; loop: boolean; loopStartSeconds?: number };
-  audioTracks: Array<ExportedMediaAsset & { language: string; durationSeconds: number; loopStartSeconds?: number }>;
-  files: Array<{ path: string; absolutePath: string; byteLength: number }>;
-  /** Colour-pipeline and stream-copy warnings that did not block the export. */
-  warnings: MediaWarning[];
-}
-
-export interface MenuLoopEncoding {
-  mode: VideoExportMode;
-  codec: VideoCodec;
-  crf: number;
-  preset: string;
-  color: Pick<VideoColorPlan, "policy" | "source" | "output" | "filterChain">;
-}
-
-/** Encoding choices known before the source is probed; the colour plan comes from the reused media plan. */
 interface ReuseEncoding { codec: VideoCodec; crf: number; preset: string; hdrMode: HdrMode; videoMode: VideoExportMode; }
 
 interface ProbeStream extends ColorProbeFields { index?: number; id?: string; codec_type?: string; codec_name?: string; width?: number; height?: number; display_aspect_ratio?: string; duration?: string; }
@@ -824,60 +600,7 @@ async function ensureAbsent(path: string): Promise<void> {
   catch (error) { if (error instanceof Error && error.message.startsWith("Media export target already exists:")) throw error; if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
 }
 
-async function runProcess(executable: string, args: string[], timeoutMs: number, signal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void): Promise<MediaProcessResult> {
-  return await new Promise((resolveResult, reject) => {
-    const child = spawn(executable, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] });
-    const stdout: Buffer[] = []; const stderr: Buffer[] = []; let size = 0; let finished = false; let requestedError: Error | undefined; let killTimer: ReturnType<typeof setTimeout> | undefined;
-    const finish = (error?: Error, result?: MediaProcessResult) => {
-      if (finished) return; finished = true; clearTimeout(timer); if (killTimer) clearTimeout(killTimer); signal?.removeEventListener("abort", abort);
-      error ? reject(error) : resolveResult(result!);
-    };
-    const terminate = (error: Error) => {
-      requestedError ??= error;
-      child.kill("SIGTERM");
-      killTimer ??= setTimeout(() => child.kill("SIGKILL"), 1000);
-    };
-    const collect = (target: Buffer[]) => (chunk: Buffer) => {
-      size += chunk.byteLength;
-      if (size > 4 * 1024 * 1024) { terminate(new MediaJobError({ code: "MEDIA_PROCESS_FAILED", executable, args: [...args], message: `${executable} output exceeded 4 MiB.` })); return; }
-      target.push(chunk);
-    };
-    let progressOutput = "";
-    let progressFields: Record<string, string> = {};
-    child.stdout.on("data", collect(stdout));
-    child.stderr.on("data", (chunk: Buffer) => {
-      collect(stderr)(chunk);
-      if (!onProgress) return;
-      progressOutput += chunk.toString("utf8");
-      const lines = progressOutput.split(/\r?\n/);
-      progressOutput = lines.pop() ?? "";
-      for (const line of lines) {
-        const separator = line.indexOf("=");
-        if (separator < 1) continue;
-        const key = line.slice(0, separator);
-        const value = line.slice(separator + 1);
-        progressFields[key] = value;
-        if (key === "progress" && (value === "continue" || value === "end")) {
-          const micros = Number(progressFields.out_time_us);
-          if (Number.isFinite(micros) && micros >= 0) onProgress({ outTimeSeconds: micros / 1_000_000, state: value });
-          progressFields = {};
-        }
-      }
-    });
-    child.on("error", (error) => finish(error));
-    child.on("close", (code, closeSignal) => {
-      if (requestedError) return finish(requestedError);
-      if (code !== 0) return finish(new Error(`${executable} exited ${code ?? closeSignal}: ${Buffer.concat(stderr).toString("utf8").trim()}`));
-      finish(undefined, { stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") });
-    });
-    const timer = setTimeout(() => terminate(new MediaJobError({ code: "MEDIA_JOB_TIMEOUT", executable, args: [...args], message: `${executable} timed out after ${timeoutMs} ms.` })), timeoutMs);
-    const abort = () => terminate(new MediaJobError({ code: "MEDIA_JOB_CANCELLED", executable, args: [...args], message: `${executable} was cancelled.` }));
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) abort();
-  });
-}
-
-export const runMediaProcess: MediaProcessRunner = runProcess;
+export { runMediaProcess } from "./process.js";
 
 function normalizePackageDirectory(value: string): string {
   const normalized = value.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "");

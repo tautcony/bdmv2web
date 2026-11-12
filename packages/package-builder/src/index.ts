@@ -1,47 +1,26 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
 import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, type VideoExportMode, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
+import { makePngBatches, type PngPayload } from "./asset-batches.js";
+import { convertSounds, type SoundMetadata } from "./sounds.js";
+import { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, packagedStyle, serializeSafeScriptData } from "./scripts.js";
+import type { MenuPackageDiagnostic, MenuPackageMetadata, MenuPackageStatus } from "./types.js";
 
-const templateDirectory = existsSync(new URL("./templates/index.html", import.meta.url)) ? "./templates/" : "../templates/";
+export { makePngBatches, type PngBatch, type PngPayload } from "./asset-batches.js";
+export { convertSounds, type SoundMetadata, type SoundPayload } from "./sounds.js";
+export { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, serializeSafeScriptData } from "./scripts.js";
+export { type MenuPackageDiagnostic, type MenuPackageMetadata, type MenuPackageStatus } from "./types.js";
+
 const RESERVED_REPORT_FILES = new Set(["compatibility.json", "asset-manifest.json"]);
-const PACKAGE_TEMPLATES = {
-  menuIndex: readFileSync(new URL(`${templateDirectory}index.html`, import.meta.url), "utf8"),
-  style: readFileSync(new URL(`${templateDirectory}style.css`, import.meta.url), "utf8"),
-  readme: readFileSync(new URL(`${templateDirectory}README.md`, import.meta.url), "utf8"),
-};
 
-function renderTemplate(template: string, values: Record<string, string>, sections: Record<string, boolean> = {}): string {
-  const withSections = template.replace(/\{\{#([A-Z_]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_match, name: string, contents: string) => sections[name] ? contents : "");
-  return withSections.replace(/\{\{([A-Z_]+)\}\}/g, (_match, name: string) => {
-    const value = values[name];
-    if (value === undefined) throw new Error(`Template value '${name}' is not defined.`);
-    return value;
-  });
-}
-
-/** A rendered PNG image asset ready for package embedding. */
-export interface PngPayload { id: string; bytes: Uint8Array }
-export interface PngBatch { index: number; assets: Array<{ id: string; dataUrl: string; byteLength: number }> }
-export interface SoundMetadata { index: number; channelCode: number; sampleRateCode: number; bitsPerSampleCode: number; channels: number | null; sampleRate: number | null; bitsPerSample: number | null; sampleOffset: number; sampleByteLength: number }
-export interface SoundPayload { index: number; path: string; byteLength: number; format: "wav-pcm" }
 export interface BdjPackageFile { path: string; sourcePath: string; bytes: Uint8Array }
 export interface PgsTrackPackageInput { playlistId: string; playlistNumber: number; playItemIndex: number; clipId: string; pid: number; streamNumber: number; language: string; sourceIn90k: string; sourceOut90k: string; source: string; path: string; displaySets: PgsDisplaySet[] }
-/** Delivery status as decided by the caller; the package must not invent one. */
-export type MenuPackageStatus = "failed" | "partial" | "complete";
-export interface MenuPackageDiagnostic { code: string; message: string; severity?: string }
-export interface MenuPackageMetadata { schemaVersion: "1.0"; runtimeVersion: string; title: string; status: MenuPackageStatus; diagnostics: MenuPackageDiagnostic[] }
-
-/** Serialize data for a classic script. Escaping '<' also prevents HTML script termination. */
-export function serializeSafeScriptData(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) => item instanceof Uint8Array ? [...item].map((byte) => byte.toString(16).padStart(2, "0")).join("") : item).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
-}
 
 /** The published CLI carries the menu bundle beside its entry; a workspace build reads the runtime-web export. */
 function menuRuntimeBundlePath(): string {
@@ -52,55 +31,6 @@ function menuRuntimeBundlePath(): string {
 function bdjClientBundlePath(): string {
   const besideEntry = fileURLToPath(new URL("runtime/bdj-client.bundle.js", import.meta.url));
   return existsSync(besideEntry) ? besideEntry : createRequire(import.meta.url).resolve("@bdmv2web/runtime-web/bdj-client-bundle");
-}
-
-export function makePngBatches(assets: PngPayload[], options: { maxAssetBytes?: number; maxBatchBytes?: number; maxTotalBytes?: number } = {}): PngBatch[] {
-  const maxAssetBytes = options.maxAssetBytes ?? 1024 * 1024;
-  const maxBatchBytes = options.maxBatchBytes ?? 4 * 1024 * 1024;
-  const maxTotalBytes = options.maxTotalBytes ?? 64 * 1024 * 1024;
-  for (const [name, value] of Object.entries({ maxAssetBytes, maxBatchBytes, maxTotalBytes })) if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive safe integer`);
-  const batches: PngBatch[] = []; let current: PngBatch = { index: 0, assets: [] }; let batchBytes = 0; let totalBytes = 0;
-  for (const asset of assets) {
-    const length = asset.bytes.byteLength;
-    if (!isPng(asset.bytes)) throw new TypeError(`Image asset '${asset.id}' must be encoded as PNG before packaging.`);
-    if (length > maxAssetBytes) throw new RangeError(`PNG asset '${asset.id}' exceeds maxAssetBytes`);
-    if (length > maxBatchBytes) throw new RangeError(`PNG asset '${asset.id}' exceeds maxBatchBytes`);
-    totalBytes += length; if (totalBytes > maxTotalBytes) throw new RangeError("PNG assets exceed maxTotalBytes");
-    if (current.assets.length && batchBytes + length > maxBatchBytes) { batches.push(current); current = { index: batches.length, assets: [] }; batchBytes = 0; }
-    current.assets.push({ id: asset.id, dataUrl: `data:image/png;base64,${Buffer.from(asset.bytes).toString("base64")}`, byteLength: length }); batchBytes += length;
-  }
-  if (current.assets.length) batches.push(current);
-  return batches;
-}
-
-function isPng(bytes: Uint8Array): boolean {
-  return bytes.length >= 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 && bytes[4] === 13 && bytes[5] === 10 && bytes[6] === 26 && bytes[7] === 10;
-}
-
-/** The stage fills the viewport and letterboxes the scene inside itself: the
- * page shows no chrome of its own, and the disc title is only the document title.
- * The inline aspect-ratio is a fallback hint if the full-viewport sizing is disabled. */
-export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSize?: { width: number; height: number }, externalPlayback = false, bdjRuntime = false): string {
-  const safeTitle = escapeHtml(title);
-  const assets = Array.from({ length: assetBatchCount }, (_, i) => `<script defer src="runtime/assets-data-${String(i).padStart(3, "0")}.js"></script>`).join("\n  ");
-  return renderTemplate(PACKAGE_TEMPLATES.menuIndex, {
-    TITLE: safeTitle,
-    ASSET_SCRIPTS: assets,
-    SCENE_ASPECT_RATIO: sceneSize ? `${sceneSize.width} / ${sceneSize.height}` : "",
-  }, {
-    EXTERNAL_PLAYBACK: externalPlayback,
-    BDJ_RUNTIME: bdjRuntime,
-    HAS_ASSET_BATCHES: assetBatchCount > 0,
-    HAS_SCENE_SIZE: sceneSize !== undefined,
-  }).replace(/\n{3,}/g, "\n\n");
-}
-
-export function createDataScript(ir: unknown): string {
-  return `globalThis.__BDMV_MENU_DATA__=${serializeSafeScriptData(ir)};\n`;
-}
-
-export function createAssetBatchScript(batch: PngBatch): string {
-  return `globalThis.__BDMV_MENU_ASSETS__=globalThis.__BDMV_MENU_ASSETS__||[];globalThis.__BDMV_MENU_ASSETS__[${batch.index}]=${serializeSafeScriptData(batch.assets)};\n`;
 }
 
 export function createCompatibility(metadata: MenuPackageMetadata, externalPlayback = false, bdjRuntime = false): Record<string, unknown> {
@@ -322,7 +252,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     }),
     ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/bdj-host-api.jar"), input.bdjHostApiJar!)] : []),
     ...(bdjRuntime ? [writeFile(resolve(runtimeDirectory, "bdj/session.json"), `${JSON.stringify(input.bdjLaunch)}\n`)] : []),
-    writeFile(resolve(runtimeDirectory, "style.css"), PACKAGE_TEMPLATES.style),
+    writeFile(resolve(runtimeDirectory, "style.css"), packagedStyle()),
     writeFile(resolve(output, "README.md"), createReadme(input.title, exportedMedia?.background.loop, !!input.externalTargets, metadata.status, bdjRuntime)),
     ...(input.externalTargets ? [writeFile(resolve(output, "external-targets.json"), `${JSON.stringify(input.externalTargets)}\n`)] : []),
     ...batches.map((batch) => writeFile(resolve(runtimeDirectory, `assets-data-${String(batch.index).padStart(3, "0")}.js`), createAssetBatchScript(batch))),
@@ -347,65 +277,10 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
 }
 
 /** Convert only M1-declared 48 kHz, signed 16-bit mono/stereo PCM sample ranges. BCLK words are big-endian. */
-export function convertSounds(entries: SoundMetadata[], source: Uint8Array | null, scene: unknown): { assets: SoundPayload[]; diagnostics: MenuPackageDiagnostic[]; files: Array<{ path: string; bytes: Uint8Array }> } {
-  const references = getSoundReferences(scene); const declared = new Map(entries.map((entry) => [entry.index, entry]));
-  const assets: SoundPayload[] = []; const diagnostics: Array<{ code: string; message: string }> = []; const files: Array<{ path: string; bytes: Uint8Array }> = [];
-  const affected = (soundId: number) => references.get(soundId)?.map((ref) => `page ${ref.pageId}, button ${ref.buttonId}`).join("; ") ?? "no menu buttons";
-  for (const soundId of new Set(references.keys())) {
-    const entry = declared.get(soundId);
-    if (!entry) { diagnostics.push({ code: "SOUND_REFERENCE_MISSING", message: `Sound ${soundId} is referenced by ${affected(soundId)} but has no M1 sound entry.` }); continue; }
-    if (!source) { diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: `Sound ${soundId} is referenced by ${affected(soundId)} but sound.bdmv bytes are unavailable.` }); continue; }
-    if (entry.channels !== 1 && entry.channels !== 2 || entry.sampleRate !== 48000 || entry.bitsPerSample !== 16 || entry.channelCode !== (entry.channels === 1 ? 1 : 3) || entry.sampleRateCode !== 1 || entry.bitsPerSampleCode !== 1) {
-      diagnostics.push({ code: "SOUND_FORMAT_UNSUPPORTED", message: `Sound ${soundId} referenced by ${affected(soundId)} has unsupported M1 PCM attributes (channel=${entry.channelCode}, rate=${entry.sampleRateCode}, bits=${entry.bitsPerSampleCode}).` }); continue;
-    }
-    const { sampleOffset, sampleByteLength } = entry;
-    if (!Number.isSafeInteger(sampleOffset) || !Number.isSafeInteger(sampleByteLength) || sampleOffset < 0 || sampleByteLength < 0 || sampleOffset > source.byteLength || sampleByteLength > source.byteLength - sampleOffset || sampleByteLength % (entry.channels * 2) !== 0 || sampleByteLength > 0xffffffff - 36) {
-      diagnostics.push({ code: "SOUND_RANGE_INVALID", message: `Sound ${soundId} referenced by ${affected(soundId)} has an invalid or truncated M1 sample range.` }); continue;
-    }
-    const wav = makePcmWav(source.subarray(sampleOffset, sampleOffset + sampleByteLength), entry.channels);
-    const path = `assets/audio/sound-${soundId}.wav`; assets.push({ index: soundId, path, byteLength: wav.byteLength, format: "wav-pcm" }); files.push({ path, bytes: wav });
-  }
-  return { assets, diagnostics, files };
-}
-
-function makePcmWav(samples: Uint8Array, channels: number): Uint8Array {
-  const wav = new Uint8Array(44 + samples.byteLength); const view = new DataView(wav.buffer);
-  const write = (offset: number, value: string) => { for (let i = 0; i < value.length; i++) wav[offset + i] = value.charCodeAt(i); };
-  write(0, "RIFF"); view.setUint32(4, 36 + samples.byteLength, true); write(8, "WAVE"); write(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true); view.setUint32(24, 48000, true); view.setUint32(28, 48000 * channels * 2, true); view.setUint16(32, channels * 2, true); view.setUint16(34, 16, true); write(36, "data"); view.setUint32(40, samples.byteLength, true);
-  for (let i = 0; i < samples.byteLength; i += 2) { wav[44 + i] = samples[i + 1]!; wav[44 + i + 1] = samples[i]!; }
-  return wav;
-}
-
-function getSoundReferences(scene: unknown): Map<number, Array<{ pageId: number; buttonId: number }>> {
-  const result = new Map<number, Array<{ pageId: number; buttonId: number }>>();
-  if (typeof scene !== "object" || scene === null || !Array.isArray((scene as { pages?: unknown }).pages)) return result;
-  for (const page of (scene as { pages: Array<{ id?: number; buttons?: Array<{ id?: number; states?: Record<string, { soundId?: number }> }> }> }).pages) for (const button of page.buttons ?? []) for (const state of Object.values(button.states ?? {})) {
-    const id = state?.soundId; if (!Number.isInteger(id) || id === 0xff || id! < 0) continue;
-    const refs = result.get(id!) ?? []; refs.push({ pageId: page.id ?? -1, buttonId: button.id ?? -1 }); result.set(id!, refs);
-  }
-  return result;
-}
-
 function getSceneSize(scene: unknown): { width: number; height: number } | undefined {
   if (scene === null) return undefined;
   if (typeof scene !== "object" || scene === null || !Number.isSafeInteger((scene as { width?: unknown }).width) || !Number.isSafeInteger((scene as { height?: unknown }).height) || (scene as { width: number }).width <= 0 || (scene as { height: number }).height <= 0) throw new TypeError("Menu scene must declare positive integer width and height");
   return { width: (scene as { width: number }).width, height: (scene as { height: number }).height };
-}
-
-export function createReadme(title: string, backgroundLoops: boolean | undefined, externalPlayback: boolean, status: MenuPackageStatus = "partial", bdjRuntime = false): string {
-  const rendered = renderTemplate(PACKAGE_TEMPLATES.readme, {
-    TITLE: title.replace(/[\r\n]/g, " "),
-    STATUS: status,
-  }, {
-    BACKGROUND_LOOP: backgroundLoops === true,
-    BACKGROUND_SINGLE_PLAY_ITEM: backgroundLoops === false,
-    BACKGROUND_UNAVAILABLE: backgroundLoops === undefined,
-    BDJ_RUNTIME: bdjRuntime,
-    EXTERNAL_PLAYBACK: externalPlayback,
-    STATIC_EXTERNAL_PLAYBACK: externalPlayback && !bdjRuntime,
-    BDJ_EXTERNAL_PLAYBACK: externalPlayback && bdjRuntime,
-  });
-  return rendered.replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
 export function runtimeAudioTrackMetadata(track: { streamNumber?: number; path: string; language: string; durationSeconds?: number }): { streamNumber: number; psrStreamNumber: number; path: string; language: string; durationSeconds?: number } {
@@ -519,5 +394,3 @@ function referenceMenuMediaResult(media: MenuLoopMediaResult, input: MenuLoopMed
     files: [],
   };
 }
-
-function escapeHtml(value: string): string { return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }

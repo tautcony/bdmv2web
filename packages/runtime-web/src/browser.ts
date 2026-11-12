@@ -1,7 +1,12 @@
 import { HdmvVm, type TraceEntry, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
-import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuButton, type MenuInputConfig, type MenuLoopMediaPackage, type MenuPage, type MenuScene, type PlaybackBridge } from "./index.js";
+import { showStatus, visibleError } from "./runtime-status.js";
+import { backgroundLabel, menuLog, sceneLabel, vmConsoleLogger } from "./runtime-diagnostics.js";
+import { menuSceneKey, normalizeScene, validateEmbeddedDiscIR } from "./scene-normalizer.js";
+export { createStatusToast, attachStatusCopy, copyText } from "./runtime-status.js";
+export type { StatusToastOptions } from "./runtime-status.js";
+import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuInputConfig, type MenuLoopMediaPackage, type PlaybackBridge } from "./index.js";
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
-import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
+import { selectPopupScene, type SerializedScene } from "./igs-adapter.js";
 import { format90kSeconds, requestExternalPlayback } from "./bdmv-url.js";
 import type { BdjPackageData, BdjRuntimeHandle, BdjRuntimeCallbacks } from "./bdj-runtime.js";
 import { startBdjMenuMedia, type BdjMenuMediaHandle } from "./bdj-menu-media.js";
@@ -17,170 +22,6 @@ declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MEN
 export function createMenuVm(data: PackageData, onTrace?: (entry: TraceEntry) => void): HdmvVm {
   if (data.profile !== undefined && (typeof data.profile !== "object" || data.profile === null || Array.isArray(data.profile))) throw new Error("Embedded player profile must be a JSON object.");
   return new HdmvVm(data.vmPrograms ?? [], { ...(onTrace ? { onTrace } : {}), ...(data.vmEntries ? { entries: data.vmEntries } : {}), ...(data.profile ? { profile: data.profile } : {}), ...(data.limits ? { limits: data.limits } : {}) });
-}
-
-export interface StatusToastOptions {
-  /** Keep the message until the next update. Use it whenever the user must act on it. */
-  persist?: boolean;
-  /** Error styling; independent of persistence so a hint can stay without turning red. */
-  error?: boolean;
-}
-type StatusToastHost = { textContent: string | null; classList?: { add(name: string): void; remove(name: string): void; toggle(name: string, force?: boolean): unknown } };
-type StatusCopyButton = { addEventListener?: (type: string, listener: () => void) => void; setAttribute?: (name: string, value: string) => void };
-/** Render status updates as a translucent toast in the top-right corner. Ordinary
- * updates fade out again; persistent ones stay until the next update and accept
- * text selection, because instructions the user has to copy must not vanish.
- * `messageHost` is the element that holds the text when the toast also carries a
- * control such as its copy button. */
-export function createStatusToast(host: StatusToastHost, timeoutMs = 4500, messageHost: StatusToastHost = host): (message: string, options?: StatusToastOptions) => void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  return (message, options = {}) => {
-    messageHost.textContent = message;
-    host.classList?.add("is-visible");
-    host.classList?.toggle("is-error", options.error === true);
-    host.classList?.toggle("is-persistent", options.persist === true);
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-    if (options.persist) return;
-    timer = setTimeout(() => { timer = undefined; host.classList?.remove("is-visible"); }, timeoutMs);
-  };
-}
-
-let statusToast: ReturnType<typeof createStatusToast> | undefined;
-let statusCopyButton: StatusCopyButton | undefined;
-let statusMessage = "";
-
-function showStatus(message: string, options?: StatusToastOptions): void {
-  const element = document.getElementById("runtime-status");
-  if (!element) return;
-  statusMessage = message;
-  statusCopyButton?.setAttribute?.("data-copied", "false");
-  const messageElement = document.getElementById("runtime-status-message") as StatusToastHost | null;
-  statusToast ??= createStatusToast(element, undefined, messageElement ?? element);
-  statusToast(message, options);
-  if (!statusCopyButton) {
-    const button = document.getElementById("runtime-status-copy") as StatusCopyButton | null;
-    if (button) {
-      statusCopyButton = button;
-      attachStatusCopy(button, () => statusMessage, () => { if (statusMessage) showStatus(statusMessage); });
-    }
-  }
-}
-
-/** Copy affordance for the status toast. The message is put back on screen after a
- * successful copy so the text the user acted on does not disappear mid-read. */
-export function attachStatusCopy(button: StatusCopyButton, message: () => string, afterCopy?: () => void): void {
-  let reset: ReturnType<typeof setTimeout> | undefined;
-  button.addEventListener?.("click", () => {
-    const text = message();
-    if (!text) return;
-    void copyText(text).then((copied) => {
-      if (!copied) return;
-      afterCopy?.();
-      button.setAttribute?.("data-copied", "true");
-      if (reset !== undefined) clearTimeout(reset);
-      reset = setTimeout(() => { reset = undefined; button.setAttribute?.("data-copied", "false"); }, 1600);
-    });
-  });
-}
-
-/** Copy text from a `file://` page: the asynchronous Clipboard API is not available
- * in every browser and context, so the selection copy stays as the fallback. */
-export async function copyText(text: string): Promise<boolean> {
-  const clipboard = globalThis.navigator?.clipboard;
-  if (clipboard && typeof clipboard.writeText === "function") {
-    try { await clipboard.writeText(text); return true; } catch { /* use the selection copy */ }
-  }
-  if (typeof document.createElement !== "function" || typeof document.body?.appendChild !== "function") return false;
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.setAttribute("readonly", "");
-  area.style.position = "fixed";
-  area.style.top = "-1000px";
-  area.style.opacity = "0";
-  document.body.appendChild(area);
-  area.select();
-  try { return document.execCommand("copy") === true; }
-  catch { return false; }
-  finally { if (typeof document.body.removeChild === "function") document.body.removeChild(area); }
-}
-
-function visibleError(error: unknown): void {
-  const status = document.getElementById("runtime-status"); const detail = document.getElementById("runtime-diagnostics");
-  if (status) status.role = "alert";
-  showStatus("Menu preview could not start.", { persist: true, error: true });
-  if (detail) { detail.hidden = false; detail.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error); }
-}
-
-/** Console trace for the HDMV VM: one line per decoded batch. `context` returns
- * the menu scene and the button that triggered the batch, so a line reads on its
- * own without the session that produced it. */
-function vmConsoleLogger(context?: () => string | null): (entry: TraceEntry) => void {
-  let pending: TraceEntry[] = [];
-  let scheduled = false;
-  return (entry) => {
-    if (entry.decoded?.startsWith("RESET ")) return;
-    pending.push(entry);
-    if (scheduled) return;
-    scheduled = true;
-    queueMicrotask(() => {
-      scheduled = false;
-      const batch = pending;
-      pending = [];
-      const commands = batch.filter((item) => item.decoded && !item.decoded.startsWith("MENU_CONTEXT")).map((item) => `${item.programId}:${item.pc} ${item.decoded}`);
-      const actions = summarizeLabels(batch.flatMap((item) => item.action ? [item.action.type] : []));
-      const events = summarizeLabels(batch.flatMap((item) => {
-        const type = item.event?.type ?? item.input?.type;
-        return type ? [type] : [];
-      }));
-      const diagnostics = summarizeLabels(batch.flatMap((item) => item.diagnostic ? [item.diagnostic.code] : []));
-      const faulted = batch.some((item) => item.status === "faulted");
-      // TIME_UPDATED arrives continuously for the whole menu loop and changes
-      // nothing; printing those batches buries the batches a click produces.
-      const heartbeatOnly = !actions && !diagnostics && !faulted && !!events && events.split(",").every((label) => label.startsWith("TIME_UPDATED"));
-      if (heartbeatOnly) return;
-      if (!commands.length && !actions && !events && !diagnostics) return;
-      const shownCommands = commands.length <= 6
-        ? commands.join(" → ")
-        : `${commands.slice(0, 2).join(" → ")} → … ${commands.length - 4} more → ${commands.slice(-2).join(" → ")}`;
-      const where = context?.();
-      const fields = where ? [where] : [];
-      fields.push(`${commands.length} step${commands.length === 1 ? "" : "s"}`);
-      if (shownCommands) fields.push(shownCommands);
-      if (actions) fields.push(`actions=${actions}`);
-      if (events) fields.push(`events=${events}`);
-      if (diagnostics) fields.push(`diag=${diagnostics}`);
-      const status = batch.at(-1)?.status;
-      if (status) fields.push(`status=${status}`);
-      console.info(`[VM] ${fields.join(" | ")}`);
-    });
-  };
-}
-
-/** Console trace for what the runtime did with a VM action: which packaged scene
- * and background a jump reached, or why it did not move. */
-function menuLog(message: string): void {
-  console.info(`[menu] ${message}`);
-}
-
-/** Scene identity as it appears in the manifest, e.g. `clip 00014 pid 0x1400`. */
-function sceneLabel(scene: SerializedScene): string {
-  const clip = scene.clipId ?? scene.id ?? "?";
-  const pid = typeof scene.pid === "number" ? `0x${scene.pid.toString(16)}` : "?";
-  return `clip ${clip} pid ${pid}`;
-}
-
-/** Asset directory of a packaged background, e.g. `playlist-00016-pi2`. */
-function backgroundLabel(path: string | undefined): string {
-  if (!path) return "none";
-  const parts = path.split("/");
-  return parts.length >= 2 ? parts[parts.length - 2]! : path;
-}
-
-function summarizeLabels(values: string[]): string {
-  const counts = new Map<string, number>();
-  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-  return [...counts].map(([value, count]) => count === 1 ? value : `${value} x${count}`).join(",");
 }
 
 async function boot(): Promise<void> {
@@ -787,72 +628,5 @@ async function boot(): Promise<void> {
 /** Check that the embedded DiscIR belongs to this runtime. The runtime never
  * reads the IR; its schema, duplicate-ID and reference rules are enforced by
  * `parseDiscIR` when the package is written. */
-function validateEmbeddedDiscIR(value: unknown): void {
-  if (!isRecord(value)) throw new Error("Embedded DiscIR must be a JSON object.");
-  if (value.schemaVersion !== "1.0") throw new Error(`Unsupported DiscIR schema version '${typeof value.schemaVersion === "string" ? value.schemaVersion : "missing"}'. Expected 1.0.`);
-  for (const key of ["entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"]) if (!Array.isArray(value[key])) throw new Error(`Embedded DiscIR is invalid: '${key}' must be an array.`);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
-
-function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageElement>): MenuScene {
-  if (!source || !Number.isSafeInteger(source.width) || source.width <= 0 || !Number.isSafeInteger(source.height) || source.height <= 0 || !Array.isArray(source.pages) || source.pages.length === 0) throw new Error("Invalid menu scene dimensions or pages.");
-  return {
-    width: source.width,
-    height: source.height,
-    ...(source.frameRateCode !== undefined ? { frameRateCode: source.frameRateCode } : {}),
-    compositionTimeout90k: source.compositionTimeout90k,
-    selectionTimeout90k: source.selectionTimeout90k,
-    pages: source.pages.map((page) => ({
-    id: page.id, uoMask: page.uoMask, defaultButtonId: page.defaultButtonId,
-    ...(page.defaultActivatedButtonId !== undefined ? { defaultActivatedButtonId: page.defaultActivatedButtonId } : {}),
-    ...(page.bogDefaults ? { bogDefaults: page.bogDefaults } : {}),
-    animationFrameRateCode: page.animationFrameRateCode,
-    ...(page.objects ? { objects: new Map(page.objects.flatMap((object) => {
-      const image = assets.get(object.assetId);
-      return image ? [[object.id, { image, width: object.width, height: object.height }] as const] : [];
-    })) } : {}),
-    ...(page.effects ? { effects: {
-      enter: normalizeEffects(page.effects.enter, assets),
-      exit: normalizeEffects(page.effects.exit, assets),
-    } } : {}),
-    ...(page.allowedActions ? { allowedActions: page.allowedActions } : {}),
-    buttons: page.buttons.map((button) => ({
-      id: button.id, bog: button.bog ?? 0, enabled: button.enabled ?? true, ...(button.autoAction !== undefined ? { autoAction: button.autoAction } : {}), neighbors: button.neighbors,
-      states: {
-        ...(button.states.normal ? { normal: normalizeState(button.states.normal, assets) } : {}),
-        ...(button.states.selected ? { selected: normalizeState(button.states.selected, assets) } : {}),
-        ...(button.states.activated ? { activated: normalizeState(button.states.activated, assets) } : {}),
-      }, commands: button.commands ?? [],
-    })),
-  })) };
-}
-
-function menuSceneKey(scene: SerializedScene): string { return `${scene.clipId ?? scene.id ?? ""}:${scene.pid ?? ""}`; }
-
-function normalizeEffects(effects: NonNullable<SerializedScene["pages"][number]["effects"]>["enter"], assets: Map<string, HTMLImageElement>): NonNullable<MenuPage["effects"]>["enter"] {
-  return effects.map((effect) => ({
-    duration90k: effect.duration90k,
-    objects: effect.objects.flatMap((object) => {
-      const image = assets.get(object.assetId);
-      return image ? [{ ...object, image }] : [];
-    }),
-  }));
-}
-
-function normalizeState(state: SerializedMenuState, assets: Map<string, HTMLImageElement>): NonNullable<MenuButton["states"]["normal"]> {
-  const { x, y, width, height } = state.bounds;
-  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) throw new Error("Invalid button state bounds.");
-  const image = state.assetId === undefined ? undefined : assets.get(state.assetId);
-  if (state.assetId !== undefined && !image) throw new Error(`Button state references missing image '${state.assetId}'.`);
-  return {
-    bounds: { x, y, width, height },
-    ...(image ? { image } : {}),
-    ...(state.soundId !== undefined ? { soundId: state.soundId } : {}),
-    startObjectId: state.startObjectId,
-    endObjectId: state.endObjectId,
-    ...(state.repeat !== undefined ? { repeat: state.repeat } : {}),
-  };
-}
 
 if (typeof document !== "undefined") void boot();
