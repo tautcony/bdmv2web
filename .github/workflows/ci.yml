@@ -19,11 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+          package-manager-cache: false
       - name: Enable pnpm
         run: corepack enable
       - name: Install dependencies
@@ -33,7 +34,7 @@ jobs:
       - name: Build packages
         run: bash scripts/ci/30-build.sh
       - name: Upload dist for the check jobs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: workspace-dist
           path: |
@@ -47,20 +48,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+          package-manager-cache: false
       - name: Enable pnpm
         run: corepack enable
       - name: Install JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
       - name: Download dist from the build job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: workspace-dist
       - name: Install dependencies
@@ -76,15 +78,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+          package-manager-cache: false
       - name: Enable pnpm
         run: corepack enable
       - name: Download dist from the build job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: workspace-dist
       - name: Install dependencies
@@ -117,25 +120,28 @@ jobs:
           - "@bdmv2web/package-builder"
           - "bdmv2web"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+          package-manager-cache: false
       - name: Enable pnpm
         run: corepack enable
       - name: Download dist from the build job
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: workspace-dist
       # The media-export suites invoke a real ffmpeg/ffprobe when the test
       # does not inject a runner, so the binary must be on PATH.
       - name: Install JDK for Java runtime tests
-        uses: actions/setup-java@v4
+        if: matrix.package == '@bdmv2web/hdmv'
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
       - name: Install FFmpeg for media export tests
+        if: matrix.package == '@bdmv2web/media-export'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install dependencies
         run: bash scripts/ci/10-install.sh
@@ -145,7 +151,7 @@ jobs:
         run: corepack pnpm --filter "${{ matrix.package }}" test --coverage
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-${{ strategy.job-index }}
           path: |
@@ -158,13 +164,14 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+          package-manager-cache: false
       - name: Download package coverage reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           pattern: coverage-*
           path: coverage/package-reports
@@ -173,7 +180,7 @@ jobs:
         run: node scripts/coverage-report.mjs coverage/package-reports coverage/workspace-report --expected-packages 11
       - name: Upload workspace coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: workspace-coverage-report
           path: coverage/workspace-report/

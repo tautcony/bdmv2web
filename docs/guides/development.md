@@ -105,7 +105,7 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 
 `corepack pnpm test:coverage` runs every package suite with Vitest's V8 coverage provider. Each package reports statement, branch, function, and line coverage for `src/**/*.ts` in the terminal and writes HTML and JSON reports to that package's `coverage/` directory. The command also writes a workspace totals report to `coverage/index.html` and `coverage/coverage-summary.json`. Run one package with `corepack pnpm --filter @bdmv2web/igs test --coverage`.
 
-The GitHub Actions test matrix runs each package with coverage enabled, uploads package reports as `coverage-*` artifacts, and publishes a `workspace-coverage-report` artifact with the overall and per-package totals.
+The GitHub Actions test matrix runs each package with coverage enabled, uploads package reports as `coverage-*` artifacts, and shows overall and per-package totals in the workflow run summary. The `workspace-coverage-report` artifact contains the HTML and JSON reports.
 
 | Package | Command |
 | --- | --- |

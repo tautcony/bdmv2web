@@ -15,7 +15,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 `corepack pnpm test:coverage` 使用 Vitest V8 provider 输出语句、分支、函数和行覆盖率。HTML 与 JSON 报告写入各包的 `coverage/` 目录。单包命令：`corepack pnpm --filter @bdmv2web/igs test --coverage`。
 
-命令还会汇总所有 package 的报告至根目录 `coverage/index.html` 与 `coverage/coverage-summary.json`。GitHub Actions 保存逐包报告，并上传汇总 artifact `workspace-coverage-report`。
+命令还会汇总所有 package 的报告至根目录 `coverage/index.html` 与 `coverage/coverage-summary.json`。GitHub Actions 在运行摘要页展示总体和逐包覆盖率，并上传包含 HTML 与 JSON 的汇总 artifact `workspace-coverage-report`。
 
 ## 逐包入口
 

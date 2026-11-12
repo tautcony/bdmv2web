@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const [inputArgument, outputArgument, ...options] = process.argv.slice(2);
@@ -41,6 +41,9 @@ const summary = {
 await mkdir(outputRoot, { recursive: true });
 await writeFile(join(outputRoot, "coverage-summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 await writeFile(join(outputRoot, "index.html"), renderHtml(summary));
+if (process.env.GITHUB_STEP_SUMMARY) {
+  await appendFile(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(summary));
+}
 
 process.stdout.write(`Workspace coverage (${packages.length} packages, ${summary.fileCount} source files)\n`);
 process.stdout.write(renderTable(packages, summary.overall));
@@ -111,6 +114,23 @@ function renderTable(items, overall) {
   ];
   for (const item of items) lines.push(`${item.name.padEnd(23)} ${formatMetric(item.metrics.statements).padStart(10)}  ${formatMetric(item.metrics.branches).padStart(8)}  ${formatMetric(item.metrics.functions).padStart(9)}  ${formatMetric(item.metrics.lines).padStart(6)}`);
   return `${lines.join("\n")}\n`;
+}
+
+function renderMarkdown(summary) {
+  const metricNames = ["statements", "branches", "functions", "lines"];
+  const row = (name, files, metrics) =>
+    `| ${name} | ${files} | ${metricNames.map((key) => `${formatMetric(metrics[key])} (${metrics[key].covered}/${metrics[key].total})`).join(" | ")} |`;
+  return [
+    "## Workspace coverage",
+    "",
+    `${summary.packageCount} packages · ${summary.fileCount} source files · generated ${summary.generatedAt}`,
+    "",
+    "| Package | Files | Statements | Branches | Functions | Lines |",
+    "| --- | ---: | ---: | ---: | ---: | ---: |",
+    row("**Workspace total**", summary.fileCount, summary.overall),
+    ...summary.packages.map((item) => row(item.name, item.files, item.metrics)),
+    "",
+  ].join("\n");
 }
 
 function renderHtml(summary) {
