@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { execFile } from "node:child_process";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -18,7 +19,7 @@ export async function buildBdjHostApiJar(): Promise<Uint8Array> {
       await execFileAsync(process.execPath, [builder, jarPath], { maxBuffer: 16 * 1024 * 1024, windowsHide: true });
       return await readFile(jarPath);
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = errorText(error);
       throw new Error(`Could not build the BD-J Java host: ${detail}`, { cause: error });
     } finally {
       await rm(temporary, { recursive: true, force: true });

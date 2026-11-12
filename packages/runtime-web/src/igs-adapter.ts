@@ -1,4 +1,5 @@
 import type { IgsAsset, IgsScene, IgsSource } from "@bdmv2web/igs";
+import { bytesToHex as toHex } from "@bdmv2web/utils";
 
 export interface SerializedMenuState {
   bounds: { x: number; y: number; width: number; height: number };
@@ -240,12 +241,6 @@ function resolvePalette(scene: IgsScene, paletteId: number): IgsScene["palettes"
 
 function sameSource(a: IgsSource, b: IgsSource): boolean {
   return a.clipId === b.clipId && a.pid === b.pid && a.packetOffset === b.packetOffset && a.pesOffset === b.pesOffset && a.segmentOffset === b.segmentOffset && a.segmentFileOffset === b.segmentFileOffset && a.pts90k === b.pts90k && a.timeDomain === b.timeDomain;
-}
-
-function toHex(bytes: Uint8Array): string {
-  let result = "";
-  for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
-  return result;
 }
 
 function diagnostic(code: string, message: string, scene: IgsScene, output: IgsAdapterDiagnostic[], pageId?: number, buttonId?: number, details?: Record<string, number | string | boolean | null>): void {

@@ -36,6 +36,13 @@ export function playlistDurationSeconds(playlist: ParsedDisc["playlists"][number
   return playlist.playItems.reduce((total, item) => total + Math.max(0, item.outTime45k - item.inTime45k), 0) / 45_000;
 }
 
+export function menuPlaylistMarks(disc: ParsedDisc, playlistIds: readonly number[]): Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }> {
+  return playlistIds.flatMap((playlistId) => {
+    const playlist = disc.playlists.find((item) => Number(item.id) === playlistId);
+    return playlist?.marks.length ? [{ playlistId, marks: playlist.marks.map((mark) => ({ index: mark.index, playItemRef: mark.playItemRef })) }] : [];
+  });
+}
+
 export function menuMediaScopedOut(playlist: ParsedDisc["playlists"][number], scope: MenuMediaScope, maxSeconds = MENU_MEDIA_AUTO_MAX_SECONDS): boolean {
   if (scope === "none") return true;
   return scope === "auto" && playlistDurationSeconds(playlist) > maxSeconds;

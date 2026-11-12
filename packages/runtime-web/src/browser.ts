@@ -1,10 +1,11 @@
+import { errorText } from "@bdmv2web/utils";
 import { HdmvVm, type TraceEntry, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
 import { showStatus, visibleError } from "./runtime-status.js";
 import { backgroundLabel, menuLog, sceneLabel, vmConsoleLogger } from "./runtime-diagnostics.js";
 import { menuSceneKey, normalizeScene, validateEmbeddedDiscIR } from "./scene-normalizer.js";
 export { createStatusToast, attachStatusCopy, copyText } from "./runtime-status.js";
 export type { StatusToastOptions } from "./runtime-status.js";
-import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuInputConfig, type MenuLoopMediaPackage, type PlaybackBridge } from "./index.js";
+import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInput, MenuController, MenuLoopPlaybackBridge, MenuSoundPlayer, PreviewPlaybackBridge, type MenuInputConfig, type MenuLoopMediaPackage, type PlaybackBridge } from "./menu/menu-runtime.js";
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { selectPopupScene, type SerializedScene } from "./igs-adapter.js";
 import { format90kSeconds, requestExternalPlayback } from "./bdmv-url.js";
@@ -442,7 +443,7 @@ async function boot(): Promise<void> {
               if (blocked) bdjBlockedAudioPlayers.add(playerId);
               else { bdjBlockedAudioPlayers.delete(playerId); bdjAudioPlayers.delete(playerId); }
               bdjRuntimeHandle?.sendPlayerEvent(playerId, blocked ? "blocked" : "error");
-              showStatus(blocked ? "BD-J audio is ready. Press a menu key or click the scene to play it." : `BD-J media resource could not start: ${error instanceof Error ? error.message : String(error)}`, { persist: true, error: !blocked });
+              showStatus(blocked ? "BD-J audio is ready. Press a menu key or click the scene to play it." : `BD-J media resource could not start: ${errorText(error)}`, { persist: true, error: !blocked });
             }
           });
         },
@@ -463,7 +464,7 @@ async function boot(): Promise<void> {
       if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") {
         const bdjoId = entry.target.target.replace(/\.bdjo$/i, "");
         try { launchBdj(bdjoId); }
-        catch (error) { return `ERROR: ${error instanceof Error ? error.message : String(error)}`; }
+        catch (error) { return `ERROR: ${errorText(error)}`; }
         bdjRuntimeHandle?.sendTitle(title, true, bdjoId, origin);
         menuLog(`TITLE_SEARCH ${title} → BDJO ${bdjoId}`);
         return "requested";

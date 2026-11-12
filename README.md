@@ -190,6 +190,7 @@ python3 scripts/fetch-reference-cache.py
 | --- | --- |
 | `apps/cli` | Command-line entry point |
 | `packages/core` | DiscIR schema, generated types, player profile, and shared utilities |
+| `packages/utils` | Shared browser-compatible utilities and Node path and filesystem utilities |
 | `packages/bdmv-io` | Input discovery, file reading, and output transactions |
 | `packages/bdmv-parser` | BDMV file parsing and the reference graph |
 | `packages/hdmv` | HDMV instructions, navigation graph, and virtual machine |

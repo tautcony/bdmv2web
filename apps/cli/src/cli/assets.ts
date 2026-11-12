@@ -1,7 +1,8 @@
-import { reachablePgsReferences } from "../shared/pgs.js";
+import { reachablePgsReferences, trackIdentityBySourceIn } from "../shared/pgs.js";
 import { optionValue } from "./context.js";
 import { fail } from "./errors.js";
 import { basename, extname } from "node:path";
+import { equalsIgnoreCase } from "@bdmv2web/utils";
 
 export interface AssetRecord {
   type: string;
@@ -60,7 +61,7 @@ export function assetSelection(): { clipId?: string; pid?: number; decodePng: bo
   return { ...(clipId ? { clipId } : {}), ...(pid === undefined ? {} : { pid }), decodePng: decode === "png" };
 }
 
-export function selectedClip(clipId: string, selection: { clipId?: string }): boolean { return selection.clipId === undefined || selection.clipId.toLocaleLowerCase("en-US") === clipId.toLocaleLowerCase("en-US"); }
+export function selectedClip(clipId: string, selection: { clipId?: string }): boolean { return selection.clipId === undefined || equalsIgnoreCase(selection.clipId, clipId); }
 export function selectedPid(pid: number, selection: { pid?: number }): boolean { return selection.pid === undefined || selection.pid === pid; }
 
 export function validateAssetType(value: string): AssetType {
@@ -74,7 +75,7 @@ export function safeAssetStem(path: string): string {
 }
 
 export function uniquePgsReferences(references: ReturnType<typeof reachablePgsReferences>): ReturnType<typeof reachablePgsReferences> {
-  return [...new Map(references.map((reference) => [`${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`, reference])).values()];
+  return [...new Map(references.map((reference) => [trackIdentityBySourceIn(reference), reference])).values()];
 }
 
 /** Distinct output paths for sup tracks that share one stream across PlayItem entry points. */

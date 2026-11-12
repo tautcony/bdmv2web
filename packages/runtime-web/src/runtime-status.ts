@@ -1,3 +1,5 @@
+import { errorDescription } from "@bdmv2web/utils";
+
 export interface StatusToastOptions {
   /** Keep the message until the next update. Use it whenever the user must act on it. */
   persist?: boolean;
@@ -84,9 +86,11 @@ export async function copyText(text: string): Promise<boolean> {
   finally { if (typeof document.body.removeChild === "function") document.body.removeChild(area); }
 }
 
+export { errorDescription as errorMessage };
+
 export function visibleError(error: unknown): void {
   const status = document.getElementById("runtime-status"); const detail = document.getElementById("runtime-diagnostics");
   if (status) status.role = "alert";
   showStatus("Menu preview could not start.", { persist: true, error: true });
-  if (detail) { detail.hidden = false; detail.textContent = error instanceof Error ? `${error.name}: ${error.message}` : String(error); }
+  if (detail) { detail.hidden = false; detail.textContent = errorDescription(error); }
 }

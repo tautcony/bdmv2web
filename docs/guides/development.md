@@ -21,7 +21,7 @@ corepack pnpm test
 corepack pnpm test:coverage
 ```
 
-`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
+`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. `@bdmv2web/bdmv-io` handles disc input and output transactions. Node filesystem utilities are available from `@bdmv2web/utils/node-fs`.
 
 ## Linting
 
@@ -110,6 +110,7 @@ The GitHub Actions test matrix runs each package with coverage enabled, uploads 
 | Package | Command |
 | --- | --- |
 | `@bdmv2web/core` | `corepack pnpm --filter @bdmv2web/core test` |
+| `@bdmv2web/utils` | `corepack pnpm --filter @bdmv2web/utils test` |
 | `@bdmv2web/bdmv-io` | `corepack pnpm --filter @bdmv2web/bdmv-io test` |
 | `@bdmv2web/bdmv-parser` | `corepack pnpm --filter @bdmv2web/bdmv-parser test` |
 | `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` |

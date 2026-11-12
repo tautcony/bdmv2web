@@ -4,6 +4,7 @@ import { extractIgsScenes } from "@bdmv2web/igs";
 import { extractPgsTracks } from "@bdmv2web/media-export";
 import { resolve } from "node:path";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
+import { equalsIgnoreCase } from "@bdmv2web/utils";
 
 export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], outputDirectory: string, pathForReference?: (reference: ReturnType<typeof reachablePgsReferences>[number], index: number) => string, selectedReferences?: ReturnType<typeof reachablePgsReferences>) {
   const references = selectedReferences ?? reachablePgsReferences(disc, scenes);
@@ -29,7 +30,7 @@ export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaite
   });
 }
 
-function trackIdentityBySourceIn(reference: { clipId: string; pid: number; sourceIn90k: string }): string {
+export function trackIdentityBySourceIn(reference: { clipId: string; pid: number; sourceIn90k: string }): string {
   return `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`;
 }
 
@@ -37,7 +38,7 @@ export function reachablePgsReferences(disc: ParsedDisc, scenes: Awaited<ReturnT
   const closure = buildMediaClosure(disc, scenes);
   return closure.playlistIds.flatMap((nodeId) => {
     const playlistId = nodeId.slice("playlist:".length);
-    const playlist = disc.playlists.find((item) => item.id.toLocaleLowerCase("en-US") === playlistId.toLocaleLowerCase("en-US"));
+    const playlist = disc.playlists.find((item) => equalsIgnoreCase(item.id, playlistId));
     return playlist?.playItems.flatMap((item) => item.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType === 0x90)
       .map((stream, index) => ({ playlistId, playlistNumber: Number(playlistId), playItemIndex: item.index, clipId: item.clipId, pid: stream.pid!, streamNumber: index + 1, language: stream.language ?? "und", sourceIn90k: String(item.inTime45k * 2), sourceOut90k: String(item.outTime45k * 2), source: `BDMV/STREAM/${item.clipId}.m2ts` }))) ?? [];
   });

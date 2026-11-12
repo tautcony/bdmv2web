@@ -67,7 +67,7 @@ export function assertActualWithinLimit(args: { scope: "asset"; actualBytes: num
   throw new MediaBudgetError({ severity: "error", code: "MEDIA_ASSET_BUDGET_EXCEEDED", message: args.message, scope: "asset", phase: "write-monitor", actualBytes: String(args.actualBytes), limitBytes: String(args.limitBytes) });
 }
 
-function estimateBytes(duration90k: bigint, rateBitsPerSecond: number, overheadPercent: number): string {
+export function estimateBytes(duration90k: bigint, rateBitsPerSecond: number, overheadPercent: number): string {
   const numerator = duration90k * BigInt(rateBitsPerSecond) * BigInt(100 + overheadPercent);
   const denominator = 90_000n * 8n * 100n;
   return ((numerator + denominator - 1n) / denominator).toString();

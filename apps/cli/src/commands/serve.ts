@@ -3,7 +3,9 @@ import { open, readFile, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { extname, resolve } from "node:path";
+import { within } from "@bdmv2web/utils/node-path";
+import { isRecord, errorText } from "@bdmv2web/utils";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { HdmvVm, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
@@ -52,12 +54,12 @@ export async function serve(): Promise<void> {
   const discIdOption = optionValue("--disc-id");
   let discIdOverride: string | undefined;
   try { if (discIdOption !== undefined) discIdOverride = normalizeDiscId(discIdOption); }
-  catch (error) { fail("CLI_INVALID_DISC_ID", error instanceof Error ? error.message : String(error)); }
+  catch (error) { fail("CLI_INVALID_DISC_ID", errorText(error)); }
   const port = Number(portText);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) fail("CLI_INVALID_PORT", `Port must be an integer from 1 to 65535; received '${portText}'.`);
   let root: string;
   try { root = await realpath(resolve(input)); }
-  catch (error) { fail("CLI_SERVE_ROOT_MISSING", `Could not open package directory: ${error instanceof Error ? error.message : String(error)}`, input); }
+  catch (error) { fail("CLI_SERVE_ROOT_MISSING", `Could not open package directory: ${errorText(error)}`, input); }
   let rootInfo;
   try { rootInfo = await stat(root); }
   catch { fail("CLI_SERVE_ROOT_INVALID", "The serve input must be a package directory.", root); }
@@ -86,7 +88,7 @@ export async function serve(): Promise<void> {
   const eventClients = new Set<import("node:http").ServerResponse>();
   const pendingStartResponses: import("node:http").ServerResponse[] = [];
   const emit = (name: string, value: unknown) => { const record = `event: ${name}\ndata: ${JSON.stringify(value)}\n\n`; for (const client of eventClients) client.write(record); };
-  const outsidePackage = (path: string): boolean => { const fromRoot = relative(root, path); return fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot); };
+  const outsidePackage = (path: string): boolean => !within(root, path);
   const resetBdjSession = (): void => {
     javaProcess = undefined;
     javaSessionStarted = false;
@@ -212,7 +214,7 @@ export async function serve(): Promise<void> {
           launch = { ...(parsed as unknown as typeof launch), discId: discIdOverride ?? parsed.discId };
           activeLaunch = launch;
         }
-        catch (error) { failStart(`BD-J launch data is unavailable: ${error instanceof Error ? error.message : String(error)}`); return; }
+        catch (error) { failStart(`BD-J launch data is unavailable: ${errorText(error)}`); return; }
         try {
         if (launch.session) hdmvVm = new HdmvVm(launch.session.vmPrograms, {
           ...(launch.session.vmEntries ? { entries: launch.session.vmEntries } : {}),
@@ -277,7 +279,7 @@ export async function serve(): Promise<void> {
                 else if (operation === "writePSR") { hdmvVm?.registers.systemWrite(Number(fields[0]), Number(fields[1]) >>> 0); result = "ok"; }
                 else if (operation === "selectTitle") {
                   const title = Number(fields[0]);
-                  const entry = title === 0 ? launch.session?.vmEntries?.find((item) => item.kind === "topMenu") : title === 0xffff ? launch.session?.vmEntries?.find((item) => item.kind === "firstPlay") : launch.session?.vmEntries?.filter((item) => item.kind === "title")[title - 1];
+                  const entry = entryForTitle(launch, title);
                   if (!entry) throw new Error(`Title ${title} has no INDEX entry.`);
                   if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") {
                     activeTitle = title; userFeatureTitleSelected = false; pendingUserSelection = false;
@@ -376,7 +378,7 @@ export async function serve(): Promise<void> {
                         emit("player-menu-media", event);
                       }).catch((error: unknown) => {
                         if (!pendingMenuPlayers.delete(playerId)) { emit("player-media-cancelled", { playerId, playlist, source: target.item.source }); return; }
-                        const message = error instanceof Error ? error.message : String(error);
+                        const message = errorText(error);
                         emit("menu-media-error", { playerId, playlist, status: "unavailable", code: "BDJ_MENU_MEDIA_UNAVAILABLE", message, source: target.item.source });
                         javaProcess?.stdin.write(`BDMV_EVENT\tplayer\t${playerId}\t${Buffer.from("error", "utf8").toString("base64")}\n`);
                       });
@@ -410,7 +412,7 @@ export async function serve(): Promise<void> {
                 }
                 else if (["playerNavigate", "playerStream", "playerGain"].includes(operation ?? "")) result = `unavailable: BD-J player operation '${operation ?? ""}' has no confirmed adapter capability.`;
                 else result = `ERROR: Unsupported local service operation '${operation}'.`;
-              } catch (error) { result = `ERROR: ${error instanceof Error ? error.message : String(error)}`; }
+              } catch (error) { result = `ERROR: ${errorText(error)}`; }
               if (javaProcess !== child) return;
               if (operation === "playerStart" && (result.startsWith("ERROR: ") || result.startsWith("unavailable:"))) activePlayerTokens.delete(fields[0] ?? "");
               if (operation === "playerStop" && result.startsWith("unavailable:")) activePlayerTokens.delete(fields[0] ?? "");
@@ -446,10 +448,10 @@ export async function serve(): Promise<void> {
         if (!response.destroyed && !response.headersSent && !response.writableEnded) response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: false, pid: child.pid ?? null }));
         for (const waiter of pendingStartResponses.splice(0)) if (!waiter.destroyed && !waiter.headersSent && !waiter.writableEnded) waiter.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: true, pid: child.pid ?? null }));
         } catch (error) {
-          if (!response.writableEnded) failStart(`Could not start the BD-J Java session: ${error instanceof Error ? error.message : String(error)}`);
+          if (!response.writableEnded) failStart(`Could not start the BD-J Java session: ${errorText(error)}`);
         }
       })().catch((error: unknown) => {
-        if (!response.writableEnded) failStart(`Could not start the BD-J Java session: ${error instanceof Error ? error.message : String(error)}`);
+        if (!response.writableEnded) failStart(`Could not start the BD-J Java session: ${errorText(error)}`);
       });
       return;
     }
@@ -516,7 +518,7 @@ export async function serve(): Promise<void> {
           const activeDescriptor = launch.session?.bdjoDescriptors?.find((item) => bdjoIdFromPath(item.path) === activeBdjoId);
           if (origin === "user" && title === 0 && activeDescriptor?.terminalInfo.menuCallMask) throw new Error(`BDJO ${activeBdjoId} masks user menu-call requests.`);
           if (origin === "user" && title > 0 && title < 0xffff && activeDescriptor?.terminalInfo.titleSearchMask) throw new Error(`BDJO ${activeBdjoId} masks user title-search requests.`);
-          const entry = title === 0 ? launch.session?.vmEntries?.find((item) => item.kind === "topMenu") : title === 0xffff ? launch.session?.vmEntries?.find((item) => item.kind === "firstPlay") : launch.session?.vmEntries?.filter((item) => item.kind === "title")[title - 1];
+          const entry = entryForTitle(launch, title);
           if (!entry) throw new Error(`Title ${title} has no INDEX entry.`);
           activeTitle = title;
           userFeatureTitleSelected = origin === "user" && entry.target.objectType === "HDMV";
@@ -534,7 +536,7 @@ export async function serve(): Promise<void> {
             hostProcess.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${Buffer.from(`${title}|stop`, "utf8").toString("base64")}\n`);
           } else throw new Error(`Title ${title} target is unavailable.`);
           response.writeHead(204).end();
-        } catch (error) { response.writeHead(400).end(error instanceof Error ? error.message : String(error)); }
+        } catch (error) { response.writeHead(400).end(errorText(error)); }
       }); return;
     }
     if (url.pathname === "/api/bdj/media-event" && request.method === "POST") {
@@ -585,7 +587,7 @@ export async function serve(): Promise<void> {
   await new Promise<void>((resolveListen, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => { server.removeListener("error", reject); resolveListen(); });
-  }).catch((error: unknown) => fail("CLI_SERVE_FAILED", `Could not start local package server: ${error instanceof Error ? error.message : String(error)}`));
+  }).catch((error: unknown) => fail("CLI_SERVE_FAILED", `Could not start local package server: ${errorText(error)}`));
   process.stdout.write(`Serving ${root}\nOpen http://127.0.0.1:${String(port)}/\nPress Ctrl-C to stop.\n`);
   const stop = () => {
     stopping = true;
@@ -601,7 +603,11 @@ export async function serve(): Promise<void> {
   await new Promise<void>((resolveClose) => server.once("close", resolveClose));
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function entryForTitle(launch: RuntimeLaunch, title: number): NonNullable<VmOptions["entries"]>[number] | undefined {
+  const entries = launch.session?.vmEntries;
+  return title === 0 ? entries?.find((item) => item.kind === "topMenu") : title === 0xffff ? entries?.find((item) => item.kind === "firstPlay") : entries?.filter((item) => item.kind === "title")[title - 1];
+}
+
 function parseByteRange(header: string | undefined, size: number): { start: number; end: number } | null | undefined {
   if (header === undefined) return undefined;
   const match = /^bytes=(\d*)-(\d*)$/.exec(header);

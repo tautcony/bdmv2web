@@ -46,6 +46,7 @@
     "@bdmv2web/runtime-web": "workspace:*",
     "@bdmv2web/test-fixtures": "workspace:*",
     "@bdmv2web/test-runner": "workspace:*",
+    "@bdmv2web/utils": "workspace:*",
     "@types/node": "24.10.0",
     "commander": "^15.0.0"
   }

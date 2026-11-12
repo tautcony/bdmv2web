@@ -1,4 +1,4 @@
-export { discoverBdmvRoot, parseBdmv, parseBdmvWithInputTable } from "./parser.js";
-export { traverseGraph } from "./graph.js";
+export { discoverBdmvRoot, parseBdmv, parseBdmvWithInputTable } from "./parsing/parser.js";
+export { traverseGraph } from "./graph/graph.js";
 export type * from "./model.js";
-export type { GraphTraversal } from "./graph.js";
+export type { GraphTraversal } from "./graph/graph.js";

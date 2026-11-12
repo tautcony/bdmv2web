@@ -190,6 +190,7 @@ python3 scripts/fetch-reference-cache.py
 | --- | --- |
 | `apps/cli` | 命令行入口 |
 | `packages/core` | DiscIR schema、生成类型、播放器档案和基础工具 |
+| `packages/utils` | 跨包共用的浏览器兼容工具及 Node 路径、文件系统工具 |
 | `packages/bdmv-io` | 输入发现、文件读取和输出事务 |
 | `packages/bdmv-parser` | BDMV 文件解析与引用图 |
 | `packages/hdmv` | HDMV 指令、导航图和虚拟机 |

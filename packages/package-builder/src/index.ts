@@ -3,15 +3,18 @@ import { createRequire } from "node:module";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { crc32, deflateSync } from "node:zlib";
 import { parseDiscIR, type DiscIR, type Limits, type PlayerProfile } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessResult, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type PgsDisplaySet, type VideoCodec, type VideoExportMode, assertPngLevel, DEFAULT_CANVAS_PNG_LEVEL } from "@bdmv2web/media-export";
+import { exportMenuLoopMedia, type ExternalMediaTargets, type HdrMode, type MediaAssetProgress, type MediaProcessResult, type MediaProcessRunner, type MenuLoopMediaInput, type MenuLoopMediaResult, type VideoCodec, type VideoExportMode,  } from "@bdmv2web/media-export";
 import { makePngBatches, type PngPayload } from "./asset-batches.js";
 import { convertSounds, type SoundMetadata } from "./sounds.js";
 import { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, packagedStyle, serializeSafeScriptData } from "./scripts.js";
 import type { MenuPackageDiagnostic, MenuPackageMetadata, MenuPackageStatus } from "./types.js";
+import { serializePgsTrack, type PgsTrackPackageInput } from "./pgs-package.js";
+import { packagedMediaMetadata, runtimeAudioTrackMetadata } from "./media-metadata.js";
 
+export { serializePgsTrack, type PgsTrackPackageInput } from "./pgs-package.js";
+export { packagedMediaMetadata, runtimeAudioTrackMetadata } from "./media-metadata.js";
 export { makePngBatches, type PngBatch, type PngPayload } from "./asset-batches.js";
 export { convertSounds, type SoundMetadata, type SoundPayload } from "./sounds.js";
 export { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, serializeSafeScriptData } from "./scripts.js";
@@ -20,7 +23,7 @@ export { type MenuPackageDiagnostic, type MenuPackageMetadata, type MenuPackageS
 const RESERVED_REPORT_FILES = new Set(["compatibility.json", "asset-manifest.json"]);
 
 export interface BdjPackageFile { path: string; sourcePath: string; bytes: Uint8Array }
-export interface PgsTrackPackageInput { playlistId: string; playlistNumber: number; playItemIndex: number; clipId: string; pid: number; streamNumber: number; language: string; sourceIn90k: string; sourceOut90k: string; source: string; path: string; displaySets: PgsDisplaySet[] }
+
 
 /** The published CLI carries the menu bundle beside its entry; a workspace build reads the runtime-web export. */
 function menuRuntimeBundlePath(): string {
@@ -285,78 +288,6 @@ function getSceneSize(scene: unknown): { width: number; height: number } | undef
   return { width: (scene as { width: number }).width, height: (scene as { height: number }).height };
 }
 
-export function runtimeAudioTrackMetadata(track: { streamNumber?: number; path: string; language: string; durationSeconds?: number }): { streamNumber: number; psrStreamNumber: number; path: string; language: string; durationSeconds?: number } {
-  if (!Number.isSafeInteger(track.streamNumber) || track.streamNumber! < 0) throw new TypeError("Exported audio track requires its zero-based STN streamNumber.");
-  return { streamNumber: track.streamNumber!, psrStreamNumber: track.streamNumber! + 1, path: track.path, language: track.language, ...(track.durationSeconds === undefined ? {} : { durationSeconds: track.durationSeconds }) };
-}
-
-function serializePgsTrack(track: PgsTrackPackageInput, pngLevel: number | undefined) {
-  if (!Number.isSafeInteger(track.pid) || !Number.isSafeInteger(track.streamNumber) || track.streamNumber <= 0 || !Number.isSafeInteger(track.playItemIndex) || track.playItemIndex < 0) throw new TypeError("PGS package track has invalid PID, stream number, or PlayItem index.");
-  if (BigInt(track.sourceOut90k) <= BigInt(track.sourceIn90k)) throw new TypeError("PGS package track has an invalid source interval.");
-  return {
-    playlistId: track.playlistId, playlistNumber: track.playlistNumber, playItemIndex: track.playItemIndex,
-    clipId: track.clipId, pid: track.pid, streamNumber: track.streamNumber, language: track.language,
-    sourceIn90k: track.sourceIn90k, sourceOut90k: track.sourceOut90k, source: track.source, path: track.path,
-    displaySets: track.displaySets.map((set) => ({
-      pts90k: set.pts90k, width: set.width, height: set.height, compositionNumber: set.compositionNumber,
-      compositionState: set.compositionState, paletteId: set.paletteId,
-      palette: [...set.palette].map(([index, rgba]) => [index, [...rgba]]),
-      bitmaps: [...set.bitmaps.values()].map((bitmap) => ({ objectId: bitmap.objectId, width: bitmap.width, height: bitmap.height })),
-      imageBase64: encodePgsDisplayPng(set, pngLevel),
-      placements: set.placements,
-    })),
-  };
-}
-
-function encodePgsDisplayPng(set: PgsDisplaySet, pngLevel: number | undefined): string {
-  const rgba = new Uint8Array(set.width * set.height * 4);
-  for (const placement of set.placements) {
-    const bitmap = set.bitmaps.get(placement.objectId);
-    if (!bitmap) continue;
-    const pixels = bitmap.pixels;
-    const { width, height } = bitmap;
-    const crop = placement.crop ?? { x: 0, y: 0, width, height };
-    for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) {
-      const sourceX = crop.x + x, sourceY = crop.y + y;
-      const targetX = placement.x + x, targetY = placement.y + y;
-      if (sourceX >= width || sourceY >= height || targetX < 0 || targetY < 0 || targetX >= set.width || targetY >= set.height) continue;
-      const sourceOffset = (sourceY * width + sourceX) * 4;
-      const targetOffset = (targetY * set.width + targetX) * 4;
-      const sourceAlpha = pixels[sourceOffset + 3]! / 255;
-      if (sourceAlpha === 0) continue;
-      const targetAlpha = rgba[targetOffset + 3]! / 255;
-      const outputAlpha = sourceAlpha + targetAlpha * (1 - sourceAlpha);
-      for (let channel = 0; channel < 3; channel++) {
-        rgba[targetOffset + channel] = Math.round((pixels[sourceOffset + channel]! * sourceAlpha + rgba[targetOffset + channel]! * targetAlpha * (1 - sourceAlpha)) / outputAlpha);
-      }
-      rgba[targetOffset + 3] = Math.round(outputAlpha * 255);
-    }
-  }
-  const scanlines = Buffer.alloc(set.height * (set.width * 4 + 1));
-  for (let y = 0; y < set.height; y++) scanlines.set(rgba.subarray(y * set.width * 4, (y + 1) * set.width * 4), y * (set.width * 4 + 1) + 1);
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(set.width, 0); header.writeUInt32BE(set.height, 4); header[8] = 8; header[9] = 6;
-  const level = assertPngLevel(pngLevel ?? DEFAULT_CANVAS_PNG_LEVEL);
-  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pngChunk("IHDR", header), pngChunk("IDAT", deflateSync(scanlines, { level })), pngChunk("IEND", Buffer.alloc(0))]);
-  return png.toString("base64");
-}
-
-function pngChunk(type: string, data: Buffer): Buffer {
-  const typeBytes = Buffer.from(type, "ascii");
-  const contents = Buffer.concat([typeBytes, data]);
-  const chunk = Buffer.alloc(data.length + 12);
-  chunk.writeUInt32BE(data.length, 0); contents.copy(chunk, 4); chunk.writeUInt32BE(crc32(contents), data.length + 8);
-  return chunk;
-}
-
-export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Record<string, unknown> {
-  return {
-    plan: media.plan,
-    outputSize: media.outputSize,
-    background: { path: media.background.path, byteLength: media.background.byteLength, codec: media.background.codec, pid: media.background.pid, width: media.background.width, height: media.background.height, durationSeconds: media.background.durationSeconds, loop: media.background.loop, ...(media.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: media.background.loopStartSeconds }) },
-    audioTracks: media.audioTracks.map((track) => ({ ...runtimeAudioTrackMetadata(track), byteLength: track.byteLength, codec: track.codec, pid: track.pid, durationSeconds: track.durationSeconds })),
-  };
-}
 
 function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncoding): string {
   const codec = encoding.codec ?? (encoding.videoMode === "copy" ? "h264" : "hevc");

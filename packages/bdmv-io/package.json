@@ -6,6 +6,6 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv2web/core": "workspace:*" },
+  "dependencies": { "@bdmv2web/core": "workspace:*", "@bdmv2web/utils": "workspace:*" },
   "devDependencies": { "@types/node": "24.10.0" }
 }

@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { pgsTrackEntrySuffixes, pidOption, pngLevelOption, safeAssetStem, selectedPid, supDisplaySetPath, uniquePgsReferences, validateAssetType } from "../cli/assets.js";
 import { inputPath, optionValue, strictDefault } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
@@ -62,7 +63,7 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
     if (source.kind === "mnu") {
       let parsed;
       try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120, pngLevel }); }
-      catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${error instanceof Error ? error.message : String(error)}`); }
+      catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${errorText(error)}`); }
       if (parsed.status === "failed" || parsed.scenes.length === 0) {
         const detail = parsed.diagnostics.find((item) => item.severity === "error")?.message ?? "no complete display set";
         throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU contains no renderable menu scene: ${detail}`);
@@ -80,7 +81,7 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
     }
     // Display sets are rendered one at a time. A feature-length SUP decodes into
     // hundreds of megabytes of bitmaps, so only the frame being rendered stays alive.
-    const parseFailure = (error: unknown) => new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
+    const parseFailure = (error: unknown) => new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${errorText(error)}`);
     const iterator = streamPgsSup(bytes)[Symbol.iterator]();
     const step = () => { try { return iterator.next(); } catch (error) { throw parseFailure(error); } };
     let current = step();

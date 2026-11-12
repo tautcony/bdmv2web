@@ -6,7 +6,7 @@ import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1Pla
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, decodeInstruction, HdmvVm } from "@bdmv2web/hdmv";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
-import { extractIgsScenes } from "../../src/extract.js";
+import { extractIgsScenes } from "../../src/scene/extract.js";
 import { syntheticClip, syntheticMenuSegments } from "../helpers/fixtures.js";
 
 describe("M1 to M2/M3 consumer handoff", () => {

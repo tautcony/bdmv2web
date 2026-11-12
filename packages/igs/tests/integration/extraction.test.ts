@@ -5,11 +5,11 @@ import { dirname, join } from "node:path";
 import { buildInputFileTable } from "@bdmv2web/bdmv-io";
 import { DEFAULT_LIMITS } from "@bdmv2web/core";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
-import { extractIgsFromChunks, extractIgsScenes } from "../../src/extract.js";
-import { consumeSegment, createIgsState, parseSegments } from "../../src/igs.js";
-import { renderIgsAssets, renderSceneAssets } from "../../src/png.js";
+import { extractIgsFromChunks, extractIgsScenes } from "../../src/scene/extract.js";
+import { consumeSegment, createIgsState, parseSegments } from "../../src/scene/igs.js";
+import { renderIgsAssets, renderSceneAssets } from "../../src/rendering/png.js";
 import { decodePng } from "../helpers/decode-png.js";
-import type { IgsSegment } from "../../src/igs.js";
+import type { IgsSegment } from "../../src/scene/igs.js";
 import { chunks, IG_PID, m2tsPacket, patPacket, PMT_PID, pmtPacket, pesPacket, syntheticClip, syntheticMenuSegments } from "../helpers/fixtures.js";
 
 describe("synthetic IGS extraction", () => {

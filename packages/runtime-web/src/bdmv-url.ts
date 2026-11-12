@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import type { ExternalPlayTarget } from "@bdmv2web/media-export/external-targets";
 
 /** Resolve one declared STREAM path against the BDMV path in the current package configuration. */
@@ -53,7 +54,7 @@ export function requestExternalPlayback(input: {
     input.navigate(url);
     return { status: "requested", url, target: input.target };
   } catch (error) {
-    return { status: "unavailable", code: "EXTERNAL_PROTOCOL_UNAVAILABLE", message: error instanceof Error ? error.message : String(error) };
+    return { status: "unavailable", code: "EXTERNAL_PROTOCOL_UNAVAILABLE", message: errorText(error) };
   }
 }
 

@@ -1,5 +1,6 @@
 import type { VmEvent } from "@bdmv2web/hdmv";
-import type { PlaybackAction, PlaybackBridge } from "./index.js";
+import type { PlaybackAction, PlaybackBridge } from "./menu-playback.js";
+import { errorMessage } from "./runtime-status.js";
 
 export interface LinearTimelinePosition {
   mapping: { mappingId: string; playlistId: string; assetId: string; playlistStart90k: string; playlistEnd90k: string; mediaStart90k: string; mediaEnd90k: string };
@@ -269,5 +270,3 @@ function compareTicks(left: string, right: string): number {
   const a = BigInt(left); const b = BigInt(right);
   return a < b ? -1 : a > b ? 1 : 0;
 }
-
-function errorMessage(error: unknown): string { return error instanceof Error ? `${error.name}: ${error.message}` : String(error); }

@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { MediaTimelineMap, type MediaTimelinePosition } from "./timeline.js";
 
 export const MEDIA_HAVE_METADATA = 1;
@@ -64,7 +65,7 @@ export async function seekTimeline(request: SeekTimelineRequest): Promise<Timeli
     request.media.currentTime = requestedSeconds;
   } catch (error) {
     seekedWait.cancel("Setting currentTime failed.");
-    return { status: "failed", generation: request.generation, reason: `Setting currentTime failed: ${errorMessage(error)}`, position, requestedSeconds, toleranceSeconds };
+    return { status: "failed", generation: request.generation, reason: `Setting currentTime failed: ${errorText(error)}`, position, requestedSeconds, toleranceSeconds };
   }
   const seeked = await seekedWait.promise;
   if (!seeked.ok) return { status: "failed", generation: request.generation, reason: seeked.reason, position, requestedSeconds, toleranceSeconds };
@@ -141,5 +142,3 @@ function parsePositiveTicks(value: string): bigint {
   if (!/^[1-9][0-9]*$/.test(value)) throw new TypeError("targetFrameDuration90k must be a canonical positive integer string.");
   return BigInt(value);
 }
-
-function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }

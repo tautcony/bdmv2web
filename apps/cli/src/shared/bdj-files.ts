@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveInputFile } from "@bdmv2web/bdmv-io";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
+import { applicationJarPath } from "@bdmv2web/core/disc-path";
 
 export interface BdjFilePayload {
   path: string;
@@ -12,14 +13,6 @@ export interface BdjFilePayload {
 export interface BdjFileCollection {
   files: BdjFilePayload[];
   diagnostics: Array<{ code: string; message: string; severity: "warning" }>;
-}
-
-function applicationJarPath(basePath: string): string | null {
-  const normalized = basePath.replaceAll("\\", "/").replace(/^\.\//, "");
-  const segments = normalized.split("/");
-  if (!normalized || normalized.startsWith("/") || segments.some((segment) => !segment || segment === "." || segment === "..")) return null;
-  const jarPath = /\.jar$/i.test(normalized) ? normalized : `${normalized}.jar`;
-  return `JAR/${jarPath}`;
 }
 
 /** Read the BD-J application directory into package-local VFS files. */
@@ -53,7 +46,7 @@ export async function collectBdjApplicationFiles(disc: ParsedDisc): Promise<BdjF
   const byPath = new Map(files.map((file) => [file.path.toLocaleLowerCase("en-US"), file]));
   for (const bdjo of disc.bdjos) {
     for (const application of bdjo.applications) {
-      const applicationPath = applicationJarPath(application.basePath);
+      const applicationPath = applicationJarPath(application.basePath, "JAR");
       if (!applicationPath) {
         diagnostics.push({ code: "BDJ_APPLICATION_BASE_PATH_INVALID", severity: "warning", message: `BDJO ${bdjo.path} app ${application.applicationId} has an invalid JAR basePath '${application.basePath}'.` });
         continue;

@@ -23,9 +23,11 @@
   },
   "dependencies": {
     "@bdmv2web/bdmv-parser": "workspace:*",
+    "@bdmv2web/core": "workspace:*",
     "@bdmv2web/hdmv": "workspace:*",
     "@bdmv2web/igs": "workspace:*",
-    "@bdmv2web/media-export": "workspace:*"
+    "@bdmv2web/media-export": "workspace:*",
+    "@bdmv2web/utils": "workspace:*"
   },
   "devDependencies": {
     "@bdmv2web/test-fixtures": "workspace:*",

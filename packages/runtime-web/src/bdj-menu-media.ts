@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import type { BdjMenuMediaEvent } from "./bdj-runtime.js";
 import { replayMediaAtLoopPoint, replayOneMediaAtLoopPoint } from "./media-loop.js";
 
@@ -36,7 +37,7 @@ export function startBdjMenuMedia(
     }).catch((error: unknown) => {
       if (stopped) return;
       stopped = true; listeners.abort(); sendEvent(event.playerId, "error");
-      onMessage(`BD-J menu loop could not resume: ${error instanceof Error ? error.message : String(error)}`, true);
+      onMessage(`BD-J menu loop could not resume: ${errorText(error)}`, true);
     });
   };
   const clearMedia = (): void => {
@@ -76,7 +77,7 @@ export function startBdjMenuMedia(
         audio.src = item.audioUrls?.[0] ? new URL(item.audioUrls[0], document.baseURI).href : "";
         audio.load();
         if (audio.src) void audio.play().catch((error: unknown) => {
-          if (!stopped) onMessage(`BD-J menu audio could not play: ${error instanceof Error ? error.message : String(error)}`, true);
+          if (!stopped) onMessage(`BD-J menu audio could not play: ${errorText(error)}`, true);
         });
       }
       void video.play().catch((error: unknown) => {
@@ -87,7 +88,7 @@ export function startBdjMenuMedia(
         sendEvent(event.playerId, isBlocked ? "blocked" : "error");
         onMessage(isBlocked
           ? `BD-J menu media playlist ${event.playlistId} is ready. Press a menu key or click the scene to play it.`
-          : `BD-J menu media playlist ${event.playlistId} could not play: ${error instanceof Error ? error.message : String(error)}`,
+          : `BD-J menu media playlist ${event.playlistId} could not play: ${errorText(error)}`,
           !isBlocked);
         if (!isBlocked) { stopped = true; listeners.abort(); clearMedia(); }
       });
@@ -128,7 +129,7 @@ export function startBdjMenuMedia(
     if (!item || loopOffset(item) === null) return;
     const offset = loopOffset(item)!;
     void replayOneMediaAtLoopPoint(audio, offset).catch((error: unknown) => {
-      if (!stopped) onMessage(`BD-J menu audio loop could not resume: ${error instanceof Error ? error.message : String(error)}`, true);
+      if (!stopped) onMessage(`BD-J menu audio loop could not resume: ${errorText(error)}`, true);
     });
   }, { signal: listeners.signal });
   video.addEventListener("error", () => {

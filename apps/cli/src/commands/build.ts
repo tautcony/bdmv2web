@@ -18,10 +18,12 @@ import { createExternalMediaTargets, type MenuLoopMediaInput } from "@bdmv2web/m
 import { buildMenuPackage } from "@bdmv2web/package-builder";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
 import { classifyDiagnostics, decideDelivery } from "@bdmv2web/test-runner";
+import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
+import { errorText } from "@bdmv2web/utils";
 import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import type { ProgressMode } from "../progress.js";
-import { createVmPrograms, createMenuDiscIR, findTopMenuPlaylist, findMenuScene, isMenuSurfaceScene, menuIgsSceneTargets, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, menuMediaEncoding, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS } from "./menu-planning.js";
+import { createVmPrograms, createMenuDiscIR, findTopMenuPlaylist, findMenuScene, isMenuSurfaceScene, menuIgsSceneTargets, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, menuMediaEncoding, menuPlaylistMarks as collectMenuPlaylistMarks, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS } from "./menu-planning.js";
 
 export {
   createMenuDiscIR, createVmPrograms, findMenuScene, findTopMenuPlaylist,
@@ -123,7 +125,7 @@ export async function build(): Promise<void> {
   const discIdOption = optionValue("--disc-id");
   let discIdOverride: string | undefined;
   try { if (discIdOption !== undefined) discIdOverride = normalizeDiscId(discIdOption); }
-  catch (error) { fail("CLI_INVALID_DISC_ID", error instanceof Error ? error.message : String(error)); }
+  catch (error) { fail("CLI_INVALID_DISC_ID", errorText(error)); }
   const limits = await loadLimits(optionValue("--limits"));
   const profile = await loadPlayerProfile(optionValue("--player-profile"));
   // Best effort: the header names the output only for inputs that resolve to a BDMV
@@ -201,6 +203,10 @@ export async function build(): Promise<void> {
   const out = plannedOut ?? resolve(dirname(disc.root), "BDMV-menu");
   const title = plannedTitle ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
+  const bdmvPath = dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root;
+  const bdjSession = (vmPrograms: ReturnType<typeof createVmPrograms>, externalTargets: ReturnType<typeof createExternalMediaTargets>) => ({
+    vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath,
+  });
   const resumeDirectory = plannedResume ?? (resumeWithoutDirectory ? await resumeMediaDirectory(roots.output, true) : undefined);
   const reuseDirectory = resumeDirectory ?? (overwrite ? roots.output : undefined);
   // The header names the target for inputs that follow the documented BDMV layout.
@@ -261,10 +267,7 @@ export async function build(): Promise<void> {
       const mixedMenuSceneResults = mixedPlaylistSceneResults.filter((item) => item.scene.uiModel === 0);
       const mixedMenuScenes = mixedMenuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
       const mixedMenuPlaylistIds = [...new Set(mixedMenuScenes.map((item) => item.playlistId))];
-      const mixedMenuPlaylistMarks = mixedMenuPlaylistIds.flatMap((playlistId) => {
-        const playlist = disc.playlists.find((item) => Number(item.id) === playlistId);
-        return playlist?.marks.length ? [{ playlistId, marks: playlist.marks.map((mark) => ({ index: mark.index, playItemRef: mark.playItemRef })) }] : [];
-      });
+      const mixedMenuPlaylistMarks = collectMenuPlaylistMarks(disc, mixedMenuPlaylistIds);
       const mixedPopupScenes = extraction.scenes.filter((item) => item.uiModel === 1).map((item) => adaptIgsScene(item, extraction.assets).scene);
       const mixedReferencedAssets = referencedAssetIds([...mixedPopupScenes, ...mixedMenuScenes.map((item) => item.scene)]);
       const mixedGraphics = extraction.assets.filter((asset) => mixedReferencedAssets.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
@@ -297,14 +300,14 @@ export async function build(): Promise<void> {
         status: decision.status, entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
         vmPrograms, vmEntries: disc.entries, externalTargets, menuScenes: mixedMenuScenes, menuPlaylistIds: mixedMenuPlaylistIds,
         ...(mixedMenuPlaylistMarks.length ? { menuPlaylistMarks: mixedMenuPlaylistMarks } : {}), popupScenes: mixedPopupScenes,
-        bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
+        bdmvPath,
         ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
         ...(firstPlayHdmv === undefined ? {} : { vmFirstPlayProgramId: firstPlayHdmv }),
         mediaEncoding: { codec: "h264", ...mediaEncoding },
         soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
         ...(bdjMenuMediaAssets.length ? { additionalMenuMedia: bdjMenuMediaAssets } : {}),
         ...(reuseDirectory === undefined ? {} : { reuseMediaFromDirectory: reuseDirectory }),
-        bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
+        bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: bdjSession(vmPrograms, externalTargets) } } : {}),
         diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
         onMediaProgress: mediaProgress.onMediaProgress,
         onPhase: (phase) => {
@@ -366,10 +369,7 @@ export async function build(): Promise<void> {
     const menuPlaylistIds = [...new Set(menuSceneResults.map((item) => item.playlistId))];
     // PLAY_PLAYLIST_MARK names a play mark; the runtime needs the mark-to-
     // PlayItem mapping to select the packaged scene for the marked PlayItem.
-    const menuPlaylistMarks = [...new Set([...menuPlaylistIds, Number(menuPlaylist.id)])].flatMap((id) => {
-      const playlist = disc.playlists.find((item) => Number(item.id) === id);
-      return playlist && playlist.marks.length ? [{ playlistId: id, marks: playlist.marks.map((mark) => ({ index: mark.index, playItemRef: mark.playItemRef })) }] : [];
-    });
+    const menuPlaylistMarks = collectMenuPlaylistMarks(disc, [...new Set([...menuPlaylistIds, Number(menuPlaylist.id)])]);
     const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
     const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
     const popupContentPlaylists: number[] = [];
@@ -435,10 +435,10 @@ export async function build(): Promise<void> {
     const soundPath = disc.sounds[0]?.source.path;
     if (soundPath) {
       try {
-        const relativeSoundPath = soundPath.replace(/^BDMV\//i, "");
+        const relativeSoundPath = bdmvRelativePath(soundPath);
         soundBytes = new Uint8Array(await readFile(await resolveInputFile(disc.root, relativeSoundPath)));
       } catch (error) {
-        diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(error instanceof Error ? error.message : String(error), roots.input) });
+        diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(errorText(error), roots.input) });
       }
     }
     const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null, hasBdjEntries);
@@ -471,7 +471,7 @@ export async function build(): Promise<void> {
       ...(menuPlaylistMarks.length ? { menuPlaylistMarks } : {}),
       ...(menuTarget?.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: menuTarget.preMenuPlaylistIds } : {}),
       externalTargets,
-      bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root,
+      bdmvPath,
       ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
       ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }),
       graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, vmLimits: limits,
@@ -479,7 +479,7 @@ export async function build(): Promise<void> {
       ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
       ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
       ...(bdjFiles.files.length ? { bdjFiles: bdjFiles.files } : {}),
-      ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjHostApiJar: bdjHostApiJar!, bdjLaunch: { ...bdjLaunch, session: { vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath: dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root) : disc.root } } } : {}),
+      ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjHostApiJar: bdjHostApiJar!, bdjLaunch: { ...bdjLaunch, session: bdjSession(vmPrograms, externalTargets) } } : {}),
       onMediaProgress: mediaProgress.onMediaProgress,
       onPhase: (phase) => {
         if (phase === "media") {

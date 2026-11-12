@@ -1,3 +1,4 @@
+import { errorDescription, errorText } from "@bdmv2web/utils";
 import type { HdmvVm, NavigationAction, VmEvent } from "@bdmv2web/hdmv";
 import { replayMediaAtLoopPoint } from "./media-loop.js";
 
@@ -113,7 +114,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
         const loopStart = media.background.loopStartSeconds;
         if (loopStart !== undefined) {
           const audioTrack = this.findAudioTrack(this.selectedAudioStream);
-          void replayMediaAtLoopPoint(this.video, audioTrack ? this.audio : null, loopStart).catch((error: unknown) => this.report(`Menu loop could not resume: ${error instanceof Error ? error.message : String(error)}`));
+          void replayMediaAtLoopPoint(this.video, audioTrack ? this.audio : null, loopStart).catch((error: unknown) => this.report(`Menu loop could not resume: ${errorText(error)}`));
         }
         return;
       }
@@ -232,7 +233,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
           await Promise.all([this.video.play(), ...(audioTrack ? [this.audio.play()] : [])]);
         } catch (error) {
           const name = typeof error === "object" && error !== null && "name" in error ? String(error.name) : "";
-          const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+          const message = errorDescription(error);
           // An autoplay block on resume is recoverable through the same retry
           // gesture as the initial start; it must not terminate the menu VM.
           if (name === "NotAllowedError") {
@@ -271,7 +272,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
       }).catch((error: unknown) => {
         if (this.mediaSequence !== mediaSequence || this.activeMedia !== media) return false;
         const name = typeof error === "object" && error !== null && "name" in error ? String(error.name) : "";
-        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        const message = errorDescription(error);
         if (name === "NotAllowedError") {
           this.report(`Browser blocked menu media playback; use the retry button to start it. (${message})`);
           const retryGeneration = ++this.retryGeneration;
@@ -441,7 +442,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
         catch (restoreError) { rollbackError = restoreError; }
       }
       if (!this.isCurrentTrackSwitch(generation, sequence)) return;
-      const failure = error instanceof Error ? error.message : String(error);
+      const failure = errorText(error);
       const restoreMessage = rollbackError ? ` Previous audio restore failed: ${rollbackError instanceof Error ? rollbackError.message : typeof rollbackError === "string" ? rollbackError : "non-Error value"}` : "";
       this.report(`Primary audio stream ${psrStreamNumber} could not be confirmed: ${failure}.${restoreMessage}`);
     }

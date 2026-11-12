@@ -8,6 +8,7 @@ import { assertDisjointRoots } from "@bdmv2web/bdmv-io";
 import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { classifyDiagnostics } from "@bdmv2web/test-runner";
+import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -97,7 +98,7 @@ export async function listAssets(): Promise<void> {
     for (const clipId of clipIds) {
       const clipNode = disc.graph.nodes.find((node) => node.id === `clip:${clipId}`);
       const source = clipNode?.state === "present" ? clipNode.source?.path : undefined;
-      const relativeSource = source?.replace(/^BDMV\//i, "");
+      const relativeSource = source === undefined ? undefined : bdmvRelativePath(source);
       const hasM2tsSource = relativeSource !== undefined && new RegExp(`^STREAM/${clipId}\\.m2ts$`, "i").test(relativeSource);
       let rawBytes: number | undefined;
       let rawPidSizes = new Map<number, number>();

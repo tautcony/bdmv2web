@@ -58,7 +58,7 @@ public final class BdjHostBridge {
         start();
         if ("selectTitle".equals(operation) || "playerPlaylist".equals(operation)) {
             trace("com.bdmv2web.bdj.BdjHostBridge", "call", operation,
-                "arguments=" + java.util.Arrays.toString(arguments) + " caller=" + caller());
+                "arguments=" + java.util.Arrays.toString(arguments) + " caller=" + traceCaller());
         }
         long id = sequence.incrementAndGet();
         StringBuilder payload = new StringBuilder();
@@ -87,7 +87,7 @@ public final class BdjHostBridge {
         synchronized (output) { output.println("BDMV_TRACE\t" + encoded); output.flush(); }
     }
 
-    private static String caller() {
+    public static String traceCaller() {
         StackTraceElement[] stack = Thread.currentThread().getStackTrace();
         StringBuilder value = new StringBuilder();
         for (int index = 3; index < Math.min(stack.length, 8); index++) {

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { consumeSegment, createIgsState } from "../../src/igs.js";
+import { consumeSegment, createIgsState } from "../../src/scene/igs.js";
 import { syntheticReferenceClip } from "../helpers/fixtures.js";
 
 describe("real IGS composition sample", () => {

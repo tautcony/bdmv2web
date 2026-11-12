@@ -1,5 +1,7 @@
 import type { ParsedDisc, PlayItem, SourceLocation, StreamDeclaration, SubPlayItem } from "@bdmv2web/bdmv-parser";
 import type { MediaClosure } from "./closure.js";
+import { estimateBytes } from "./budget.js";
+import { equalsIgnoreCase as sameId } from "@bdmv2web/utils";
 
 export interface MediaPlanOptions {
   /** Estimated output rates, not measurements from source media; defaults are 8 Mb/s video and 192 kb/s per audio track. */
@@ -297,11 +299,3 @@ function toTrack(stream: StreamDeclaration): PlannedTrack {
   const role = type === null ? "unknown" : VIDEO_CODING_TYPES.has(type) ? "video" : AUDIO_CODING_TYPES.has(type) ? "audio" : SUBTITLE_CODING_TYPES.has(type) ? "subtitle" : "unknown";
   return { role, streamType: stream.streamType, codingType: type, pid: stream.pid, subPathId: stream.subPathId, subClipId: stream.subClipId, language: stream.language, source: stream.source };
 }
-
-function estimateBytes(duration90k: bigint, rateBitsPerSecond: number, overheadPercent: number): string {
-  const numerator = duration90k * BigInt(rateBitsPerSecond) * BigInt(100 + overheadPercent);
-  const denominator = 90_000n * 8n * 100n;
-  return ((numerator + denominator - 1n) / denominator).toString();
-}
-
-function sameId(a: string, b: string): boolean { return a.toLocaleLowerCase("en-US") === b.toLocaleLowerCase("en-US"); }

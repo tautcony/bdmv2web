@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { errorText } from "@bdmv2web/utils";
 import { createRequire } from "node:module";
 import { CommanderError } from "commander";
 import { ContractError } from "@bdmv2web/core/contract-error";
@@ -43,7 +44,7 @@ function wantsJsonErrors(): boolean {
 }
 
 function plainMessage(error: unknown): string {
-  if (!(error instanceof ContractError)) return error instanceof Error ? error.message : String(error);
+  if (!(error instanceof ContractError)) return errorText(error);
   return error.message.slice(`${error.code} at ${error.path}: `.length);
 }
 

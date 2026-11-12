@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { ContractError, DEFAULT_PLAYER_PROFILE } from "@bdmv2web/core";
 import { DEFAULT_LIMITS, validateLimits } from "@bdmv2web/core/limits";
 import { profileWord } from "@bdmv2web/hdmv";
@@ -11,7 +12,7 @@ export async function loadPlayerProfile(path: string | undefined): Promise<Playe
   try {
     parsed = JSON.parse(await readFile(resolve(path), "utf8"));
   } catch (error) {
-    throw new ContractError("CLI_INVALID_PROFILE", "/", `--player-profile could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new ContractError("CLI_INVALID_PROFILE", "/", `--player-profile could not be read as JSON: ${errorText(error)}`);
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new ContractError("CLI_INVALID_PROFILE", "/", "--player-profile must contain a JSON object");
   const record = parsed as Record<string, unknown>;
@@ -47,7 +48,7 @@ export async function loadLimits(path: string | undefined): Promise<Limits> {
   try {
     parsed = JSON.parse(await readFile(resolve(path), "utf8"));
   } catch (error) {
-    throw new ContractError("INVALID_LIMITS_FILE", "/", `--limits could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new ContractError("INVALID_LIMITS_FILE", "/", `--limits could not be read as JSON: ${errorText(error)}`);
   }
   return validateLimits(parsed);
 }

@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { inputPath, optionValue, strictDefault } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { readJsonObject, writeGeneratedReport } from "../cli/output.js";
@@ -83,7 +84,7 @@ export async function validate(): Promise<void> {
       await writeGeneratedReport(audit.packageRoot, "compatibility.json", `${JSON.stringify(releaseSummary.compatibility, null, 2)}\n`);
       await writeGeneratedReport(audit.packageRoot, "reports/release-summary.json", `${JSON.stringify(releaseSummary, null, 2)}\n`);
     } catch (error) {
-      audit.checks.push({ checkId: "RELEASE_REPORT_WRITE_FAILED", result: "fail", message: error instanceof Error ? error.message : String(error), path: "reports/release-summary.json" });
+      audit.checks.push({ checkId: "RELEASE_REPORT_WRITE_FAILED", result: "fail", message: errorText(error), path: "reports/release-summary.json" });
       releaseSummary = createReleaseSummary(releaseSummaryInput);
       dependencyAudit = releaseSummary.dependencyAudit;
     }

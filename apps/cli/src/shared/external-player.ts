@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { spawn } from "node:child_process";
 import { posix, win32 } from "node:path";
 import { isDeclaredExternalStreamPath, type ExternalPlayItem, type ExternalPlayTarget } from "@bdmv2web/media-export/external-targets";
@@ -70,7 +71,7 @@ export async function launchExternalPlayer(launch: NativePlayerLaunch | Unavaila
         resolve({ status: "requested", adapter: launch.adapter, target: launch.target, playbackState: "unobserved" });
       });
     } catch (error) {
-      resolve({ status: "error", code: "EXTERNAL_PLAYER_LAUNCH_FAILED", message: error instanceof Error ? error.message : String(error), source: launchSource(launch) });
+      resolve({ status: "error", code: "EXTERNAL_PLAYER_LAUNCH_FAILED", message: errorText(error), source: launchSource(launch) });
     }
   });
 }

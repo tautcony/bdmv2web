@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { link, lstat, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 
@@ -21,7 +22,7 @@ export async function readJsonObject(path: string, onError?: (message: string) =
   try {
     const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch (error) { onError?.(error instanceof Error ? error.message : String(error)); return {}; }
+  } catch (error) { onError?.(errorText(error)); return {}; }
 }
 
 export async function writeGeneratedReport(root: string, relativePath: string, content: string): Promise<void> {

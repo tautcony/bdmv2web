@@ -160,7 +160,7 @@ public class IxcRegistry {
                 com.bdmv2web.bdj.BdjHostBridge.trace(target.getClass().getName(), method.getName(), "ixc-call",
                     "owner=" + applicationId(owner) + " requester=" + applicationId(requester)
                         + " arguments=" + java.util.Arrays.toString(arguments)
-                        + " caller=" + caller());
+                        + " caller=" + com.bdmv2web.bdj.BdjHostBridge.traceCaller());
                 Object result = target.getClass().getMethod(method.getName(), targetParameters).invoke(target, targetArguments);
                 return result instanceof Remote ? adapt((Remote) result, owner, requester) : result;
             } catch (InvocationTargetException error) { throw error.getCause(); }
@@ -169,15 +169,6 @@ public class IxcRegistry {
             Object organization = context.getXletProperty("dvb.org.id");
             Object application = context.getXletProperty("dvb.app.id");
             return String.valueOf(organization) + ":" + String.valueOf(application);
-        }
-        private static String caller() {
-            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-            StringBuilder value = new StringBuilder();
-            for (int index = 3; index < Math.min(stack.length, 8); index++) {
-                if (index > 3) value.append(" <- ");
-                value.append(stack[index].getClassName()).append('.').append(stack[index].getMethodName());
-            }
-            return value.toString();
         }
         private static Class<?> resolveType(Class<?> type, ClassLoader loader) throws ClassNotFoundException {
             if (type.isPrimitive() || type.getClassLoader() == null) return type;

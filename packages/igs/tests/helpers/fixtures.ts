@@ -1,4 +1,4 @@
-import { encodeTimestampForFixture } from "../../src/transport.js";
+import { encodeTimestampForFixture } from "../../src/transport/transport.js";
 
 export const IG_PID = 0x120;
 export const PMT_PID = 0x100;

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { bytesToHex } from "@bdmv2web/utils";
 import type { PngBatch } from "./asset-batches.js";
 import type { MenuPackageStatus } from "./types.js";
 
@@ -20,7 +21,7 @@ function renderTemplate(template: string, values: Record<string, string>, sectio
 
 /** Serialize data for a classic script. Escaping '<' also prevents HTML script termination. */
 export function serializeSafeScriptData(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) => item instanceof Uint8Array ? [...item].map((byte) => byte.toString(16).padStart(2, "0")).join("") : item).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+  return JSON.stringify(value, (_key, item: unknown) => item instanceof Uint8Array ? bytesToHex(item) : item).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 
 /** The stage fills the viewport and letterboxes the scene inside itself: the

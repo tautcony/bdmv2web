@@ -8,6 +8,7 @@
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
     "./contract-error": { "types": "./dist/contract-error.d.ts", "import": "./dist/contract-error.js" },
+    "./disc-path": { "types": "./dist/disc-path.d.ts", "import": "./dist/disc-path.js" },
     "./defaults": { "types": "./dist/defaults.d.ts", "import": "./dist/defaults.js" },
     "./limits": { "types": "./dist/limits.d.ts", "import": "./dist/limits.js" },
     "./browser": "./dist/browser.js",

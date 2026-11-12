@@ -1,3 +1,4 @@
+import { errorText } from "@bdmv2web/utils";
 import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { createReferenceCompareReport, validateCompareInput, type ReferenceCompareReport, type TraceEvent } from "@bdmv2web/test-runner";
@@ -10,7 +11,7 @@ async function readJson(path: string, code: string, what: string): Promise<unkno
   try {
     return JSON.parse(await readFile(path, "utf8")) as unknown;
   } catch (error) {
-    return fail(code, `${what} ${path} could not be read as JSON: ${error instanceof Error ? error.message : String(error)}`, path);
+    return fail(code, `${what} ${path} could not be read as JSON: ${errorText(error)}`, path);
   }
 }
 

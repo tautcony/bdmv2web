@@ -1,9 +1,14 @@
-import { access, mkdir, readdir, stat, unlink, writeFile } from "node:fs/promises";
+import { errorText } from "@bdmv2web/utils";
+import { access, mkdir, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import type { SourceLocation } from "@bdmv2web/bdmv-parser";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetRates } from "./budget.js";
+import { directoryBytesExcludingPaths, fileBytes } from "@bdmv2web/utils/node-fs";
+import { hasEncoder, hasFilter } from "./tools/ffmpeg-capabilities.js";
+import { parseProbe, probeArgs, type ProbeResult as Probe, type ProbeStream } from "./tools/probe.js";
+import { runControlledProcess, runMonitoredProcess } from "./process/process-control.js";
 import type { MediaPlan as SourceMediaPlan, MediaPlanRequirement, PlannedTrack } from "./media-plan.js";
-import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type ColorProbeFields, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color.js";
+import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color/color.js";
 
 export interface LinearProcessResult { stdout: string; stderr: string; }
 export type LinearProcessRunner = (executable: string, args: string[], timeoutMs: number, signal?: AbortSignal) => Promise<LinearProcessResult>;
@@ -74,8 +79,6 @@ export interface LinearMediaExportResult {
   tools: { ffmpeg: string; ffprobe: string; invocations: Array<{ executable: string; args: string[] }> };
 }
 
-interface ProbeStream extends ColorProbeFields { index?: number; id?: string; codec_type?: string; codec_name?: string; width?: number; height?: number; display_aspect_ratio?: string; sample_rate?: string; channels?: number; duration?: string; }
-interface Probe { streams?: ProbeStream[]; format?: { start_time?: string; duration?: string }; }
 interface ResolvedPlayItem { item: MediaPlanRequirement["playItems"][number]; sourcePath: string; probe: Probe; video: ProbeStream; audios: Map<string, ProbeStream | null>; startOffsetSeconds: number; aspectRatio: string; }
 interface PendingAsset { plan: LinearAssetPlan; args: string[]; width: number; height: number; durationSeconds: number; codec: VideoCodec; color: VideoColorPlan; }
 
@@ -110,32 +113,17 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
   const invoke = async (executable: string, args: string[], parentSignal?: AbortSignal): Promise<LinearProcessResult> => {
     if (options.signal?.aborted || parentSignal?.aborted) throw jobError("MEDIA_JOB_CANCELLED", executable, args, "Linear media export was cancelled before tool launch.");
     invocations.push({ executable, args: [...args] });
-    const controller = new AbortController();
-    let cancelled = false;
-    let rejectCancelled: ((error: Error) => void) | undefined;
-    const cancelledPromise = new Promise<never>((_resolve, reject) => { rejectCancelled = reject; });
-    const onAbort = () => { cancelled = true; controller.abort(); rejectCancelled?.(jobError("MEDIA_JOB_CANCELLED", executable, args, `Media job '${executable}' was cancelled.`)); };
-    options.signal?.addEventListener("abort", onAbort, { once: true });
-    parentSignal?.addEventListener("abort", onAbort, { once: true });
-    let rejectTimeout: ((error: Error) => void) | undefined;
-    const deadline = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
-    const process = options.runProcess(executable, args, timeoutMs, controller.signal);
-    const timeout = setTimeout(() => {
-      controller.abort();
-      rejectTimeout?.(jobError("MEDIA_JOB_TIMEOUT", executable, args, `${executable} timed out after ${timeoutMs} ms.`));
-    }, timeoutMs);
-    try { return await Promise.race([process, deadline, cancelledPromise]); }
-    catch (error) {
-      controller.abort();
-      await process.catch(() => undefined);
-      if (error instanceof LinearMediaExportError) throw error;
-      if (cancelled) throw jobError("MEDIA_JOB_CANCELLED", executable, args, `Media job '${executable}' was cancelled.`);
-      throw jobError("MEDIA_PROCESS_FAILED", executable, args, `${executable} failed: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      clearTimeout(timeout);
-      options.signal?.removeEventListener("abort", onAbort);
-      parentSignal?.removeEventListener("abort", onAbort);
-    }
+    return runControlledProcess({
+      run: (processSignal) => options.runProcess(executable, args, timeoutMs, processSignal),
+      signals: [options.signal, parentSignal], timeoutMs,
+      cancellationError: () => jobError("MEDIA_JOB_CANCELLED", executable, args, `Media job '${executable}' was cancelled.`),
+      timeoutError: () => jobError("MEDIA_JOB_TIMEOUT", executable, args, `${executable} timed out after ${timeoutMs} ms.`),
+      processError: (error, cancelled) => {
+        if (error instanceof LinearMediaExportError) return error;
+        if (cancelled) return jobError("MEDIA_JOB_CANCELLED", executable, args, `Media job '${executable}' was cancelled.`);
+        return jobError("MEDIA_PROCESS_FAILED", executable, args, `${executable} failed: ${errorText(error)}`);
+      },
+    });
   };
 
   const ffmpegVersion = firstLine((await invoke(ffmpeg, ["-version"])).stdout);
@@ -184,7 +172,7 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
   }
 
   const excludedSources = new Set(requirements.flatMap((requirement) => requirement.playItems.map((item) => resolve(sourceRoot, item.streamFile.path))));
-  const existingOutputBytes = await directoryBytes(output, excludedSources);
+  const existingOutputBytes = await directoryBytesExcludingPaths(output, excludedSources);
   const planColor = pendingAssets[0]?.color ?? planVideoColor(readSourceColor({}), colorOptions);
   const linearEncoding = { codec, crf, preset, color: planColor };
   for (const asset of pendingAssets) assertEstimateWithinLimit({ scope: "asset", estimateBytes: BigInt(asset.plan.estimatedBytes), limitBytes: options.maxAssetBytes, message: `Estimated linear asset '${asset.plan.path}' exceeds maxAssetBytes.` });
@@ -207,7 +195,7 @@ export async function exportLinearMedia(mediaPlan: SourceMediaPlan, options: Lin
     const manifest = `${JSON.stringify(plan, null, 2)}\n`;
     created.push(planPath);
     await writeFile(planPath, manifest, { flag: "wx" });
-    const actualOutputBytes = await directoryBytes(output, excludedSources);
+    const actualOutputBytes = await directoryBytesExcludingPaths(output, excludedSources);
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return { plan, assets: exported, outputSize, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations } };
   } catch (error) {
@@ -242,8 +230,8 @@ async function resolvePlayItems(requirement: MediaPlanRequirement, sourceRoot: s
     catch { diagnostics.push({ code: "MEDIA_STREAM_FILE_MISSING", message: `Required clip '${item.clipId}' is not readable at its planned source path.`, source: item.streamFile.source ?? item.source }); continue; }
     let probe = cache.get(sourcePath);
     if (!probe) {
-      const result = await invoke(ffprobe, probeArgs(sourcePath));
-      probe = parseProbe(result.stdout, sourcePath);
+      const result = await invoke(ffprobe, probeArgs(sourcePath, { audio: true }));
+      probe = parseProbe(result.stdout, sourcePath, "invalid ffprobe JSON for");
       cache.set(sourcePath, probe);
     }
     const sourceStart = Number(probe.format?.start_time);
@@ -350,40 +338,27 @@ function makeLinearPlan(source: SourceMediaPlan, assets: readonly LinearAssetPla
 }
 
 async function runWithBudget(ffmpeg: string, args: string[], relativePath: string, assetPath: string, options: LinearMediaExportOptions, invoke: (executable: string, args: string[], signal?: AbortSignal) => Promise<LinearProcessResult>): Promise<void> {
-  const controller = new AbortController();
-  const process = invoke(ffmpeg, args, controller.signal);
-  let checkingAsset = false;
-  let rejectBudget: ((error: Error) => void) | undefined;
-  const budget = new Promise<never>((_resolve, reject) => { rejectBudget = reject; });
-  const failBudget = (error: unknown) => { controller.abort(); rejectBudget?.(error instanceof Error ? error : new Error(String(error))); };
-  const checkAsset = async () => {
-    if (checkingAsset) return;
-    checkingAsset = true;
-    try {
-      const assetBytes = await fileBytes(assetPath);
-      assertActualWithinLimit({ scope: "asset", actualBytes: assetBytes, limitBytes: options.maxAssetBytes, message: `Linear asset '${relativePath}' exceeded maxAssetBytes while encoding.` });
-    } catch (error) { failBudget(error); }
-    finally { checkingAsset = false; }
-  };
-  const assetTimer = setInterval(() => { void checkAsset(); }, 10);
-  void checkAsset();
   try {
-    await Promise.race([process, budget]);
-    assertActualWithinLimit({ scope: "asset", actualBytes: await fileBytes(assetPath), limitBytes: options.maxAssetBytes, message: `Linear asset '${relativePath}' exceeded maxAssetBytes at process completion.` });
+    await runMonitoredProcess({
+      run: (signal) => invoke(ffmpeg, args, signal),
+      check: async (phase) => {
+        const assetBytes = await fileBytes(assetPath);
+        const when = phase === "during encoding" ? "while encoding" : phase;
+        assertActualWithinLimit({ scope: "asset", actualBytes: assetBytes, limitBytes: options.maxAssetBytes, message: `Linear asset '${relativePath}' exceeded maxAssetBytes ${when}.` });
+      },
+      monitorError: (error) => error instanceof Error ? error : new Error(String(error)),
+    });
   } catch (error) {
-    controller.abort();
-    await process.catch(() => undefined);
-    if (error instanceof Error && "diagnostic" in error) throw error;
     if (error instanceof Error) throw error;
     throw new Error(String(error), { cause: error });
-  } finally { clearInterval(assetTimer); }
+  }
 }
 
 async function probeOutput(ffprobe: string, path: string, timeoutMs: number, invoke: (executable: string, args: string[]) => Promise<LinearProcessResult>): Promise<Probe> {
-  const args = probeArgs(path);
+  const args = probeArgs(path, { audio: true });
   const response = await invoke(ffprobe, args);
-  try { return parseProbe(response.stdout, path); }
-  catch (error) { throw jobError("MEDIA_OUTPUT_INVALID", ffprobe, args, `FFprobe returned invalid metadata for encoded output: ${error instanceof Error ? error.message : String(error)}`); }
+  try { return parseProbe(response.stdout, path, "invalid ffprobe JSON for"); }
+  catch (error) { throw jobError("MEDIA_OUTPUT_INVALID", ffprobe, args, `FFprobe returned invalid metadata for encoded output: ${errorText(error)}`); }
 }
 
 function validateOutput(probe: Probe, asset: PendingAsset): { width: number; height: number; durationSeconds: number } {
@@ -404,38 +379,15 @@ function validateOutput(probe: Probe, asset: PendingAsset): { width: number; hei
   } catch (error) { throw new LinearMediaExportError({ code: "MEDIA_OUTPUT_INVALID", message: `Encoded asset '${asset.plan.path}' failed FFprobe validation: ${error instanceof Error ? error.message : "invalid metadata"}` }, { cause: error }); }
 }
 
-function parseProbe(text: string, subject: string): Probe {
-  try { const value = JSON.parse(text) as Probe; if (!Array.isArray(value.streams)) throw new Error("no streams array"); return value; }
-  catch (error) { throw new Error(`invalid ffprobe JSON for '${subject}': ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
-}
-function probeArgs(path: string): string[] { return ["-v", "error", "-show_entries", "stream=index,id,codec_type,codec_name,width,height,display_aspect_ratio,sample_rate,channels,duration,pix_fmt,color_range,color_space,color_transfer,color_primaries,bits_per_raw_sample:stream_side_data=side_data_type:format=start_time,duration", "-of", "json", path]; }
 function streamPid(id: string | undefined): number | null { if (!id) return null; return /^0x[0-9a-f]+$/i.test(id) ? Number.parseInt(id.slice(2), 16) : /^\d+$/.test(id) ? Number(id) : null; }
 function aspectRatio(stream: ProbeStream): string { if (stream.display_aspect_ratio && /^\d+:\d+$/.test(stream.display_aspect_ratio)) return stream.display_aspect_ratio; if (!validDimension(stream.width) || !validDimension(stream.height)) throw new Error("source aspect ratio is unknown"); const divisor = gcd(stream.width, stream.height); return `${stream.width / divisor}:${stream.height / divisor}`; }
 function sameAspectRatio(left: string, right: string): boolean { const [lw, lh] = left.split(":").map(Number); const [rw, rh] = right.split(":").map(Number); return lw! * rh! === rw! * lh!; }
 function gcd(a: number, b: number): number { return b === 0 ? a : gcd(b, a % b); }
 function validDimension(value: number | undefined): value is number { return Number.isSafeInteger(value) && value! > 0; }
 function positiveInteger(value: number): boolean { return Number.isSafeInteger(value) && value > 0; }
-function hasEncoder(text: string, name: string): boolean { return text.split(/\r?\n/).some((line) => /^\s*[VAS.D]{6}\s+/.test(line) && line.trim().split(/\s+/, 2)[1] === name); }
-function hasFilter(text: string, name: string): boolean { return text.split(/\r?\n/).some((line) => /^\s*[TSC.]{2,3}\s+/.test(line) && line.trim().split(/\s+/, 2)[1] === name); }
 function firstLine(text: string): string { return text.split(/\r?\n/, 1)[0] || "unknown"; }
 function seconds(value: number): string { return value.toFixed(9).replace(/0+$/, "").replace(/\.$/, ""); }
 function pathPart(value: string): string { return basename(value).replace(/[^a-zA-Z0-9._-]/g, "-") || "unknown"; }
 function jobError(code: "MEDIA_JOB_CANCELLED" | "MEDIA_JOB_TIMEOUT" | "MEDIA_PROCESS_FAILED" | "MEDIA_OUTPUT_INVALID", executable: string, args: string[], message: string): LinearMediaExportError { return new LinearMediaExportError({ code, executable, args: [...args], message }); }
 
-async function fileBytes(path: string): Promise<bigint> { try { return BigInt((await stat(path)).size); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0n; throw error; } }
-async function directoryBytes(root: string, excluded: Set<string>): Promise<bigint> {
-  let total = 0n;
-  const visit = async (directory: string): Promise<void> => {
-    let entries;
-    try { entries = await readdir(directory, { withFileTypes: true }); } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
-    for (const entry of entries) {
-      const path = resolve(directory, entry.name);
-      if (excluded.has(path) || entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) await visit(path);
-      else if (entry.isFile()) total += BigInt((await stat(path)).size);
-    }
-  };
-  await visit(root);
-  return total;
-}
 async function ensureAbsent(path: string): Promise<void> { try { await access(path); throw new Error(`Output target already exists: '${path}'.`); } catch (error) { if (error instanceof Error && error.message.startsWith("Output target already exists:")) throw error; if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; } }

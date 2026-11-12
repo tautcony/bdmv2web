@@ -1,6 +1,8 @@
 import { type Dirent } from "node:fs";
 import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
-import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, extname, relative, resolve, sep } from "node:path";
+import { within } from "@bdmv2web/utils/node-path";
+import { isRecord, errorText } from "@bdmv2web/utils";
 import type { AuditCheck, DeliveryManifest, ManifestFile, OfflinePackageAudit } from "./types.js";
 
 const PAYLOAD_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".png", ".wav", ".mp4", ".webm", ".vtt", ".jar", ".wasm", ".gz"]);
@@ -10,17 +12,8 @@ const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_BYTES = 16 * 1024 * 1024;
 const comparePath = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 
-function within(root: string, target: string): boolean {
-  const rel = relative(root, target);
-  return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
-}
-
 function add(checks: AuditCheck[], checkId: string, result: AuditCheck["result"], message: string, path?: string, evidence?: Record<string, unknown>): void {
   checks.push({ checkId, result, message, ...(path === undefined ? {} : { path }), ...(evidence === undefined ? {} : { evidence }) });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isPlayerProfile(value: unknown): value is Record<string, unknown> {
@@ -121,7 +114,7 @@ async function listFiles(root: string, checks: AuditCheck[]): Promise<string[]> 
   const walk = async (dir: string): Promise<void> => {
     let entries: Dirent[];
     try { entries = await readdir(dir, { withFileTypes: true }); }
-    catch (error) { add(checks, "PACKAGE_DIRECTORY_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), relative(root, dir).split(sep).join("/") || "."); return; }
+    catch (error) { add(checks, "PACKAGE_DIRECTORY_UNREADABLE", "fail", errorText(error), relative(root, dir).split(sep).join("/") || "."); return; }
     for (const entry of entries) {
       const absolute = resolve(dir, entry.name);
       const rel = relative(root, absolute).split(sep).join("/");
@@ -295,7 +288,7 @@ function auditScript(text: string, source: string, checks: AuditCheck[], refs: R
 function auditJsonUrls(text: string, source: string, checks: AuditCheck[], refs: RuntimeUrlRef[]): void {
   let value: unknown;
   try { value = JSON.parse(text); }
-  catch (error) { add(checks, "RUNTIME_JSON_UNPARSABLE", "not-verified", `Runtime JSON could not be parsed for the URL audit: ${error instanceof Error ? error.message : String(error)}`, source); return; }
+  catch (error) { add(checks, "RUNTIME_JSON_UNPARSABLE", "not-verified", `Runtime JSON could not be parsed for the URL audit: ${errorText(error)}`, source); return; }
   const walk = (item: unknown, path: string): void => {
     if (Array.isArray(item)) { item.forEach((child, i) => walk(child, `${path}/${i}`)); return; }
     if (!isRecord(item)) return;
@@ -317,7 +310,7 @@ async function auditRuntimeFiles(root: string, files: string[], checks: AuditChe
     try {
       if ((await stat(resolve(root, path))).size > MAX_TEXT_BYTES) { add(checks, "RUNTIME_FILE_TOO_LARGE", "not-verified", "Static resource audit skipped because the file exceeds the bounded scan size", path); continue; }
       text = await readFile(resolve(root, path), "utf8");
-    } catch (error) { add(checks, "RUNTIME_FILE_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), path); continue; }
+    } catch (error) { add(checks, "RUNTIME_FILE_UNREADABLE", "fail", errorText(error), path); continue; }
     if (ext === ".html" || ext === ".htm") auditHtml(text, path, checks, refs);
     if (ext === ".css") auditCss(text, path, checks, refs);
     if (ext === ".js" || ext === ".mjs") auditScript(text, path, checks, refs, allowLocalSessionTransport && path === "runtime/bdj-client.js");
@@ -361,10 +354,10 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   try {
     if ((await lstat(manifestAbsolute)).isSymbolicLink()) throw new Error("manifest symlink is not allowed");
     if ((await stat(manifestAbsolute)).size > MAX_MANIFEST_BYTES) throw new Error("manifest exceeds bounded size");
-  } catch (error) { add(checks, "MANIFEST_UNREADABLE", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files }; }
+  } catch (error) { add(checks, "MANIFEST_UNREADABLE", "fail", errorText(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files }; }
   let parsed: unknown;
   try { parsed = JSON.parse(await readFile(manifestAbsolute, "utf8")); }
-  catch (error) { add(checks, "MANIFEST_INVALID_JSON", "fail", error instanceof Error ? error.message : String(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files }; }
+  catch (error) { add(checks, "MANIFEST_INVALID_JSON", "fail", errorText(error), manifestRel); return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files }; }
   const manifest = parseManifest(parsed, checks);
   if (!manifest) return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files };
 

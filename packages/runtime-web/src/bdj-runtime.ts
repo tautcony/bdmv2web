@@ -1,4 +1,6 @@
 import type { NavigationAction, VmOptions } from "@bdmv2web/hdmv";
+import { applicationJarPath } from "@bdmv2web/core/disc-path";
+import { errorText } from "@bdmv2web/utils";
 
 export interface BdjApplicationRecord {
   organizationId: number;
@@ -59,11 +61,11 @@ export function startBdjRuntime(data: BdjPackageData, root: HTMLElement, callbac
   const appJars = new Set<string>();
   for (const descriptor of selectedBdjos) {
     for (const application of descriptor.applications) {
-      const jarPath = applicationJarPath(application.basePath);
+      const jarPath = applicationJarPath(application.basePath, "BDMV/JAR");
       if (!jarPath || !packageFiles.has(jarPath.toLocaleLowerCase("en-US"))) throw new Error(`BDJO ${descriptor.path} application ${application.applicationId} JAR '${application.basePath}' is not packaged.`);
       appJars.add(jarPath);
       for (const item of application.classPath.split(/[;:]/).map((value) => value.trim()).filter(Boolean)) {
-        const classPath = applicationJarPath(item);
+        const classPath = applicationJarPath(item, "BDMV/JAR");
         if (!classPath || !packageFiles.has(classPath.toLocaleLowerCase("en-US"))) throw new Error(`BDJO ${descriptor.path} application ${application.applicationId} class path '${item}' is not packaged.`);
         appJars.add(classPath);
       }
@@ -99,12 +101,12 @@ export function startBdjRuntime(data: BdjPackageData, root: HTMLElement, callbac
     if (!response.ok) throw new Error((await response.text()) || `Local BD-J service returned HTTP ${response.status}.`);
     const session: unknown = await response.json();
     return typeof session === "object" && session !== null && "attached" in session && session.attached === true;
-  }).catch((error: unknown) => { callbacks.report(`Could not start local BD-J session: ${error instanceof Error ? error.message : String(error)}`, true); throw error; });
+  }).catch((error: unknown) => { callbacks.report(`Could not start local BD-J session: ${errorText(error)}`, true); throw error; });
   const post = (operation: () => Promise<Response>, label: string) => {
     if (closed) return;
     void sessionStarted.then(operation)
       .then(async (response) => { if (!response.ok) throw new Error((await response.text()) || `Local BD-J service returned HTTP ${response.status}.`); })
-      .catch((error: unknown) => { if (!closed) callbacks.report(`${label}: ${error instanceof Error ? error.message : String(error)}`, true); });
+      .catch((error: unknown) => { if (!closed) callbacks.report(`${label}: ${errorText(error)}`, true); });
   };
   const sendInput = (body: unknown) => post(() => fetch("/api/bdj/input", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), "Local BD-J input failed");
   return {
@@ -114,7 +116,7 @@ export function startBdjRuntime(data: BdjPackageData, root: HTMLElement, callbac
       if (started && origin === "startup") {
         void sessionStarted.then((attached) => attached || closed ? undefined : fetch("/api/bdj/title", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, origin }) }))
           .then(async (response) => { if (response && !response.ok) throw new Error((await response.text()) || `Local BD-J service returned HTTP ${response.status}.`); })
-          .catch((error: unknown) => { if (!closed) callbacks.report(`Local BD-J title routing failed: ${error instanceof Error ? error.message : String(error)}`, true); });
+          .catch((error: unknown) => { if (!closed) callbacks.report(`Local BD-J title routing failed: ${errorText(error)}`, true); });
         return;
       }
       post(() => fetch("/api/bdj/title", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, started, bdjoId, origin }) }), "Local BD-J title routing failed");
@@ -165,11 +167,5 @@ export function installBdjPointerInput(root: HTMLElement, runtime: BdjRuntimeHan
   return () => root.removeEventListener("pointerdown", activate);
 }
 
-function applicationJarPath(basePath: string): string | null {
-  const normalized = basePath.replaceAll("\\", "/").replace(/^\.\//, "");
-  if (!normalized || normalized.startsWith("/") || normalized.split("/").some((segment) => !segment || segment === "." || segment === "..")) return null;
-  const jarPath = /\.jar$/i.test(normalized) ? normalized : `${normalized}.jar`;
-  return `BDMV/JAR/${jarPath}`;
-}
 function record(value: unknown, label: string): Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${label} must be an object.`); return value as Record<string, unknown>; }
 function arrayOf<T>(value: unknown, label: string): T[] { if (!Array.isArray(value)) throw new Error(`${label} must be an array.`); return value as T[]; }

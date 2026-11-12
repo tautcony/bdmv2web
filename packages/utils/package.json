@@ -1,0 +1,20 @@
+{
+  "name": "@bdmv2web/utils",
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./node-path": { "types": "./dist/node-path.d.ts", "import": "./dist/node-path.js" },
+    "./node-fs": { "types": "./dist/node-fs.d.ts", "import": "./dist/node-fs.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": { "@types/node": "24.10.0" }
+}

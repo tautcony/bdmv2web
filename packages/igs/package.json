@@ -13,7 +13,8 @@
   "dependencies": {
     "@bdmv2web/bdmv-io": "workspace:*",
     "@bdmv2web/bdmv-parser": "workspace:*",
-    "@bdmv2web/core": "workspace:*"
+    "@bdmv2web/core": "workspace:*",
+    "@bdmv2web/utils": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { extractIgsFromChunks } from "../../src/extract.js";
+import { extractIgsFromChunks } from "../../src/scene/extract.js";
 import { chunks } from "../helpers/fixtures.js";
 import { decodePng } from "../helpers/decode-png.js";
 

@@ -1,5 +1,5 @@
 import type { MenuLoopBudgetEstimate } from "./budget.js";
-import type { ColorWarning, ColorFilterChain, HdrMode, OutputColor, SourceColor, VideoCodec, VideoColorPlan } from "./color.js";
+import type { ColorWarning, ColorFilterChain, HdrMode, OutputColor, SourceColor, VideoCodec, VideoColorPlan } from "./color/color.js";
 
 export interface MediaProcessResult { stdout: string; stderr: string; }
 export interface MediaProcessProgress { outTimeSeconds: number; state: "continue" | "end"; }

@@ -110,6 +110,8 @@ jobs:
         package:
           - filter: "@bdmv2web/core"
             artifact: coverage-core
+          - filter: "@bdmv2web/utils"
+            artifact: coverage-utils
           - filter: "@bdmv2web/test-runner"
             artifact: coverage-test-runner
           - filter: "@bdmv2web/test-fixtures"
@@ -188,7 +190,7 @@ jobs:
           path: coverage/package-reports
           merge-multiple: true
       - name: Build workspace coverage summary
-        run: node scripts/coverage-report.mjs coverage/package-reports coverage/workspace-report --expected-packages 11
+        run: node scripts/coverage-report.mjs coverage/package-reports coverage/workspace-report --expected-packages 12
       - name: Upload workspace coverage report
         if: always()
         uses: actions/upload-artifact@v6

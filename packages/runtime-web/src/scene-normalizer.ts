@@ -1,4 +1,5 @@
-import type { MenuButton, MenuPage, MenuScene } from "./index.js";
+import { isRecord } from "@bdmv2web/utils";
+import type { MenuButton, MenuPage, MenuScene } from "./menu/menu-runtime.js";
 import type { SerializedMenuState, SerializedScene } from "./igs-adapter.js";
 
 export function validateEmbeddedDiscIR(value: unknown): void {
@@ -6,8 +7,6 @@ export function validateEmbeddedDiscIR(value: unknown): void {
   if (value.schemaVersion !== "1.0") throw new Error(`Unsupported DiscIR schema version '${typeof value.schemaVersion === "string" ? value.schemaVersion : "missing"}'. Expected 1.0.`);
   for (const key of ["entries", "programs", "menus", "playlists", "mediaAssets", "diagnostics"]) if (!Array.isArray(value[key])) throw new Error(`Embedded DiscIR is invalid: '${key}' must be an array.`);
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 
 export function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageElement>): MenuScene {
   if (!source || !Number.isSafeInteger(source.width) || source.width <= 0 || !Number.isSafeInteger(source.height) || source.height <= 0 || !Array.isArray(source.pages) || source.pages.length === 0) throw new Error("Invalid menu scene dimensions or pages.");
