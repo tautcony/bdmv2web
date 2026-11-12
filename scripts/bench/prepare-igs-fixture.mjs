@@ -27,8 +27,8 @@ async function main() {
   const pid = typeof pidValue === "string" ? Number(pidValue) : pidValue;
   const expected = definition.expected?.details ?? definition.expected;
   const [{ extractIgsFromChunks }, { parseIgsMnu }] = await Promise.all([
-    import(pathToFileURL(resolve(root, "packages/igs/dist/extract.js")).href),
-    import(pathToFileURL(resolve(root, "packages/igs/dist/mnu.js")).href),
+    import(pathToFileURL(resolve(root, "packages/igs/dist/scene/extract.js")).href),
+    import(pathToFileURL(resolve(root, "packages/igs/dist/rendering/mnu.js")).href),
   ]);
   const source = new Uint8Array(await readFile(packetsPath));
   async function* chunks() {

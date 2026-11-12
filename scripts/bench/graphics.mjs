@@ -21,7 +21,7 @@ export async function prepareIgsInput(root, options) {
       source: { path: options.source?.remotePath ?? options.file, origin: "primary", offset: "0" },
     }], { captureStreams: true });
   } else {
-    const { parseIgsMnu } = await moduleAt(root, "packages/igs/dist/mnu.js");
+    const { parseIgsMnu } = await moduleAt(root, "packages/igs/dist/rendering/mnu.js");
     extraction = parseIgsMnu(new Uint8Array(await readFile(file)), { clipId: options.clipId, pid: options.pid });
   }
   if (extraction.scenes.length !== 1) throw new Error(`IGS fixture ${options.fixtureId ?? options.clipId} produced ${extraction.scenes.length} scenes`);

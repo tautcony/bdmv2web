@@ -20,7 +20,7 @@ async function loadPlaywright() {
 
 export async function buildSyntheticPackage(root, output) {
   const builderPath = resolve(root, "packages/package-builder/dist/index.js");
-  const graphicsPath = resolve(root, "packages/igs/dist/png.js");
+  const graphicsPath = resolve(root, "packages/igs/dist/rendering/png.js");
   const [{ buildMenuPackage }, { encodeRgbaPng }] = await Promise.all([
     import(pathToFileURL(builderPath).href), import(pathToFileURL(graphicsPath).href),
   ]);

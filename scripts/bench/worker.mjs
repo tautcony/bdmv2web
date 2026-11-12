@@ -49,8 +49,8 @@ function usefulOutput(description, context) {
 }
 async function parseMnu(root, options) {
   const [igsExtract, igsMnu] = await Promise.all([
-    dist(root, "igsExtract", "packages/igs/dist/extract.js"),
-    dist(root, "igsMnu", "packages/igs/dist/mnu.js"),
+    dist(root, "igsExtract", "packages/igs/dist/scene/extract.js"),
+    dist(root, "igsMnu", "packages/igs/dist/rendering/mnu.js"),
   ]);
   const file = resolveInput(root, options.file);
   const source = new Uint8Array(await readFile(file));
@@ -95,7 +95,7 @@ export async function prepareCase(caseDef, root) {
   }
   const o = caseDef.options ?? {};
   if (caseDef.category === "bdmv") {
-    const parserSteps = await dist(root, "parserSteps", "packages/bdmv-parser/dist/parser.js");
+    const parserSteps = await dist(root, "parserSteps", "packages/bdmv-parser/dist/parsing/parser.js");
     const path = resolveInput(root, o.file), { bytes, fullLength } = await readBounded(path, o.maxReadBytes ?? Number.MAX_SAFE_INTEGER);
     const kindFns = { index: "parseIndex", movieObject: "parseMobj", playlist: "parseMpls", clipInfo: "parseClpi", sound: "parseSound" };
     const fn = parserSteps[kindFns[o.kind]];
@@ -117,7 +117,7 @@ export async function prepareCase(caseDef, root) {
     return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), sourceBytes: bytes.length, fullLength }, fixture: caseDef.fixture };
   }
   if (caseDef.category === "graph") {
-    const [parser, parserSteps] = await Promise.all([dist(root, "parser", "packages/bdmv-parser/dist/index.js"), dist(root, "parserSteps", "packages/bdmv-parser/dist/parser.js")]);
+    const [parser, parserSteps] = await Promise.all([dist(root, "parser", "packages/bdmv-parser/dist/index.js"), dist(root, "parserSteps", "packages/bdmv-parser/dist/parsing/parser.js")]);
     const graphTree = o.files?.length ? await (await import("./fixture-input.mjs")).materializeBdmvFiles(caseDef.fixtureRoot, o.files) : null;
     const bdmvDir = graphTree?.directory ?? resolveInput(root, o.bdmvDir), parsed = await parser.parseBdmv(bdmvDir), paths = await walkFiles(bdmvDir);
     const files = await Promise.all(paths.map(async (path) => ({ rel: `BDMV/${relative(bdmvDir, path).replaceAll("\\", "/")}`, abs: path, size: (await stat(path)).size })));
@@ -134,11 +134,11 @@ export async function prepareCase(caseDef, root) {
       return describe(assets, { assets: assets.assets.length, pngBytes, pixels, errors: assets.diagnostics.filter((d) => d.severity === "error").length }, { value: pixels, unit: "rendered pixels" });
     };
     if (o.operation === "parse") return { run: parse, validate: (v) => { const d = describeMnu(v); expected(d.details, o.expected, caseDef.caseId); if (d.details.status !== "complete") throw new Error("MNU parse status is incomplete"); usefulOutput(d, caseDef.caseId); }, describe: describeMnu, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), sourceBytes: source.length, mnuBytes: streamBytes.length }, fixture: caseDef.fixture };
-    const igsPng = await dist(root, "igsPng", "packages/igs/dist/png.js");
+    const igsPng = await dist(root, "igsPng", "packages/igs/dist/rendering/png.js");
     return { run: () => igsPng.renderIgsAssets(scene.scenes), validate: (v) => { const d = describeValue(v); expected(d.details, o.expectedRender, caseDef.caseId); if (d.details.errors) throw new Error("IGS rendering returned errors"); usefulOutput(d, caseDef.caseId); if (JSON.stringify(describeMnu(scene)) !== before) throw new Error(`${caseDef.caseId}: rendering modified pre-parsed scene state`); }, describe: describeValue, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), mnuBytes: streamBytes.length, prepared: true }, fixture: caseDef.fixture };
   }
   if (caseDef.category === "pgs") {
-    const [pgs, pgsRender] = await Promise.all([dist(root, "pgs", "packages/media-export/dist/pgs.js"), dist(root, "pgsRender", "packages/media-export/dist/pgs-render.js")]);
+    const [pgs, pgsRender] = await Promise.all([dist(root, "pgs", "packages/media-export/dist/pgs/pgs.js"), dist(root, "pgsRender", "packages/media-export/dist/pgs/pgs-render.js")]);
     const bytes = o.source === "synthetic" ? syntheticPgs(o) : new Uint8Array(await readFile(resolveInput(root, o.file)));
     const parsed = pgs.parsePgsSup(bytes);
     if (!parsed.length) throw new Error("PGS contains zero display sets");

@@ -177,7 +177,7 @@ async function runCli(root, caseDef, outputDir, sequence) {
 export async function prepareScenarioCase(caseDef, root) {
   const { category, options, fixture } = caseDef;
   if (category === "scale" && caseDef.scope === "rle-decode") {
-    const { decodeRle } = await readModule(root, "packages/igs/dist/igs.js");
+    const { decodeRle } = await readModule(root, "packages/igs/dist/scene/igs.js");
     const input = rleFixture(options.scale);
     return { input: { bytes: input.bytes.byteLength, width: input.width, height: input.height }, fixture, scope: caseDef.scope,
       run: () => decodeRle(input.bytes, input.width, input.height),
@@ -185,7 +185,7 @@ export async function prepareScenarioCase(caseDef, root) {
       describe: (value) => ({ summary: `Decoded ${value.byteLength} indexed pixels`, details: { bytes: value.byteLength, width: input.width, height: input.height }, units: { value: value.byteLength, unit: "pixels" } }) };
   }
   if (category === "scale" && caseDef.scope === "png-encode-with-crc") {
-    const { encodeRgbaPng } = await readModule(root, "packages/igs/dist/png.js");
+    const { encodeRgbaPng } = await readModule(root, "packages/igs/dist/rendering/png.js");
     const width = options.width; const height = options.height;
     const rgba = new Uint8Array(width * height * 4);
     for (let i = 0; i < rgba.length; i += 4) { rgba[i] = i & 0xff; rgba[i + 1] = (i >>> 2) & 0xff; rgba[i + 2] = 96; rgba[i + 3] = 255; }
@@ -196,7 +196,7 @@ export async function prepareScenarioCase(caseDef, root) {
   }
   if (category === "scale" && caseDef.scope === "graph-build") {
     const { parseBdmv } = await readModule(root, "packages/bdmv-parser/dist/index.js");
-    const { buildGraph } = await readModule(root, "packages/bdmv-parser/dist/parser.js");
+    const { buildGraph } = await readModule(root, "packages/bdmv-parser/dist/parsing/parser.js");
     const { materializeBdmvFiles } = await import("./fixture-input.mjs");
     const materialized = await materializeBdmvFiles(caseDef.fixtureRoot ?? root, options.files);
     const parsed = await parseBdmv(materialized.directory);
@@ -209,7 +209,7 @@ export async function prepareScenarioCase(caseDef, root) {
       afterMeasurement: materialized.cleanup, cleanup: materialized.cleanup };
   }
   if (category === "scale" && caseDef.scope === "pes-transport-and-igs-extract") {
-    const { extractIgsFromChunks } = await readModule(root, "packages/igs/dist/extract.js");
+    const { extractIgsFromChunks } = await readModule(root, "packages/igs/dist/scene/extract.js");
     const bytes = new Uint8Array(await readFile(fileFor(root, options.file)));
     const repeated = new Uint8Array(bytes.length * options.scale);
     for (let i = 0; i < options.scale; i++) repeated.set(bytes, i * bytes.length);
