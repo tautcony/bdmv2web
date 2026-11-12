@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { statSync } from "node:fs";
-import { isAbsolute, relative, sep } from "node:path";
+import { isAbsolute, posix, relative, sep } from "node:path";
 
 /**
  * A benchmark case may only measure inputs that every clone has. A path that is
@@ -14,9 +14,12 @@ export function fixturePathsOf(definition, root) {
   const found = new Set();
   const visit = (value) => {
     if (typeof value === "string") {
-      const path = isAbsolute(value) ? relative(root, value) : value;
+      const relativePath = isAbsolute(value)
+        ? posix.isAbsolute(value) && posix.isAbsolute(root) ? posix.relative(root, value) : relative(root, value)
+        : value;
+      const path = relativePath.replaceAll("\\", "/");
       // Virtual paths such as `BDMV/index.bdmv` describe a disc layout, not a file on disk.
-      if (isAbsolute(value) && path.startsWith("..")) return;
+      if (isAbsolute(value) && (path === ".." || path.startsWith(`..${sep}`) || path.startsWith("../") || path.startsWith("..\\"))) return;
       if (!path.startsWith("test-data/")) return;
       found.add(path.replace(/\/+$/, ""));
       return;

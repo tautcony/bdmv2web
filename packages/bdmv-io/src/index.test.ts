@@ -19,6 +19,9 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 
 const roots: string[] = [];
 async function temp(name: string) { const path = await mkdtemp(join(tmpdir(), name)); roots.push(path); return path; }
+async function createDirectoryLink(target: string, path: string): Promise<void> {
+  await symlink(target, path, process.platform === "win32" ? "junction" : "dir");
+}
 afterEach(async () => { await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true }))); });
 
 describe("bounded stream I/O and path isolation", () => {
@@ -53,14 +56,14 @@ describe("bounded stream I/O and path isolation", () => {
   it("accepts Unicode and spaces but rejects dot-dot and symlink escapes", async () => {
     const root = await temp("bdmv input "); const external = await temp("bdmv outside ");
     await writeFile(join(root, "正常 #1.bin"), "ok"); await writeFile(join(external, "secret.bin"), "no");
-    await symlink(join(external, "secret.bin"), join(root, "escape.bin"));
     expect(await resolveInputFile(root, "正常 #1.bin")).toBe(join(await realpath(root), "正常 #1.bin"));
     const table = await buildInputFileTable(root, ["正常 #1.bin"]);
     expect(resolveFileReference(table, "正常 #1.bin")).toBe(join(await realpath(root), "正常 #1.bin"));
     expect(() => resolveFileReference(table, "unlisted.bin")).toThrow(/FILE_NOT_REGISTERED/);
     await expect(buildInputFileTable(root, ["../secret.bin"])).rejects.toThrow(/PATH_ESCAPE/);
     await expect(resolveInputFile(root, "../outside/secret.bin")).rejects.toThrow(/PATH_ESCAPE/);
-    await expect(resolveInputFile(root, "escape.bin")).rejects.toThrow(/PATH_ESCAPE/);
+    await createDirectoryLink(external, join(root, "escape"));
+    await expect(resolveInputFile(root, "escape/secret.bin")).rejects.toThrow(/PATH_ESCAPE/);
   });
 
   it("validates normalized and unique input table paths", async () => {
@@ -97,7 +100,8 @@ describe("bounded stream I/O and path isolation", () => {
     expect(discovered.root).toBe(await realpath(root));
     expect([...discovered.table.files.keys()]).toEqual(["index.bdmv", "PLAYLIST/00001.mpls", "PLAYLIST/00002.mpls"]);
 
-    await symlink(join(root, "index.bdmv"), join(root, "linked-index.bdmv"));
+    const outside = join(parent, "outside"); await mkdir(outside);
+    await createDirectoryLink(outside, join(root, "linked-directory"));
     await expect(discoverBdmvInput(parent)).rejects.toThrow(/SYMLINK_REJECTED/);
   });
 

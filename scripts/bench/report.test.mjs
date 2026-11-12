@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { buildTrend, html, loadRuns, markdown } from "./report.mjs";
 
@@ -103,7 +104,7 @@ test("report CLI reads run directories and writes portable HTML and Markdown out
     const record = run("a", "2026-01-01").run;
     record.environment.revision = "123456789";
     await writeFile(join(runDir, "run.json"), JSON.stringify(record));
-    const script = new URL("./report.mjs", import.meta.url).pathname;
+    const script = fileURLToPath(new URL("./report.mjs", import.meta.url));
     const htmlPath = join(reportDir, "trend.html"), markdownPath = join(reportDir, "nested", "trend.md");
     const htmlResult = spawnSync(process.execPath, [script, join(root, "runs"), "--format", "html", "--out", htmlPath], { encoding: "utf8" });
     const mdResult = spawnSync(process.execPath, [script, join(root, "runs"), "--format", "markdown", "--out", markdownPath], { encoding: "utf8" });

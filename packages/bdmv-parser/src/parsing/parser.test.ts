@@ -8,6 +8,9 @@ import { buildM1ClipInfoProgramAndCpi, buildM1ClipInfoWithHevcVideo, buildM1Clip
 import { discoverBdmvRoot, parseBdmv, parseBdmvWithInputTable, traverseGraph, type GraphEdge, type GraphNode } from "../index.js";
 
 async function temp(): Promise<string> { return mkdtemp(join(tmpdir(), "bdmv m1 中文 ")); }
+async function createDirectoryLink(target: string, path: string): Promise<void> {
+  await symlink(target, path, process.platform === "win32" ? "junction" : "dir");
+}
 async function skeleton(parent: string, index = buildM1Index()): Promise<string> {
   const root = join(parent, "BDMV");
   await mkdir(join(root, "PLAYLIST"), { recursive: true }); await mkdir(join(root, "CLIPINF"), { recursive: true }); await mkdir(join(root, "STREAM"), { recursive: true });
@@ -471,8 +474,21 @@ describe("M1 BDMV discovery and structure", () => {
   });
 
   it("rejects symlinks anywhere in the scanned BDMV tree and a symlink root", async () => {
-    const parent = await temp(); const root = await skeleton(parent); const outside = join(parent, "outside"); await mkdir(outside); await symlink(outside, join(root, "STREAM", "escape"));
-    try { await expect(parseBdmv(root)).rejects.toThrow("SYMLINK_REJECTED"); await rm(join(root, "STREAM", "escape")); const linkRoot = join(parent, "LinkedBDMV"); await symlink(root, linkRoot); await expect(discoverBdmvRoot(linkRoot)).rejects.toThrow("SYMLINK_REJECTED"); await rm(linkRoot); const candidateParent = join(parent, "candidate parent"); await mkdir(candidateParent); await symlink(root, join(candidateParent, "BDMV")); await expect(discoverBdmvRoot(candidateParent)).rejects.toThrow("SYMLINK_REJECTED"); }
+    const parent = await temp(); const root = await skeleton(parent); const outside = join(parent, "outside"); await mkdir(outside);
+    try {
+      const escape = join(root, "STREAM", "escape");
+      await createDirectoryLink(outside, escape);
+      await expect(parseBdmv(root)).rejects.toThrow("SYMLINK_REJECTED");
+      await rm(escape);
+      const linkRoot = join(parent, "LinkedBDMV");
+      await createDirectoryLink(root, linkRoot);
+      await expect(discoverBdmvRoot(linkRoot)).rejects.toThrow("SYMLINK_REJECTED");
+      await rm(linkRoot);
+      const candidateParent = join(parent, "candidate parent"); await mkdir(candidateParent);
+      const candidate = join(candidateParent, "BDMV");
+      await createDirectoryLink(root, candidate);
+      await expect(discoverBdmvRoot(candidateParent)).rejects.toThrow("SYMLINK_REJECTED");
+    }
     finally { await rm(parent, { recursive: true, force: true }); }
   });
 

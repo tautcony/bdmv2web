@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { bootstrap, compareRuns, markdown } from "./compare.mjs";
 
@@ -90,13 +91,13 @@ test("fail-on-regression gates confirmed results and keeps uncertain observation
     const baseline = makeRun("base", [1, 1.01, 1.02]);
     const candidate = makeRun("candidate", [1.4, 1.41, 1.42]);
     await writeFile(baselinePath, JSON.stringify(baseline)); await writeFile(candidatePath, JSON.stringify(candidate));
-    const script = new URL("./compare.mjs", import.meta.url);
-    const confirmed = spawnSync(process.execPath, [script.pathname, baselinePath, candidatePath, "--fail-on-regression", "--out", comparisonPath], { encoding: "utf8" });
+    const script = fileURLToPath(new URL("./compare.mjs", import.meta.url));
+    const confirmed = spawnSync(process.execPath, [script, baselinePath, candidatePath, "--fail-on-regression", "--out", comparisonPath], { encoding: "utf8" });
     assert.equal(confirmed.status, 1);
     assert.equal(JSON.parse(await readFile(comparisonPath, "utf8")).rows[0].verdict, "confirmed-regression");
     const uncertainPath = join(directory, "uncertain.json"), uncertainComparison = join(directory, "uncertain-comparison.json");
     await writeFile(uncertainPath, JSON.stringify(makeRun("uncertain", [1.4, 1.41])));
-    const uncertain = spawnSync(process.execPath, [script.pathname, baselinePath, uncertainPath, "--fail-on-regression", "--out", uncertainComparison], { encoding: "utf8" });
+    const uncertain = spawnSync(process.execPath, [script, baselinePath, uncertainPath, "--fail-on-regression", "--out", uncertainComparison], { encoding: "utf8" });
     assert.equal(uncertain.status, 0);
     assert.equal(JSON.parse(await readFile(uncertainComparison, "utf8")).rows[0].verdict, "regression-warning");
   } finally { await rm(directory, { recursive: true, force: true }); }

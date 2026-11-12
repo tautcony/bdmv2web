@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Option } from "commander";
 import { createProgram, exitWithError, parseOptions } from "./cli.mjs";
@@ -120,7 +120,7 @@ function buildTrend(runs) {
 }
 function profileLinks(profiles, baseDir) {
   if (!profiles.length) return "—";
-  return profiles.map((profile) => `[${profile.path}](<${relative(baseDir, resolve(profile.runDirectory, profile.path))}>)`).join(", ");
+  return profiles.map((profile) => `[${profile.path}](<${relative(baseDir, resolve(profile.runDirectory, profile.path)).split(sep).join("/")}>)`).join(", ");
 }
 function sourceLabel(series) {
   if (!series.source) return series.sample ?? "";
@@ -171,12 +171,12 @@ function plotRow(series, seriesIndex) {
   return `<g><text x="12" y="${top + 16}">${label}</text><text x="8" y="${plotTop + 4}" text-anchor="end">${high.toPrecision(3)}</text><text x="8" y="${plotBottom + 4}" text-anchor="end">${low.toPrecision(3)}</text><line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="#e1e5e8"/><line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="#83909c"/><polyline points="${coordinates}" fill="none" stroke="hsl(${Math.abs(hash(series.caseId + series.environmentSeries)) % 360} 65% 42%)" stroke-width="2"/>${marks}</g>`;
 }
 function runRow(series, run, baseDir) {
-  const profiles = run.profiles.map((profile) => { const href = relative(baseDir, resolve(profile.runDirectory, profile.path)); return `<a href="${escapeXml(href)}">${escapeXml(profile.path)}</a>`; }).join(", ");
+  const profiles = run.profiles.map((profile) => { const href = relative(baseDir, resolve(profile.runDirectory, profile.path)).split(sep).join("/"); return `<a href="${escapeXml(href)}">${escapeXml(profile.path)}</a>`; }).join(", ");
   return `<tr><td><strong>${escapeXml(series.name || series.caseId)}</strong><br><small>${escapeXml(series.caseId)}</small></td><td>${escapeXml(series.fixture?.id ?? "")}<br><small>${escapeXml(series.sample ?? "")}</small></td><td>${escapeXml(sourceLabel(series))}</td><td>${escapeXml(series.scope ?? "")}</td><td>${escapeXml(run.outputStatuses.join(", ") || "measured")}</td><td>${escapeXml(series.environmentSeries)}<br><small>${escapeXml(cpuLabel(series.environment))}</small></td><td>${escapeXml(series.environment?.node ?? "")}/${escapeXml(series.environment?.v8 ?? "")}</td><td>${escapeXml(JSON.stringify(series.environment?.nodeOptions ?? series.environment?.execArgv ?? []))}</td><td>${escapeXml(String(series.environment?.buildMode ?? "unknown"))} (${escapeXml(String(series.environment?.profileBuildMode ?? "unknown"))})</td><td>${escapeXml(run.runId)}</td><td>${run.forkCount}</td><td>${run.callsPerSample}</td><td>${formatCell(run.forkMedianMs, 5)}</td><td>${formatCell(run.minForkMedianMs, 5)}–${formatCell(run.maxForkMedianMs, 5)}</td><td>${formatCell(run.p95Ms, 5)}</td><td>${formatCell(run.p99Ms, 5)}</td><td>${formatCell(run.opsPerSecond, 4)}</td><td>${formatCell(run.worstCvPercent, 3)}</td><td>${formatCell(run.outlierPercent, 3)}</td><td>${formatDrift(run.driftPercent)}${unstableMark(run)}</td><td>${profiles || "—"}</td></tr>`;
 }
 function captureRow(capture, baseDir) {
   return capture.artifacts.map((artifact) => {
-    const href = relative(baseDir, resolve(artifact.runDirectory, artifact.path));
+    const href = relative(baseDir, resolve(artifact.runDirectory, artifact.path)).split(sep).join("/");
     return `<tr><td>${escapeXml(capture.caseId)}</td><td>${escapeXml(capture.mode)}</td><td>${escapeXml(capture.fixture?.id ?? "")}</td><td>${escapeXml(capture.environment?.buildMode ?? "unknown")} (${escapeXml(String(capture.environment?.profileBuildMode ?? "unknown"))})</td><td>${escapeXml(cpuLabel(capture.environment))}</td><td>${escapeXml(capture.runId)}</td><td><a href="${escapeXml(href)}">${escapeXml(artifact.path)}</a></td></tr>`;
   }).join("");
 }
