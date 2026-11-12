@@ -7,7 +7,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
 import { expect, it } from "vitest";
 
-const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../../dist/index.js");
+const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../../src/index.ts");
 
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -126,7 +126,7 @@ it.skipIf(process.platform === "win32")("routes the startup BD-J playlist to pac
       background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
     })) }));
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
@@ -160,7 +160,7 @@ it.skipIf(process.platform === "win32")("publishes a contextual warning and miss
     const packageData = await fixture(parent, application, fakeJava, { externalTargets: playlist100 });
     await rm(join(packageData.root, "BDMV", "STREAM", "00100.m2ts"), { force: true });
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
@@ -199,7 +199,7 @@ it.skipIf(process.platform === "win32")("stops prepared BD-J media after a playl
       background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
     }] }));
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
@@ -230,7 +230,7 @@ it.skipIf(process.platform === "win32")("uses the external adapter only after a 
       bdjoDescriptors: [{ path: "BDJO/00000.bdjo", terminalInfo: { titleSearchMask: false, menuCallMask: false }, accessiblePlaylists: { accessToAll: true, playlistIds: ["00100"] } }],
     });
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
@@ -257,7 +257,7 @@ it.skipIf(process.platform === "win32")("serves BD-J resources and forwards obse
   try {
     const packageData = await fixture(parent, application, fakeJava);
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const events = await fetch(`http://127.0.0.1:${port}/api/bdj/events`);
     const reader = events.body!.getReader();
@@ -290,7 +290,7 @@ it.skipIf(process.platform === "win32")("replays a user-selected feature player 
     const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
     const packageData = await fixture(parent, application, fakeJava, { vmPrograms: [], vmEntries: [{ id: "feature", kind: "title", target: { objectType: "HDMV", playbackType: 1, target: 1, source } }], externalTargets: playlist100, bdjoDescriptors: [{ path: "BDJO/00000.bdjo", terminalInfo: { titleSearchMask: false, menuCallMask: false }, accessiblePlaylists: { accessToAll: true, playlistIds: ["00100"] } }] });
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const firstReader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
@@ -333,7 +333,7 @@ it.skipIf(process.platform === "win32")("routes mixed BD-J and HDMV title events
     session.session.bdjoDescriptors[0]!.terminalInfo.menuCallMask = false;
     await writeFile(join(packageData.root, "runtime/bdj/session.json"), JSON.stringify(session));
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const events = await fetch(`http://127.0.0.1:${port}/api/bdj/events`);
     const reader = events.body!.getReader();
@@ -381,7 +381,7 @@ it.skipIf(process.platform === "win32")("runs HDMV First Play before the indexed
     };
     const packageData = await fixture(parent, application, fakeJava, runtimeSession);
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const events = await fetch(`http://127.0.0.1:${port}/api/bdj/events`);
     const reader = events.body!.getReader();
@@ -426,7 +426,7 @@ it.skipIf(process.platform === "win32")("authored Java title selection bypasses 
     };
     const packageData = await fixture(parent, application, fakeJava, runtimeSession);
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -453,7 +453,7 @@ it.skipIf(process.platform === "win32")("refuses package symlinks that resolve o
     await symlink(join(outsideDir, "secret.txt"), join(packageData.root, "leak.txt"));
     await symlink(outsideDir, join(packageData.root, "escape"));
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port)], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port)], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     for (const path of ["leak.txt", "escape/secret.txt"]) {
       const leak = await fetch(`http://127.0.0.1:${port}/${path}`);
@@ -472,7 +472,7 @@ it.skipIf(process.platform === "win32")("reports a Java spawn failure and keeps 
   try {
     const packageData = await fixture(parent, application, "#!/usr/bin/env node\n");
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", join(parent, "missing-java")], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", join(parent, "missing-java")], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     const first = await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" });
@@ -503,7 +503,7 @@ it.skipIf(process.platform === "win32")("starts a fresh Java session after the h
   try {
     const packageData = await fixture(parent, application, fakeJava);
     const port = await freePort();
-    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
     const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);

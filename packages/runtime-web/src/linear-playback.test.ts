@@ -149,3 +149,74 @@ describe("linear playback generation cancellation", () => {
     expect(vm.trace.some((entry) => entry.event?.responseTo === "link" && entry.event.type === "MEDIA_SEEKED")).toBe(false);
   });
 });
+
+describe("linear playback responses", () => {
+  it("confirms playback only after the media play promise resolves", async () => {
+    const vm = makeVm();
+    const media = new FakeMedia();
+    let finish!: () => void;
+    media.play.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const bridge = new LinearPlaybackBridge(vm, media, [asset()], { report: vi.fn() });
+    const action = nextPlaylistAction(vm);
+    const pending = bridge.dispatch(action);
+    await vi.waitFor(() => expect(media.play).toHaveBeenCalled());
+    expect(vm.snapshot().playback.status).toBe("requested");
+    finish();
+    await pending;
+    expect(vm.snapshot().playback.status).toBe("playing");
+    expect(vm.trace.some((entry) => entry.event?.type === "MEDIA_STARTED" && entry.event.responseTo === action.id)).toBe(true);
+  });
+
+  it("reports a rejected media play to the waiting VM", async () => {
+    const vm = makeVm();
+    const media = new FakeMedia();
+    media.play.mockRejectedValueOnce(new Error("play blocked"));
+    const report = vi.fn();
+    const bridge = new LinearPlaybackBridge(vm, media, [asset()], { report });
+    const action = nextPlaylistAction(vm);
+    await bridge.dispatch(action);
+    expect(vm.snapshot()).toMatchObject({ waiting: null, playback: { status: "error" }, diagnostic: { code: "HDMV_MEDIA_ERROR" } });
+    expect(vm.trace.some((entry) => entry.event?.type === "MEDIA_ERROR" && entry.event.responseTo === action.id)).toBe(true);
+    expect(report).toHaveBeenCalledWith(expect.stringContaining("play blocked"));
+  });
+
+  it("reports an unavailable playlist when its selected audio variant is missing", async () => {
+    const vm = makeVm();
+    const media = new FakeMedia();
+    const report = vi.fn();
+    const bridge = new LinearPlaybackBridge(vm, media, [asset()], { report });
+    const action = nextPlaylistAction(vm);
+    await bridge.dispatch({ id: "stream", generation: action.generation, type: "SET_STREAM", payload: { primaryAudioStream: 2 } });
+    await bridge.dispatch(action);
+    expect(vm.snapshot()).toMatchObject({ waiting: null, playback: { status: "unavailable" } });
+    expect(vm.trace.some((entry) => entry.event?.type === "MEDIA_UNAVAILABLE" && entry.event.responseTo === action.id)).toBe(true);
+    expect(report).toHaveBeenCalledWith(expect.stringContaining("audio stream 2"));
+    expect(media.play).not.toHaveBeenCalled();
+  });
+
+  it("reports an unmapped PlayItem without starting another playlist", async () => {
+    const vm = makeVm();
+    const media = new FakeMedia();
+    const report = vi.fn();
+    const bridge = new LinearPlaybackBridge(vm, media, [asset()], { report });
+    const action = nextPlaylistAction(vm);
+    await bridge.dispatch(action);
+    await bridge.dispatch({ id: "link", generation: action.generation, type: "LINK_PLAY_ITEM", payload: { playItem: 7 } });
+    expect(report).toHaveBeenCalledWith(expect.stringContaining("LINK_PLAY_ITEM operand 7"));
+    expect(media.play).toHaveBeenCalledTimes(1);
+    expect(vm.snapshot().playback.status).toBe("playing");
+  });
+
+  it("ends the active playlist when the media element reports an error", async () => {
+    const vm = makeVm();
+    const media = new FakeMedia();
+    const report = vi.fn();
+    const bridge = new LinearPlaybackBridge(vm, media, [asset()], { report });
+    const action = nextPlaylistAction(vm);
+    await bridge.dispatch(action);
+    media.emit("error");
+    expect(vm.snapshot()).toMatchObject({ waiting: null, playback: { status: "error" } });
+    expect(report).toHaveBeenCalledWith(expect.stringContaining("Media element reported a playback error"));
+    expect(media.listeners.get("ended")?.size).toBe(0);
+  });
+});

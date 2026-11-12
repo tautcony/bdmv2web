@@ -1,12 +1,9 @@
-import { spawnSync } from "node:child_process";
+import { runCommand } from "../helpers/run-cli.js";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildM1Index, buildM1MovieObject } from "@bdmv2web/test-fixtures";
-
-const cliRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function buildEmptyBdjo(): Uint8Array {
   const output = new Uint8Array(90);
@@ -49,7 +46,7 @@ describe("inspect structural records", () => {
       await writeFile(join(discRoot, "META", "DL", "bdmt_eng.xml"),
         "<meta><title><name>Example &amp; Title</name></title><tableOfContents><titleName titleNumber=\"1\">Opening</titleName></tableOfContents></meta>");
 
-      const result = spawnSync(process.execPath, [resolve(cliRoot, "dist/index.js"), "inspect", discRoot, "--format", "json"]);
+      const result = await runCommand(["inspect", discRoot, "--format", "json"]);
       expect(result.status, result.stderr.toString()).toBe(0);
       expect(result.stderr.toString()).toBe("");
       const parsed = JSON.parse(result.stdout.toString());

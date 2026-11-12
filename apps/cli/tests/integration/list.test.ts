@@ -1,19 +1,18 @@
-import { spawnSync } from "node:child_process";
+import { runCommand } from "../helpers/run-cli.js";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const cliRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const cli = resolve(cliRoot, "dist/index.js");
 const fixture = resolve(cliRoot, "../../test-data/fixtures/synthetic-all-features/BDMV");
 
-function runList(args: string[]): ReturnType<typeof spawnSync> {
-  return spawnSync(process.execPath, [cli, "list", fixture, ...args], { encoding: "utf8" });
+function runList(args: string[]) {
+  return runCommand(["list", fixture, ...args]);
 }
 
-describe("list command", () => {
-  it("reports M2TS sizes and stream payloads in the table view", () => {
-    const result = runList([]);
+describe("list command", async () => {
+  it("reports M2TS sizes and stream payloads in the table view", async () => {
+    const result = await runList([]);
     expect(result.status, String(result.stderr)).toBe(0);
     expect(String(result.stderr)).toBe("");
     expect(String(result.stdout)).toContain("M2TS 00001 · 6.0 KB");
@@ -21,8 +20,8 @@ describe("list command", () => {
     expect(String(result.stdout)).toContain("SUP PID 0x1200 · eng · Stream 1 · payload 180 B · Playlist 00003 / PlayItem 0");
   });
 
-  it("reports structural IGS streams, image elements, and SUP tracks", () => {
-    const result = runList(["--format", "json"]);
+  it("reports structural IGS streams, image elements, and SUP tracks", async () => {
+    const result = await runList(["--format", "json"]);
     expect(result.status, String(result.stderr)).toBe(0);
     expect(String(result.stderr)).toBe("");
 
@@ -49,8 +48,8 @@ describe("list command", () => {
     ]);
   });
 
-  it.each([["--decode", "png"], ["--png-level", "6"]])("rejects %s on list", (option, value) => {
-    const result = runList([option, value]);
+  it.each([["--decode", "png"], ["--png-level", "6"]])("rejects %s on list", async (option, value) => {
+    const result = await runList([option, value]);
     expect(result.status).toBe(1);
     expect(String(result.stderr)).toContain(`CLI_UNKNOWN_OPTION: unknown option '${option}'`);
   });

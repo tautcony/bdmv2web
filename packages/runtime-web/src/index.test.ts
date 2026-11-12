@@ -822,6 +822,30 @@ describe("menu primitives", () => {
     controller.restoreCheckpoint(checkpoint); expect(controller.visualState(controller.button!)?.image).toBe(imageA);
     controller.advanceWhileRunning(48); expect(controller.visualState(controller.button!)?.image).toBe(imageB);
   });
+  it("restores selection, disabled buttons and a pending page effect from one checkpoint", () => {
+    const scheduler = new EventScheduler();
+    const controller = new MenuController(scene(), { handleEvent: vi.fn() }, {}, scheduler);
+    controller.start();
+    controller.handle("right");
+    controller.setButtonEnabled(1, false);
+    let completions = 0;
+    controller.schedulePageEffect(10, () => { completions++; });
+    controller.advanceWhileRunning(4);
+    const checkpoint = controller.saveCheckpoint();
+
+    controller.setButtonEnabled(1, true);
+    controller.setPage(1);
+    controller.advanceWhileRunning(20);
+    controller.restoreCheckpoint(checkpoint);
+    expect(controller.page.id).toBe(0);
+    expect(controller.selectedButtonId).toBe(2);
+    controller.handle("right");
+    expect(controller.selectedButtonId).toBe(2);
+    controller.advanceWhileRunning(5);
+    expect(completions).toBe(0);
+    controller.advanceWhileRunning(1);
+    expect(completions).toBe(1);
+  });
   it("runs page out then in effects by duration and blocks input until the sequence ends", () => {
     const testScene = scene(); const render = vi.fn(); const executeButtonProgram = vi.fn();
     const imageA = {} as CanvasImageSource; const imageB = {} as CanvasImageSource;
