@@ -12,11 +12,11 @@ const target: Extract<ExternalPlayTarget, { status: "available" }> = {
 };
 
 it("records a dispatched process as requested with unobserved playback", async () => {
-  const result = await launchExternalPlayer({ status: "available", command: process.execPath, args: ["-e", "process.exit(0)"], adapter: "mpv", target });
+  const result = await launchExternalPlayer({ status: "available", command: process.execPath, args: ["-e", "process.exit(0)"], adapter: "system", target });
   expect(result).toMatchObject({ status: "requested", playbackState: "unobserved", target });
 });
 
 it("reports an executable launch failure with the target source", async () => {
-  const result = await launchExternalPlayer({ status: "available", command: "/bdmv2web-test/missing-player", args: [], adapter: "mpv", target });
+  const result = await launchExternalPlayer({ status: "available", command: "/bdmv2web-test/missing-player", args: [], adapter: "system", target });
   expect(result).toMatchObject({ status: "error", code: "EXTERNAL_PLAYER_LAUNCH_FAILED", source: target.item.source });
 });

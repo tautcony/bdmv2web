@@ -22,31 +22,10 @@ describe("native player launch", () => {
     expect(plan).toMatchObject({ status: "available", command, args });
   });
 
-  it("passes the initial position and every bounded PlayItem to mpv", () => {
-    const plan = buildExternalPlayerLaunch(target, { bdmvRoot: "/disc", platform: "linux", adapter: "mpv", executable: "/bin/custom mpv" });
-    expect(plan).toMatchObject({ status: "available", command: "/bin/custom mpv", target });
-    if (plan.status !== "available") throw new Error(plan.message);
-    expect(plan.args).toEqual(["--no-terminal", "--", "edl://%23%/disc/STREAM/00001.m2ts,1.5,2.5;%23%/disc/STREAM/00002.m2ts,2,4"]);
-  });
-
-  it("uses UTF-8 byte lengths for EDL filenames and native Windows paths", () => {
-    const plan = buildExternalPlayerLaunch({ ...target, remainingItems: [] }, { bdmvRoot: "C:\\碟片;菜单", platform: "win32", adapter: "mpv" });
-    expect(plan.status).toBe("available");
-    if (plan.status !== "available") throw new Error(plan.message);
-    const filename = "C:/碟片;菜单/STREAM/00001.m2ts";
-    expect(plan.args[2]).toBe(`edl://%${Buffer.byteLength(filename)}%${filename},1.5,2.5`);
-  });
-
   it("reports the system opener capability for a bounded playlist", () => {
     expect(buildExternalPlayerLaunch(target, { bdmvRoot: "/disc", adapter: "system" })).toMatchObject({
       status: "unavailable", code: "EXTERNAL_PLAYER_CAPABILITY_UNAVAILABLE", source: item.source,
     });
-  });
-
-  it("reports a missing later clip with its source", () => {
-    const later = { ...target.remainingItems[0]!, present: false, source: { ...item.source, offset: "72" } };
-    expect(buildExternalPlayerLaunch({ ...target, remainingItems: [later] }, { bdmvRoot: "/disc", adapter: "mpv" }))
-      .toMatchObject({ status: "unavailable", code: "EXTERNAL_STREAM_MISSING", source: later.source });
   });
 
 });

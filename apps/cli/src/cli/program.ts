@@ -113,7 +113,7 @@ export function buildProgram(version?: string): Command {
     .option("--port <port>", "loopback HTTP port (default: 4173)", nonEmpty);
   serveCommand.option("--java <executable>", "Java executable used for BD-J packages", nonEmpty);
   serveCommand.option("--disc-id <32hex>", "BD-J disc identifier for packages without source certificate metadata", nonEmpty);
-  serveCommand.option("--player <adapter>", "feature player adapter: system or mpv", oneOf("player", ["system", "mpv"]));
+  serveCommand.option("--player <adapter>", "feature player adapter: system", oneOf("player", ["system"]));
   serveCommand.option("--player-executable <path>", "executable for the selected player adapter", nonEmpty);
   withStrict(serveCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("serve", input, options));
 

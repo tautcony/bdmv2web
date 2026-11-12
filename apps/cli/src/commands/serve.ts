@@ -342,7 +342,7 @@ export async function serve(): Promise<void> {
                     if (userFeatureTitleSelected || pendingUserSelection) {
                       userFeatureTitleSelected = false; pendingUserSelection = false;
                       const executable = optionValue("--player-executable");
-                      const plan = buildExternalPlayerLaunch(target, { bdmvRoot, adapter: (optionValue("--player") ?? "system") as "system" | "mpv", ...(executable ? { executable } : {}) });
+                      const plan = buildExternalPlayerLaunch(target, { bdmvRoot, adapter: (optionValue("--player") ?? "system") as "system", ...(executable ? { executable } : {}) });
                       const handoff = await launchExternalPlayer(plan);
                       if (javaProcess !== child) return;
                       const event = { playerId, playlist, ...handoff };
