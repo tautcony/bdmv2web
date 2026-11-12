@@ -98,7 +98,7 @@ jobs:
         run: bash scripts/ci/40-typecheck.sh
 
   test:
-    name: test ${{ matrix.package }}
+    name: test ${{ matrix.package.filter }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -108,17 +108,28 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - "@bdmv2web/core"
-          - "@bdmv2web/test-runner"
-          - "@bdmv2web/test-fixtures"
-          - "@bdmv2web/bdmv-io"
-          - "@bdmv2web/bdmv-parser"
-          - "@bdmv2web/hdmv"
-          - "@bdmv2web/igs"
-          - "@bdmv2web/media-export"
-          - "@bdmv2web/runtime-web"
-          - "@bdmv2web/package-builder"
-          - "bdmv2web"
+          - filter: "@bdmv2web/core"
+            artifact: coverage-core
+          - filter: "@bdmv2web/test-runner"
+            artifact: coverage-test-runner
+          - filter: "@bdmv2web/test-fixtures"
+            artifact: coverage-test-fixtures
+          - filter: "@bdmv2web/bdmv-io"
+            artifact: coverage-bdmv-io
+          - filter: "@bdmv2web/bdmv-parser"
+            artifact: coverage-bdmv-parser
+          - filter: "@bdmv2web/hdmv"
+            artifact: coverage-hdmv
+          - filter: "@bdmv2web/igs"
+            artifact: coverage-igs
+          - filter: "@bdmv2web/media-export"
+            artifact: coverage-media-export
+          - filter: "@bdmv2web/runtime-web"
+            artifact: coverage-runtime-web
+          - filter: "@bdmv2web/package-builder"
+            artifact: coverage-package-builder
+          - filter: bdmv2web
+            artifact: coverage-cli
     steps:
       - uses: actions/checkout@v7
       - name: Install Node.js
@@ -135,25 +146,25 @@ jobs:
       # The media-export suites invoke a real ffmpeg/ffprobe when the test
       # does not inject a runner, so the binary must be on PATH.
       - name: Install JDK for Java runtime tests
-        if: matrix.package == '@bdmv2web/hdmv'
+        if: matrix.package.filter == '@bdmv2web/hdmv'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
       - name: Install FFmpeg for media export tests
-        if: matrix.package == '@bdmv2web/media-export'
+        if: matrix.package.filter == '@bdmv2web/media-export'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install dependencies
         run: bash scripts/ci/10-install.sh
       - name: Generate contracts
         run: bash scripts/ci/20-generate.sh
-      - name: Test ${{ matrix.package }}
-        run: corepack pnpm --filter "${{ matrix.package }}" test --coverage
+      - name: Test ${{ matrix.package.filter }}
+        run: corepack pnpm --filter "${{ matrix.package.filter }}" test --coverage
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: coverage-${{ strategy.job-index }}
+          name: ${{ matrix.package.artifact }}
           path: |
             apps/*/coverage/
             packages/*/coverage/
