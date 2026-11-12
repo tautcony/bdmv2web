@@ -13,7 +13,6 @@ export interface ReleaseSummaryInput {
   coverage: CoverageReport | null;
   referenceEvidence: readonly AuditCheck[];
   decisionFacts: ReleaseDecisionFacts;
-  strict?: boolean;
 }
 
 export interface ReleaseGap {
@@ -29,8 +28,7 @@ export interface ReleaseSummary {
   schemaVersion: "1.0";
   release: {
     status: DeliveryStatus;
-    strict: boolean;
-    exitCode: 0 | 1 | 2;
+    exitCode: 0 | 1;
     reasons: string[];
     /** Evidence that was not collected or not verified; informational only. */
     notVerified: string[];
@@ -77,7 +75,7 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
     requiredEvidenceComplete: referenceEvidenceComplete,
     coverageComplete,
   };
-  const decision: DeliveryDecision = decideDelivery(decisionInput, input.strict ?? false);
+  const decision: DeliveryDecision = decideDelivery(decisionInput);
   const compatibility = {
     schemaVersion: "1.0" as const,
     status: decision.status,
@@ -89,7 +87,7 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   const gaps = checks.filter((check): check is AuditCheck & { result: "fail" | "not-verified" } => check.result !== "pass").map(toGap);
   return {
     schemaVersion: "1.0",
-    release: { status: decision.status, strict: decision.strict, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
+    release: { status: decision.status, exitCode: decision.exitCode, reasons: decision.reasons, notVerified: decision.notVerified, gaps },
     compatibility,
     dependencyAudit,
     coverage,

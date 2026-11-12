@@ -1,5 +1,5 @@
 import { safeAssetLanguage } from "../cli/assets.js";
-import { flagEnabled, inputPath, optionValue, strictDefault } from "../cli/context.js";
+import { flagEnabled, inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { buildExternalTargets } from "../shared/media.js";
@@ -21,7 +21,6 @@ export async function extract(): Promise<void> {
   const includeHdmv = all || selectedType === "hdmv";
   const includeIgs = all || selectedType === "igs";
   const includeSup = all || selectedType === "sup";
-  const strict = strictDefault();
   const { disc, table } = await parseBdmvWithInputTable(input);
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   // Fail on fatal parse diagnostics before scanning STREAM data (P2-INFO-3).
@@ -30,7 +29,7 @@ export async function extract(): Promise<void> {
   const needsIgs = includeIgs || includeSup;
   const igs = needsIgs ? await extractIgsScenes(disc, { renderAssets: false, table }) : { scenes: [], assets: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
   const stageDiagnostics = [...disc.diagnostics, ...(includeIgs || includeSup ? igs.diagnostics : [])];
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics: stageDiagnostics, strict });
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: stageDiagnostics });
   if (outcome.status === "failed") {
     stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics);
     return;

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-让 CLI 的阶段结果、交付状态与进程退出码三者一致：状态判定只反映已验证事实，参数契约不出现"接受但不生效"的项，未实现能力明确报错并退出，严格模式只改变接受策略而不改写支持结论。
+让 CLI 的阶段结果、交付状态与进程退出码三者一致：状态判定只反映已验证事实，参数契约不出现"接受但不生效"的项，未实现能力明确报错并退出，状态不由接受策略改写。
 
 ## Requirements
 
@@ -39,14 +39,14 @@
 - **WHEN** `convert` 的解析或打包阶段出现 `fatal` 诊断
 - **THEN** 不产生可被误认为完成的新包，退出码为 1
 
-### Requirement: strict 只改变接受策略
+### Requirement: 状态只由失败证据决定
 
-系统 SHALL 让 strict 仅把可接受的 partial 变为拒绝，不改变诊断事实、不把 partial 升级为 complete、不把 failed 降级。
+系统 SHALL 让阶段与交付状态只由诊断与审计事实决定：fatal 为 failed 并退出 1，其余可接受的 partial 退出 0 且报告显著标注，不得把 partial 升级为 complete、不得把 failed 降级。
 
-#### Scenario: 非 strict 的 partial
+#### Scenario: 可接受的 partial
 
 - **WHEN** 存在未认可的 error 但无 fatal
-- **THEN** 阶段或交付状态为 partial，非 strict 退出 0 且报告显著标注，strict 退出 2
+- **THEN** 阶段或交付状态为 partial，退出 0 且报告显著标注
 
 #### Scenario: acknowledged 错误
 
@@ -79,7 +79,7 @@
 #### Scenario: 未验证证据不阻断
 
 - **WHEN** 交付包的检查项全部为 `pass` 或 `not-verified`，且无 `fail` 检查、无 fatal、无 blocking error
-- **THEN** 状态为 `complete`，`not-verified` 项记入 `notVerified` 字段，`--strict` 退出码仍为 0
+- **THEN** 状态为 `complete`，`not-verified` 项记入 `notVerified` 字段，退出码为 0
 
 #### Scenario: 失败证据仍然阻断
 

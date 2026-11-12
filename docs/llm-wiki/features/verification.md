@@ -22,7 +22,7 @@ complete← 以上都没有
 关键点：
 
 - **缺证据不降低状态**。未执行的检查、未提供的入口计数、未验证的覆盖率只进 `notVerified`。这类包的 `complete` 表示没有已知失败。
-- **strict 只改变接受策略**。`partial` 在非 strict 下退出 0，strict 下退出 2；`failed` 始终 1；`complete` 始终 0。
+- **状态决定退出码**。`complete` 与可接受的 `partial` 退出 0；`failed` 退出 1。
 - **acknowledged 的 error 仍是 partial**。确认只影响说明文字。
 - **limitations 不参与判定**，只出现在 `reasons` 与报告说明里。
 
@@ -83,7 +83,7 @@ complete← 以上都没有
 ```json
 {
   "schemaVersion": "1.0",
-  "release": { "status": "partial", "strict": false, "exitCode": 0, "reasons": [], "notVerified": [], "gaps": [] },
+  "release": { "status": "partial", "exitCode": 0, "reasons": [], "notVerified": [], "gaps": [] },
   "compatibility": { "status": "...", "checks": [] },
   "dependencyAudit": { "status": "...", "externalReferences": [], "checks": [] },
   "coverage": {},

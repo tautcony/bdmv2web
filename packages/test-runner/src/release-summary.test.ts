@@ -82,10 +82,10 @@ describe("release summary aggregation", () => {
 const failing = (checkId: string): AuditCheck => ({ checkId, result: "fail", message: `${checkId} failed.` });
 const unverified = (checkId: string): AuditCheck => ({ checkId, result: "not-verified", message: `${checkId} was not verified.` });
 
-function summarize(checks: AuditCheck[], strict = false) {
+function summarize(checks: AuditCheck[]) {
   return createReleaseSummary({
     audit: audit(), dependencyAudit: dependencyAudit(checks, "pass"), coverage: completeCoverage,
-    referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts, strict,
+    referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
   });
 }
 
@@ -122,19 +122,13 @@ describe("check result aggregation priority", () => {
     expect(summarize([failing("OFFLINE_ROOT_ESCAPE"), unverified("OFFLINE_EXTERNAL_TARGET")]).release.status).toBe("failed");
   });
 
-  it("keeps strict mode on the same status and exit code for a failure", () => {
-    const strict = summarize([failing("OFFLINE_ROOT_ESCAPE"), unverified("OFFLINE_EXTERNAL_TARGET")], true);
-    expect(strict.release.status).toBe("failed");
-    expect(strict.release.strict).toBe(true);
-    expect(strict.release.exitCode).toBe(1);
-  });
 });
 
 describe("delivery decision truth table", () => {
   const facts = { declaredEntryCount: 1, hdmvEntryCount: 1, hasUnresolvedReachability: false, hasUnsupportedReachableCapability: false, hasMissingRequiredAsset: false };
-  const decide = (overrides: Partial<typeof facts> & { checks?: AuditCheck[]; diagnostics?: Parameters<typeof decideDelivery>[0]["diagnostics"]; requiredEvidenceComplete?: boolean; coverageComplete?: boolean } = {}, strict = false) => {
+  const decide = (overrides: Partial<typeof facts> & { checks?: AuditCheck[]; diagnostics?: Parameters<typeof decideDelivery>[0]["diagnostics"]; requiredEvidenceComplete?: boolean; coverageComplete?: boolean } = {}) => {
     const { checks = [pass("PACKAGE_VALID")], diagnostics, requiredEvidenceComplete = true, coverageComplete = true, ...rest } = overrides;
-    return decideDelivery({ checks, requiredEvidenceComplete, coverageComplete, ...(diagnostics === undefined ? {} : { diagnostics }), ...facts, ...rest }, strict);
+    return decideDelivery({ checks, requiredEvidenceComplete, coverageComplete, ...(diagnostics === undefined ? {} : { diagnostics }), ...facts, ...rest });
   };
 
   it("returns complete with exit 0 when every check passes", () => {
@@ -158,14 +152,13 @@ describe("delivery decision truth table", () => {
     expect(decision.blockingChecks.map((check) => check.checkId)).toEqual(["OFFLINE_ROOT_ESCAPE"]);
   });
 
-  it("keeps a reachable unsupported capability partial in both strict modes", () => {
-    expect(decide({ hasUnsupportedReachableCapability: true }, true)).toMatchObject({ status: "partial", exitCode: 2 });
-    expect(decide({ hasUnsupportedReachableCapability: true }, false)).toMatchObject({ status: "partial", exitCode: 0 });
+  it("keeps a reachable unsupported capability partial", () => {
+    expect(decide({ hasUnsupportedReachableCapability: true })).toMatchObject({ status: "partial", exitCode: 0 });
   });
 
   it("keeps acknowledged errors partial", () => {
     const diagnostics = [{ severity: "error", code: "MEDIA_TARGET_UNAVAILABLE", acknowledged: true, acknowledgement: { by: "reviewer", reason: "accepted" } }];
-    expect(decide({ diagnostics }, true)).toMatchObject({ status: "partial", exitCode: 2 });
+    expect(decide({ diagnostics })).toMatchObject({ status: "partial", exitCode: 0 });
   });
 
   it("fails pure BD-J packages, fatal diagnostics and missing required assets", () => {

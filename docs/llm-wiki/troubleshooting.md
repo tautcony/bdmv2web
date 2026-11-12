@@ -23,7 +23,7 @@ corepack pnpm test
 | `fatal BDMV_REQUIRED_FILE_MISSING` | `index.bdmv` 缺失或不可解析 | 确认输入是完整 BDMV；看 `--format json` 的 `diagnostics[].sourcePath` |
 | `BDMV_UNSUPPORTED_VERSION` | 版本不在 `0100/0200/0240/0300` | 主文件版本不会被旧备份掩盖；确认盘片版本 |
 | `BDMV_ROOT_NOT_FOUND` / `BDMV_ROOT_AMBIGUOUS` | 传了错误的层级或存在大小写变体 | 传 `BDMV` 根或其直接父目录 |
-| `stageStatus: partial`，退出 0 | 有 `error` 无 `fatal` | 看 `diagnostics` 里第一条 `error`；`--strict` 可让它退出 2 |
+| `stageStatus: partial`，退出 0 | 有 `error` 无 `fatal` | 看 `diagnostics` 里第一条 `error` |
 | `extract` 没有产物 | 有 `fatal`，事务未创建 | 先解决 fatal；该命令不在失败时留 staging |
 | `extract --type igs` 没有 PNG | 该命令不生成 PNG | 用 `render --type igs` |
 | `sup/tracks.json` 为空 | 没有可达 PGS 轨道 | `list --type sup` 确认 PID/语言 |

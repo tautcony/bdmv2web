@@ -173,32 +173,29 @@ describe("delivery status and coverage", () => {
     coverageComplete: true,
   };
 
-  it("keeps strict policy separate from status and never upgrades acknowledged errors", () => {
-    expect(decideDelivery({ ...base }, false)).toMatchObject({ status: "complete", exitCode: 0 });
-    expect(decideDelivery({ ...base }, true)).toMatchObject({ status: "complete", exitCode: 0 });
-    expect(decideDelivery({ ...base, hasUnresolvedReachability: true }, false)).toMatchObject({ status: "partial", exitCode: 0 });
-    expect(decideDelivery({ ...base, hasUnresolvedReachability: true }, true)).toMatchObject({ status: "partial", exitCode: 2 });
+  it("derives exit code from failure evidence and never upgrades acknowledged errors", () => {
+    expect(decideDelivery({ ...base })).toMatchObject({ status: "complete", exitCode: 0 });
+    expect(decideDelivery({ ...base, hasUnresolvedReachability: true })).toMatchObject({ status: "partial", exitCode: 0 });
     const acknowledged = acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED", blocksComplete: true }, "reviewer", "accepted for preview");
     expect(acknowledged).toMatchObject({ severity: "error", blocksComplete: true, acknowledged: true });
-    expect(decideDelivery({ ...base, diagnostics: [acknowledged] }, true)).toMatchObject({ status: "partial", exitCode: 2 });
-    expect(decideDelivery({ ...base, declaredEntryCount: 2, hdmvEntryCount: 0 }, false)).toMatchObject({ status: "failed", exitCode: 1 });
-    expect(decideDelivery({ ...base, checks: [{ checkId: "ASSET_MISSING", result: "fail", message: "Required asset is missing" }] }, true)).toMatchObject({ status: "failed", exitCode: 1 });
+    expect(decideDelivery({ ...base, diagnostics: [acknowledged] })).toMatchObject({ status: "partial", exitCode: 0 });
+    expect(decideDelivery({ ...base, declaredEntryCount: 2, hdmvEntryCount: 0 })).toMatchObject({ status: "failed", exitCode: 1 });
+    expect(decideDelivery({ ...base, checks: [{ checkId: "ASSET_MISSING", result: "fail", message: "Required asset is missing" }] })).toMatchObject({ status: "failed", exitCode: 1 });
   });
 
   it.each([
-    ["without gaps", { ...base }, false, "complete", 0],
-    ["strict without gaps", { ...base }, true, "complete", 0],
-    ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, true, "partial", 2],
-    ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, true, "failed", 1],
-    ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, true, "partial", 2],
-    ["missing required media", { ...base, hasMissingRequiredAsset: true }, false, "failed", 1],
-    ["missing required evidence", { ...base, requiredEvidenceComplete: false }, true, "complete", 0],
-  ])("applies delivery policy to %s", (_label, input, strict, status, exitCode) => {
-    expect(decideDelivery(input, strict)).toMatchObject({ status, strict, exitCode });
+    ["without gaps", { ...base }, "complete", 0],
+    ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, "partial", 0],
+    ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, "failed", 1],
+    ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, "partial", 0],
+    ["missing required media", { ...base, hasMissingRequiredAsset: true }, "failed", 1],
+    ["missing required evidence", { ...base, requiredEvidenceComplete: false }, "complete", 0],
+  ])("applies delivery policy to %s", (_label, input, status, exitCode) => {
+    expect(decideDelivery(input)).toMatchObject({ status, exitCode });
   });
 
   it("uses delivery facts to determine status", () => {
-    const decision = decideDelivery({ ...base }, false);
+    const decision = decideDelivery({ ...base });
     expect(decision.status).toBe("complete");
   });
 
@@ -212,8 +209,8 @@ describe("delivery status and coverage", () => {
       hasUnresolvedReachability: false,
       hasUnsupportedReachableCapability: false,
       limitations: ["Media timeline and seek accuracy remain unverified"],
-    }, true);
-    expect(decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
+    });
+    expect(decision).toMatchObject({ status: "complete", exitCode: 0 });
     expect(decision.notVerified).toEqual(expect.arrayContaining(["REFERENCE_COMPARISON", "REQUIRED_EVIDENCE_INCOMPLETE", "COVERAGE_INCOMPLETE"]));
     expect(decision.reasons.join(" ")).toContain("Limitation:");
   });
@@ -232,23 +229,21 @@ describe("delivery status and coverage", () => {
   });
 
   it.each([
-    ["fatal", [{ severity: "fatal", code: "BDMV_REQUIRED_FILE_MISSING" }], false, "failed", 1],
-    ["fatal under strict", [{ severity: "fatal", code: "BDMV_REQUIRED_FILE_MISSING" }], true, "failed", 1],
-    ["error", [{ severity: "error", code: "STREAM_TRUNCATED" }], false, "partial", 0],
-    ["error under strict", [{ severity: "error", code: "STREAM_TRUNCATED" }], true, "partial", 2],
-    ["acknowledged error", [acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED" }, "reviewer", "accepted")], false, "partial", 0],
-    ["no diagnostics", [], false, "complete", 0],
-  ])("decides the stage outcome for %s", (_label, diagnostics, strict, status, exitCode) => {
-    const outcome = decideStageOutcome({ stage: "extract", diagnostics, strict });
-    expect(outcome).toMatchObject({ status, strict, exitCode });
+    ["fatal", [{ severity: "fatal", code: "BDMV_REQUIRED_FILE_MISSING" }], "failed", 1],
+    ["error", [{ severity: "error", code: "STREAM_TRUNCATED" }], "partial", 0],
+    ["acknowledged error", [acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED" }, "reviewer", "accepted")], "partial", 0],
+    ["no diagnostics", [], "complete", 0],
+  ])("decides the stage outcome for %s", (_label, diagnostics, status, exitCode) => {
+    const outcome = decideStageOutcome({ stage: "extract", diagnostics });
+    expect(outcome).toMatchObject({ status, exitCode });
     expect(outcome.blockingDiagnostics).toHaveLength(status === "complete" ? 0 : 1);
   });
 
   it("keeps delivery status and stage status mutually unassignable", () => {
-    const outcome = decideStageOutcome({ stage: "inspect", diagnostics: [], strict: false });
+    const outcome = decideStageOutcome({ stage: "inspect", diagnostics: [] });
     expect(outcome).toMatchObject({ status: "complete", exitCode: 0, blockingDiagnostics: [] });
     // No checks were supplied: that is missing evidence, not a failure (D-2R).
-    const delivery = decideDelivery({ checks: [], diagnostics: [] }, false);
+    const delivery = decideDelivery({ checks: [], diagnostics: [] });
     expect(delivery.status).toBe("complete");
     expect(delivery.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS", "REQUIRED_EVIDENCE_INCOMPLETE"]));
 

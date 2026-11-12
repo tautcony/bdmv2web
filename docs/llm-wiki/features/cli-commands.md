@@ -27,7 +27,6 @@
 | `--format table\|json` | stdout 格式，默认 `table` |
 | `--out FILE` | 写完整 JSON；目标不能已存在 |
 | `--allow-partial` | 即使 `stageStatus: failed` 也退出 0 |
-| `--strict` / `--no-strict` | 只影响 partial 的退出码 |
 
 输出字段：`ParsedDisc` 全量 + `stageStatus`。表格只显示计数（analysisStage、delivery、entries、movieObjects、playlists、playItems、clips、streams、sounds、diagnostics、support prediction）。
 
@@ -40,7 +39,6 @@
 | `--out DIR` | 必填 |
 | `--type hdmv\|igs\|sup` | 与 `--all` 二选一 |
 | `--all` | 三类全导 |
-| `--strict` | partial 退出 2 |
 
 产物：
 
@@ -121,14 +119,19 @@ IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与
 | `--title NAME` | `<BDMV 父目录名>` | 文档标题与 README 标题 |
 | `--player-profile FILE` | 内置默认 | PSR16–20 语言/国家/地区 |
 | `--limits FILE` | `DEFAULT_LIMITS` | VM 指令/队列/调用预算 |
+| `--disc-id HEX` | `CERTIFICATE/id.bdmv` | 32 位十六进制碟片 ID；只写入 BD-J 包的 `bdjLaunch.discId`，HDMV 包不使用 |
 | `--overwrite` | 关 | 允许覆盖已有目录；匹配的旧媒体可复用 |
 | `--resume [dir]` | 关 | 从上次运行留下的目录复用已完成的媒体；省略 `dir` 时取输出目录旁最新的 `.<输出名>.staging-*` |
+| `--codec hevc\|h264` | `hevc`（`copy` 时 `h264`） | 菜单背景视频编码格式；HDMV 与 BD-J 包共用同一默认 |
+| `--crf N` | 24（hevc）/ 18（h264） | 编码质量 0–51 |
+| `--preset NAME` | `veryfast` | `ultrafast` / `veryfast` / `fast` / `medium` |
+| `--hdr tonemap\|preserve` | `tonemap` | HDR 处理方式 |
 | `--video encode\|copy` | `encode` | `copy` 把源 H.264 视频流复制进 MP4 不重编码；复制起点是播放器解码的入口点（EP map 中 `in` 点之前最近的关键帧），`in` 点须落在该入口点 256 tick（5.689 ms）的量化栅格内，其余自动退回编码并给 `MEDIA_REMUX_UNAVAILABLE` 警告。`copy` 时 `--codec` 缺省 `h264` |
 | `--menu-media auto\|all\|none` | `auto` | 导出哪些播放列表的媒体，HDMV 与 BD-J 共用同一个取值。`auto` 只导菜单级媒体；`all` 导出导航可达的全部 PlayItem；`none` 不导媒体 |
-| `--png-level 0-9` | 见 `render` | 包内 PNG（元素图与 PGS 字幕画布）的 deflate 档位 |
-| `--strict` | 关 | partial 退出 2 |
 | `--progress` | 自动 | stderr 非终端时也逐行输出进度 |
 | `--no-progress` | 关 | 关闭进度输出 |
+
+编码参数的生效范围：`--codec`/`--crf`/`--preset`/`--hdr` 只在重编码背景视频时起作用。`--video copy` 成功时背景流按比特复制，这四个值只写入 media plan 参与复用匹配；`--menu-media none` 或盘上无可导媒体时不发生编码，它们仍记录进 `mediaEncoding` 但不参与导出。
 
 `--menu-media` 的三种取值在两种导航模式下含义相同，判定证据不同：HDMV 由 IGS 场景确定哪些 PlayItem 属于菜单，`auto` 即「场景匹配到的菜单媒体」；BD-J 没有场景证据，BDJO 又常以 `accessToAll` 授权整碟，`auto` 改以播放列表总时长不超过 900 秒作为菜单级判据，超出的写 `M5_MENU_MEDIA_SCOPE_SKIPPED`（列出编号与分钟数，提示可用 `--menu-media all`）。`all` 在两种模式下都导出全部可达 PlayItem（HDMV 取 VM 可达集合，BD-J 取 BDJO 授权集合），会包含正片，开销接近整碟。`none` 只打包结构与场景，运行时把 `PLAY_PLAYLIST` 报为不可用，并写 `M5_MENU_MEDIA_DISABLED`。
 
@@ -163,7 +166,6 @@ reports/                       # validate 之后出现
 | 选项 | 作用 |
 | --- | --- |
 | `--format json` | 只支持 json；其它值在读写前失败 |
-| `--strict` | partial 退出 2 |
 
 行为：
 
@@ -178,15 +180,13 @@ reports/                       # validate 之后出现
 bdmv2web compare <input> [--format json]
 ```
 
-未实现：stderr 输出 `{ code: "E_NOT_IMPLEMENTED", command, strict, message }`，退出 1。`test-runner` 里已有 `compareVmTraces` / `compareIgRgbaFrames` / `createReferenceCompareReport`，可直接用于实现该命令。
+未实现：stderr 输出 `{ code: "E_NOT_IMPLEMENTED", command, message }`，退出 1。`test-runner` 里已有 `compareVmTraces` / `compareIgRgbaFrames` / `createReferenceCompareReport`，可直接用于实现该命令。
 
 ## 通用退出码
 
 | 结果 | 退出码 |
 | --- | --- |
-| `complete` | 0 |
-| `partial`，非 strict | 0 |
-| `partial`，`--strict` | 2 |
+| `complete`、`partial` | 0 |
 | `failed`、参数错误、`fatal` | 1 |
 
 `inspect --allow-partial` 始终 0；`compare` 始终 1。
@@ -220,7 +220,7 @@ corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/assets --type igs
 corepack pnpm run cli:dev render "/path/BDMV" --out /tmp/png --type sup
 corepack pnpm run cli:dev render --sup /tmp/subtitle.sup --out /tmp/png
 corepack pnpm run cli:dev build "/path/BDMV" --out /tmp/menu --player-profile profile.json
-corepack pnpm run cli:dev validate /tmp/menu --strict
+corepack pnpm run cli:dev validate /tmp/menu
 ```
 
 `export --decode` 只接受 `png`；`--m2ts`/`--pid` 取值来自 `list` 的表格或 JSON。

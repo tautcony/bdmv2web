@@ -35,18 +35,18 @@ bdmv2web validate ./BDMV-menu
 
 | Command | Purpose |
 | --- | --- |
-| `inspect <BDMV>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`, `--strict`) |
+| `inspect <BDMV>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`) |
 | `extract <BDMV> --out DIR` | Export HDMV, IGS, and SUP analysis data (`--type hdmv\|igs\|sup`, `--all`) |
 | `list <BDMV>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
 | `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets (`--type`, `--m2ts`, `--pid`, `--decode png`) |
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
-| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--strict`) |
-| `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`, `--strict`) |
+| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`) |
+| `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`) |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session (`--port N`, `--java EXECUTABLE`, `--player system`) |
 
 `convert` is an alias of `build`. `bdmv2web --help` lists every command and `bdmv2web <command> --help` lists the options of one command.
 
-The exit code is 0 on success and 1 on failure; with `--strict`, a partially completed result exits with 2. Option lists, output files, error codes, and the `--player-profile` schema are documented in the [development guide](https://github.com/tautcony/bdmv2web/blob/master/docs/guides/development.md).
+The exit code is 0 on success and 1 on failure. Option lists, output files, error codes, and the `--player-profile` schema are documented in the [development guide](https://github.com/tautcony/bdmv2web/blob/master/docs/guides/development.md).
 
 ## Contributing
 

@@ -1,6 +1,6 @@
 import { errorText } from "@bdmv2web/utils";
 import { pgsTrackEntrySuffixes, pidOption, pngLevelOption, safeAssetStem, selectedPid, supDisplaySetPath, uniquePgsReferences, validateAssetType } from "../cli/assets.js";
-import { inputPath, optionValue, strictDefault } from "../cli/context.js";
+import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { extractReachablePgsTracks, reachablePgsReferences } from "../shared/pgs.js";
@@ -108,7 +108,7 @@ export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; p
       current = next; next = step();
     }
   }
-  await commitRenderedAssets(out, files, pending, partial, strictDefault());
+  await commitRenderedAssets(out, files, pending, partial);
 }
 
 export async function renderPngFromBdmv(input: string, out: string, rawType: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
@@ -119,7 +119,7 @@ export async function renderPngFromBdmv(input: string, out: string, rawType: str
   if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const igs = await extractIgsScenes(disc, { renderAssets: type !== "sup", captureStreams: false, pngLevel, table });
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics] });
   if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
   const files: AssetRecord[] = [];
   const pending: Array<{ path: string; bytes: Uint8Array }> = [];
@@ -157,10 +157,10 @@ export async function renderPngFromBdmv(input: string, out: string, rawType: str
       }
     } finally { await rm(temp, { recursive: true, force: true }); }
   }
-  await commitRenderedAssets(roots.output, files, pending, outcome.status === "partial", strictDefault(), outcome.exitCode);
+  await commitRenderedAssets(roots.output, files, pending, outcome.status === "partial");
 }
 
-export async function commitRenderedAssets(out: string, files: AssetRecord[], pending: Array<{ path: string; bytes: Uint8Array }>, partial: boolean, strict: boolean, exitCode?: number): Promise<void> {
+export async function commitRenderedAssets(out: string, files: AssetRecord[], pending: Array<{ path: string; bytes: Uint8Array }>, partial: boolean): Promise<void> {
   const transaction = await beginOutputTransaction(resolve(out));
   try {
     for (const file of pending) {
@@ -172,7 +172,5 @@ export async function commitRenderedAssets(out: string, files: AssetRecord[], pe
     await transaction.commit();
     const status = partial ? "partial" : "complete";
     process.stdout.write(`${JSON.stringify({ stageStatus: status, output: resolve(out), assetCount: files.length })}\n`);
-    const code = exitCode ?? (partial && strict ? 2 : 0);
-    if (code !== 0) process.exitCode = code;
   } catch (error) { await transaction.abort(); throw error; }
 }

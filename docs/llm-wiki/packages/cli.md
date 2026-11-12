@@ -10,7 +10,7 @@ src/
   progress.ts           stderr 进度渲染
   cli/
     program.ts          commander 命令与选项声明、dispatch、COMMANDER_CODES
-    context.ts          当前命令的解析结果：optionValue/flagEnabled/optionState/strictDefault/inputPath
+    context.ts          当前命令的解析结果：optionValue/flagEnabled/optionState/inputPath
     errors.ts           fail、outputFormat
     output.ts           printTable、writeJsonFile
     profile.ts          loadPlayerProfile、loadLimits
@@ -36,11 +36,11 @@ src/
 解析、帮助与分派交给 `commander`；本包只声明契约，不手写扫描。每个命令一个 `program.command(<动词>)`，位置参数统一为可选 `[input]`：
 
 ```ts
-inspect   [input]  --out --format --allow-partial --strict/--no-strict
-extract   [input]  --out --type --all --format --strict/--no-strict
-build     [input]  --out --title --player-profile --limits --overwrite --resume --video --png-level --progress/--no-progress --strict/--no-strict
-validate  [input]  --format --strict/--no-strict
-compare   [input]  --format --strict/--no-strict
+inspect   [input]  --out --format --allow-partial
+extract   [input]  --out --type --all --format
+build     [input]  --out --title --player-profile --limits --disc-id --overwrite --resume --crf --preset --codec --hdr --video --menu-media --progress/--no-progress
+validate  [input]  --format
+compare   [input]  --actual --reference --reference-tool --reference-version --out --format
 list      [input]  --type --m2ts --pid --out --format
 export    [input]  --out --type --m2ts --pid --decode --png-level --format
 render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level --format
@@ -57,8 +57,6 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 | 带值选项后没有值（`inspect X --out`） | `CLI_MISSING_VALUE` |
 | `--out=` 空值 | `CLI_INVALID_ARGUMENT` |
 | 未知命令 | `CLI_USAGE`；`--help` 打印帮助后退出 0 |
-
-`--strict`/`--no-strict` 只改变“可接受的 partial 是否被拒绝”，不改变诊断事实。默认非 strict。
 
 ## 命令实现要点
 
@@ -128,9 +126,7 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 
 | 场景 | 码 |
 | --- | --- |
-| 成功，`complete` | 0 |
-| `partial` 且非 strict | 0 |
-| `partial` 且 `--strict` | 2 |
+| 成功，`complete` / `partial` | 0 |
 | `failed` / 参数错误 / `fatal` | 1 |
 
 `inspect --allow-partial` 例外：始终 0。`compare` 始终 1。

@@ -108,24 +108,24 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 
 | 命令 | 用途 | 常用选项 |
 | --- | --- | --- |
-| `inspect <BDMV>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE`、`--strict` |
+| `inspect <BDMV>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE` |
 | `extract <BDMV> --out DIR` | 导出 HDMV、IGS、SUP 分析数据 | `--type hdmv\|igs\|sup` 或 `--all` |
 | `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
 | `export <BDMV> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--png-level 0-9` |
 | `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG`、`--png-level 0-9` |
-| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--menu-media auto\|all\|none`、`--png-level 0-9`、`--overwrite`、`--resume [DIR]`、`--strict` |
-| `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json`、`--strict` |
+| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--menu-media auto\|all\|none`、`--overwrite`、`--resume [DIR]` |
+| `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json` |
 | `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
 `build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。运行中断时已完成的工作保留在 `.<输出名>.staging-*`，`--resume` 从该目录继续；输出目标在构建完成时写入。影片 PGS 字幕通过 `export --type sup` 导出。
 
-`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --decode png` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.mnu` 或 `.sup` 输入。`--png-level 0-9` 设置写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。
+`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --decode png` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.mnu` 或 `.sup` 输入。`--png-level 0-9` 设置 `export --decode png` 与 `render` 写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。
 
 `assets-manifest.json` 的 `sup-png` 条目记录 `displaySet`、`startSeconds`、`endSeconds`、`width` 和 `height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条显示集的起点，单位秒（3 位小数），以轨道起点为 0；无法确定时写 `null`。全透明显示集从 PNG 输出和清单中省略。
 
 `convert` 等同于 `build`。`bdmv2web --help` 列出全部命令，`bdmv2web <命令> --help` 列出该命令的选项。
 
-命令成功时退出码为 0，失败时为 1；使用 `--strict` 时，部分完成的结果退出码为 2。完整选项、输出文件和错误码见[开发指南](docs/guides/development.md)。
+命令成功时退出码为 0，失败时为 1。完整选项、输出文件和错误码见[开发指南](docs/guides/development.md)。
 
 ### 播放器档案
 

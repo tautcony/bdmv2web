@@ -161,8 +161,8 @@
     {
       "path": "features/verification.md",
       "kind": "feature",
-      "summary": "阶段/交付两类判定、严格模式、build 与 validate 的关系、报告字段与证据类型。",
-      "covers": ["delivery decision", "stage outcome", "strict", "reports", "evidence", "notVerified"],
+      "summary": "阶段/交付两类判定、build 与 validate 的关系、报告字段与证据类型。",
+      "covers": ["delivery decision", "stage outcome", "reports", "evidence", "notVerified"],
       "keywords": ["交付判定", "validate", "manifest", "auditScope", "gaps"],
       "keyFiles": ["packages/test-runner/src/decisions.ts", "packages/test-runner/src/package-audit.ts", "packages/test-runner/src/release-summary.ts", "apps/cli/src/cli/program.ts"]
     },

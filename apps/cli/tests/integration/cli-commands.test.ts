@@ -49,14 +49,13 @@ describe("M4 build output", () => {
     return disc;
   }
 
-  it("writes a local menu package with a complete delivery status in default and strict modes", async () => {
+  it("writes a local menu package with a complete delivery status", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv menu convert "));
     const disc = await makeMenuDisc(parent);
-    const regular = join(parent, "regular output"); const strict = join(parent, "strict output");
+    const regular = join(parent, "regular output");
     try {
       for (const [output, args, exitCode] of [
         [regular, [], 0],
-        [strict, ["--strict"], 0],
       ] as const) {
         const result = await runCommand(["build", disc, "--out", output, "--title", "Offline Menu", ...args]);
         expect(result.status).toBe(exitCode);
@@ -212,13 +211,13 @@ describe("M4 build output", () => {
   it("defaults to a sibling BDMV-menu output with a configurable BDMV path", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv default menu ")); const disc = await makeMenuDisc(parent);
     try {
-      const result = await runCommand(["build", disc, "--no-strict"]);
+      const result = await runCommand(["build", disc]);
       expect(result.status).toBe(0);
       const output = join(parent, "BDMV-menu");
       expect(JSON.parse(result.stdout.toString()).output).toBe(await realpath(output));
       expect(await readFile(join(output, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
       const parentOutput = join(parent, "parent-input-menu");
-      const parentResult = await runCommand(["build", parent, "--out", parentOutput, "--no-strict"]);
+      const parentResult = await runCommand(["build", parent, "--out", parentOutput]);
       expect(parentResult.status).toBe(0);
       expect(await readFile(join(parentOutput, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
       const verify = () => runCommand(["validate", output, "--format", "json"]);
@@ -230,7 +229,7 @@ describe("M4 build output", () => {
       expect(JSON.parse(changedAudit.stdout.toString()).checks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_CONFIG", result: "not-verified" }));
       const other = join(parent, "other"); await mkdir(other);
       const externalOutput = join(other, "menu");
-      const separate = await runCommand(["build", disc, "--out", externalOutput, "--no-strict"]);
+      const separate = await runCommand(["build", disc, "--out", externalOutput]);
       expect(separate.status).toBe(0);
       expect(await readFile(join(externalOutput, "runtime", "bdmv-config.js"), "utf8")).toContain(`globalThis.__BDMV_BDMV_PATH__=${JSON.stringify(await realpath(disc))}`);
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -496,7 +495,7 @@ describe("IGS extract CLI", () => {
     const rootPath = await makeIgsDisc(parent, clip, { structuralPid: 0x121 });
     const target = join(parent, "out");
     try {
-      const result = await runCommand(["extract", rootPath, "--type", "igs", "--no-strict", "--out", target]);
+      const result = await runCommand(["extract", rootPath, "--type", "igs", "--out", target]);
       expect(result.status).toBe(0);
       const diagnostics = JSON.parse(await readFile(join(target, "igs/diagnostics.json"), "utf8"));
       const sourceMap = JSON.parse(await readFile(join(target, "igs/source-map.json"), "utf8"));
@@ -664,7 +663,7 @@ describe("validate CLI", () => {
       expect(audit.dependencyAudit).toMatchObject({ schemaVersion: "1.0", status: "pass" });
       expect(audit.dependencyAudit.checks.some((check: any) => check.checkId === "OFFLINE_STATIC_AUDIT" && check.result === "pass")).toBe(true);
       // Only not-verified evidence was missing, so the delivery is complete (D-2R).
-      expect(audit.decision).toMatchObject({ status: "complete", strict: false, exitCode: 0 });
+      expect(audit.decision).toMatchObject({ status: "complete", exitCode: 0 });
       expect(audit.releaseSummary.release.gaps.map((gap: any) => gap.checkId)).toEqual(expect.arrayContaining(["REFERENCE_EVIDENCE_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS"]));
       const report = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(report).toEqual(audit.dependencyAudit);
@@ -678,12 +677,6 @@ describe("validate CLI", () => {
       expect(second.status).toBe(0);
       expect(JSON.parse(second.stdout.toString()).checks.some((check: any) => check.checkId === "PACKAGE_UNLISTED_PAYLOAD")).toBe(false);
       expect(JSON.parse(second.stdout.toString()).releaseSummary.release.status).toBe("complete");
-      const strict = await runCommand(["validate", directory, "--strict", "--format", "json"]);
-      expect(strict.status).toBe(0);
-      expect(JSON.parse(strict.stdout.toString()).decision).toMatchObject({ status: "complete", strict: true, exitCode: 0 });
-      const noStrict = await runCommand(["validate", directory, "--no-strict", "--format", "json"]);
-      expect(noStrict.status).toBe(0);
-      expect(JSON.parse(noStrict.stdout.toString()).decision.status).toBe("complete");
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 

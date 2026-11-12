@@ -29,9 +29,6 @@ export function optionState(name: string): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-export function strictDefault(): boolean {
-  return activeOptions.strict === true;
-}
 export function inputPath(): string | undefined {
   return activeInput;
 }

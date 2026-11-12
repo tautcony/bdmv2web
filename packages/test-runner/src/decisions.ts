@@ -26,8 +26,7 @@ export interface DeliveryDecisionInput {
 
 export interface DeliveryDecision {
   status: DeliveryStatus;
-  strict: boolean;
-  exitCode: 0 | 1 | 2;
+  exitCode: 0 | 1;
   reasons: string[];
   /**
    * Evidence that was not collected or not verified. Reported for information
@@ -49,13 +48,11 @@ export interface StageOutcomeInput {
   /** Recorded for the caller; the verdict only depends on the diagnostics. */
   stage: "inspect" | "extract";
   diagnostics?: readonly DeliveryDiagnostic[];
-  strict: boolean;
 }
 
 export interface StageOutcome {
   status: StageStatus;
-  strict: boolean;
-  exitCode: 0 | 1 | 2;
+  exitCode: 0 | 1;
   blockingDiagnostics: DeliveryDiagnostic[];
 }
 
@@ -88,7 +85,7 @@ export function acknowledgeDiagnostic<T extends DeliveryDiagnostic>(diagnostic: 
   return { ...diagnostic, acknowledged: true, acknowledgement: { by, reason } };
 }
 
-export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): DeliveryDecision {
+export function decideDelivery(input: DeliveryDecisionInput): DeliveryDecision {
   const reasons: string[] = [];
   const notVerified: string[] = [];
   const blockingChecks = input.checks.filter((check) => check.result === "fail");
@@ -129,19 +126,17 @@ export function decideDelivery(input: DeliveryDecisionInput, strict: boolean): D
   // Limitations are explanatory only; they are listed but never decide the status.
   if (input.limitations?.length) reasons.push(...input.limitations.map((item) => `Limitation: ${item}`));
   const status: DeliveryStatus = deliveryStatus(hardFailure ? "failed" : partialConditions.some(Boolean) ? "partial" : "complete");
-  const exitCode: 0 | 1 | 2 = status === "failed" ? 1 : status === "partial" && strict ? 2 : 0;
-  return { status, strict, exitCode, reasons: [...new Set(reasons)], notVerified: [...new Set(notVerified)], blockingChecks };
+  const exitCode: 0 | 1 = status === "failed" ? 1 : 0;
+  return { status, exitCode, reasons: [...new Set(reasons)], notVerified: [...new Set(notVerified)], blockingChecks };
 }
 
 /**
  * Decide whether one command stage reached its own goal. `complete` here means
  * "this stage produced what it promised", never "the delivery is complete".
- * `strict` only turns an acceptable partial into a rejection; it never upgrades
- * or downgrades the underlying diagnostic facts.
  */
 export function decideStageOutcome(input: StageOutcomeInput): StageOutcome {
   const facts = classifyDiagnostics(input.diagnostics);
-  if (facts.hasFatal) return { status: stageStatus("failed"), strict: input.strict, exitCode: 1, blockingDiagnostics: facts.blocking };
-  if (facts.hasBlockingError) return { status: stageStatus("partial"), strict: input.strict, exitCode: input.strict ? 2 : 0, blockingDiagnostics: facts.blocking };
-  return { status: stageStatus("complete"), strict: input.strict, exitCode: 0, blockingDiagnostics: [] };
+  if (facts.hasFatal) return { status: stageStatus("failed"), exitCode: 1, blockingDiagnostics: facts.blocking };
+  if (facts.hasBlockingError) return { status: stageStatus("partial"), exitCode: 0, blockingDiagnostics: facts.blocking };
+  return { status: stageStatus("complete"), exitCode: 0, blockingDiagnostics: [] };
 }

@@ -36,14 +36,14 @@
 - **WHEN** 原始BDMV和FFmpeg均不可用但包完整
 - **THEN** `validate` 仍能校验包内 manifest/资源/引用及已有证据，并将外部 M2TS 可用性和系统交接记为未验证，不要求安装转换工具
 
-### Requirement: 完成度与严格模式
+### Requirement: 完成度判定
 
-系统 SHALL 按共享决策表区分complete/partial/failed；`complete` 只表示无已知失败证据。strict只改变接受策略，不能改变支持事实。未执行或无法观察的检查 SHALL 单独进入 `notVerified`，不得改写 `status`。
+系统 SHALL 按共享决策表区分complete/partial/failed；`complete` 只表示无已知失败证据，状态只由失败证据决定。未执行或无法观察的检查 SHALL 单独进入 `notVerified`，不得改写 `status`。
 
 #### Scenario: 混合入口或未支持操作
 
 - **WHEN** 包可启动但含BD-J或可达unsupported/unknown
-- **THEN** 状态partial并保留受影响入口；strict退出2，非strict不因此升级complete
+- **THEN** 状态partial并保留受影响入口；退出0，不因此升级complete
 
 #### Scenario: 纯BD-J或关键损坏
 
@@ -58,7 +58,7 @@
 #### Scenario: 缺参考证据但无已知失败
 
 - **WHEN** 所有已执行检查为pass，另有not-verified，且无阻断诊断
-- **THEN** 状态complete，strict退出0，并逐条列出notVerified；不声称这些检查已通过
+- **THEN** 状态complete，退出0，并逐条列出notVerified；不声称这些检查已通过
 
 #### Scenario: 检查失败与未验证并存
 

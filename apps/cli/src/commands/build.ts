@@ -1,5 +1,4 @@
-import { flagEnabled, inputPath, optionState, optionValue, strictDefault } from "../cli/context.js";
-import { pngLevelOption } from "../cli/assets.js";
+import { flagEnabled, inputPath, optionState, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { loadLimits, loadPlayerProfile } from "../cli/profile.js";
 import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/stages.js";
@@ -215,7 +214,7 @@ export async function build(): Promise<void> {
   if (plannedResume === undefined && resumeDirectory !== undefined) progress.info("resume", resumeDirectory);
 
   progress.start(CONVERT_STEPS.scenes);
-  const extraction = await extractIgsScenes(disc, { pngLevel: pngLevelOption(), table });
+  const extraction = await extractIgsScenes(disc, { table });
   progress.done(CONVERT_STEPS.scenes, `${countOf(extraction.scenes.length, "scene", "scenes")} · ${countOf(extraction.assets.length, "image", "images")} · ${countOf(extraction.streams.length, "stream", "streams")}`);
 
   progress.start(CONVERT_STEPS.playlist);
@@ -290,7 +289,7 @@ export async function build(): Promise<void> {
         hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
         hasMissingRequiredAsset: false,
         limitations: ["BD-J menu background and playlist media depend on the browser playback bridge."],
-      }, strictDefault());
+      });
       const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
       progress.done(CONVERT_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
       const mediaEncoding = menuMediaEncoding();
@@ -303,7 +302,7 @@ export async function build(): Promise<void> {
         bdmvPath,
         ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
         ...(firstPlayHdmv === undefined ? {} : { vmFirstPlayProgramId: firstPlayHdmv }),
-        mediaEncoding: { codec: "h264", ...mediaEncoding },
+        ...(mediaEncoding ? { mediaEncoding } : {}),
         soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
         ...(bdjMenuMediaAssets.length ? { additionalMenuMedia: bdjMenuMediaAssets } : {}),
         ...(reuseDirectory === undefined ? {} : { reuseMediaFromDirectory: reuseDirectory }),
@@ -453,7 +452,7 @@ export async function build(): Promise<void> {
       // `buildMenuPackage` reached this point, so no required asset can be missing.
       hasMissingRequiredAsset: false,
       limitations: menuMedia ? [] : [mediaScope === "none" ? "Menu media export is disabled by --menu-media none." : "Menu loop media is unavailable; the menu background holds its final frame."],
-    }, strictDefault());
+    });
     const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
     const plannedMedia = [
       menuMedia === null ? null : "background",
@@ -463,7 +462,6 @@ export async function build(): Promise<void> {
     const mediaEncoding = menuMediaEncoding();
     const mediaProgress = mediaExportProgress([...(menuMedia === null ? [] : [menuMedia]), ...additionalMenuMedia], (ratio, detail) => progress.progress(ratio, detail));
     const packaged = await buildMenuPackage({
-      pngLevel: pngLevelOption(),
       outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
       ...(mediaEncoding ? { mediaEncoding } : {}),
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },

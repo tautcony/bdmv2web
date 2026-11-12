@@ -56,7 +56,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 输入事实 | 结果 |
 | --- | --- |
 | 任一 `fail` 检查 / `fatal` 诊断 / 无 HDMV 入口 / 缺失必需资产 | `failed`，退出码 1 |
-| 可达性有未解析项 / 可达能力不支持 / 有 `error`（无 fatal）/ 诊断严重性未识别 | `partial`，`--strict` 时退出码 2 |
+| 可达性有未解析项 / 可达能力不支持 / 有 `error`（无 fatal）/ 诊断严重性未识别 | `partial`，退出码 0 |
 | 以上都没有 | `complete`，退出码 0 |
 
 `notVerified` 只记录缺失证据，**不降低状态**：没有检查（`NO_AUDIT_CHECKS`）、没给入口计数（`ENTRY_COUNTS_MISSING`）、能力事实不全（`CAPABILITY_FACTS_INCOMPLETE`）、所需证据不全（`REQUIRED_EVIDENCE_INCOMPLETE`）、覆盖率不全（`COVERAGE_INCOMPLETE`）。
@@ -68,7 +68,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 诊断 | `stageStatus` | 退出码 |
 | --- | --- | --- |
 | 有 `fatal` | `failed` | 1 |
-| 有 `error` 无 `fatal` | `partial` | `--strict` 时 2，否则 0 |
+| 有 `error` 无 `fatal` | `partial` | 0 |
 | 都没有 | `complete` | 0 |
 
 `StageStatus` 与 `DeliveryStatus` 是两个品牌类型，`inspect`/`extract` 只输出 `stageStatus`，不输出 `status`。
@@ -78,7 +78,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 函数 | 产物 |
 | --- | --- |
 | `createDependencyAuditReport(audit)` | `dependency-audit.json`：`OFFLINE_*` 检查与 `externalReferences` |
-| `createReleaseSummary(input)` | `reports/release-summary.json`：`release.{status,strict,exitCode,reasons,notVerified,gaps}` + `compatibility` + `dependencyAudit` + `coverage` + `checks` |
+| `createReleaseSummary(input)` | `reports/release-summary.json`：`release.{status,exitCode,reasons,notVerified,gaps}` + `compatibility` + `dependencyAudit` + `coverage` + `checks` |
 
 `createReleaseSummary` 会忽略各报告的存储状态，用新鲜事实重算：
 

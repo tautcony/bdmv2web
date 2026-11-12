@@ -1,5 +1,5 @@
 import { errorText } from "@bdmv2web/utils";
-import { inputPath, optionValue, strictDefault } from "../cli/context.js";
+import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { readJsonObject, writeGeneratedReport } from "../cli/output.js";
 import { auditOutputPackage, createDependencyAuditReport, createReleaseSummary, summarizeDeliveryCoverage } from "@bdmv2web/test-runner";
@@ -11,7 +11,6 @@ export async function validate(): Promise<void> {
   // Argument contract first: a rejected command must not rewrite the package (P2-P2-1).
   const format = optionValue("--format");
   if (format !== undefined && format !== "json") fail("CLI_INVALID_FORMAT", `validate supports only 'json' for --format, got '${format}'`);
-  const strict = strictDefault();
   const audit = await auditOutputPackage(resolve(input));
   const writable = !audit.checks.some((check) => check.checkId === "PACKAGE_ROOT_MISSING" || check.checkId === "PACKAGE_ROOT_INVALID");
   const manifest = await readJsonObject(resolve(audit.packageRoot, audit.manifestPath), (message) => {
@@ -53,7 +52,6 @@ export async function validate(): Promise<void> {
       ...(typeof manifest.hasUnresolvedReachability === "boolean" ? { hasUnresolvedReachability: manifest.hasUnresolvedReachability } : {}),
       ...(typeof manifest.hasUnsupportedReachableCapability === "boolean" ? { hasUnsupportedReachableCapability: manifest.hasUnsupportedReachableCapability } : {}),
     },
-    strict,
   } as const;
   let releaseSummary = createReleaseSummary(releaseSummaryInput);
   // `validate` never rewrites manifest.status: a disagreement is reported as
@@ -96,7 +94,7 @@ export async function validate(): Promise<void> {
     const unverified = audit.checks.filter((check) => check.result === "not-verified");
     process.stdout.write(`Package audit: ${failed.length ? "failed" : unverified.length ? "not verified" : "passed"}\n`);
     process.stdout.write(`Dependency audit: ${dependencyAudit.status}\n`);
-    process.stdout.write(`Delivery decision: ${decision.status}${decision.strict ? " (strict)" : ""}\n`);
+    process.stdout.write(`Delivery decision: ${decision.status}\n`);
     if (manifestStatus !== undefined && manifestStatus !== decision.status) process.stdout.write(`Manifest status: ${manifestStatus} (not rewritten)\n`);
     for (const check of audit.checks) if (check.result !== "pass") process.stdout.write(`${check.result.toUpperCase()} ${check.checkId}${check.path ? ` ${check.path}` : ""}: ${check.message}\n`);
     for (const gap of releaseSummary.release.gaps) process.stdout.write(`GAP ${gap.result} ${gap.checkId}${gap.path ? ` ${gap.path}` : ""}: ${gap.message} Next: ${gap.action}\n`);

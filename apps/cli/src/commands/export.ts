@@ -1,5 +1,5 @@
 import { assetSelection, assetTypeOption, igsMnuPath, pngLevelOption, pgsTrackEntrySuffixes, selectedClip, selectedPid, supDisplaySetPath, supTrackPath, uniquePgsReferences } from "../cli/assets.js";
-import { inputPath, optionValue, strictDefault } from "../cli/context.js";
+import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { extractReachablePgsTracks, reachablePgsReferences } from "../shared/pgs.js";
@@ -22,7 +22,7 @@ export async function exportAssets(): Promise<void> {
   if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const igs = await extractIgsScenes(disc, { renderAssets: selection.decodePng && type !== "sup", captureStreams: type !== "sup", pngLevel: pngLevelOption(), table });
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics], strict: strictDefault() });
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics] });
   if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
   const transaction = await beginOutputTransaction(roots.output);
   try {

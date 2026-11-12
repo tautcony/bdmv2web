@@ -48,12 +48,6 @@ function crfValue(value: string): number {
   return parsed;
 }
 
-function withStrict(command: Command): Command {
-  return command
-    .option("--strict", "treat error diagnostics as a stage failure")
-    .option("--no-strict", "accept error diagnostics (default)");
-}
-
 /** `version` is optional so tests can build the command tree without package metadata. */
 export function buildProgram(version?: string): Command {
   const program = new Command("bdmv2web")
@@ -68,7 +62,7 @@ export function buildProgram(version?: string): Command {
     .option("--out <file>", "write the JSON report to a file", nonEmpty)
     .option("--format <format>", "table or json", nonEmpty)
     .option("--allow-partial", "exit 0 even when the stage failed");
-  withStrict(inspectCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("inspect", input, options));
+  inspectCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("inspect", input, options));
 
   const extractCommand = program.command("extract")
     .description("Write structural analysis artifacts (hdmv, igs, sup)")
@@ -77,7 +71,7 @@ export function buildProgram(version?: string): Command {
     .option("--type <type>", "hdmv, igs, or sup", nonEmpty)
     .option("--all", "extract every artifact type")
     .option("--format <format>", "table or json", nonEmpty);
-  withStrict(extractCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("extract", input, options));
+  extractCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("extract", input, options));
 
   const buildCommand = program.command("build")
     .alias("convert")
@@ -97,15 +91,14 @@ export function buildProgram(version?: string): Command {
     .option("--video <mode>", "menu video pipeline: encode (default) or copy (remux the source H.264 stream)", oneOf("video", ["encode", "copy"]))
     .option("--menu-media <mode>", "menu media to export: auto (default, menus only), all, or none", oneOf("menu-media", ["auto", "all", "none"]))
     .option("--progress", "print step progress on stderr")
-    .option("--no-progress", "keep stderr silent")
-    .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty);
-  withStrict(buildCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("build", input, options));
+    .option("--no-progress", "keep stderr silent");
+  buildCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("build", input, options));
 
   const validateCommand = program.command("validate")
     .description("Audit a generated menu package")
     .argument("[input]", "package directory")
     .option("--format <format>", "json", nonEmpty);
-  withStrict(validateCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("validate", input, options));
+  validateCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("validate", input, options));
 
   const serveCommand = program.command("serve")
     .description("Serve a generated menu package and run its local BD-J Java session")
@@ -115,7 +108,7 @@ export function buildProgram(version?: string): Command {
   serveCommand.option("--disc-id <32hex>", "BD-J disc identifier for packages without source certificate metadata", nonEmpty);
   serveCommand.option("--player <adapter>", "feature player adapter: system", oneOf("player", ["system"]));
   serveCommand.option("--player-executable <path>", "executable for the selected player adapter", nonEmpty);
-  withStrict(serveCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("serve", input, options));
+  serveCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("serve", input, options));
 
   const compareCommand = program.command("compare")
     .description("Compare an actual VM trace against an independent reference trace")
@@ -126,7 +119,7 @@ export function buildProgram(version?: string): Command {
     .option("--reference-version <version>", "reference tool version", nonEmpty)
     .option("--out <file>", "write the comparison report to this path", nonEmpty)
     .option("--format <format>", "json", nonEmpty);
-  withStrict(compareCommand).action((input: string | undefined, options: ParsedOptions) => dispatch("compare", input, options));
+  compareCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("compare", input, options));
 
   const listCommand = program.command("list")
     .description("List IGS and SUP assets of a disc")

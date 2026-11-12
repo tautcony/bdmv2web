@@ -1,4 +1,4 @@
-import { flagEnabled, inputPath, optionValue, strictDefault } from "../cli/context.js";
+import { flagEnabled, inputPath, optionValue } from "../cli/context.js";
 import { fail, outputFormat } from "../cli/errors.js";
 import { printTable, writeJsonFile } from "../cli/output.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
@@ -12,10 +12,9 @@ export async function inspect(): Promise<void> {
   // Argument contract first: a missing flag value must not be masked by stage output.
   const out = optionValue("--out");
   const format = outputFormat("inspect");
-  const strict = strictDefault();
   const allowPartial = flagEnabled("--allow-partial");
   const disc = await parseBdmv(input);
-  const outcome = decideStageOutcome({ stage: "inspect", diagnostics: disc.diagnostics, strict });
+  const outcome = decideStageOutcome({ stage: "inspect", diagnostics: disc.diagnostics });
   if (outcome.status === "failed" && !allowPartial) {
     stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics);
     return;
