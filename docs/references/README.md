@@ -58,7 +58,7 @@ SAPikachu/igstools 固定为已核验的 `34a133150ca8b52237284da4d47d93911bcd49
 
 ## 本地参考源码摘录
 
-为便于按固定 revision 对照，本地 `.reference-cache/repositories/` 保存上游仓库的完整 checkout，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将缓存排除在版本控制外。来源清单只记录仓库地址、固定 revision 和许可证信息，见 [cache-manifest.json](cache-manifest.json)。下载并检出固定版本：
+为便于按固定 revision 对照，本地 `.reference-cache/repositories/` 保存上游仓库的完整 checkout，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将缓存排除在版本控制外。初始化脚本在 POSIX 平台创建相对目录符号链接，在 Windows 创建目录联接（junction），均提供 `.reference-cache/<id>` 入口。来源清单只记录仓库地址、固定 revision 和许可证信息，见 [cache-manifest.json](cache-manifest.json)。下载并检出固定版本：
 
 ```sh
 python3 scripts/fetch-reference-cache.py

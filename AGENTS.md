@@ -27,7 +27,7 @@ This file records cross-cutting requirements repeated in Codex conversations for
 
 ## Reference cache
 
-`.reference-cache/` is gitignored and populated with the pinned references below. Read them in place. `python3 scripts/fetch-reference-cache.py` refreshes `repositories/` at the revisions in `docs/references/cache-manifest.json`, including submodules; set `https_proxy`, `http_proxy` and `all_proxy` when the network needs a proxy. Each `.reference-cache/<id>` entry is a symlink to `repositories/<id>`, so both path styles resolve to one copy.
+`.reference-cache/` is gitignored and populated with the pinned references below. Read them in place. `python3 scripts/fetch-reference-cache.py` refreshes `repositories/` at the revisions in `docs/references/cache-manifest.json`, including submodules; set `https_proxy`, `http_proxy` and `all_proxy` when the network needs a proxy. Each `.reference-cache/<id>` entry points to `repositories/<id>` through a relative symlink on POSIX or a directory junction on Windows, so both path styles resolve to one copy.
 
 | Path | Role |
 | --- | --- |
