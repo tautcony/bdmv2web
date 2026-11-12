@@ -5,12 +5,17 @@
 ```sh
 corepack pnpm test                      # 各包 vitest run（fail-fast 语义由各包决定）
 corepack pnpm test:all                  # -r --no-bail，收集全部失败
+corepack pnpm test:coverage             # 各包运行测试并生成 workspace 覆盖率总览
 corepack pnpm --filter @bdmv2web/igs test
 corepack pnpm typecheck                 # 先 build，再对含测试的源码做 tsc --noEmit
 bash scripts/ci.sh                      # install → generate:contracts → build → lint/typecheck/test:all 并行 lane
 ```
 
 每个包的 `vitest.config.ts` 用 `include` 锁定测试文件，编译产物 `dist/**/*.test.js` 不会被加载。某包匹配不到测试文件时任务失败。
+
+`corepack pnpm test:coverage` 使用 Vitest V8 provider 输出语句、分支、函数和行覆盖率。HTML 与 JSON 报告写入各包的 `coverage/` 目录。单包命令：`corepack pnpm --filter @bdmv2web/igs test --coverage`。
+
+命令还会汇总所有 package 的报告至根目录 `coverage/index.html` 与 `coverage/coverage-summary.json`。GitHub Actions 保存逐包报告，并上传汇总 artifact `workspace-coverage-report`。
 
 ## 逐包入口
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertByteLimit, assertDisjointRoots, beginOutputTransaction, buildInputFileTable, readFileChunks, resolveFileReference, resolveInputFile } from "./index.js";
+import { assertByteLimit, assertDisjointRoots, beginOutputTransaction, buildInputFileTable, discoverBdmvInput, readFileChunks, readRegisteredFile, resolveFileReference, resolveInputFile } from "./index.js";
 import { selectBdmvChild } from "./bdmv-candidate.js";
 
 const rootRealpathCounter = vi.hoisted(() => ({ root: undefined as string | undefined, canonicalRoot: undefined as string | undefined, count: 0 }));
@@ -35,6 +35,13 @@ describe("bounded stream I/O and path isolation", () => {
     ], "/disc")).toThrow("SYMLINK_REJECTED");
   });
 
+  it("reports a missing BDMV child when no directory candidate exists", () => {
+    expect(() => selectBdmvChild([
+      { name: "BDMV.txt", kind: "other" },
+      { name: "PLAYLIST", kind: "directory" },
+    ], "/disc")).toThrow("BDMV_ROOT_NOT_FOUND");
+  });
+
   it("streams files in bounded chunks and rejects an oversized configured window before opening", async () => {
     const root = await temp("bdmv io "); const file = join(root, "中文 name.bin"); await writeFile(file, new Uint8Array(12));
     const chunks: number[] = []; for await (const chunk of readFileChunks(file, { maxReadWindowBytes: 4 } as never, 4)) chunks.push(chunk.length);
@@ -54,6 +61,44 @@ describe("bounded stream I/O and path isolation", () => {
     await expect(buildInputFileTable(root, ["../secret.bin"])).rejects.toThrow(/PATH_ESCAPE/);
     await expect(resolveInputFile(root, "../outside/secret.bin")).rejects.toThrow(/PATH_ESCAPE/);
     await expect(resolveInputFile(root, "escape.bin")).rejects.toThrow(/PATH_ESCAPE/);
+  });
+
+  it("validates normalized and unique input table paths", async () => {
+    const root = await temp("bdmv table paths ");
+    await mkdir(join(root, "nested"));
+    await writeFile(join(root, "nested", "file.bin"), "value");
+
+    for (const path of ["/absolute.bin", "nested/../file.bin", "./nested/file.bin", "nested//file.bin", "nested\\file.bin"]) {
+      await expect(buildInputFileTable(root, [path])).rejects.toThrow(/PATH_ESCAPE/);
+    }
+    await expect(buildInputFileTable(root, ["nested/file.bin", "nested/file.bin"])).rejects.toThrow(/DUPLICATE_FILE_PATH/);
+  });
+
+  it("reads a bounded prefix and rejects full reads that exceed the declared limit", async () => {
+    const root = await temp("bdmv registered read ");
+    await writeFile(join(root, "large.bin"), Uint8Array.from([1, 2, 3, 4, 5, 6]));
+    const table = await buildInputFileTable(root, ["large.bin"]);
+
+    await expect(readRegisteredFile(table, "large.bin", 3, true)).resolves.toMatchObject({ bytes: Uint8Array.from([1, 2, 3]), byteLength: 6 });
+    await expect(readRegisteredFile(table, "large.bin", 3)).rejects.toThrow(/LIMIT_EXCEEDED/);
+    await expect(readRegisteredFile(table, "large.bin", 0, true)).rejects.toThrow(/INVALID_LIMIT/);
+    await expect(readRegisteredFile(table, "unlisted.bin", 3, true)).rejects.toThrow(/FILE_NOT_REGISTERED/);
+  });
+
+  it("discovers and sorts a BDMV tree while rejecting symlinks inside it", async () => {
+    const parent = await temp("bdmv discover ");
+    const root = join(parent, "BDMV");
+    await mkdir(join(root, "PLAYLIST"), { recursive: true });
+    await writeFile(join(root, "index.bdmv"), "index");
+    await writeFile(join(root, "PLAYLIST", "00002.mpls"), "second");
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), "first");
+
+    const discovered = await discoverBdmvInput(parent);
+    expect(discovered.root).toBe(await realpath(root));
+    expect([...discovered.table.files.keys()]).toEqual(["index.bdmv", "PLAYLIST/00001.mpls", "PLAYLIST/00002.mpls"]);
+
+    await symlink(join(root, "index.bdmv"), join(root, "linked-index.bdmv"));
+    await expect(discoverBdmvInput(parent)).rejects.toThrow(/SYMLINK_REJECTED/);
   });
 
   it("canonicalizes the file table root once for 1000 files", async () => {
@@ -111,5 +156,22 @@ describe("output transactions", () => {
     await rm(tx.stagingPath, { recursive: true });
     await expect(tx.commit()).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(join(target, "index.html"), "utf8")).toBe("previous package");
+  });
+
+  it("rejects invalid overwrite targets and closed transactions", async () => {
+    const parent = await temp("bdmv tx states ");
+    const fileTarget = join(parent, "not-a-directory");
+    await writeFile(fileTarget, "keep");
+    await expect(beginOutputTransaction(fileTarget, { overwrite: true })).rejects.toThrow(/TARGET_NOT_DIRECTORY/);
+
+    const aborted = await beginOutputTransaction(join(parent, "aborted"));
+    await aborted.abort();
+    await expect(aborted.commit()).rejects.toThrow(/TRANSACTION_CLOSED/);
+
+    const committed = await beginOutputTransaction(join(parent, "committed"));
+    await committed.commit();
+    await expect(committed.abort()).resolves.toBeUndefined();
+    await expect(committed.commit()).rejects.toThrow(/TRANSACTION_CLOSED/);
+    expect(await readFile(fileTarget, "utf8")).toBe("keep");
   });
 });

@@ -18,6 +18,7 @@ corepack pnpm generate:contracts
 corepack pnpm build
 corepack pnpm typecheck
 corepack pnpm test
+corepack pnpm test:coverage
 ```
 
 `corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. Node filesystem operations belong to `@bdmv2web/bdmv-io`.
@@ -101,6 +102,10 @@ Argument contract: unknown options fail with `CLI_UNKNOWN_OPTION` and extra posi
 ## Test suites
 
 `corepack pnpm test` runs every package's suite; `corepack pnpm test:all` adds `--no-bail` so all packages report before the command exits.
+
+`corepack pnpm test:coverage` runs every package suite with Vitest's V8 coverage provider. Each package reports statement, branch, function, and line coverage for `src/**/*.ts` in the terminal and writes HTML and JSON reports to that package's `coverage/` directory. The command also writes a workspace totals report to `coverage/index.html` and `coverage/coverage-summary.json`. Run one package with `corepack pnpm --filter @bdmv2web/igs test --coverage`.
+
+The GitHub Actions test matrix runs each package with coverage enabled, uploads package reports as `coverage-*` artifacts, and publishes a `workspace-coverage-report` artifact with the overall and per-package totals.
 
 | Package | Command |
 | --- | --- |

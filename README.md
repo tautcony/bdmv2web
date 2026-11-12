@@ -168,6 +168,7 @@ corepack pnpm lint:java                          # Check BD-J host Java style an
 corepack pnpm typecheck                          # Type checking
 corepack pnpm test                               # Run tests
 corepack pnpm test:all                           # Run all tests and collect failures
+corepack pnpm test:coverage                      # Run tests and report source coverage
 bash scripts/ci.sh                               # Run the full CI check
 ```
 

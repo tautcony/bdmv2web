@@ -4,6 +4,7 @@
 .codegraph/
 node_modules/
 **/dist/
+**/coverage/
 *.m2ts
 !test-data/fixtures/igs-parser/synthetic-single-object.m2ts
 !test-data/fixtures/synthetic-all-features/BDMV/STREAM/*.m2ts

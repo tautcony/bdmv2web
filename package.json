@@ -22,12 +22,14 @@
     "typecheck": "corepack pnpm build && corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test && corepack pnpm bench:test",
     "test:all": "corepack pnpm -r --no-bail test && corepack pnpm bench:test",
+    "test:coverage": "corepack pnpm -r --no-bail test --coverage && node scripts/coverage-report.mjs",
     "generate:contracts": "corepack pnpm --filter @bdmv2web/core generate",
     "generate:synthetic-all-features": "node scripts/generate-synthetic-all-features.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.10.0",
+    "@vitest/coverage-v8": "4.0.8",
     "commander": "^15.0.0",
     "esbuild": "0.25.12",
     "eslint": "10.14.0",

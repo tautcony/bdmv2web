@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 # The gate runs as separate job nodes: build first, then lint, typecheck, and
-# one test job per workspace package in parallel. Every job runs the same
+# one test job per workspace package in parallel. Every test job reports
+# source coverage and uploads its HTML/JSON report. Every job runs the same
 # stage modules from scripts/ci/ that the local gate (scripts/ci.sh) runs.
 jobs:
   build:
@@ -141,4 +142,39 @@ jobs:
       - name: Generate contracts
         run: bash scripts/ci/20-generate.sh
       - name: Test ${{ matrix.package }}
-        run: corepack pnpm --filter "${{ matrix.package }}" test
+        run: corepack pnpm --filter "${{ matrix.package }}" test --coverage
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ strategy.job-index }}
+          path: |
+            apps/*/coverage/
+            packages/*/coverage/
+          if-no-files-found: warn
+
+  coverage-report:
+    name: workspace coverage report
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Download package coverage reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage/package-reports
+          merge-multiple: true
+      - name: Build workspace coverage summary
+        run: node scripts/coverage-report.mjs coverage/package-reports coverage/workspace-report --expected-packages 11
+      - name: Upload workspace coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-coverage-report
+          path: coverage/workspace-report/
+          if-no-files-found: warn
