@@ -24,13 +24,13 @@
   - [从 npm 安装](#从-npm-安装)
   - [从源码构建](#从源码构建)
 - [使用](#使用)
+  - [HDMV 与 BD-J 播放](#hdmv-与-bd-j-播放)
   - [CLI](#cli)
   - [播放器档案](#播放器档案)
 - [开发](#开发)
   - [仓库结构](#仓库结构)
 - [文档](#文档)
 - [维护者](#维护者)
-- [参与贡献](#参与贡献)
 - [许可](#许可)
 
 ## 安装
@@ -46,9 +46,9 @@
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
 | Java 运行时 | Java 21 或兼容 `java.desktop`；仅 BD-J 包需要 | 通过 `serve` 运行打包的 BD-J Xlet |
 
-默认用 `libx265`（HEVC）编码背景视频，`crf` 24；需要 H.264 时加 `--codec h264`（`crf` 缺省 18）。蓝光菜单 clip 通常是 H.264，浏览器本身就能解码，因此 `build --video copy` 把源视频流直接复制进 MP4 而不重新编码，保留原盘码率；音轨仍转 AAC，因为浏览器在 MP4 里不解码 AC-3、DTS、LPCM。复制要求片段从播放器实际起播的入口点开始——PlayItem 的 in 点必须落在入口点表 5.689 ms 的量化栅格内——且源为 8-bit 4:2:0 SDR H.264；不满足的 clip 退回编码（未指定 `--codec` 时用 H.264），原因写进媒体计划并给出 `MEDIA_REMUX_UNAVAILABLE` 诊断。源为 HDR 时默认做色调映射转成 SDR BT.709，该步骤需要 FFmpeg 带 `zscale`（libzimg）；缺该滤镜时仍会出包，但保留 HDR 标签并在诊断里给 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告（画面在 SDR 屏上会发灰）。
+背景视频默认用 `libx265`（HEVC）编码，`crf` 24；`--codec h264` 使用 H.264 和 `crf` 18。`build --video copy` 把源视频流重新封装进 MP4，保留源码率。音轨编码为 AAC。重新封装要求源为 8-bit 4:2:0 SDR H.264，且 PlayItem 的 in 点落在入口点表 5.689 ms 栅格内的解码入口点；其他 clip 重新编码（未指定 `--codec` 时用 H.264），媒体计划记录 `MEDIA_REMUX_UNAVAILABLE` 警告。HDR 源默认经 FFmpeg 的 `zscale` 滤镜（libzimg）色调映射为 SDR BT.709。FFmpeg 不含 `zscale` 时，包保留 HDR 标签，诊断中给出 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告。
 
-菜单媒体的范围由 `--menu-media auto|all|none` 控制，HDMV 与 BD-J 取值含义相同：`auto`（默认）只导出菜单用到的播放列表——HDMV 取 IGS 场景匹配到的，BD-J 取总时长不超过 15 分钟的，因为 BD-J 碟的 BDJO 通常授权整碟，不过滤就会把正片一并重编码；`all` 导出全部可达播放列表；`none` 不打包媒体，运行时把 `PLAY_PLAYLIST` 报为不可用。被 `auto` 跳过的播放列表会写进 `M5_MENU_MEDIA_SCOPE_SKIPPED` 诊断。
+菜单媒体范围由 `--menu-media auto|all|none` 控制，HDMV 与 BD-J 相同：`auto`（默认）导出菜单使用的播放列表——HDMV 为 IGS 场景匹配到的，BD-J 为总时长不超过 15 分钟的；`all` 导出全部可达播放列表；`none` 只打包菜单资源，运行时将 `PLAY_PLAYLIST` 报为不可用。被 `auto` 跳过的播放列表写入 `M5_MENU_MEDIA_SCOPE_SKIPPED` 诊断。
 
 ### 从 npm 安装
 
@@ -78,7 +78,7 @@ corepack pnpm bundle:cli
 bdmv2web build /path/to/BDMV --out ./BDMV-menu
 ```
 
-用浏览器打开 `BDMV-menu/index.html`。复制或移动菜单时，请保留整个输出目录。
+HDMV 菜单包用浏览器打开 `BDMV-menu/index.html`；BD-J 菜单包用 `bdmv2web serve ./BDMV-menu` 启动。复制或移动菜单时，保留整个输出目录。
 
 校验生成的菜单包：
 
@@ -86,9 +86,11 @@ bdmv2web build /path/to/BDMV --out ./BDMV-menu
 bdmv2web validate ./BDMV-menu
 ```
 
+`validate` 审计菜单包的结构、引用、路径和依赖，并更新审计报告。
+
 ### HDMV 与 BD-J 播放
 
-直接打开 `BDMV-menu/index.html` 可运行 HDMV 菜单包。菜单媒体保存在输出包内。正片播放由配置的外部播放器适配器处理。
+直接打开 `BDMV-menu/index.html` 可运行 HDMV 菜单包。菜单媒体保存在输出包内。正片播放由配置的外部播放器适配器处理。`loop=false` 的背景项停在最后一帧。
 
 构建阶段会将 BD-J 可访问 Playlist 的 PlayItem 导出为 MP4 视频和 AAC 音频，并写入输出目录。等价媒体引用共用资产。使用 `--overwrite` 时从输出目录复用匹配媒体计划的资产；源区间或编码设置变化时重新导出。`--resume [DIR]` 改为从上次中断留下的目录复用：给了 `DIR` 就用它，省略时取输出目录旁最新的 `.<输出名>.staging-*`。复用的资产会被探测，时长与媒体计划相差超过 0.25s 的重新导出。目录是可选值，输入写在标志之前，或用 `--resume=DIR`。
 
@@ -98,7 +100,7 @@ bdmv2web validate ./BDMV-menu
 bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 ```
 
-打开 `serve` 打印的 loopback 地址。通过 `file://` 打开 BD-J 页面时，页面会显示启动命令。`--player system` 会打开受支持的整文件目标；系统播放器不支持有边界和多片段播放。外部播放器启动结果为 `requested`；菜单运行时不观察正片播放状态。
+打开 `serve` 打印的 loopback 地址。通过 `file://` 打开 BD-J 页面时，页面会显示启动命令。`--player system` 打开受支持的整文件目标，启动结果记为 `requested`。有边界和多片段目标返回带来源的 `EXTERNAL_PLAYER_CAPABILITY_UNAVAILABLE`。正片播放状态由系统播放器持有。
 
 ### CLI
 
@@ -108,18 +110,18 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 | --- | --- | --- |
 | `inspect <BDMV>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE`、`--strict` |
 | `extract <BDMV> --out DIR` | 导出 HDMV、IGS、SUP 分析数据 | `--type hdmv\|igs\|sup` 或 `--all` |
-| `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--png-level 0-9`、`--format table\|json` |
+| `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
 | `export <BDMV> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--decode png`、`--png-level 0-9` |
 | `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG`、`--png-level 0-9` |
-| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--png-level 0-9`、`--overwrite`、`--resume [DIR]`、`--strict` |
+| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--menu-media auto\|all\|none`、`--png-level 0-9`、`--overwrite`、`--resume [DIR]`、`--strict` |
 | `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json`、`--strict` |
 | `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
-`build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。运行中断时目标目录尚未写入，已完成的工作留在 `.<输出名>.staging-*`；`--resume` 从该目录继续。影片 PGS 字幕通过 `export --type sup` 导出。
+`build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。运行中断时已完成的工作保留在 `.<输出名>.staging-*`，`--resume` 从该目录继续；输出目标在构建完成时写入。影片 PGS 字幕通过 `export --type sup` 导出。
 
-`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --decode png` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.mnu` 或 `.sup` 输入。
+`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --decode png` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.mnu` 或 `.sup` 输入。`--png-level 0-9` 设置写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。
 
-`assets-manifest.json` 的 `sup-png` 条目记录 `displaySet`、`startSeconds`、`endSeconds`、`width` 和 `height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条显示集的起点，单位秒（3 位小数），以轨道起点为 0；无法确定时写 `null`。全透明显示集不输出 PNG，不写入清单。
+`assets-manifest.json` 的 `sup-png` 条目记录 `displaySet`、`startSeconds`、`endSeconds`、`width` 和 `height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条显示集的起点，单位秒（3 位小数），以轨道起点为 0；无法确定时写 `null`。全透明显示集从 PNG 输出和清单中省略。
 
 `convert` 等同于 `build`。`bdmv2web --help` 列出全部命令，`bdmv2web <命令> --help` 列出该命令的选项。
 
@@ -164,6 +166,7 @@ corepack pnpm lint:java                          # 检查 BD-J 主机 Java 样�
 corepack pnpm typecheck                          # 类型检查
 corepack pnpm test                               # 运行测试
 corepack pnpm test:all                           # 运行全部测试并收集失败结果
+corepack pnpm test:coverage                      # 运行测试并输出源码覆盖率报告
 bash scripts/ci.sh                               # 运行完整 CI 检查
 ```
 
@@ -187,13 +190,13 @@ python3 scripts/fetch-reference-cache.py
 | --- | --- |
 | `apps/cli` | 命令行入口 |
 | `packages/core` | DiscIR schema、生成类型、播放器档案和基础工具 |
-| `packages/bdmv-io` | 输入发现、文件读取、哈希和输出事务 |
+| `packages/bdmv-io` | 输入发现、文件读取和输出事务 |
 | `packages/bdmv-parser` | BDMV 文件解析与引用图 |
 | `packages/hdmv` | HDMV 指令、导航图和虚拟机 |
 | `packages/igs` | 传输流重组、IGS 场景提取和 PNG 编码 |
 | `packages/media-export` | 菜单媒体导出、时间线和外部播放目标 |
 | `packages/runtime-web` | 浏览器菜单运行时 |
-| `packages/package-builder` | 菜单包生成和指纹计算 |
+| `packages/package-builder` | 菜单包生成 |
 | `packages/test-runner` | 菜单包校验、诊断和交付判定 |
 | `packages/test-fixtures` | 测试夹具和字节构造器 |
 | `test-data/` | 测试夹具、光盘数据和输出目录 |

@@ -23,7 +23,7 @@ Node.js `>=22` is required. `ffmpeg` and `ffprobe` must be callable from `PATH` 
 bdmv2web build /path/to/BDMV --out ./BDMV-menu
 ```
 
-Open `BDMV-menu/index.html` in a browser. Keep the whole output directory when copying or moving the menu.
+Open an HDMV package from `BDMV-menu/index.html`; start a BD-J package with `bdmv2web serve ./BDMV-menu`. Keep the whole output directory when copying or moving the menu.
 
 ```sh
 bdmv2web validate ./BDMV-menu
@@ -42,6 +42,7 @@ bdmv2web validate ./BDMV-menu
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
 | `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--strict`) |
 | `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`, `--strict`) |
+| `serve <package dir>` | Serve a generated package and run its BD-J Java session (`--port N`, `--java EXECUTABLE`, `--player system`) |
 
 `convert` is an alias of `build`. `bdmv2web --help` lists every command and `bdmv2web <command> --help` lists the options of one command.
 

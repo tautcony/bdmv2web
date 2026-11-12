@@ -94,8 +94,7 @@ corepack pnpm test
 | --- | --- |
 | 点击后无反应 | `external-targets.json` 是否有该播放列表/PlayItem/Mark |
 | 外部播放器未启动 | `bdmv2web serve` 的 `--player` / `--player-executable` 设置；播放器进程是否可启动 |
-| system adapter 报 capability unavailable | 目标包含有界播放；使用支持完整时间范围的 `--player mpv` 配置 |
-| mpv 的播放时间不正确 | 检查 `external-targets.json` 的 PlayItem 源起点、入点与出点 |
+| system adapter 报 capability unavailable | 目标包含有界播放或多片段；诊断的 source 指向播放列表/PlayItem/Mark |
 | 路径错误 | `runtime/bdmv-config.js` 的 `__BDMV_BDMV_PATH__`；相对路径基于 `index.html` |
 | `EXTERNAL_STREAM_MISSING` | 源 `STREAM/*.m2ts` 被移动或重命名 |
 

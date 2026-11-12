@@ -104,7 +104,7 @@ BD-J 菜单媒体按 authored PlayItem 顺序播放。缺失媒体会显示带 B
 
 ## 外部播放
 
-HDMV VM actions resolve through `external-targets.json`. `bdmv2web serve <package-directory> --player system` requests the operating system's default player for a whole-file target. Add `--player-executable <path>` to run a selected executable with the media path. `--player mpv --player-executable <path>` requests mpv with the complete bounded playlist and source-time intervals. A successful process launch is reported as requested; the external player's playback state remains unobserved.
+HDMV VM actions resolve through `external-targets.json`. `bdmv2web serve <package-directory> --player system` requests the operating system's default player for a whole-file target. Add `--player-executable <path>` to run a selected executable with the media path. Bounded and multi-item targets return `EXTERNAL_PLAYER_CAPABILITY_UNAVAILABLE` with their source. A process launch is reported as `requested`; external players own playback state.
 
 ## 诊断码
 
