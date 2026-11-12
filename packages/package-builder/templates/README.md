@@ -14,7 +14,7 @@ The Java process can access the files and network resources available to the inv
 
 {{#EXTERNAL_PLAYBACK}}
 {{#BDJ_EXTERNAL_PLAYBACK}}
-External playback requests use `bdmv2web serve <package-directory> --player system` to open supported whole-file targets with the operating system's default player. Use `--player mpv --player-executable <path>` for bounded or multi-item playlists. The mpv adapter passes the complete playlist and source-time bounds. A process launch is reported as requested; playback state is not observed for external players.
+External playback requests use `bdmv2web serve <package-directory> --player system` to open supported whole-file targets with the operating system's default player. Add `--player-executable <path>` to run a selected executable with a whole-file media path. Use `--player mpv --player-executable <path>` for bounded or multi-item playlists. The mpv adapter passes the complete playlist and source-time bounds. A process launch is reported as requested; playback state is not observed for external players.
 
 Edit `runtime/bdmv-config.js` and reload to change the BDMV path for browser playback.
 {{/BDJ_EXTERNAL_PLAYBACK}}

@@ -129,6 +129,11 @@ jobs:
           name: workspace-dist
       # The media-export suites invoke a real ffmpeg/ffprobe when the test
       # does not inject a runner, so the binary must be on PATH.
+      - name: Install JDK for Java runtime tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Install FFmpeg for media export tests
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Install dependencies

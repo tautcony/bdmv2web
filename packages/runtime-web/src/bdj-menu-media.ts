@@ -21,6 +21,7 @@ export function startBdjMenuMedia(
   let lastSkipped: BdjMenuMediaEvent["items"][number] | undefined;
   let emittedMarks = new Set<number>();
   let lastPosition90k = -1n;
+  const listeners = new AbortController();
   const loopOffset = (item: BdjMenuMediaEvent["items"][number]): number | null => item.loopStartOffset90k === undefined ? null : Number(item.loopStartOffset90k) / 90_000;
   const resumeLoop = (item: BdjMenuMediaEvent["items"][number]): void => {
     const offset = loopOffset(item);
@@ -34,7 +35,7 @@ export function startBdjMenuMedia(
       sendEvent(event.playerId, `position|${(position90k * 1_000_000_000n / 90_000n).toString()}|${item.index}|${item.loopMarkIndex ?? ""}`);
     }).catch((error: unknown) => {
       if (stopped) return;
-      stopped = true; sendEvent(event.playerId, "error");
+      stopped = true; listeners.abort(); sendEvent(event.playerId, "error");
       onMessage(`BD-J menu loop could not resume: ${error instanceof Error ? error.message : String(error)}`, true);
     });
   };
@@ -53,7 +54,7 @@ export function startBdjMenuMedia(
     while (!stopped) {
       const item = event.items[itemIndex];
       if (!item) {
-        stopped = true; clearMedia();
+        stopped = true; listeners.abort(); clearMedia();
         if (lastSkipped) sendEvent(event.playerId, `missing-ended|${lastSkipped.index}|${encodeURIComponent(lastSkipped.source.path)}`);
         else sendEvent(event.playerId, "ended");
         return;
@@ -88,7 +89,7 @@ export function startBdjMenuMedia(
           ? `BD-J menu media playlist ${event.playlistId} is ready. Press a menu key or click the scene to play it.`
           : `BD-J menu media playlist ${event.playlistId} could not play: ${error instanceof Error ? error.message : String(error)}`,
           !isBlocked);
-        if (!isBlocked) { stopped = true; clearMedia(); }
+        if (!isBlocked) { stopped = true; listeners.abort(); clearMedia(); }
       });
       return;
     }
@@ -99,7 +100,7 @@ export function startBdjMenuMedia(
     blocked = false;
     if (!started) { started = true; sendEvent(event.playerId, "started"); }
     if (!presented) { presented = true; sendEvent(event.playerId, "presented"); }
-  });
+  }, { signal: listeners.signal });
   video.addEventListener("timeupdate", () => {
     if (stopped || !activeItemStarted || !currentSourceMatches()) return;
     const item = event.items[itemIndex]; if (!item) return;
@@ -112,7 +113,7 @@ export function startBdjMenuMedia(
     }
     if (!crossed.length) sendEvent(event.playerId, `position|${(position90k * 1_000_000_000n / 90_000n).toString()}|${item.index}|`);
     lastPosition90k = position90k;
-  });
+  }, { signal: listeners.signal });
   video.addEventListener("ended", () => {
     if (stopped || !activeItemStarted || !currentSourceMatches()) return;
     const item = event.items[itemIndex];
@@ -120,7 +121,7 @@ export function startBdjMenuMedia(
     activeItemStarted = false;
     itemIndex += 1;
     playCurrent();
-  });
+  }, { signal: listeners.signal });
   audio?.addEventListener("ended", () => {
     if (stopped || !audio?.src || !activeItemStarted) return;
     const item = event.items[itemIndex];
@@ -129,11 +130,11 @@ export function startBdjMenuMedia(
     void replayOneMediaAtLoopPoint(audio, offset).catch((error: unknown) => {
       if (!stopped) onMessage(`BD-J menu audio loop could not resume: ${error instanceof Error ? error.message : String(error)}`, true);
     });
-  });
+  }, { signal: listeners.signal });
   video.addEventListener("error", () => {
     if (stopped || !currentSourceMatches()) return;
-    stopped = true; video.pause(); video.removeAttribute("src"); video.load(); if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); } sendEvent(event.playerId, "error");
-  });
+    stopped = true; listeners.abort(); video.pause(); video.removeAttribute("src"); video.load(); if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); } sendEvent(event.playerId, "error");
+  }, { signal: listeners.signal });
   playCurrent();
   if (stopped) return undefined;
   return {
@@ -141,6 +142,7 @@ export function startBdjMenuMedia(
     stop: () => {
       if (stopped) return;
       stopped = true;
+      listeners.abort();
       clearMedia();
       if (video.paused) sendEvent(event.playerId, "stopped");
     },

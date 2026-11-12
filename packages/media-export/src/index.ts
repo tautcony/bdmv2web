@@ -212,6 +212,7 @@ export interface MediaPlan {
   backgroundMode: "single-clip" | "loop-one-clip" | "still-last-frame";
   videoPid: number;
   audioTracks: MediaAudioTrackInput[];
+  assetPaths?: { background: string; audioTracks: string[] };
   encoding: {
     video: {
       /** `copy` keeps the source bitstream; `encode` runs the configured encoder. */
@@ -499,7 +500,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, encoding, false, [
       ...(videoMode === "copy" ? ["The background video is a bit-exact copy of the source H.264 stream; only its dimensions, colour signalling, and duration are verified."] : []),
       ...(copyRefusal === undefined ? [] : [`Video stream copy is unavailable for this clip: ${copyRefusal}`]),
-    ]);
+    ], { background: backgroundPath, audioTracks: audioOutputs.map(({ relativePath }) => relativePath) });
     created.push(planAbsolute);
     const planText = `${JSON.stringify(plan, null, 2)}\n`;
     await writeFile(planAbsolute, planText, { flag: "wx" });
@@ -534,16 +535,17 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
     .find((candidate) => candidate?.plan?.playlistId === input.playlistId && (candidate.plan.playItemIndex ?? 0) === input.playItemIndex);
   const priorBackground = media?.background;
   const priorAudioTracks = media?.audioTracks;
-  const priorBackgroundPath = `${priorDirectory}/background.mp4`;
+  const priorBackgroundPath = safePriorPath(priorBackground?.path) ?? safePriorPath(priorPlan.assetPaths?.background) ?? `${priorDirectory}/background.mp4`;
   const backgroundPath = `${assetDirectory}/background.mp4`;
   if (!priorBackground || priorBackground.path !== priorBackgroundPath || priorBackground.codec !== encoding.codec || priorBackground.pid !== input.videoPid
     || !positive(priorBackground.width) || !positive(priorBackground.height)
     || typeof priorBackground.durationSeconds !== "number" || !Number.isFinite(priorBackground.durationSeconds)
     || priorBackground.loop !== loopBackground(input) || !Array.isArray(priorAudioTracks) || priorAudioTracks.length !== input.audioTracks.length) return null;
-  const audioRecords = input.audioTracks.map((track) => {
+  const audioRecords = input.audioTracks.map((track, index) => {
     const name = `audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
-    const priorPath = `${priorDirectory}/${name}`;
-    const previous = priorAudioTracks.find((candidate) => candidate.pid === track.pid && candidate.streamNumber === track.streamNumber && candidate.language === track.language && candidate.path === priorPath && candidate.codec === "aac");
+    const previous = priorAudioTracks.find((candidate) => candidate.pid === track.pid && candidate.streamNumber === track.streamNumber && candidate.language === track.language && candidate.codec === "aac");
+    const priorPath = safePriorPath(previous?.path) ?? safePriorPath(priorPlan.assetPaths?.audioTracks[index]) ?? `${priorDirectory}/${name}`;
+    if (previous && previous.path !== priorPath) return null;
     if (!previous || typeof previous.durationSeconds !== "number" || !Number.isFinite(previous.durationSeconds)) return null;
     return { track, priorPath, path: `${assetDirectory}/${name}`, previous };
   });
@@ -582,7 +584,10 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
       await copyFile(resolve(sourceDirectory, source), target);
       copied.push(target);
     }
-    const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, reusableEncoding, true);
+    const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, reusableEncoding, true, [], {
+      background: backgroundPath,
+      audioTracks: audioRecords.map((record) => record!.path),
+    });
     const files = transfers.map(({ destination, source }) => ({ path: destination, absolutePath: resolve(output, destination), byteLength: sourceSizes.get(source)! }));
     const backgroundFile = files[0]!;
     const audioTracks = audioRecords.map((record, index) => {
@@ -640,7 +645,7 @@ async function readPriorManifest(sourceDirectory: string): Promise<Record<string
  * of the reuse path and sends that clip back through the encoder.
  */
 async function probePriorManifest(sourceDirectory: string, input: MenuLoopMediaInput, assetDirectory: string, planned: MediaPlan, probe: ReuseProbe): Promise<Record<string, unknown> | null> {
-  const backgroundPath = `${assetDirectory}/background.mp4`;
+  const backgroundPath = safePriorPath(planned.assetPaths?.background) ?? `${assetDirectory}/background.mp4`;
   try {
     const backgroundProbe = await probeEncodedOutput(probe.ffprobe, resolve(sourceDirectory, backgroundPath), probe.timeoutMs, probe.invoke);
     const background = requireOneStream(backgroundProbe, "video", backgroundPath);
@@ -648,8 +653,8 @@ async function probePriorManifest(sourceDirectory: string, input: MenuLoopMediaI
     const backgroundDuration = streamDuration(background, backgroundProbe);
     assertDuration(backgroundDuration, planned.durationSeconds, backgroundPath);
     const audioTracks: Array<Record<string, unknown>> = [];
-    for (const track of input.audioTracks) {
-      const path = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
+    for (const [index, track] of input.audioTracks.entries()) {
+      const path = safePriorPath(planned.assetPaths?.audioTracks[index]) ?? `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
       const audioProbe = await probeEncodedOutput(probe.ffprobe, resolve(sourceDirectory, path), probe.timeoutMs, probe.invoke);
       const audio = requireOneStream(audioProbe, "audio", path);
       const duration = streamDuration(audio, audioProbe);
@@ -876,17 +881,22 @@ export const runMediaProcess: MediaProcessRunner = runProcess;
 
 function normalizePackageDirectory(value: string): string {
   const normalized = value.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "");
-  if (!normalized || normalized.startsWith("/") || normalized.split("/").some((part) => part === "" || part === "." || part === "..")) throw new RangeError(`assetDirectory must be a package-relative directory, received '${value}'.`);
+  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.split("/").some((part) => part === "" || part === "." || part === "..")) throw new RangeError(`assetDirectory must be a package-relative directory, received '${value}'.`);
   return normalized;
 }
 
 function normalizePackagePath(value: string): string {
   const normalized = value.replace(/\\/g, "/").replace(/^\.\/+/, "");
-  if (!normalized || normalized.startsWith("/") || normalized.split("/").some((part) => part === "" || part === "." || part === "..")) throw new RangeError(`planPath must be a package-relative file path, received '${value}'.`);
+  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.split("/").some((part) => part === "" || part === "." || part === "..")) throw new RangeError(`planPath must be a package-relative file path, received '${value}'.`);
   return normalized;
 }
 
-function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, maxAssetBytes: number | null, encoding: MenuLoopEncoding, reused = false, notes: readonly string[] = []): MediaPlan {
+function safePriorPath(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try { return normalizePackagePath(value); } catch { return undefined; }
+}
+
+function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, existingOutputBytes: bigint, maxAssetBytes: number | null, encoding: MenuLoopEncoding, reused = false, notes: readonly string[] = [], assetPaths?: MediaPlan["assetPaths"]): MediaPlan {
   const fallback = encoding.color.filterChain === "hdr-passthrough-fallback";
   const hdrWithoutHevc = encoding.codec === "h264" && encoding.color.output.bitDepth === 10;
   return {
@@ -896,6 +906,7 @@ function makePlan(input: MenuLoopMediaInput, estimate: MenuLoopBudgetEstimate, e
     durationSeconds: durationSeconds(input), repeatCount: input.repeatCount,
     backgroundMode: input.stillMode === 2 ? "still-last-frame" : loopBackground(input) ? "loop-one-clip" : "single-clip", videoPid: input.videoPid,
     audioTracks: input.audioTracks.map((track) => ({ ...track })),
+    ...(assetPaths ? { assetPaths } : {}),
     encoding: {
       video: {
         mode: encoding.mode,

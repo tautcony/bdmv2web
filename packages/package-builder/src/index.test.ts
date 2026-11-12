@@ -241,7 +241,7 @@ describe("menu package primitives", () => {
       expect(encodeOutputs.filter((path) => path.endsWith(".m4a"))).toHaveLength(4);
       expect(physicalMediaFiles).toHaveLength(6);
       expect(new Set(physicalMediaFiles.map((file) => file.path)).size).toBe(6);
-      expect(manifest.files.filter((file) => file.kind === "media-plan")).toHaveLength(2);
+      expect(manifest.files.filter((file) => file.kind === "media-plan")).toHaveLength(1000);
       expect(assetManifest.menuMedia).toHaveLength(1000);
       expect(assetManifest.menuMedia.map((item) => item.plan.playItemIndex)).toEqual(mediaWithDistinctSegment.map((item) => item.playItemIndex));
       expect(new Set(assetManifest.menuMedia.slice(0, 999).map((item) => item.background.path)).size).toBe(1);

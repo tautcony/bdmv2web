@@ -253,9 +253,13 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     const existing = mediaByKey.get(key);
     if (existing) {
       // The clip shares its bytes with one already exported: nothing is encoded,
-      // but it is still one of the plan's clips, so it reports as finished.
+      // but it keeps a PlayItem-specific plan for future reuse.
       input.onMediaProgress?.({ state: "end", outTimeSeconds: existing.result.background.durationSeconds, durationSeconds: existing.result.background.durationSeconds, assetPath: existing.result.background.path, source: { playlistId: media.playlistId, playItemIndex: media.playItemIndex, clipId: media.clipId, kind: "background", pid: media.videoPid, videoMode: existing.result.plan.encoding.video.mode, reused: true } });
-      additionalMedia.push({ input: media, result: referenceMenuMediaResult(existing.result, media), planPath: existing.planPath });
+      const { planPath } = menuMediaPaths(media);
+      const result = referenceMenuMediaResult(existing.result, media);
+      await mkdir(resolve(output, dirname(planPath)), { recursive: true });
+      await writeFile(resolve(output, planPath), `${JSON.stringify(result.plan, null, 2)}\n`);
+      additionalMedia.push({ input: media, result, planPath });
       continue;
     }
     const { directory, planPath } = menuMediaPaths(media);
@@ -478,7 +482,7 @@ export function packagedMediaMetadata(media: Awaited<ReturnType<typeof exportMen
 }
 
 function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncoding): string {
-  const codec = encoding.codec ?? "hevc";
+  const codec = encoding.codec ?? (encoding.videoMode === "copy" ? "h264" : "hevc");
   return JSON.stringify({
     sourcePath: resolve(media.sourcePath),
     sourceFile: media.sourceFile,
@@ -505,7 +509,12 @@ function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncodin
 function referenceMenuMediaResult(media: MenuLoopMediaResult, input: MenuLoopMediaInput): MenuLoopMediaResult {
   return {
     ...media,
-    plan: { ...media.plan, playlistId: input.playlistId, playItemIndex: input.playItemIndex },
+    plan: {
+      ...media.plan,
+      playlistId: input.playlistId,
+      playItemIndex: input.playItemIndex,
+      assetPaths: { background: media.background.path, audioTracks: media.audioTracks.map((track) => track.path) },
+    },
     tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
     files: [],
   };

@@ -53,7 +53,9 @@ export function buildExternalPlayerLaunch(target: ExternalPlayTarget | WholeFile
     if (!isDeclaredExternalStreamPath(target.clipId, target.streamPath)) return unavailable("EXTERNAL_TARGET_UNDECLARED", `Clip ${target.clipId} has no declared STREAM target.`);
     if (!target.present) return unavailable("EXTERNAL_STREAM_MISSING", `Source ${target.streamPath} is missing.`);
     const filename = paths.resolve(options.bdmvRoot, target.streamPath);
-    const command = adapter === "system" ? createSystemOpenCommand(filename, platform) : { command: options.executable ?? "mpv", args: ["--no-terminal", "--", filename] };
+    const command = adapter === "system"
+      ? options.executable ? { command: options.executable, args: [filename] } : createSystemOpenCommand(filename, platform)
+      : { command: options.executable ?? "mpv", args: ["--no-terminal", "--", filename] };
     if (!command) return unavailable("EXTERNAL_PLATFORM_UNSUPPORTED", `System file opening is unavailable for ${platform}.`);
     return { status: "available", adapter, target, ...command };
   }

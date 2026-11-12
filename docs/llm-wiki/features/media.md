@@ -135,7 +135,7 @@ media-plans/playlist-<id>-pi<n>-clip-<clipId>.json
 
 `createExternalMediaTargets(disc, closure)` 建立播放列表/PlayItem/章节 Mark → 源 M2TS 的映射，写 `external-targets.json`。
 
-`bdmv2web serve <package-directory> --player system` requests the operating system's default player for a whole-file target. `--player mpv --player-executable <path>` requests mpv with every playlist item, source-time bound and initial seek position. Unsupported targets include the source playlist or PlayItem. Process launch does not confirm external playback.
+`bdmv2web serve <package-directory> --player system` requests the operating system's default player for a whole-file target. Add `--player-executable <path>` to run a selected executable with the media path. `--player mpv --player-executable <path>` requests mpv with every playlist item, source-time bound and initial seek position. Unsupported targets include the source playlist or PlayItem. Process launch does not confirm external playback.
 
 `runtime/bdmv-config.js` sets the source BDMV path for browser playback. The configured path can be absolute or relative to the package.
 

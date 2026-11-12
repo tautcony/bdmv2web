@@ -3,7 +3,7 @@ import { CanvasViewport, drawMenu, installCanvasPointerInput, installKeyboardInp
 import { resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { selectPopupScene, type SerializedMenuState, type SerializedScene } from "./igs-adapter.js";
 import { format90kSeconds, requestExternalPlayback } from "./bdmv-url.js";
-import type { BdjHostRequest, BdjPackageData, BdjRuntimeHandle, BdjRuntimeCallbacks } from "./bdj-runtime.js";
+import type { BdjPackageData, BdjRuntimeHandle, BdjRuntimeCallbacks } from "./bdj-runtime.js";
 import { startBdjMenuMedia, type BdjMenuMediaHandle } from "./bdj-menu-media.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
@@ -27,8 +27,6 @@ export interface StatusToastOptions {
 }
 type StatusToastHost = { textContent: string | null; classList?: { add(name: string): void; remove(name: string): void; toggle(name: string, force?: boolean): unknown } };
 type StatusCopyButton = { addEventListener?: (type: string, listener: () => void) => void; setAttribute?: (name: string, value: string) => void };
-interface RuntimeBdjoDescriptor { path: string; source: { path: string; origin: "primary" | "backup"; byteOffset: string }; accessiblePlaylists: { accessToAll: boolean; playlistIds: string[] }; terminalInfo: { menuCallMask: boolean; titleSearchMask: boolean } }
-
 /** Render status updates as a translucent toast in the top-right corner. Ordinary
  * updates fade out again; persistent ones stay until the next update and accept
  * text selection, because instructions the user has to copy must not vanish.
@@ -288,12 +286,10 @@ async function boot(): Promise<void> {
     let removeBdjPointer: (() => void) | undefined;
     let activeBdjoId: string | null = null;
     const bdjAudioPlayers = new Map<string, HTMLAudioElement>();
+    const bdjBlockedAudioPlayers = new Set<string>();
     const bdjMenuVideos = new Map<string, BdjMenuMediaHandle>();
-    const bdjPlayerPlaylists = new Map<string, number>();
-    let bdjActiveVideoPlayer: string | null = null;
     let serverHdmvMode = false;
     let routeDiscTitle: (title: number, origin?: "user" | "startup" | "system" | "authored") => string = () => "ERROR: Disc title routing is not ready.";
-    let handleBdjHostRequest: (request: BdjHostRequest) => Promise<string> | string = () => "ERROR: BD-J host services are not ready.";
     // The playlist the VM is currently playing. `LinkPI`/`LinkMK` address a
     // PlayItem inside it and carry no playlist operand of their own.
     let activeMenuPlaylist: number | null = data.media?.playlist ?? data.menuPlaylistIds?.[0] ?? null;
@@ -478,7 +474,6 @@ async function boot(): Promise<void> {
       offerRetry: (retry) => { retrySound = retry; start.textContent = "Retry sound"; start.hidden = false; start.disabled = false; },
       isCurrent: (_soundId, buttonId) => !!controller && controller.button?.id === buttonId && controller.activatedButtonId === buttonId,
     });
-    const packagedBdjEntries = (): NonNullable<ReturnType<typeof readBdjDescriptors>> => readBdjDescriptors(data.ir);
     const entryForTitle = (title: number) => {
       const entries = data.vmEntries ?? [];
       return title === 0 ? entries.find((item) => item.kind === "topMenu")
@@ -504,12 +499,13 @@ async function boot(): Promise<void> {
         }
       }
     };
-    const applyServerHdmvActions = (actions: ReturnType<HdmvVm["drainActions"]>, origin: "user" | "system" = "user"): void => {
+    const applyServerHdmvActions = (actions: ReturnType<HdmvVm["drainActions"]>, origin: "user" | "startup" | "system" | "authored" = "authored"): void => {
       if (!actions.length) return;
+      const titleOrigin = ["user", "startup", "system", "authored"].includes(origin) ? origin : "authored";
       setServerHdmvMode(true);
       for (const action of actions) {
         if (action.type === "TITLE_SEARCH" && typeof action.payload.title === "number") {
-          bdjRuntimeHandle?.sendTitle(action.payload.title, false, undefined, origin);
+          bdjRuntimeHandle?.sendTitle(action.payload.title, false, undefined, titleOrigin);
         } else if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && typeof action.payload.playlist === "number") {
           const playlist = action.payload.playlist;
           const playItem = requestedPlayItem(playlist, action);
@@ -543,7 +539,6 @@ async function boot(): Promise<void> {
       const bdjClient = globalThis.__BDMV_BDJ_CLIENT__;
       if (!bdjClient) throw new Error("The native BD-J client script is missing from this package.");
       bdjRuntimeHandle = bdjClient.start(data, root, {
-        request: (request) => handleBdjHostRequest(request),
         report: (message, error) => { if (error === true) bdjPersistentError = true; showStatus(message, { persist: error === true, error: error === true }); },
         trace: (message) => { console.info(`[BDMV BD-J] ${message}`); menuLog(message); },
         hdmvMode: setServerHdmvMode,
@@ -574,6 +569,19 @@ async function boot(): Promise<void> {
         },
         retryMenuMedia: () => {
           for (const player of bdjMenuVideos.values()) player.retry();
+          for (const playerId of bdjBlockedAudioPlayers) {
+            const player = bdjAudioPlayers.get(playerId);
+            if (!player) { bdjBlockedAudioPlayers.delete(playerId); continue; }
+            void player.play().then(() => {
+              if (bdjAudioPlayers.get(playerId) !== player) return;
+              bdjBlockedAudioPlayers.delete(playerId);
+              bdjRuntimeHandle?.sendPlayerEvent(playerId, "started");
+            }).catch((error: unknown) => {
+              if (bdjAudioPlayers.get(playerId) !== player) return;
+              if (error instanceof Error && error.name === "NotAllowedError") bdjBlockedAudioPlayers.add(playerId);
+              else { bdjBlockedAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"); }
+            });
+          }
         },
         playerResource: (playerId, path) => {
           const file = data.bdjFiles?.find((item) => item.packagePath === path);
@@ -581,19 +589,25 @@ async function boot(): Promise<void> {
           const player = new Audio(new URL(file.packagePath, document.baseURI).href);
           player.preload = "auto";
           bdjAudioPlayers.get(playerId)?.pause();
+          bdjBlockedAudioPlayers.delete(playerId);
           bdjAudioPlayers.set(playerId, player);
-          player.addEventListener("ended", () => { if (bdjAudioPlayers.get(playerId) === player) bdjAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended"); }, { once: true });
-          player.addEventListener("error", () => { if (bdjAudioPlayers.get(playerId) === player) bdjAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"); }, { once: true });
+          player.addEventListener("ended", () => { if (bdjAudioPlayers.get(playerId) === player) { bdjAudioPlayers.delete(playerId); bdjBlockedAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended"); } }, { once: true });
+          player.addEventListener("error", () => { if (bdjAudioPlayers.get(playerId) === player) { bdjAudioPlayers.delete(playerId); bdjBlockedAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"); } }, { once: true });
           void player.play().then(() => {
             if (bdjAudioPlayers.get(playerId) === player) bdjRuntimeHandle?.sendPlayerEvent(playerId, "started");
           }).catch((error: unknown) => {
-            if (bdjAudioPlayers.get(playerId) === player) bdjRuntimeHandle?.sendPlayerEvent(playerId, error instanceof Error && error.name === "NotAllowedError" ? "blocked" : "error");
-            showStatus(`BD-J media resource could not start: ${error instanceof Error ? error.message : String(error)}`, { persist: true, error: true });
+            if (bdjAudioPlayers.get(playerId) === player) {
+              const blocked = error instanceof Error && error.name === "NotAllowedError";
+              if (blocked) bdjBlockedAudioPlayers.add(playerId);
+              else { bdjBlockedAudioPlayers.delete(playerId); bdjAudioPlayers.delete(playerId); }
+              bdjRuntimeHandle?.sendPlayerEvent(playerId, blocked ? "blocked" : "error");
+              showStatus(blocked ? "BD-J audio is ready. Press a menu key or click the scene to play it." : `BD-J media resource could not start: ${error instanceof Error ? error.message : String(error)}`, { persist: true, error: !blocked });
+            }
           });
         },
         playerStop: (playerId) => {
           const player = bdjAudioPlayers.get(playerId);
-          if (player) { player.pause(); player.currentTime = 0; bdjAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "stopped"); }
+          if (player) { player.pause(); player.currentTime = 0; bdjAudioPlayers.delete(playerId); bdjBlockedAudioPlayers.delete(playerId); bdjRuntimeHandle?.sendPlayerEvent(playerId, "stopped"); }
           const menuPlayer = bdjMenuVideos.get(playerId);
           if (menuPlayer) { menuPlayer.stop(); bdjMenuVideos.delete(playerId); }
         },
@@ -630,155 +644,6 @@ async function boot(): Promise<void> {
       void dispatchActions().completion;
       return "requested";
     };
-    handleBdjHostRequest = async ({ operation, arguments: args }): Promise<string> => {
-      const numberAt = (index: number, name: string): number => {
-        const value = Number(args[index]);
-        if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer.`);
-        return value;
-      };
-      const bdjo = packagedBdjEntries().find((item) => item.path.toLocaleLowerCase("en-US").endsWith(`/bdjo/${String(activeBdjoId ?? "").padStart(5, "0")}.bdjo`));
-      const source = bdjo ? { path: bdjo.source.path, origin: bdjo.source.origin, offset: bdjo.source.byteOffset } as Parameters<HdmvVm["requestHostAction"]>[2] : undefined;
-      switch (operation) {
-        case "discId": return "00000000000000000000000000000000";
-        case "readGPR": return String(vm.registers.read({ kind: "gpr", index: numberAt(0, "GPR index") }));
-        case "writeGPR": vm.registers.write({ kind: "gpr", index: numberAt(0, "GPR index") }, numberAt(1, "GPR value")); return "written";
-        case "readPSR": return String(vm.registers.read({ kind: "psr", index: numberAt(0, "PSR index") }));
-        case "writePSR": vm.registers.systemWrite(numberAt(0, "PSR index"), numberAt(1, "PSR value")); return "written";
-        case "selectTitle": {
-          if (!bdjo?.terminalInfo.titleSearchMask) throw new Error(`BDJO ${activeBdjoId} does not permit title-search calls.`);
-          return routeDiscTitle(numberAt(0, "Title number"), "authored");
-        }
-        case "topMenu": {
-          if (!bdjo?.terminalInfo.menuCallMask) throw new Error(`BDJO ${activeBdjoId} does not permit menu-call requests.`);
-          return routeDiscTitle(0);
-        }
-        case "selectPlaylist": {
-          const playlist = numberAt(0, "Playlist number");
-          if (!bdjo || !source) throw new Error("The active BDJO descriptor has no playlist access record.");
-          const allowed = bdjo.accessiblePlaylists.accessToAll || bdjo.accessiblePlaylists.playlistIds.some((id) => Number(id) === playlist);
-          if (!allowed) throw new Error(`BDJO ${activeBdjoId} cannot access playlist ${String(playlist).padStart(5, "0")}.`);
-          const action = vm.requestHostAction("PLAY_PLAYLIST", { playlist }, source);
-          pendingActions.push(...vm.drainActions());
-          await dispatchActions().completion;
-          return action.id;
-        }
-        case "selectPlaylistItem": {
-          const playlist = numberAt(0, "Playlist number"); const playItem = numberAt(1, "PlayItem");
-          if (!bdjo || !source) throw new Error("The active BDJO descriptor has no playlist access record.");
-          const allowed = bdjo.accessiblePlaylists.accessToAll || bdjo.accessiblePlaylists.playlistIds.some((id) => Number(id) === playlist);
-          if (!allowed) throw new Error(`BDJO ${activeBdjoId} cannot access playlist ${String(playlist).padStart(5, "0")}.`);
-          const action = vm.requestHostAction("PLAY_PLAYLIST_ITEM", { playlist, playItem }, source);
-          pendingActions.push(...vm.drainActions());
-          await dispatchActions().completion;
-          return action.id;
-        }
-        case "playerStart": {
-          const playerId = args[0] ?? "";
-          if (args[1] === "playlist") {
-            const playlist = bdjPlayerPlaylists.get(playerId) ?? numberAt(2, "Playlist number");
-            const result = await handleBdjHostRequest({ operation: "selectPlaylist", arguments: [String(playlist)] });
-            if (result.startsWith("ERROR:")) throw new Error(result.slice(6).trim());
-            const playback = vm.snapshot().playback;
-            if (playback.status === "playing" && playback.playlist === playlist && video && !video.paused && !video.ended) {
-              bdjActiveVideoPlayer = playerId;
-              return "started";
-            }
-            return "unavailable";
-          }
-          if (args[1] === "resource") {
-            const path = args[2] ?? "";
-            const filePath = path.match(/\/bdj\/(BDMV\/JAR\/[^?#]+)/i)?.[1];
-            const file = data.bdjFiles?.find((item) => item.path.toLocaleLowerCase("en-US") === filePath?.toLocaleLowerCase("en-US"));
-            if (!file) throw new Error(`BD-J media resource '${path}' is not packaged.`);
-            const player = new Audio(new URL(file.packagePath, document.baseURI).href);
-            player.preload = "auto";
-            await player.play();
-            player.addEventListener("ended", () => bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended"), { once: true });
-            player.addEventListener("error", () => bdjRuntimeHandle?.sendPlayerEvent(playerId, "error"), { once: true });
-            bdjAudioPlayers.set(playerId, player);
-            return "started";
-          }
-          throw new Error(`BD-J player ${playerId} has no playlist or media resource.`);
-        }
-        case "playerStop": {
-          const playerId = args[0] ?? "";
-          const player = bdjAudioPlayers.get(playerId);
-          if (player) { player.pause(); player.currentTime = 0; bdjAudioPlayers.delete(playerId); return "stopped"; }
-          if (bdjActiveVideoPlayer !== playerId) return "stopped";
-          if (!bdjo || !source) throw new Error("The active BDJO descriptor has no playback source.");
-          vm.requestHostAction("PLAY_STOP", {}, source);
-          pendingActions.push(...vm.drainActions());
-          await dispatchActions().completion;
-          bdjActiveVideoPlayer = null;
-          return "stopped";
-        }
-        case "playerPlaylist": {
-          const playerId = args[0] ?? "";
-          const playlist = numberAt(1, "Playlist number");
-          if (!bdjo) throw new Error("The active BDJO descriptor has no playlist access record.");
-          const allowed = bdjo.accessiblePlaylists.accessToAll || bdjo.accessiblePlaylists.playlistIds.some((id) => Number(id) === playlist);
-          if (!allowed) throw new Error(`BDJO ${activeBdjoId} cannot access playlist ${String(playlist).padStart(5, "0")}.`);
-          bdjPlayerPlaylists.set(playerId, playlist);
-          return "selected";
-        }
-        case "playerListAudioStreams": {
-          const playerId = args[0] ?? "";
-          const playlist = bdjPlayerPlaylists.get(playerId) ?? activeMenuPlaylist;
-          const media = [data.media, ...(data.menuMedia ?? [])].filter((item): item is PackageMenuMedia => !!item && item.playlist === playlist);
-          const streams = [...new Set(media.flatMap((item) => item.audioTracks.map((track) => track.psrStreamNumber ?? track.streamNumber + 1)))].sort((a, b) => a - b);
-          return streams.join(",");
-        }
-        case "playerCurrentAudioStream": {
-          return String(playbackBridge.selectedPrimaryAudioStream ?? vm.registers.read({ kind: "psr", index: 1 }));
-        }
-        case "playerNavigate": {
-          const [playerId = "", kind = "", value = ""] = args;
-          if (kind === "nextMark" || kind === "previousMark") return "false";
-          const playlist = bdjPlayerPlaylists.get(playerId) ?? activeMenuPlaylist;
-          if (!bdjo || !source || playlist === null) throw new Error(`BD-J player ${playerId} has no active playlist.`);
-          const number = Number(value);
-          if (!Number.isSafeInteger(number) || number < 0) throw new Error(`BD-J ${kind} operand must be a non-negative integer.`);
-          const action = vm.requestHostAction(kind === "mark" ? "PLAY_PLAYLIST_MARK" : "PLAY_PLAYLIST_ITEM", kind === "mark" ? { playlist, playMark: number } : { playlist, playItem: number }, source);
-          pendingActions.push(...vm.drainActions());
-          await dispatchActions().completion;
-          return action.id;
-        }
-        case "playerStream": {
-          const [playerId = "", kind = "", value = ""] = args;
-          if (kind !== "audio") throw new Error(`BD-J ${kind || "stream"} selection is unsupported.`);
-          if (!bdjo || !source) throw new Error(`BD-J player ${playerId} has no active BDJO.`);
-          const number = Number(value);
-          if (!Number.isSafeInteger(number) || number < 0) throw new Error("BD-J audio stream number must be a non-negative integer.");
-          vm.requestHostAction("SET_STREAM", { primaryAudioStream: number }, source);
-          pendingActions.push(...vm.drainActions());
-          await dispatchActions().completion;
-          if (playbackBridge.selectedPrimaryAudioStream !== number) throw new Error(`BD-J player ${playerId} audio stream ${number} was not confirmed by the active package media.`);
-          return "confirmed";
-        }
-        case "playerGain": {
-          const [playerId = "", kind = "", value = ""] = args;
-          const volume = kind === "mute" ? (value === "true" ? 0 : 1) : Math.max(0, Math.min(1, Number(value)));
-          const player = bdjAudioPlayers.get(playerId);
-          if (player) { player.volume = volume; player.muted = kind === "mute" && value === "true"; }
-          else { if (audio) audio.volume = volume; if (video) video.volume = volume; }
-          return "updated";
-        }
-        case "xletEvent": menuLog(`BD-J ${args[0] ?? "event"} ${args[1] ?? ""}`); return "recorded";
-        default: throw new Error(`BD-J host operation '${operation}' is unsupported.`);
-      }
-    };
-    video?.addEventListener("ended", () => {
-      const playerId = bdjActiveVideoPlayer;
-      if (!playerId) return;
-      bdjRuntimeHandle?.sendPlayerEvent(playerId, "ended");
-      bdjActiveVideoPlayer = null;
-    });
-    video?.addEventListener("error", () => {
-      const playerId = bdjActiveVideoPlayer;
-      if (!playerId) return;
-      bdjRuntimeHandle?.sendPlayerEvent(playerId, "error");
-      bdjActiveVideoPlayer = null;
-    });
     let menuMuted = false;
     let manualMuted = false;
     let removeAutoMuteRestore: (() => void) | null = null;
@@ -929,19 +794,6 @@ function validateEmbeddedDiscIR(value: unknown): void {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
-
-function readBdjDescriptors(value: unknown): RuntimeBdjoDescriptor[] {
-  if (!isRecord(value) || !Array.isArray(value["bdjos"])) return [];
-  return value["bdjos"].filter((item): item is RuntimeBdjoDescriptor => isRecord(item)
-    && typeof item["path"] === "string"
-    && isRecord(item["source"]) && typeof item["source"]["path"] === "string"
-    && (item["source"]["origin"] === "primary" || item["source"]["origin"] === "backup")
-    && typeof item["source"]["byteOffset"] === "string"
-    && isRecord(item["accessiblePlaylists"]) && typeof item["accessiblePlaylists"]["accessToAll"] === "boolean"
-    && Array.isArray(item["accessiblePlaylists"]["playlistIds"])
-    && isRecord(item["terminalInfo"]) && typeof item["terminalInfo"]["menuCallMask"] === "boolean"
-    && typeof item["terminalInfo"]["titleSearchMask"] === "boolean");
-}
 
 function normalizeScene(source: SerializedScene, assets: Map<string, HTMLImageElement>): MenuScene {
   if (!source || !Number.isSafeInteger(source.width) || source.width <= 0 || !Number.isSafeInteger(source.height) || source.height <= 0 || !Array.isArray(source.pages) || source.pages.length === 0) throw new Error("Invalid menu scene dimensions or pages.");

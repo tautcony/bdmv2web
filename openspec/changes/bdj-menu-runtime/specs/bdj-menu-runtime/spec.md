@@ -178,7 +178,7 @@
 
 ### Requirement: BD-J 本地服务启动
 
-含 BD-J 后端的生成包 SHALL 通过 bdmv2web 本地服务启动，并明确声明兼容 Java 运行环境和包内 host/application JAR、菜单资源要求。页面和资源 SHALL 由回环地址提供，断开外网后继续运行。Java 可执行文件 SHALL 支持显式配置，启动机制 SHALL 覆盖 Windows、macOS 和 Linux。
+含 BD-J 后端的生成包 SHALL 通过 bdmv2web 本地服务启动，并明确声明兼容 Java 运行环境和包内 host/application JAR、菜单资源要求。页面和资源 SHALL 由回环地址提供，断开外网后继续运行。Java 可执行文件 SHALL 支持显式配置，启动机制 SHALL 覆盖 Windows、macOS 和 Linux。服务 SHALL 在 Java 主机完成应用初始化并发出就绪记录后返回启动成功；就绪前退出或超时 SHALL 返回错误并复位会话状态。
 
 #### Scenario: 本地运行
 
@@ -189,6 +189,11 @@
 
 - **WHEN** 指定的 Java 可执行文件不存在、版本不兼容或缺少需要的模块
 - **THEN** 输出可定位的运行环境诊断和配置说明；服务关闭相关等待并保留可用页面
+
+#### Scenario: Java 主机在就绪前退出
+
+- **WHEN** Java 主机在应用初始化期间退出或未在启动时限内发出就绪记录
+- **THEN** `/api/bdj/start` 返回 HTTP 500，SSE 发出会话错误，后续启动请求可以创建新进程
 
 #### Scenario: 直接 file URL 打开
 

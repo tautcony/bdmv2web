@@ -31,6 +31,7 @@ public final class BdjApplicationManager {
         private boolean started;
         private boolean paused;
         private boolean destroyed;
+        private boolean registered;
         private BdjApplicationClassLoader classLoader;
 
         public Application(String bdjoId, int controlCode, int binding, int organizationId, int applicationId, String initialClass, String basePath, String classPath, String[] parameters) {
@@ -135,9 +136,10 @@ public final class BdjApplicationManager {
     }
 
     private void initializeApplication(Application application) throws Exception {
-        application.classLoader = new BdjApplicationClassLoader(application);
+        application.destroyed = false;
         Thread thread = Thread.currentThread(); ClassLoader previous = thread.getContextClassLoader();
         try {
+            application.classLoader = new BdjApplicationClassLoader(application);
             thread.setContextClassLoader(application.classLoader);
             Class<?> type = Class.forName(application.initialClass, true, application.classLoader);
             Object instance = type.getDeclaredConstructor().newInstance();
@@ -153,6 +155,10 @@ public final class BdjApplicationManager {
                 public void pause() { BdjApplicationManager.this.pause(application); }
                 public void resume() { try { BdjApplicationManager.this.resume(application); } catch (XletStateChangeException error) { throw new IllegalStateException(error); } }
             });
+            application.registered = true;
+        } catch (Exception | Error error) {
+            destroyApplication(application);
+            throw error;
         } finally { thread.setContextClassLoader(previous); }
     }
 
@@ -161,20 +167,26 @@ public final class BdjApplicationManager {
     }
 
     private void destroyApplication(Application application) {
-        if (!application.initialized) return;
+        if (application.destroyed) return;
         Thread thread = Thread.currentThread(); ClassLoader previous = thread.getContextClassLoader();
         try {
             if (application.classLoader != null) thread.setContextClassLoader(application.classLoader);
-            BdjHostBridge.trace(application.initialClass, "destroyXlet", "", "bdjo=" + application.bdjoId + " unconditional=true classLoader=" + System.identityHashCode(application.classLoader)); application.xlet.destroyXlet(true);
+            if (application.xlet != null) {
+                BdjHostBridge.trace(application.initialClass, "destroyXlet", "", "bdjo=" + application.bdjoId + " unconditional=true classLoader=" + System.identityHashCode(application.classLoader));
+                application.xlet.destroyXlet(true);
+            }
         }
         catch (Throwable error) { BdjHostBridge.trace(application.initialClass, "destroyXlet", "error", error.toString()); }
         finally { thread.setContextClassLoader(previous); }
-        if (application.context != null) org.dvb.io.ixc.IxcRegistry.unbindAll(application.context);
-        AppsDatabase.getAppsDatabase().unregister(new AppID(application.organizationId, application.applicationId));
+        try { if (application.context != null) org.dvb.io.ixc.IxcRegistry.unbindAll(application.context); }
+        catch (Throwable error) { BdjHostBridge.trace(application.initialClass, "IxcRegistry.unbindAll", "error", error.toString()); }
+        try { if (application.registered) AppsDatabase.getAppsDatabase().unregister(new AppID(application.organizationId, application.applicationId)); }
+        catch (Throwable error) { BdjHostBridge.trace(application.initialClass, "AppsDatabase.unregister", "error", error.toString()); }
+        finally { application.registered = false; }
+        BdjApplicationClassLoader classLoader = application.classLoader;
         application.initialized = false; application.started = false; application.xlet = null; application.context = null; application.destroyed = true;
-        application.paused = false;
-        if (application.classLoader != null) try { application.classLoader.close(); } catch (Exception error) { BdjHostBridge.trace(application.initialClass, "classLoader.close", "error", error.toString()); }
-        application.classLoader = null;
+        application.paused = false; application.classLoader = null;
+        if (classLoader != null) try { classLoader.close(); } catch (Exception error) { BdjHostBridge.trace(application.initialClass, "classLoader.close", "error", error.toString()); }
     }
 
     public void dispatchInput(int keyCode, int modifiers, int eventType) {
@@ -191,13 +203,14 @@ public final class BdjApplicationManager {
     public synchronized void dispatchTitle(String bdjoId, int title, boolean started, boolean restart) {
         BdjHostBridge.trace("com.bdmv2web.bdj.BdjApplicationManager", "dispatchTitle", "received",
             "activeBdjo=" + activeBdjoId + " activeTitle=" + activeTitle + " bdjo=" + bdjoId + " title=" + title + " started=" + started + " restart=" + restart);
+        boolean dispatched = false;
         try {
-            if (started) activate(bdjoId, title, restart);
-            else if (bdjoId.equals(activeBdjoId)) changeTitle(0xffff, restart);
+            if (started) { activate(bdjoId, title, restart); dispatched = true; }
+            else if (bdjoId.equals(activeBdjoId)) { changeTitle(0xffff, restart); dispatched = true; }
         } catch (Throwable error) { BdjHostBridge.trace("runtime", "title", "error", error.toString()); }
         BdjHostBridge.trace("com.bdmv2web.bdj.BdjApplicationManager", "dispatchTitle", "complete",
             "activeBdjo=" + activeBdjoId + " activeTitle=" + activeTitle + " bdjo=" + bdjoId + " title=" + title + " started=" + started + " restart=" + restart);
-        eventSink.send(started ? "title-start" : "title-stop", Integer.toString(title));
+        if (dispatched) eventSink.send(started ? "title-start" : "title-stop", Integer.toString(title));
     }
     synchronized void notifyDestroyed(Application application) { destroyApplication(application); eventSink.send("application-destroyed", applicationId(application)); }
     synchronized void notifyPaused(Application application) {

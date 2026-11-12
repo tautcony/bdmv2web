@@ -14,10 +14,9 @@ export interface BdjApplicationRecord {
 interface BdjDescriptor { path: string; applications: BdjApplicationRecord[]; accessiblePlaylists: { accessToAll: boolean; playlistIds: string[] }; terminalInfo: { menuCallMask: boolean; titleSearchMask: boolean } }
 interface BdjFile { path: string; packagePath: string }
 export interface BdjPackageData { ir: unknown; vmEntries?: NonNullable<VmOptions["entries"]>; bdjRuntime?: boolean; bdjFiles?: BdjFile[]; bdjHostApiPath?: string }
-export interface BdjHostRequest { operation: string; arguments: string[] }
 export interface BdjMenuMediaItem { index: number; clipId: string; source: { path: string; offset?: string }; start90k: string; end90k: string; mediaStart90k?: string; url?: string; missing?: true; warning?: string; audioUrls?: string[]; loopStartOffset90k?: string; loopMarkIndex?: number; marks?: Array<{ index: number; offset90k: string }> }
 export interface BdjMenuMediaEvent { playerId: string; mode: "menu"; bdjoId: string; title: number; playlistId: string; source: { path: string; offset?: string }; items: BdjMenuMediaItem[] }
-export interface BdjRuntimeCallbacks { request: (request: BdjHostRequest) => Promise<string> | string; report: (message: string, error?: boolean) => void; trace: (message: string) => void; frameReady?: () => void; playerHandoff?: (result: { status: string; message?: string; source?: { path: string; offset?: string } }) => void; playerResource?: (playerId: string, path: string) => void; playerMenuMedia?: (event: BdjMenuMediaEvent) => void; menuMediaUnavailable?: (result: { playerId: string; playlist?: number; message: string; source?: { path: string; offset?: string } }) => void; retryMenuMedia?: () => void; playerStop?: (playerId: string) => void; hdmvMode?: (active: boolean) => void; hdmvActions?: (actions: NavigationAction[], origin?: "user" | "system") => void }
+export interface BdjRuntimeCallbacks { report: (message: string, error?: boolean) => void; trace: (message: string) => void; frameReady?: () => void; playerHandoff?: (result: { status: string; message?: string; source?: { path: string; offset?: string } }) => void; playerResource?: (playerId: string, path: string) => void; playerMenuMedia?: (event: BdjMenuMediaEvent) => void; menuMediaUnavailable?: (result: { playerId: string; playlist?: number; message: string; source?: { path: string; offset?: string } }) => void; retryMenuMedia?: () => void; playerStop?: (playerId: string) => void; hdmvMode?: (active: boolean) => void; hdmvActions?: (actions: NavigationAction[], origin?: "user" | "startup" | "system" | "authored") => void }
 
 export interface BdjRuntimeHandle {
   sendInput(keyCode: number, modifiers?: number, pressed?: boolean): void;
@@ -95,7 +94,7 @@ export function startBdjRuntime(data: BdjPackageData, root: HTMLElement, callbac
   eventSource.addEventListener("player-handoff", (event) => callbacks.playerHandoff?.(JSON.parse((event as MessageEvent<string>).data) as { status: string; message?: string; source?: { path: string; offset?: string } }));
   eventSource.addEventListener("player-stop", (event) => callbacks.playerStop?.((JSON.parse((event as MessageEvent<string>).data) as { playerId: string }).playerId));
   eventSource.addEventListener("hdmv-mode", (event) => callbacks.hdmvMode?.((JSON.parse((event as MessageEvent<string>).data) as { active: boolean }).active));
-  eventSource.addEventListener("hdmv-actions", (event) => { const item = JSON.parse((event as MessageEvent<string>).data) as { actions: NavigationAction[]; origin?: "user" | "system" }; callbacks.hdmvActions?.(item.actions, item.origin); });
+  eventSource.addEventListener("hdmv-actions", (event) => { const item = JSON.parse((event as MessageEvent<string>).data) as { actions: NavigationAction[]; origin?: "user" | "startup" | "system" | "authored" }; callbacks.hdmvActions?.(item.actions, item.origin); });
   const sessionStarted = fetch("/api/bdj/start", { method: "POST" }).then(async (response) => {
     if (!response.ok) throw new Error((await response.text()) || `Local BD-J service returned HTTP ${response.status}.`);
     const session: unknown = await response.json();

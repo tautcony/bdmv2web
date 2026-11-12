@@ -1,5 +1,5 @@
-import { createReadStream } from "node:fs";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { open, readFile, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -64,6 +64,8 @@ export async function serve(): Promise<void> {
   if (!rootInfo.isDirectory()) fail("CLI_SERVE_ROOT_INVALID", "The serve input must be a package directory.", root);
   let javaProcess: ChildProcessWithoutNullStreams | undefined;
   let javaSessionStarted = false;
+  let javaSessionReady = false;
+  let stopping = false;
   let hdmvVm: HdmvVm | undefined;
   let hdmvMode = false;
   let activeBdjoId = "";
@@ -82,7 +84,30 @@ export async function serve(): Promise<void> {
   let frameSequence = 0;
   let latestFrame: { sequence: number; data: string } | undefined;
   const eventClients = new Set<import("node:http").ServerResponse>();
+  const pendingStartResponses: import("node:http").ServerResponse[] = [];
   const emit = (name: string, value: unknown) => { const record = `event: ${name}\ndata: ${JSON.stringify(value)}\n\n`; for (const client of eventClients) client.write(record); };
+  const outsidePackage = (path: string): boolean => { const fromRoot = relative(root, path); return fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot); };
+  const resetBdjSession = (): void => {
+    javaProcess = undefined;
+    javaSessionStarted = false;
+    javaSessionReady = false;
+    hdmvVm = undefined;
+    hdmvMode = false;
+    activeBdjoId = "";
+    activeLaunch = undefined;
+    activeTitle = 0xffff;
+    userFeatureTitleSelected = false;
+    pendingUserSelection = false;
+    latestFrame = undefined;
+    playerPlaylists.clear();
+    browserMediaPlayers.clear();
+    menuMediaSessions.clear();
+    pendingMenuPlayers.clear();
+    activePlayerTokens.clear();
+    menuMediaFiles.clear();
+    latestPlayerHandoffs.clear();
+    packagedMenuMedia = undefined;
+  };
   const packagedMenuItems = (): Promise<Array<Record<string, unknown>>> => packagedMenuMedia ??= readFile(resolve(root, "asset-manifest.json"), "utf8").then((json) => {
     const manifest: unknown = JSON.parse(json);
     return isRecord(manifest) && Array.isArray(manifest.menuMedia) ? manifest.menuMedia.filter(isRecord) : [];
@@ -106,7 +131,6 @@ export async function serve(): Promise<void> {
     if (!match || !isRecord(match.background) || typeof match.background.path !== "string") throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} source ${item.streamPath} has no matching packaged playback asset; rebuild the package.`);
     const audioFiles = Array.isArray(match.audioTracks) ? match.audioTracks.flatMap((track) => isRecord(track) && typeof track.path === "string" ? [resolve(root, track.path)] : []) : [];
     const videoFile = resolve(root, match.background.path);
-    const outsidePackage = (path: string): boolean => { const fromRoot = relative(root, path); return fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot); };
     if (outsidePackage(videoFile)) throw new Error(`Packaged BD-J menu media path '${match.background.path}' is outside the package.`);
     for (const audioFile of audioFiles) if (outsidePackage(audioFile)) throw new Error(`Packaged BD-J menu audio path '${audioFile}' is outside the package.`);
     return { videoFile, audioFiles };
@@ -141,7 +165,7 @@ export async function serve(): Promise<void> {
     }
     if (url.pathname === "/api/bdj/events" && request.method === "GET") {
       response.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Connection": "keep-alive", "Cache-Control": "no-cache" });
-      response.write(`event: session\ndata: ${JSON.stringify({ running: javaProcess !== undefined, alive: javaProcess?.exitCode === null })}\n\n`);
+      response.write(`event: session\ndata: ${JSON.stringify({ running: javaSessionReady && javaProcess !== undefined, alive: javaSessionReady && javaProcess?.exitCode === null, starting: javaSessionStarted && !javaSessionReady })}\n\n`);
       if (latestFrame) response.write(`event: frame\ndata: ${JSON.stringify(latestFrame)}\n\n`);
       for (const handoff of latestPlayerHandoffs.values()) response.write(`event: player-handoff\ndata: ${JSON.stringify(handoff)}\n\n`);
       for (const media of menuMediaSessions.values()) response.write(`event: player-menu-media\ndata: ${JSON.stringify(media)}\n\n`);
@@ -151,25 +175,35 @@ export async function serve(): Promise<void> {
     if (menuAssetId && (request.method === "GET" || request.method === "HEAD")) {
       const assetPath = menuMediaFiles.get(menuAssetId);
       if (!assetPath) { response.writeHead(404).end("Menu media item not found."); return; }
-      void stat(assetPath).then((info) => {
-        const range = request.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
-        let start = 0; let end = Math.max(0, info.size - 1);
-        const mediaType = contentTypes[extname(assetPath).toLowerCase()] ?? "application/octet-stream";
-        if (range) {
-          start = range[1] ? Number(range[1]) : 0;
-          end = range[2] ? Math.min(Number(range[2]), end) : end;
-          if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= info.size) { response.writeHead(416, { "Content-Range": `bytes */${info.size}` }).end(); return; }
-          response.writeHead(206, { "Content-Type": mediaType, "Accept-Ranges": "bytes", "Content-Range": `bytes ${start}-${end}/${info.size}`, "Content-Length": String(end - start + 1) });
-        } else response.writeHead(200, { "Content-Type": mediaType, "Accept-Ranges": "bytes", "Content-Length": String(info.size) });
-        if (request.method === "HEAD") { response.end(); return; }
-        const stream = createReadStream(assetPath, range ? { start, end } : undefined);
+      void realpath(assetPath).then(async (filePath) => {
+        if (outsidePackage(filePath)) { response.writeHead(403).end("Menu media item is outside the package."); return; }
+        const handle = await open(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+        const info = await handle.stat();
+        if (!info.isFile()) { await handle.close(); response.writeHead(404).end("Menu media item not found."); return; }
+        const range = parseByteRange(request.headers.range, info.size);
+        if (range === null) { await handle.close(); response.writeHead(416, { "Content-Range": `bytes */${info.size}` }).end(); return; }
+        const mediaType = contentTypes[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+        if (range) response.writeHead(206, { "Content-Type": mediaType, "Accept-Ranges": "bytes", "Content-Range": `bytes ${range.start}-${range.end}/${info.size}`, "Content-Length": String(range.end - range.start + 1) });
+        else response.writeHead(200, { "Content-Type": mediaType, "Accept-Ranges": "bytes", "Content-Length": String(info.size) });
+        if (request.method === "HEAD") { await handle.close(); response.end(); return; }
+        const stream = handle.createReadStream(range ? { start: range.start, end: range.end } : undefined);
         stream.on("error", () => response.destroy()); stream.pipe(response);
-      }).catch(() => response.writeHead(404).end("Menu media item not found."));
+      }).catch(() => { if (!response.headersSent) response.writeHead(404).end("Menu media item not found."); else response.destroy(); });
       return;
     }
     if (url.pathname === "/api/bdj/start" && request.method === "POST") {
-      if (javaSessionStarted) { response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: javaProcess?.exitCode === null })); return; }
+      if (javaSessionStarted) {
+        if (javaSessionReady) response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: javaProcess?.exitCode === null }));
+        else pendingStartResponses.push(response);
+        return;
+      }
       javaSessionStarted = true;
+      const failStart = (message: string): void => {
+        resetBdjSession();
+        emit("session-error", { message });
+        if (!response.destroyed && !response.headersSent && !response.writableEnded) response.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: message }));
+        for (const waiter of pendingStartResponses.splice(0)) if (!waiter.destroyed && !waiter.headersSent && !waiter.writableEnded) waiter.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: message }));
+      };
       void (async () => {
         let launch: RuntimeLaunch;
         try {
@@ -178,7 +212,8 @@ export async function serve(): Promise<void> {
           launch = { ...(parsed as unknown as typeof launch), discId: discIdOverride ?? parsed.discId };
           activeLaunch = launch;
         }
-        catch (error) { javaSessionStarted = false; response.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: `BD-J launch data is unavailable: ${error instanceof Error ? error.message : String(error)}` })); return; }
+        catch (error) { failStart(`BD-J launch data is unavailable: ${error instanceof Error ? error.message : String(error)}`); return; }
+        try {
         if (launch.session) hdmvVm = new HdmvVm(launch.session.vmPrograms, {
           ...(launch.session.vmEntries ? { entries: launch.session.vmEntries } : {}),
           ...(launch.session.playerProfile ? { profile: launch.session.playerProfile } : {}),
@@ -192,21 +227,36 @@ export async function serve(): Promise<void> {
         const classpath = hostJar;
         const applicationRecord = (app: typeof launch.applications[number]) => {
           const parameters = Buffer.from(app.parameters.join("\n"), "utf8").toString("base64");
-          const fields = [app.bdjoId, app.controlCode, app.binding, app.organizationId, app.applicationId, app.initialClass, app.basePath, app.classPath, parameters].join("|");
-          return Buffer.from(fields, "utf8").toString("base64");
+          const fields = [app.bdjoId, app.controlCode, app.binding, app.organizationId, app.applicationId, app.initialClass, app.basePath, app.classPath, parameters];
+          if (fields.slice(0, 8).some((field) => String(field).includes("|"))) throw new Error(`BD-J application '${app.initialClass}' has a descriptor field containing '|', which the Java host cannot decode.`);
+          return Buffer.from(fields.join("|"), "utf8").toString("base64");
         };
         const java = optionValue("--java") ?? "java";
         const args = [`-Dbluray.vfs.root=${resolve(root, "bdj")}`, "-Djava.awt.headless=true", "-cp", classpath,
           "com.bdmv2web.bdj.BdjMain", launch.discId, launch.initialBdjoId, String(launch.applications.length), ...launch.applications.map(applicationRecord)];
-        javaProcess = spawn(java, args, { cwd: root, stdio: "pipe", windowsHide: true });
-        javaProcess.stdout.setEncoding("utf8");
-        javaProcess.stderr.setEncoding("utf8");
+        const child = spawn(java, args, { cwd: root, stdio: "pipe", windowsHide: true });
+        javaProcess = child;
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        let startupReady = false;
+        let resolveStartupReady!: () => void;
+        let rejectStartupReady!: (error: Error) => void;
+        let startupTimer: ReturnType<typeof setTimeout>;
+        const startupReadyPromise = new Promise<void>((resolveReady, rejectReady) => {
+          resolveStartupReady = () => { startupReady = true; clearTimeout(startupTimer); resolveReady(); };
+          rejectStartupReady = (error) => { clearTimeout(startupTimer); rejectReady(error); };
+          startupTimer = setTimeout(() => {
+            rejectStartupReady(new Error("BD-J Java host did not complete startup within 30 seconds."));
+            if (javaProcess === child && child.exitCode === null) child.kill();
+          }, 30_000);
+        });
         let stdout = "";
-        javaProcess.stdout.on("data", (chunk: string) => {
+        child.stdout.on("data", (chunk: string) => {
           stdout += chunk;
           const lines = stdout.split(/\r?\n/); stdout = lines.pop() ?? "";
           for (const line of lines) {
-            if (line.startsWith("BDMV_FRAME\t")) { latestFrame = { sequence: ++frameSequence, data: line.slice(11) }; emit("frame", latestFrame); }
+            if (line === "BDMV_READY") resolveStartupReady();
+            else if (line.startsWith("BDMV_FRAME\t")) { latestFrame = { sequence: ++frameSequence, data: line.slice(11) }; emit("frame", latestFrame); }
             else if (line.startsWith("BDMV_TRACE\t")) {
               const trace = decodeTrace(line);
               process.stdout.write(`[BD-J] ${trace}\n`);
@@ -217,6 +267,7 @@ export async function serve(): Promise<void> {
               const fields = Buffer.from(payload, "base64").toString("utf8").split("\u001f");
               let result: string;
               void (async () => {
+              if (javaProcess !== child) return;
               try {
                 if (operation === "discId") result = launch.discId;
                 else if (operation === "xletEvent") { emit("xlet-event", { name: fields[0] ?? "", value: fields[1] ?? "", bdjoId: activeBdjoId }); result = "ok"; }
@@ -239,7 +290,7 @@ export async function serve(): Promise<void> {
                     hdmvMode = true; emit("hdmv-mode", { active: true });
                     const snapshot = hdmvVm?.selectTitle(title); const actions = hdmvVm?.drainActions() ?? [];
                     emit("navigation", { title, status: snapshot?.status, programId: snapshot?.programId, pc: snapshot?.pc, gpr: snapshot?.registers.gpr, psr: snapshot?.registers.psr, actions });
-                    if (actions.length) emit("hdmv-actions", { actions });
+                    if (actions.length) emit("hdmv-actions", { actions, origin: "authored" });
                     const message = Buffer.from(`${title}|stop`, "utf8").toString("base64");
                     javaProcess?.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${message}\n`); result = "requested";
                   } else throw new Error(`Title ${title} target is unavailable.`);
@@ -265,7 +316,7 @@ export async function serve(): Promise<void> {
                     const snapshot = hdmvVm?.selectTitle(0);
                     const actions = hdmvVm?.drainActions() ?? [];
                     emit("navigation", { type: "title", title: 0, target, status: snapshot?.status, programId: snapshot?.programId, pc: snapshot?.pc, gpr: snapshot?.registers.gpr, psr: snapshot?.registers.psr, actions });
-                    if (actions.length) emit("hdmv-actions", { actions });
+                    if (actions.length) emit("hdmv-actions", { actions, origin: "authored" });
                     javaProcess?.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${Buffer.from("0|stop", "utf8").toString("base64")}\n`);
                     result = "requested";
                   } else throw new Error("The INDEX Top Menu target is unavailable.");
@@ -293,6 +344,7 @@ export async function serve(): Promise<void> {
                       const executable = optionValue("--player-executable");
                       const plan = buildExternalPlayerLaunch(target, { bdmvRoot, adapter: (optionValue("--player") ?? "system") as "system" | "mpv", ...(executable ? { executable } : {}) });
                       const handoff = await launchExternalPlayer(plan);
+                      if (javaProcess !== child) return;
                       const event = { playerId, playlist, ...handoff };
                       latestPlayerHandoffs.set(playerId, event);
                       emit("player-handoff", event);
@@ -359,29 +411,55 @@ export async function serve(): Promise<void> {
                 else if (["playerNavigate", "playerStream", "playerGain"].includes(operation ?? "")) result = `unavailable: BD-J player operation '${operation ?? ""}' has no confirmed adapter capability.`;
                 else result = `ERROR: Unsupported local service operation '${operation}'.`;
               } catch (error) { result = `ERROR: ${error instanceof Error ? error.message : String(error)}`; }
+              if (javaProcess !== child) return;
               if (operation === "playerStart" && (result.startsWith("ERROR: ") || result.startsWith("unavailable:"))) activePlayerTokens.delete(fields[0] ?? "");
               if (operation === "playerStop" && result.startsWith("unavailable:")) activePlayerTokens.delete(fields[0] ?? "");
-              javaProcess?.stdin.write(`BDMV_RES\t${id}\t${Buffer.from(result, "utf8").toString("base64")}\n`);
+              child.stdin.write(`BDMV_RES\t${id}\t${Buffer.from(result, "utf8").toString("base64")}\n`);
               emit("rpc", { operation, status: result.startsWith("ERROR: ") ? "unsupported" : "ok" });
               })();
             } else if (line.trim()) emit("diagnostic", { message: line });
           }
         });
-        javaProcess.stderr.on("data", (chunk: string) => {
+        child.stderr.on("data", (chunk: string) => {
           process.stderr.write(`[BD-J stderr] ${chunk}`);
           emit("diagnostic", { error: true, message: chunk.trim() });
         });
-        javaProcess.once("error", (error) => { javaSessionStarted = false; emit("session-error", { message: `Could not start Java executable '${java}': ${error.message}` }); });
-        javaProcess.once("exit", (code, signal) => { const process = javaProcess; javaProcess = undefined; emit("session-exit", { code, signal }); if (process?.exitCode === null) process.kill(); });
-        response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: false, pid: javaProcess.pid ?? null }));
-      })();
+        child.once("error", (error) => {
+          if (javaProcess !== child) return;
+          if (startupReady) failStart(`Java session '${java}' reported an error: ${error.message}`);
+          else rejectStartupReady(new Error(`Could not start Java executable '${java}': ${error.message}`));
+        });
+        child.once("exit", (code, signal) => {
+          if (javaProcess !== child) return;
+          if (!startupReady) {
+            emit("session-exit", { code, signal });
+            rejectStartupReady(new Error(`BD-J Java process exited before startup completed (code ${String(code)}, signal ${String(signal)}).`));
+            return;
+          }
+          resetBdjSession();
+          emit("session-exit", { code, signal });
+          if (!stopping) emit("session-error", { message: `BD-J Java process exited (code ${String(code)}, signal ${String(signal)}). Restart the BD-J session to continue.` });
+          if (child.exitCode === null) child.kill();
+        });
+        await startupReadyPromise;
+        javaSessionReady = true;
+        if (!response.destroyed && !response.headersSent && !response.writableEnded) response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: false, pid: child.pid ?? null }));
+        for (const waiter of pendingStartResponses.splice(0)) if (!waiter.destroyed && !waiter.headersSent && !waiter.writableEnded) waiter.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ started: true, attached: true, pid: child.pid ?? null }));
+        } catch (error) {
+          if (!response.writableEnded) failStart(`Could not start the BD-J Java session: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      })().catch((error: unknown) => {
+        if (!response.writableEnded) failStart(`Could not start the BD-J Java session: ${error instanceof Error ? error.message : String(error)}`);
+      });
       return;
     }
     if (url.pathname === "/api/bdj/input" && request.method === "POST") {
-      if (!javaProcess || javaProcess.exitCode !== null) { response.writeHead(409).end("BD-J session is not running."); return; }
+      const hostProcess = javaProcess;
+      if (!hostProcess || hostProcess.exitCode !== null) { response.writeHead(409).end("BD-J session is not running."); return; }
       let body = ""; request.setEncoding("utf8"); request.on("data", (part: string) => { body += part; });
       request.on("end", () => {
         try {
+          if (javaProcess !== hostProcess || hostProcess.exitCode !== null) { response.writeHead(409).end("BD-J session changed while reading input."); return; }
           const input = JSON.parse(body) as { kind: "key" | "pointer"; keyCode?: number; modifiers?: number; x?: number; y?: number; type?: "pressed" | "released" };
           if (input.kind === "key" && (!Number.isInteger(input.keyCode) || !Number.isInteger(input.modifiers ?? 0) || ![undefined, "pressed", "released"].includes(input.type))) throw new Error("Invalid key event.");
           if (input.kind === "pointer" && (!Number.isFinite(input.x) || !Number.isFinite(input.y))) throw new Error("Invalid pointer event.");
@@ -389,17 +467,18 @@ export async function serve(): Promise<void> {
           if (input.kind === "pointer" || (input.type !== "released" && [10, 13, 32].includes(input.keyCode ?? 0))) pendingUserSelection = true;
       const value = input.kind === "pointer" ? `${input.x ?? 0}|${input.y ?? 0}` : `${input.keyCode ?? 0}|${input.modifiers ?? 0}|${input.type === "released" ? 402 : 401}`;
           const encoded = Buffer.from(value, "utf8").toString("base64");
-          javaProcess?.stdin.write(`BDMV_EVENT\t${input.kind === "key" ? "input" : "pointer"}\t\t${encoded}\n`);
+          hostProcess.stdin.write(`BDMV_EVENT\t${input.kind === "key" ? "input" : "pointer"}\t\t${encoded}\n`);
           response.writeHead(204).end();
         } catch { response.writeHead(400).end("Invalid input request."); }
       }); return;
     }
     if (url.pathname === "/api/bdj/hdmv" && request.method === "POST") {
-      const sessionVm = hdmvVm;
-      if (!javaProcess || javaProcess.exitCode !== null || !sessionVm || !hdmvMode) { response.writeHead(409).end("The BD-J session is not in HDMV mode."); return; }
+      const hostProcess = javaProcess; const sessionVm = hdmvVm;
+      if (!hostProcess || hostProcess.exitCode !== null || !sessionVm || !hdmvMode) { response.writeHead(409).end("The BD-J session is not in HDMV mode."); return; }
       let body = ""; request.setEncoding("utf8"); request.on("data", (part: string) => { body += part; });
       request.on("end", () => {
         try {
+          if (javaProcess !== hostProcess || hostProcess.exitCode !== null || hdmvVm !== sessionVm || !hdmvMode) { response.writeHead(409).end("BD-J session changed while reading HDMV input."); return; }
           const input: unknown = JSON.parse(body);
           if (!isRecord(input) || typeof input.kind !== "string") throw new Error("Invalid HDMV request.");
           if (input.kind === "context") {
@@ -417,7 +496,7 @@ export async function serve(): Promise<void> {
           } else throw new Error("Unsupported HDMV request.");
           const actions = sessionVm.drainActions();
           emit("hdmv-state", { snapshot: sessionVm.snapshot() });
-          if (actions.length) emit("hdmv-actions", { actions });
+          if (actions.length) emit("hdmv-actions", { actions, origin: "authored" });
           response.writeHead(204).end();
         } catch { response.writeHead(400).end("Invalid HDMV request."); }
       }); return;
@@ -428,6 +507,7 @@ export async function serve(): Promise<void> {
       let body = ""; request.setEncoding("utf8"); request.on("data", (part: string) => { body += part; });
       request.on("end", () => {
         try {
+          if (javaProcess !== hostProcess || hostProcess.exitCode !== null || hdmvVm !== sessionVm || activeLaunch !== launch) { response.writeHead(409).end("BD-J session changed while reading the title request."); return; }
           const input: unknown = JSON.parse(body);
           if (!isRecord(input) || !Number.isSafeInteger(input.title) || (input.title as number) < 0 || (input.title as number) > 0xffff) throw new Error("Invalid title number.");
           const title = input.title as number;
@@ -458,10 +538,12 @@ export async function serve(): Promise<void> {
       }); return;
     }
     if (url.pathname === "/api/bdj/media-event" && request.method === "POST") {
-      if (!javaProcess || javaProcess.exitCode !== null) { response.writeHead(409).end("BD-J session is not running."); return; }
+      const hostProcess = javaProcess;
+      if (!hostProcess || hostProcess.exitCode !== null) { response.writeHead(409).end("BD-J session is not running."); return; }
       let body = ""; request.setEncoding("utf8"); request.on("data", (part: string) => { body += part; });
       request.on("end", () => {
         try {
+          if (javaProcess !== hostProcess || hostProcess.exitCode !== null) { response.writeHead(409).end("BD-J session changed while reading the media event."); return; }
           const observation = JSON.parse(body) as { playerId?: string; event?: string };
           const missingEnded = /^missing-ended\|\d+\|[^|\r\n]+$/.test(observation.event ?? "");
           if (!observation.playerId || !( ["started", "presented", "ended", "error", "blocked", "stopped"].includes(observation.event ?? "")
@@ -473,7 +555,7 @@ export async function serve(): Promise<void> {
           if (terminal || ["error", "blocked", "stopped"].includes(observation.event!)) browserMediaPlayers.delete(observation.playerId);
           if (terminal || ["error", "stopped"].includes(observation.event!)) menuMediaSessions.delete(observation.playerId);
           const encoded = Buffer.from(observation.event!, "utf8").toString("base64");
-          javaProcess?.stdin.write(`BDMV_EVENT\tplayer\t${observation.playerId}\t${encoded}\n`);
+          hostProcess.stdin.write(`BDMV_EVENT\tplayer\t${observation.playerId}\t${encoded}\n`);
           if (terminal || ["error", "stopped"].includes(observation.event!)) activePlayerTokens.delete(observation.playerId);
           emit("player-observation", observation);
           response.writeHead(204).end();
@@ -484,19 +566,21 @@ export async function serve(): Promise<void> {
     let pathname: string;
     try { pathname = decodeURIComponent(url.pathname); }
     catch { response.writeHead(400).end("Invalid URL path."); return; }
-    const target = resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
-    const pathFromRoot = relative(root, target);
-    if (pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`) || resolve(target) !== target) { response.writeHead(403).end("Path is outside the package."); return; }
-    void stat(target).then((info) => {
-      if (!info.isFile()) { response.writeHead(404).end("File not found."); return; }
+    const requestedPath = resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
+    if (outsidePackage(requestedPath)) { response.writeHead(403).end("Path is outside the package."); return; }
+    void realpath(requestedPath).then(async (target) => {
+      if (outsidePackage(target)) { response.writeHead(403).end("Path is outside the package."); return; }
+      const handle = await open(target, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+      const info = await handle.stat();
+      if (!info.isFile()) { await handle.close(); response.writeHead(404).end("File not found."); return; }
       response.setHeader("Content-Type", contentTypes[extname(target).toLowerCase()] ?? "application/octet-stream");
       response.setHeader("Content-Length", String(info.size));
       response.writeHead(200);
-      if (request.method === "HEAD") { response.end(); return; }
-      const stream = createReadStream(target);
-      stream.on("error", () => { if (!response.headersSent) response.writeHead(500); response.end("Could not read package file."); });
+      if (request.method === "HEAD") { await handle.close(); response.end(); return; }
+      const stream = handle.createReadStream();
+      stream.on("error", () => response.destroy());
       stream.pipe(response);
-    }).catch(() => response.writeHead(404).end("File not found."));
+    }).catch(() => { if (!response.headersSent) response.writeHead(404).end("File not found."); else response.destroy(); });
   });
   await new Promise<void>((resolveListen, reject) => {
     server.once("error", reject);
@@ -504,6 +588,7 @@ export async function serve(): Promise<void> {
   }).catch((error: unknown) => fail("CLI_SERVE_FAILED", `Could not start local package server: ${error instanceof Error ? error.message : String(error)}`));
   process.stdout.write(`Serving ${root}\nOpen http://127.0.0.1:${String(port)}/\nPress Ctrl-C to stop.\n`);
   const stop = () => {
+    stopping = true;
     if (javaProcess && javaProcess.exitCode === null) {
       javaProcess.stdin.write(`BDMV_EVENT\tshutdown\t\t${Buffer.from("", "utf8").toString("base64")}\n`);
       const child = javaProcess;
@@ -517,6 +602,22 @@ export async function serve(): Promise<void> {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function parseByteRange(header: string | undefined, size: number): { start: number; end: number } | null | undefined {
+  if (header === undefined) return undefined;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header);
+  if (!match || (!match[1] && !match[2]) || size === 0) return null;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return null;
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isSafeInteger(requestedEnd)) return null;
+  const end = Math.min(requestedEnd, size - 1);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start >= size || start > end) return null;
+  return { start, end };
+}
 function bdjoIdFromPath(path: string): string | undefined { return path.replaceAll("\\", "/").match(/(?:^|\/)BDJO\/(\d{5})\.bdjo$/i)?.[1]; }
 function decodeTrace(line: string): string {
   const fields = line.slice("BDMV_TRACE\t".length).split("\t");

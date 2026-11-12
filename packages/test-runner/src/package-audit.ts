@@ -252,14 +252,19 @@ function auditScript(text: string, source: string, checks: AuditCheck[], refs: R
     [/\bimport\b/, "BUNDLE_IMPORT", "Module imports are not permitted"],
     [/\bimportScripts\s*\(/, "BUNDLE_IMPORT", "Worker imports are not permitted"],
     [/\b(?:eval|Function)\s*\(/, "BUNDLE_EVAL", "Dynamic code evaluation is not permitted"],
-    [/\bfetch\s*\(|\bnew\s+(?:XMLHttpRequest|WebSocket|EventSource)\s*\(|\bXMLHttpRequest\b|\b(?:window|globalThis|self)\s*\.\s*(?:fetch|WebSocket|EventSource)\b/, "BUNDLE_NETWORK_API", "Network-capable API reference found in runtime script"],
+    [/\bnew\s+(?:XMLHttpRequest|WebSocket)\s*\(|\bXMLHttpRequest\b|\bWebSocket\b|\b(?:window|globalThis|self)\s*\.\s*(?:fetch|WebSocket|EventSource)\b/, "BUNDLE_NETWORK_API", "Network-capable API reference found in runtime script"],
   ];
-  for (const [pattern, code, message] of forbidden) if (!(allowLocalSessionTransport && code === "BUNDLE_NETWORK_API") && pattern.test(codeOnly)) add(checks, code, "fail", message, source);
-  if (allowLocalSessionTransport) {
-    const callCount = [...codeOnly.matchAll(/\b(?:fetch|EventSource)\s*\(/g)].length;
-    const localCallCount = [...text.matchAll(/\b(?:fetch|EventSource)\s*\(\s*(["'])\/(?:api\/bdj\/)[^"']*\1/g)].length;
-    if (callCount !== localCallCount) add(checks, "BUNDLE_NETWORK_API", "fail", "BD-J runtime transport must use the same-origin local session API", source, { calls: callCount, localCalls: localCallCount });
-  }
+  for (const [pattern, code, message] of forbidden) if (pattern.test(codeOnly)) add(checks, code, "fail", message, source);
+  const fetchReferences = [...codeOnly.matchAll(/\bfetch\b/g)].length;
+  const eventSourceReferences = [...codeOnly.matchAll(/\bEventSource\b/g)].length;
+  const calls = [...codeOnly.matchAll(/\b(?:fetch|EventSource)\s*\(/g)].length;
+  const localCalls = [...text.matchAll(/\b(?:fetch|EventSource)\s*\(\s*(["'])\/(?:api\/bdj\/)[^"']*\1/g)].length;
+  const localTransportOnly = allowLocalSessionTransport
+    && fetchReferences === [...codeOnly.matchAll(/\bfetch\s*\(/g)].length
+    && eventSourceReferences === [...codeOnly.matchAll(/\bEventSource\s*\(/g)].length
+    && calls === localCalls;
+  if (allowLocalSessionTransport && !localTransportOnly) add(checks, "BUNDLE_NETWORK_API", "fail", "BD-J runtime transport must use direct same-origin local session API calls", source, { calls, localCalls, fetchReferences, eventSourceReferences });
+  if (!allowLocalSessionTransport && (fetchReferences > 0 || eventSourceReferences > 0)) add(checks, "BUNDLE_NETWORK_API", "fail", "Network-capable API reference found in runtime script", source, { fetchReferences, eventSourceReferences });
   for (const match of text.matchAll(/\b(?:fetch|open)\s*\([^,)]*(?:,\s*)?(['"])(https?:\/\/|\/\/)/gi)) add(checks, "BUNDLE_EXTERNAL_RUNTIME_URL", "fail", "Browser JVM runtime code contains an external URL literal", source, { expression: match[0] });
   const dynamicNetworkAccess = /\b(?:window|globalThis|self)\s*\[\s*(?:[^\]]+)\s*\]/g;
   for (const match of text.matchAll(dynamicNetworkAccess)) {

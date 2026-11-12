@@ -413,6 +413,8 @@ export class HdmvVm {
       return this.snapshot();
     } catch (error) {
       const issue = { code: error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", message: error instanceof Error ? error.message : String(error), source: null };
+      this.pendingTitleCall = null; this.titleTransition = false;
+      if (this.status === "suspended" && !this.continuation) this.status = "idle";
       this.diagnostic = issue; this.diagnostics.push(issue);
       this.record({ source: null, raw: null, decoded: "BDJ_TITLE_SELECTION_REJECTED", registerDelta: EMPTY_DELTA, status: this.status, diagnostic: issue });
       return this.snapshot();

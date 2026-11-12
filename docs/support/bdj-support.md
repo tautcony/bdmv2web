@@ -31,7 +31,7 @@ bdmv2web serve <package-directory> --player system
 bdmv2web serve <package-directory> --player mpv --player-executable <path-to-mpv>
 ```
 
-The system adapter opens only explicitly whole-file targets. The mpv adapter accepts bounded multi-item playlists. A successful process launch records `requested`; it does not report playback telemetry. Java player state remains `Prefetched` until the browser reports an observed media event. A bounded playlist can therefore leave an authored BD-J menu waiting for media progress.
+The system adapter opens explicitly whole-file targets with the operating system default. `--player system --player-executable <path>` runs the selected executable with the media path. The mpv adapter accepts bounded multi-item playlists and receives the configured playback arguments. A successful process launch records `requested`; it does not report playback telemetry. Java player state remains `Prefetched` until the browser reports an observed media event. A bounded playlist can therefore leave an authored BD-J menu waiting for media progress.
 
 ## Implemented service operations
 

@@ -31,6 +31,8 @@ public final class BdjMain {
                 manager.add(decodeApplication(args[index + 3]));
             }
             manager.activate(args[1], 0xffff);
+            System.out.println("BDMV_READY");
+            System.out.flush();
             BdjHostBridge.trace("runtime", "BdjMain", "main", "disc=" + args[0] + " applications=" + count);
             shutdown.await();
         } catch (Throwable error) {

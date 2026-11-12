@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -78,7 +78,8 @@ async function fixture(parent: string, args: Array<{ bdjoId: string; controlCode
     discId: "fixture-disc", initialBdjoId: "00000", applications: args, session: { vmPrograms: [], vmEntries: [], bdjoDescriptors: [{ path: "BDJO/00000.bdjo", terminalInfo: { titleSearchMask: true, menuCallMask: true }, accessiblePlaylists: { accessToAll: true, playlistIds: [] } }], ...runtimeSession },
   }));
   const java = join(parent, "fake-java");
-  await writeFile(java, script);
+  const executable = script.replace(/^#![^\n]*\n/, (shebang) => `${shebang}process.stdout.write('BDMV_READY\\n');\n`);
+  await writeFile(java, executable);
   await chmod(java, 0o755);
   return { root, java };
 }
@@ -345,8 +346,8 @@ it.skipIf(process.platform === "win32")("routes mixed BD-J and HDMV title events
     }
     expect(await readFile(join(parent, "rpc-response.log"), "utf8")).toBe("requested");
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/hdmv`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "event", event: { type: "TOP_MENU" } }) })).status).toBe(204);
-    await expect(readEvent(reader, "hdmv-actions")).resolves.toMatchObject({ actions: [expect.objectContaining({ type: "TITLE_SEARCH", payload: { title: 0 } })] });
-    expect((await fetch(`http://127.0.0.1:${port}/api/bdj/title`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: 0 }) })).status).toBe(204);
+    await expect(readEvent(reader, "hdmv-actions")).resolves.toMatchObject({ actions: [expect.objectContaining({ type: "TITLE_SEARCH", payload: { title: 0 } })], origin: "authored" });
+    expect((await fetch(`http://127.0.0.1:${port}/api/bdj/title`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: 0, origin: "authored" }) })).status).toBe(204);
     await expect(readEvent(reader, "navigation")).resolves.toMatchObject({ title: 0, programId: 1 });
     await reader.cancel();
   } finally {
@@ -436,6 +437,82 @@ it.skipIf(process.platform === "win32")("authored Java title selection bypasses 
     const masked = await fetch(`http://127.0.0.1:${port}/api/bdj/title`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: 1 }) });
     expect(masked.status).toBe(400);
     expect(await masked.text()).toContain("masks user title-search requests");
+  } finally {
+    await stopServer(serverProcess, parent);
+  }
+});
+
+it.skipIf(process.platform === "win32")("refuses package symlinks that resolve outside the package directory", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "bdmv2web serve symlink "));
+  let serverProcess: ChildProcess | undefined;
+  try {
+    const packageData = await fixture(parent, application, "#!/usr/bin/env node\n");
+    const outsideDir = join(parent, "outside-dir");
+    await mkdir(outsideDir);
+    await writeFile(join(outsideDir, "secret.txt"), "outside-package-secret");
+    await symlink(join(outsideDir, "secret.txt"), join(packageData.root, "leak.txt"));
+    await symlink(outsideDir, join(packageData.root, "escape"));
+    const port = await freePort();
+    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port)], { stdio: ["ignore", "pipe", "pipe"] });
+    await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
+    for (const path of ["leak.txt", "escape/secret.txt"]) {
+      const leak = await fetch(`http://127.0.0.1:${port}/${path}`);
+      expect(leak.status).toBe(403);
+      expect(await leak.text()).not.toContain("outside-package-secret");
+    }
+    expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200);
+  } finally {
+    await stopServer(serverProcess, parent);
+  }
+});
+
+it.skipIf(process.platform === "win32")("reports a Java spawn failure and keeps the session retryable", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "bdmv2web serve spawn failure "));
+  let serverProcess: ChildProcess | undefined;
+  try {
+    const packageData = await fixture(parent, application, "#!/usr/bin/env node\n");
+    const port = await freePort();
+    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", join(parent, "missing-java")], { stdio: ["ignore", "pipe", "pipe"] });
+    await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
+    const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
+    const first = await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" });
+    expect(first.status).toBe(500);
+    expect(await first.text()).toContain("Could not start Java executable");
+    await expect(readEvent(reader, "session-error")).resolves.toMatchObject({ message: expect.stringContaining("Could not start Java executable") });
+    expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(500);
+    const reconnected = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
+    await expect(readEvent(reconnected, "session")).resolves.toMatchObject({ running: false });
+    await reader.cancel(); await reconnected.cancel();
+  } finally {
+    await stopServer(serverProcess, parent);
+  }
+});
+
+it.skipIf(process.platform === "win32")("starts a fresh Java session after the host exits", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "bdmv2web serve restart "));
+  const launches = join(parent, "launches.log");
+  const fakeJava = [
+    "#!/usr/bin/env node",
+    "const fs = require('node:fs');",
+    `const launches = ${JSON.stringify(launches)};`,
+    "fs.appendFileSync(launches, 'launch\\n');",
+    "if (fs.readFileSync(launches, 'utf8').trim().split('\\n').length === 1) process.exit(1);",
+    "let input = ''; process.stdin.on('data', (chunk) => { input += chunk; const lines = input.split(/\\r?\\n/); input = lines.pop() || ''; for (const line of lines) if (line.startsWith('BDMV_EVENT\\tshutdown')) process.exit(0); });",
+  ].join("\n");
+  let serverProcess: ChildProcess | undefined;
+  try {
+    const packageData = await fixture(parent, application, fakeJava);
+    const port = await freePort();
+    serverProcess = spawn(process.execPath, [cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
+    await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
+    const reader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
+    expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
+    await expect(readEvent(reader, "session-exit")).resolves.toMatchObject({ code: 1 });
+    const restarted = await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" });
+    expect(restarted.status).toBe(200);
+    expect(await restarted.json()).toMatchObject({ started: true, attached: false, pid: expect.any(Number) });
+    expect(await waitForText(launches, "launch\nlaunch\n")).toBe("launch\nlaunch\n");
+    await reader.cancel();
   } finally {
     await stopServer(serverProcess, parent);
   }
