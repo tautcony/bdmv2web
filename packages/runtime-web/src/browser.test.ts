@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { access } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
+import { installBdjKeyboardInput, installBdjPointerInput, startBdjRuntime, type BdjPackageData } from "./bdj-runtime.js";
 
 const validIr = {
   schemaVersion: "1.0", entries: [], programs: [], menus: [], playlists: [], mediaAssets: [], diagnostics: [],
@@ -64,7 +69,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
       pause() {}, load() {},
     };
   };
-  for (const id of ["runtime-status", "runtime-status-copy", "runtime-diagnostics", "start-menu", "audio-mute-toggle", "menu-canvas", "popup-canvas", "menu-background", "menu-audio"]) elements.set(id, element(id));
+  for (const id of ["runtime-status", "runtime-status-copy", "runtime-diagnostics", "start-menu", "audio-mute-toggle", "menu-canvas", "popup-canvas", "menu-background", "menu-audio", "bdj-runtime-root"]) elements.set(id, element(id));
   const document = { getElementById: (id: string) => elements.get(id) ?? null } as unknown as Document;
   const fakeWindow = {
     devicePixelRatio: 1,
@@ -111,6 +116,16 @@ async function launch(data: Record<string, unknown>, options: { assetBatches?: u
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+it("requires a local HTTP URL before starting the BD-J runtime", () => {
+  vi.stubGlobal("location", { protocol: "file:" });
+
+  expect(() => startBdjRuntime(
+    packageData() as unknown as BdjPackageData,
+    {} as HTMLElement,
+    { report: vi.fn(), trace: vi.fn() },
+  )).toThrow("BD-J execution requires `bdmv2web serve <package-directory>` and a local HTTP URL.");
+});
+
 it("runs the initial VM turn and keeps menu input active when the package has no media", async () => {
   const trace = vi.spyOn(console, "info").mockImplementation(() => {});
   const data = packageData({
@@ -137,6 +152,55 @@ it("runs the initial VM turn and keeps menu input active when the package has no
 });
 
 describe("browser boot", () => {
+  it("starts the packaged Spider-Man BD-J app from the existing disc fixture", async () => {
+    const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../");
+    const bdmvRoot = resolve(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV");
+    const disc = await parseBdmv(bdmvRoot);
+    const appPaths = new Set((disc.bdjos ?? []).flatMap((bdjo) => bdjo.applications.flatMap((application) => [application.basePath, ...application.classPath.split(/[;:]/).map((value) => value.trim()).filter(Boolean)])));
+    const bdjFiles = [...appPaths].map((basePath) => {
+      const jarPath = basePath.toLocaleLowerCase("en-US").endsWith(".jar") ? basePath : `${basePath}.jar`;
+      const path = `BDMV/JAR/${jarPath}`;
+      return { path, packagePath: `bdj/${path}` };
+    });
+    for (const file of bdjFiles) await access(resolve(bdmvRoot, file.path.slice("BDMV/".length)));
+    expect(disc.entries.find((entry) => entry.kind === "firstPlay")?.target).toMatchObject({ objectType: "BDJ", target: "00001" });
+    expect(disc.bdjos?.map((bdjo) => bdjo.path)).toContain("BDJO/00001.bdjo");
+
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("location", { protocol: "http:", hash: "", href: "http://127.0.0.1:4173/" });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      requests.push({ url, ...(init ? { init } : {}) });
+      return { ok: true, status: 200, json: async () => ({ attached: false }), text: async () => "" } as Response;
+    });
+    const eventSource = {
+      closed: false,
+      listeners: new Map<string, Array<(event: MessageEvent<string>) => void>>(),
+      emit(type: string, value: unknown) { for (const listener of this.listeners.get(type) ?? []) listener({ data: JSON.stringify(value) } as MessageEvent<string>); },
+    };
+    vi.stubGlobal("EventSource", class {
+      constructor(readonly url: string) {}
+      addEventListener(type: string, listener: (event: MessageEvent<string>) => void) { eventSource.listeners.set(type, [...(eventSource.listeners.get(type) ?? []), listener]); }
+      close() { eventSource.closed = true; }
+    });
+    vi.stubGlobal("__BDMV_BDJ_CLIENT__", { start: startBdjRuntime, installKeyboardInput: installBdjKeyboardInput, installPointerInput: installBdjPointerInput });
+
+    const host = await launch(packageData({
+      ir: { ...validIr, bdjos: disc.bdjos }, scene: null, bdjRuntime: true,
+      vmEntries: disc.entries, bdjFiles, bdjHostApiPath: "runtime/bdj/bdj-host-api.jar",
+    }));
+    await host.elements.get("start-menu")!.fire("click");
+    await vi.waitFor(() => expect(requests.map((request) => request.url)).toContain("/api/bdj/start"));
+    expect(host.elements.get("runtime-status")?.textContent).toBe("Starting BD-J application from BDJO 00001.");
+
+    await host.fakeWindow.fire("keydown", { code: "Enter", key: "Enter", shiftKey: false, preventDefault() {}, stopImmediatePropagation() {} });
+    await vi.waitFor(() => expect(requests.some((request) => request.url === "/api/bdj/input")).toBe(true));
+    expect(requests.find((request) => request.url === "/api/bdj/input")?.init?.body).toBe(JSON.stringify({ kind: "key", keyCode: 10, modifiers: 0, type: "pressed" }));
+    eventSource.emit("trace", { line: "Spider-Man fixture BD-J trace" });
+    await host.fakeWindow.fire("pagehide");
+    expect(eventSource.closed).toBe(true);
+  });
+
   it("opens a matching popup IGS overlay on POPUP_MENU and closes it on POPUP_OFF", async () => {
     const mainScene = packageData().scene as Record<string, unknown>;
     const data = packageData({
@@ -223,6 +287,11 @@ describe("browser boot", () => {
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
 
     expect(host.audioUrls).toEqual(["assets/audio/sound-4.wav"]);
+    expect(host.elements.get("runtime-status")?.textContent).toBe("Playback unavailable in menu preview (LINK_PLAY_ITEM).");
+
+    const canvas = host.elements.get("menu-canvas")!;
+    await canvas.fire("pointermove", { clientX: 15, clientY: 15 });
+    await canvas.fire("pointerdown", { clientX: 15, clientY: 15 });
     expect(host.elements.get("runtime-status")?.textContent).toBe("Playback unavailable in menu preview (LINK_PLAY_ITEM).");
   });
 

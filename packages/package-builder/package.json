@@ -8,5 +8,5 @@
   "types": "./dist/index.d.ts",
   "scripts": { "build": "tsc -p tsconfig.build.json && node scripts/copy-templates.mjs", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
   "dependencies": { "@bdmv2web/core": "workspace:*", "@bdmv2web/hdmv": "workspace:*", "@bdmv2web/media-export": "workspace:*", "@bdmv2web/runtime-web": "workspace:*" },
-  "devDependencies": { "@bdmv2web/test-fixtures": "workspace:*", "@types/node": "24.10.0" }
+  "devDependencies": { "@bdmv2web/bdmv-parser": "workspace:*", "@bdmv2web/igs": "workspace:*", "@bdmv2web/test-fixtures": "workspace:*", "@types/node": "24.10.0" }
 }

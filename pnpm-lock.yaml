@@ -198,6 +198,12 @@ importers:
         specifier: workspace:*
         version: link:../runtime-web
     devDependencies:
+      '@bdmv2web/bdmv-parser':
+        specifier: workspace:*
+        version: link:../bdmv-parser
+      '@bdmv2web/igs':
+        specifier: workspace:*
+        version: link:../igs
       '@bdmv2web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures
