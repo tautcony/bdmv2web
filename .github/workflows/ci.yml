@@ -62,7 +62,7 @@ jobs:
           distribution: temurin
           java-version: "21"
       - name: Download dist from the build job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: workspace-dist
       - name: Install dependencies
@@ -87,7 +87,7 @@ jobs:
       - name: Enable pnpm
         run: corepack enable
       - name: Download dist from the build job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: workspace-dist
       - name: Install dependencies
@@ -129,7 +129,7 @@ jobs:
       - name: Enable pnpm
         run: corepack enable
       - name: Download dist from the build job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: workspace-dist
       # The media-export suites invoke a real ffmpeg/ffprobe when the test
@@ -171,7 +171,7 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
       - name: Download package coverage reports
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: coverage-*
           path: coverage/package-reports
