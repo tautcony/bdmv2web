@@ -13,7 +13,11 @@ import type { BdjPackageData, BdjRuntimeHandle, BdjRuntimeCallbacks } from "./bd
 import { startBdjMenuMedia, type BdjMenuMediaHandle } from "./bdj-menu-media.js";
 
 export type PackageMenuMedia = MenuLoopMediaPackage;
-export interface PackageData extends BdjPackageData { title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: Array<{ playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; scene: SerializedScene }>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
+/** One PlayItem's pointer at a menu composition. The composition itself is
+ * stored once in `PackageData.scenes`, because a menu playlist can name the same
+ * clip/PID from hundreds of PlayItems. */
+export interface PackageMenuSceneEntry { playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; sceneId: string }
+export interface PackageData extends BdjPackageData { title?: string; scene: SerializedScene | null; popupScenes?: SerializedScene[]; menuScenes?: PackageMenuSceneEntry[]; scenes?: Record<string, SerializedScene>; menuPlaylistIds?: number[]; menuPlaylistMarks?: Array<{ playlistId: number; marks: Array<{ index: number; playItemRef: number }> }>; preMenuPlaylistIds?: number[]; pgsTracks?: unknown[]; vmPrograms?: VmProgram[]; profile?: VmOptions["profile"]; limits?: VmOptions["limits"]; externalTargets?: ExternalMediaTargets; vmInitialProgramId?: number; vmFirstPlayProgramId?: number; sounds?: Record<number, string>; media?: MenuLoopMediaPackage; menuMedia?: PackageMenuMedia[]; inputConfig?: Partial<MenuInputConfig> }
 interface Asset { id: string; dataUrl: string }
 declare global { var __BDMV_MENU_DATA__: PackageData | undefined; var __BDMV_MENU_ASSETS__: Asset[][] | undefined; var __BDMV_BDMV_PATH__: string | undefined; var __BDMV_BDJ_CLIENT__: { start: (data: BdjPackageData, root: HTMLElement, callbacks: BdjRuntimeCallbacks, requestedBdjoId?: string) => BdjRuntimeHandle; installKeyboardInput: (target: Window, runtime: BdjRuntimeHandle) => () => void; installPointerInput: (root: HTMLElement, runtime: BdjRuntimeHandle) => () => void } | undefined; }
 
@@ -92,7 +96,11 @@ async function boot(): Promise<void> {
       return fallbackToFirst ? 1 : undefined;
     };
     const menuSceneTarget = (playlist: number, playItem: number, requestedStream: number, fallbackToFirst = true) => {
-      const candidates = (data.menuScenes ?? []).filter((item) => item.playlistId === playlist && (item.playItem ?? 0) === playItem);
+      const candidates = (data.menuScenes ?? []).flatMap((item) => {
+        if (item.playlistId !== playlist || (item.playItem ?? 0) !== playItem) return [];
+        const scene = data.scenes?.[item.sceneId];
+        return scene ? [{ ...item, scene }] : [];
+      });
       if (!candidates.length) return undefined;
       const hasStreamMetadata = candidates.some((item) => item.igStreamCount !== undefined || item.igStreamNumber !== undefined);
       const selectedStream = effectiveMenuIgStreamNumber(playlist, playItem, requestedStream, fallbackToFirst);
@@ -105,6 +113,7 @@ async function boot(): Promise<void> {
         offerRetry: (retry) => { retryMedia = retry; start.textContent = "Retry menu media"; start.hidden = false; start.disabled = false; },
         clearRetry: () => { retryMedia = null; if (!retrySound) start.hidden = true; },
         resolvePlayItem: (playlist, action) => requestedPlayItem(playlist, action),
+        mediaStarted: () => { if (menuStopped) { menuStopped = false; updateAudioControl(); } },
       }, menuMedia)
       : new PreviewPlaybackBridge(vm, (message) => { showStatus(message); });
     let controller: MenuController | null = null;
@@ -202,11 +211,10 @@ async function boot(): Promise<void> {
       while (pendingActions.length) {
         const action = pendingActions.shift()!;
         const inputController = popupController ?? controller;
-        if (action.type === "PLAY_STOP" && action.payload.implicit === true) {
-          continue;
-        } else if (action.type === "PLAY_STOP" && playbackBridge.resumeStoppedMenu) {
-          menuStopped = true;
-          updateAudioControl();
+        if (action.type === "PLAY_STOP") {
+          // libbluray closes the playlist on PLAY_STOP whatever requested it; the
+          // next play request, or the control's resume, starts the menu again.
+          if (playbackBridge.resumeStoppedMenu) { menuStopped = true; updateAudioControl(); }
           mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
         } else if (action.type === "SET_STREAM") {
           if (typeof action.payload.interactiveGraphicsStream === "number") activeIgStreamNumber = currentIgStreamNumber();
@@ -329,7 +337,7 @@ async function boot(): Promise<void> {
           continue;
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistHasMedia(action.payload.playlist))) {
           closePopup();
-          if (!menuStopped) setMenuMuted(true);
+          setMenuMuted(true);
           const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest, { allowMissing: true });
           const bdmvPath = globalThis.__BDMV_BDMV_PATH__;
           const handoff = requestExternalPlayback({

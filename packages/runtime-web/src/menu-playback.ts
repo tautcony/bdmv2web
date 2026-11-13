@@ -77,6 +77,9 @@ export interface MenuLoopPlaybackHooks {
   /** Resolves the PlayItem a playlist request addresses. Play marks and `LinkPI`
    * both need package metadata the bridge does not carry. */
   resolvePlayItem?: (playlist: number, action: PlaybackAction) => number;
+  /** Called whenever the menu loop is playing again after a `PLAY_STOP`, a media
+   * switch, or the resume control. */
+  mediaStarted?: () => void;
 }
 
 /** Plays the exported menu loop for its matching HDMV playlist and applies primary-audio selections. */
@@ -255,6 +258,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
         }
       }
       if (response) this.confirmStarted(response);
+      this.hooks.mediaStarted?.();
       return true;
     }
     if (!this.startPromise) {
@@ -299,6 +303,7 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     const started = await attempt;
     if (this.startPromise === attempt && !started) this.startPromise = null;
     if (started && response) this.confirmStarted(response);
+    if (started) this.hooks.mediaStarted?.();
     return started;
   }
   private confirmStarted(response: PlaybackAction): void {

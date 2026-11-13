@@ -15,7 +15,9 @@
 
 ## 场景数据
 
-`SerializedScene`（写入 `runtime/disc-data.js` 的 `scene`/`popupScenes`/`menuScenes`）：
+`SerializedScene`（写入 `runtime/disc-data.js` 的 `scene`/`popupScenes`/`scenes`）：
+
+`menuScenes` 只存 PlayItem → 场景的引用（`sceneId`），场景本体在 `data.scenes[sceneId]`。同一构图被多个 PlayItem 引用时运行时只解析一份；`sceneId` 查不到对应场景时该 PlayItem 视为未打包，菜单保持当前画面。`menuSceneKey(scene)`（`clipId:pid`）用于判断"已经在显示这个构图"。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -80,6 +82,8 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 | `LinearPlaybackBridge` | 线性拼接资产 | 每个资产带自己的时间线映射，`PLAY_PLAYLIST_ITEM`/`MARK` 通过显式操作数表换算，不用文件名或 ID 算术 |
 
 `MenuLoopPlaybackBridge` 会在外部播放请求时自动静音菜单音频；按键/点击恢复自动静音，手动静音保持不变。右下角图标显示静音开关状态；媒体尚未启动时，图标仍显示当前静音状态。
+
+`PLAY_STOP` 一律关闭菜单播放列表（暂停背景视频与音轨），无论是 `_jump_object()`、`Call_Object` 这类转移还是 `TERMINATE_PL`（libbluray 由播放器在 `PLAY_STOP` 时关闭 playlist）。转移后紧接的 `PLAY_PLAYLIST*` 会让桥自行重新起播（`mediaStarted` 回调清除停止态）；没有后续播放时控件转为"恢复播放"，用户点击后从暂停位置继续。`JUMP_TITLE` / `CALL_TITLE` 不产生 `PLAY_STOP`，菜单媒体保持播放。
 
 ## 时钟
 
