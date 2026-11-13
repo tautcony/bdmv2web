@@ -23,7 +23,18 @@ it("allows literal same-origin transport in the local-jvm client bundle", async 
   });
   const audit = await auditOutputPackage(root);
   expect(audit.checks).not.toContainEqual(expect.objectContaining({ checkId: "BUNDLE_NETWORK_API", result: "fail" }));
-  expect(audit.checks).toContainEqual(expect.objectContaining({ checkId: "OFFLINE_STATIC_AUDIT", result: "pass" }));
+  // A package the audit can fully read reports only passing checks: no
+  // placeholder "not verified" entry stands in for evidence it never collects.
+  expect(audit.checks.filter((check) => check.result !== "pass")).toEqual([]);
+});
+
+it("reports only setAttribute calls whose attribute can carry a URL", async () => {
+  const root = await packageRoot("hdmv", {
+    "runtime/app.bundle.js": `el.setAttribute("aria-label", label); el.setAttribute("readonly", ""); el.setAttribute("src", nextUrl);`,
+  });
+  const sinks = (await auditOutputPackage(root)).checks.filter((check) => check.checkId === "BUNDLE_DYNAMIC_URL_SINK");
+  expect(sinks).toHaveLength(1);
+  expect(sinks[0]).toMatchObject({ result: "not-verified", evidence: { expression: expect.stringContaining('"src"') } });
 });
 
 async function packageRoot(launchMode: string, runtimeFiles: Record<string, string>): Promise<string> {

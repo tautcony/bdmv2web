@@ -74,7 +74,7 @@
 
 ### Requirement: 结论只由失败证据决定
 
-系统 SHALL 以"是否存在失败证据"判定交付状态，不得把"缺少证据"当作失败证据：未执行的检查、未提供的条目计数、未验证的覆盖率都不降低状态。
+系统 SHALL 以"是否存在失败证据"判定交付状态，不得把"缺少证据"当作失败证据：未执行的检查、未提供的条目计数、未采集的覆盖率指标都不降低状态。
 
 #### Scenario: 未验证证据不阻断
 
@@ -104,7 +104,7 @@
 #### Scenario: limitations 只作说明
 
 - **WHEN** manifest 记录了 limitations
-- **THEN** limitations 只出现在说明与 `reasons` 中，不参与状态判定
+- **THEN** limitations 只出现在报告与 `reasons` 中，不参与状态判定，也不作为 stdout 的结论行打印
 
 ### Requirement: 参数契约明确
 
@@ -156,5 +156,5 @@
 
 #### Scenario: 空检查集
 
-- **WHEN** 包内没有静态载荷，依赖审计检查集为空
-- **THEN** 磁盘 `dependency-audit.json` 与 stdout 的 `dependencyAudit.checks` 完全相等（都含 `DEPENDENCY_AUDIT_REQUIRED`）
+- **WHEN** 包内没有静态载荷，依赖检查集为空
+- **THEN** 磁盘 `dependency-audit.json` 与 stdout 的 `dependencyAudit.checks` 完全相等且为空，`dependencyAudit.status` 为 `pass`（没有可检查的引用不等于未验证）；只有审计完全没有产出检查项时才记 `DEPENDENCY_AUDIT_REQUIRED`

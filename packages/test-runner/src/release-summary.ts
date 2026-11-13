@@ -1,17 +1,15 @@
 import { decideDelivery, type DeliveryDecisionInput, type DeliveryDecision } from "./decisions.js";
-import type { CoverageReport, CoverageSummary } from "./coverage.js";
+import type { CoverageReport } from "./coverage.js";
 import type { CompatibilityReport, DependencyAuditReport } from "./report.js";
 import type { AuditCheck, DeliveryStatus, OfflinePackageAudit } from "./types.js";
 
-const REQUIRED_COVERAGE = ["entries", "instructions", "media", "tests"] as const;
-
-export type ReleaseDecisionFacts = Omit<DeliveryDecisionInput, "checks" | "requiredEvidenceComplete" | "coverageComplete">;
+export type ReleaseDecisionFacts = Omit<DeliveryDecisionInput, "checks">;
 
 export interface ReleaseSummaryInput {
   audit: OfflinePackageAudit;
   dependencyAudit: DependencyAuditReport;
+  /** Recorded in the report; per-category counts are not part of the delivery verdict. */
   coverage: CoverageReport | null;
-  referenceEvidence: readonly AuditCheck[];
   decisionFacts: ReleaseDecisionFacts;
 }
 
@@ -48,18 +46,14 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
     checks.push({ checkId: "PACKAGE_AUDIT_REQUIRED", result: "not-verified", message: "No independent output-package audit checks were supplied." });
   } else checks.push(...input.audit.checks);
 
+  // A dependency surface of zero findings is a result, not a missing audit: only a
+  // package audit that produced no checks at all leaves the dependency set unknown.
   const dependencyChecks = input.dependencyAudit.checks.length
     ? [...input.dependencyAudit.checks]
-    : [{ checkId: "DEPENDENCY_AUDIT_REQUIRED", result: "not-verified" as const, message: "No independent package dependency checks were supplied." }];
+    : input.audit.checks.length === 0
+      ? [{ checkId: "DEPENDENCY_AUDIT_REQUIRED", result: "not-verified" as const, message: "No independent package dependency checks were supplied." }]
+      : [];
   checks.push(...dependencyChecks);
-
-  const coverageChecks = summarizeCoverageGates(coverage);
-  checks.push(...coverageChecks);
-
-  const referenceChecks = input.referenceEvidence.length
-    ? [...input.referenceEvidence]
-    : [{ checkId: "REFERENCE_EVIDENCE_REQUIRED", result: "not-verified" as const, message: "No independent reference comparison evidence was supplied." }];
-  checks.push(...referenceChecks);
 
   const dependencyAudit: DependencyAuditReport = {
     schemaVersion: "1.0",
@@ -67,14 +61,7 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
     externalReferences: dependencyChecks.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"),
     checks: dependencyChecks,
   };
-  const referenceEvidenceComplete = referenceChecks.length > 0 && referenceChecks.every((check) => check.result === "pass");
-  const coverageComplete = coverageChecks.every((check) => check.result === "pass");
-  const decisionInput: DeliveryDecisionInput = {
-    checks,
-    ...input.decisionFacts,
-    requiredEvidenceComplete: referenceEvidenceComplete,
-    coverageComplete,
-  };
+  const decisionInput: DeliveryDecisionInput = { checks, ...input.decisionFacts };
   const decision: DeliveryDecision = decideDelivery(decisionInput);
   const compatibility = {
     schemaVersion: "1.0" as const,
@@ -95,37 +82,10 @@ export function createReleaseSummary(input: ReleaseSummaryInput): ReleaseSummary
   };
 }
 
-function summarizeCoverageGates(report: CoverageReport): AuditCheck[] {
-  return REQUIRED_COVERAGE.map((name) => {
-    const summary = report[name];
-    if (!summary) return { checkId: `COVERAGE_${name.toUpperCase()}`, result: "not-verified", message: `Coverage for ${name} was not supplied.` };
-    if (isExplicitNotApplicable(summary)) return { checkId: `COVERAGE_${name.toUpperCase()}`, result: "pass", message: `${name} coverage is N/A with an explicit zero-item reason.`, evidence: { denominator: 0, reason: summary.reason } };
-    if (isCompleteCoverage(summary)) return { checkId: `COVERAGE_${name.toUpperCase()}`, result: "pass", message: `${name} coverage accounts for every item with evidence.`, evidence: { denominator: summary.denominator, passed: summary.passed, failed: summary.failed, unknown: summary.unknown, percent: 100 } };
-    return { checkId: `COVERAGE_${name.toUpperCase()}`, result: summary.failed > 0 ? "fail" : "not-verified", message: `${name} coverage is incomplete: ${coverageReason(summary)}.`, evidence: { denominator: summary.denominator, passed: summary.passed, failed: summary.failed, unknown: summary.unknown, percent: summary.percent ?? null } };
-  });
-}
-
-function isExplicitNotApplicable(summary: CoverageSummary): boolean {
-  return summary.status === "N/A" && summary.denominator === 0 && summary.passed === 0 && summary.failed === 0 && summary.unknown === 0 && summary.percent === null && typeof summary.reason === "string" && summary.reason.trim().length > 0;
-}
-
-function isCompleteCoverage(summary: CoverageSummary): boolean {
-  return summary.status === "measured" && summary.complete === true && Number.isSafeInteger(summary.denominator) && (summary.denominator ?? 0) > 0 &&
-    summary.passed === summary.denominator && summary.failed === 0 && summary.unknown === 0 && summary.percent === 100;
-}
-
-function coverageReason(summary: CoverageSummary): string {
-  if (summary.reason?.trim()) return summary.reason;
-  if (summary.denominator === null) return "the population denominator is unknown";
-  if (summary.failed > 0) return `${summary.failed} item(s) failed`;
-  if (summary.unknown > 0 || summary.complete !== true) return `${summary.unknown} item(s) remain unverified`;
-  return "reported coverage fields are inconsistent";
-}
-
-/** Priority is `fail` → `not-verified` → `pass`; an empty set is `not-verified`. */
+/** Priority is `fail` → `not-verified` → `pass`; an empty set has nothing to report. */
 function summarizeCheckResult(checks: readonly AuditCheck[]): DependencyAuditReport["status"] {
   if (checks.some((check) => check.result === "fail")) return "fail";
-  if (checks.length === 0 || checks.some((check) => check.result === "not-verified")) return "not-verified";
+  if (checks.some((check) => check.result === "not-verified")) return "not-verified";
   return "pass";
 }
 

@@ -63,8 +63,9 @@ describe("package audit", () => {
     });
     const validChecks = (await auditOutputPackage(valid)).checks;
     expect(validChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass", path: "external-targets.json" }));
-    expect(validChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_SOURCE_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
-    expect(validChecks).toContainEqual(expect.objectContaining({ checkId: "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", result: "not-verified", path: "external-targets.json" }));
+    // The audit checks the declaration it can read; STREAM availability and the
+    // system handoff are outside the package and are not reported as findings.
+    expect(validChecks.filter((check) => check.checkId.startsWith("EXTERNAL_"))).toEqual([expect.objectContaining({ checkId: "EXTERNAL_TARGETS_DECLARED", result: "pass" })]);
     expect(validChecks.some((check) => check.checkId === "PACKAGE_MISSING_ASSET" && check.path === "STREAM/00002.m2ts")).toBe(false);
 
     for (const streamPath of ["/etc/passwd", "../STREAM/00002.m2ts", "STREAM\\00002.m2ts", "https://example.com/00002.m2ts", "STREAM/00003.m2ts", "stream/00002.m2ts", "STREAM/%30%30%30%30%32.m2ts", "STREAM/%2e%2e/00002.m2ts", "STREAM/%252e%252e/00002.m2ts"]) {
@@ -156,7 +157,6 @@ describe("package audit", () => {
     const result = await auditOutputPackage(root);
     expect(result.checks.some((check) => check.checkId === "BUNDLE_DYNAMIC_ACCESS" && check.result === "not-verified")).toBe(true);
     expect(result.checks.some((check) => check.checkId === "BUNDLE_DYNAMIC_URL_SINK" && check.result === "not-verified")).toBe(true);
-    expect(result.checks.find((check) => check.checkId === "OFFLINE_STATIC_AUDIT")?.result).toBe("not-verified");
   });
 });
 
@@ -169,8 +169,6 @@ describe("delivery status and coverage", () => {
     hasMissingRequiredAsset: false,
     hasUnresolvedReachability: false,
     hasUnsupportedReachableCapability: false,
-    requiredEvidenceComplete: true,
-    coverageComplete: true,
   };
 
   it("derives exit code from failure evidence and never upgrades acknowledged errors", () => {
@@ -187,9 +185,8 @@ describe("delivery status and coverage", () => {
     ["without gaps", { ...base }, "complete", 0],
     ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, "partial", 0],
     ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, "failed", 1],
-    ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, coverageComplete: false, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, "partial", 0],
+    ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, "partial", 0],
     ["missing required media", { ...base, hasMissingRequiredAsset: true }, "failed", 1],
-    ["missing required evidence", { ...base, requiredEvidenceComplete: false }, "complete", 0],
   ])("applies delivery policy to %s", (_label, input, status, exitCode) => {
     expect(decideDelivery(input)).toMatchObject({ status, exitCode });
   });
@@ -211,7 +208,7 @@ describe("delivery status and coverage", () => {
       limitations: ["Media timeline and seek accuracy remain unverified"],
     });
     expect(decision).toMatchObject({ status: "complete", exitCode: 0 });
-    expect(decision.notVerified).toEqual(expect.arrayContaining(["REFERENCE_COMPARISON", "REQUIRED_EVIDENCE_INCOMPLETE", "COVERAGE_INCOMPLETE"]));
+    expect(decision.notVerified).toEqual(expect.arrayContaining(["REFERENCE_COMPARISON"]));
     expect(decision.reasons.join(" ")).toContain("Limitation:");
   });
 
@@ -245,7 +242,7 @@ describe("delivery status and coverage", () => {
     // No checks were supplied: that is missing evidence, not a failure (D-2R).
     const delivery = decideDelivery({ checks: [], diagnostics: [] });
     expect(delivery.status).toBe("complete");
-    expect(delivery.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS", "REQUIRED_EVIDENCE_INCOMPLETE"]));
+    expect(delivery.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS", "ENTRY_COUNTS_MISSING"]));
 
     // @ts-expect-error a delivery status must not be usable where a stage status is required
     const stageFromDelivery: StageStatus = delivery.status;

@@ -20,8 +20,6 @@ export interface DeliveryDecisionInput {
   hasUnresolvedReachability?: boolean;
   hasUnsupportedReachableCapability?: boolean;
   hasMissingRequiredAsset?: boolean;
-  requiredEvidenceComplete?: boolean;
-  coverageComplete?: boolean;
 }
 
 export interface DeliveryDecision {
@@ -99,16 +97,13 @@ export function decideDelivery(input: DeliveryDecisionInput): DeliveryDecision {
   if (onlyBdj) reasons.push("No valid HDMV entry is available for this release profile.");
   if (input.hasMissingRequiredAsset) reasons.push("A required package asset is missing.");
 
-  // Checks that never ran, counts that were never supplied and evidence that
-  // was not verified are collected in `notVerified`; the status keeps its
-  // value (D-2R).
+  // Checks that never ran and counts that were never supplied are collected in
+  // `notVerified`; the status keeps its value (D-2R).
   const unverifiedChecks = input.checks.filter((check) => check.result === "not-verified");
   notVerified.push(...unverifiedChecks.map((check) => check.checkId));
   if (input.checks.length === 0) notVerified.push("NO_AUDIT_CHECKS");
   if (input.declaredEntryCount === undefined || input.hdmvEntryCount === undefined) notVerified.push("ENTRY_COUNTS_MISSING");
   if (input.hasMissingRequiredAsset === undefined || input.hasUnresolvedReachability === undefined || input.hasUnsupportedReachableCapability === undefined) notVerified.push("CAPABILITY_FACTS_INCOMPLETE");
-  if (input.requiredEvidenceComplete !== true) notVerified.push("REQUIRED_EVIDENCE_INCOMPLETE");
-  if (input.coverageComplete !== true) notVerified.push("COVERAGE_INCOMPLETE");
 
   // Only failure evidence blocks `complete`: unresolved reachability, unsupported
   // reachable capabilities, blocking errors and unrecognised severities.

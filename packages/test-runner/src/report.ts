@@ -24,9 +24,11 @@ export interface DependencyAuditReport {
 export function createDependencyAuditReport(audit: OfflinePackageAudit): DependencyAuditReport {
   const relevant = audit.checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
   // `fail` outranks `not-verified`: a missing evidence item must not hide a failure.
+  // An empty dependency surface of an audit that did run means "nothing to check",
+  // not "unknown"; only an audit that produced no checks at all stays unverified.
   const status = relevant.some((check) => check.result === "fail")
     ? "fail"
-    : relevant.length === 0 || relevant.some((check) => check.result === "not-verified")
+    : relevant.some((check) => check.result === "not-verified") || audit.checks.length === 0
       ? "not-verified"
       : "pass";
   return { schemaVersion: "1.0", status, externalReferences: relevant.filter((check) => check.checkId.startsWith("OFFLINE_") && check.result !== "pass"), checks: relevant };

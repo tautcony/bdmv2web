@@ -31,27 +31,46 @@ const completeDecisionFacts = {
 };
 
 describe("release summary aggregation", () => {
-  it("keeps status complete while listing missing reference, dependency, and coverage evidence as gaps", () => {
+  it("keeps status complete while listing an audit that never ran as a gap", () => {
     const summary = createReleaseSummary({
-      audit: audit(), dependencyAudit: dependencyAudit([], "pass"), coverage: null,
-      referenceEvidence: [], decisionFacts: completeDecisionFacts,
+      audit: audit([]), dependencyAudit: dependencyAudit([], "pass"), coverage: null,
+      decisionFacts: completeDecisionFacts,
     });
 
     // Missing evidence is reported, not treated as a failure (D-2R).
     expect(summary.release.status).toBe("complete");
-    expect(summary.release.notVerified).toEqual(expect.arrayContaining(["DEPENDENCY_AUDIT_REQUIRED", "REFERENCE_EVIDENCE_REQUIRED"]));
-    expect(summary.release.gaps.map((gap) => gap.checkId)).toEqual(expect.arrayContaining([
-      "DEPENDENCY_AUDIT_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS",
-      "REFERENCE_EVIDENCE_REQUIRED",
-    ]));
+    expect(summary.release.notVerified).toEqual(expect.arrayContaining(["DEPENDENCY_AUDIT_REQUIRED"]));
+    expect(summary.release.gaps.map((gap) => gap.checkId)).toEqual(["PACKAGE_AUDIT_REQUIRED", "DEPENDENCY_AUDIT_REQUIRED"]);
     expect(summary.release.gaps.every((gap) => gap.result === "not-verified" && gap.action.length > 0)).toBe(true);
     expect(summary.compatibility.status).toBe("complete");
+  });
+
+  it("treats an empty dependency surface as nothing to report", () => {
+    const summary = createReleaseSummary({
+      audit: audit(), dependencyAudit: dependencyAudit([], "pass"), coverage: null,
+      decisionFacts: completeDecisionFacts,
+    });
+
+    // The package audit ran and found no runtime references: that is a pass with
+    // zero findings, not an unverified audit.
+    expect(summary.release.status).toBe("complete");
+    expect(summary.release.gaps).toEqual([]);
+    expect(summary.dependencyAudit).toMatchObject({ status: "pass", checks: [], externalReferences: [] });
+  });
+
+  it("never turns absent coverage counts into delivery gaps", () => {
+    const summary = createReleaseSummary({
+      audit: audit(), dependencyAudit: dependencyAudit(), coverage: null,
+      decisionFacts: completeDecisionFacts,
+    });
+
+    expect(summary.release.gaps).toEqual([]);
+    expect(summary.release.notVerified).not.toEqual(expect.arrayContaining(["COVERAGE_INCOMPLETE", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS"]));
   });
 
   it("uses current evidence to determine delivery status", () => {
     const summary = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: completeDecisionFacts,
     });
 
@@ -59,7 +78,6 @@ describe("release summary aggregation", () => {
 
     const gapped = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit(), coverage: completeCoverage,
-      referenceEvidence: [pass("REFERENCE_COMPARISON")],
       decisionFacts: { ...completeDecisionFacts, hasUnresolvedReachability: true },
     });
     expect(gapped.release.status).toBe("partial");
@@ -68,8 +86,7 @@ describe("release summary aggregation", () => {
   it("allows complete only from current passing tool facts and ignores persisted component statuses", () => {
     const summary = createReleaseSummary({
       audit: audit(), dependencyAudit: dependencyAudit([pass("OFFLINE_DEPENDENCIES_VALID")], "fail"),
-      coverage: completeCoverage,
-      referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
+      coverage: completeCoverage, decisionFacts: completeDecisionFacts,
     });
 
     expect(summary.release.status).toBe("complete");
@@ -85,7 +102,7 @@ const unverified = (checkId: string): AuditCheck => ({ checkId, result: "not-ver
 function summarize(checks: AuditCheck[]) {
   return createReleaseSummary({
     audit: audit(), dependencyAudit: dependencyAudit(checks, "pass"), coverage: completeCoverage,
-    referenceEvidence: [pass("REFERENCE_COMPARISON")], decisionFacts: completeDecisionFacts,
+    decisionFacts: completeDecisionFacts,
   });
 }
 
@@ -107,11 +124,12 @@ describe("check result aggregation priority", () => {
     expect(summarize([unverified("OFFLINE_A"), unverified("OFFLINE_B")]).dependencyAudit.status).toBe("not-verified");
   });
 
-  it("treats an empty check set as not-verified", () => {
+  it("reports nothing for a dependency surface with zero findings", () => {
     const summary = summarize([]);
-    expect(summary.dependencyAudit.status).toBe("not-verified");
+    expect(summary.dependencyAudit.status).toBe("pass");
     expect(summary.release.status).toBe("complete");
-    expect(summary.release.notVerified).toEqual(expect.arrayContaining(["DEPENDENCY_AUDIT_REQUIRED"]));
+    expect(summary.release.gaps).toEqual([]);
+    expect(summary.release.notVerified).not.toContain("DEPENDENCY_AUDIT_REQUIRED");
   });
 
   it("flips the report back to failed as soon as the failing check is present", () => {
@@ -126,9 +144,9 @@ describe("check result aggregation priority", () => {
 
 describe("delivery decision truth table", () => {
   const facts = { declaredEntryCount: 1, hdmvEntryCount: 1, hasUnresolvedReachability: false, hasUnsupportedReachableCapability: false, hasMissingRequiredAsset: false };
-  const decide = (overrides: Partial<typeof facts> & { checks?: AuditCheck[]; diagnostics?: Parameters<typeof decideDelivery>[0]["diagnostics"]; requiredEvidenceComplete?: boolean; coverageComplete?: boolean } = {}) => {
-    const { checks = [pass("PACKAGE_VALID")], diagnostics, requiredEvidenceComplete = true, coverageComplete = true, ...rest } = overrides;
-    return decideDelivery({ checks, requiredEvidenceComplete, coverageComplete, ...(diagnostics === undefined ? {} : { diagnostics }), ...facts, ...rest });
+  const decide = (overrides: Partial<typeof facts> & { checks?: AuditCheck[]; diagnostics?: Parameters<typeof decideDelivery>[0]["diagnostics"] } = {}) => {
+    const { checks = [pass("PACKAGE_VALID")], diagnostics, ...rest } = overrides;
+    return decideDelivery({ checks, ...(diagnostics === undefined ? {} : { diagnostics }), ...facts, ...rest });
   };
 
   it("returns complete with exit 0 when every check passes", () => {
@@ -139,10 +157,10 @@ describe("delivery decision truth table", () => {
   });
 
   it("returns complete while listing unverified evidence that is not a failure", () => {
-    const decision = decide({ checks: [pass("PACKAGE_VALID"), unverified("OFFLINE_EXTERNAL_TARGET")], requiredEvidenceComplete: false });
+    const decision = decide({ checks: [pass("PACKAGE_VALID"), unverified("OFFLINE_EXTERNAL_TARGET")] });
     expect(decision.status).toBe("complete");
     expect(decision.exitCode).toBe(0);
-    expect(decision.notVerified).toEqual(expect.arrayContaining(["OFFLINE_EXTERNAL_TARGET", "REQUIRED_EVIDENCE_INCOMPLETE"]));
+    expect(decision.notVerified).toEqual(expect.arrayContaining(["OFFLINE_EXTERNAL_TARGET"]));
   });
 
   it("returns failed when a failing check coexists with unverified evidence", () => {

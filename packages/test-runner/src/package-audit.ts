@@ -10,6 +10,10 @@ const REPORT_FILES = new Set(["reports.json", "dependency-audit.json", "asset-ma
 const NON_RUNTIME_KINDS = new Set(["parsed-disc", "raw-command-table", "readme", "report", "evidence", "compatibility", "dependency-audit", "asset-manifest"]);
 const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_BYTES = 16 * 1024 * 1024;
+/** Attributes a `setAttribute` call can use to point the runtime at a resource. */
+const URL_ATTRIBUTES = new Set(["src", "href", "poster", "srcset", "data", "action", "formaction", "style", "xlink:href"]);
+/** Attributes whose literal value the static scanner resolves against the package. */
+const RESOLVABLE_URL_ATTRIBUTES = new Set(["src", "href", "poster"]);
 const comparePath = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
 
 function add(checks: AuditCheck[], checkId: string, result: AuditCheck["result"], message: string, path?: string, evidence?: Record<string, unknown>): void {
@@ -31,8 +35,9 @@ const DECLARED_STREAM_PATH = /^STREAM\/([0-9]{5})\.m2ts$/;
 
 /**
  * Check that every external playback target stays a declared BDMV STREAM clip.
- * The configured BDMV root and the system player stay unobservable here, so the
- * audit reports those separately as `not-verified` instead of asserting them.
+ * Whether those STREAM files exist, and whether the system hands the target to a
+ * player, is outside the package and therefore outside this audit: it reports
+ * only the declaration it can read.
  */
 function auditExternalTargets(checks: AuditCheck[], path: string, source: string): void {
   let parsed: unknown;
@@ -61,13 +66,7 @@ function auditExternalTargets(checks: AuditCheck[], path: string, source: string
       }
     }
   }
-  if (!invalid) {
-    add(checks, "EXTERNAL_TARGETS_DECLARED", "pass", "Every external target is a declared BDMV STREAM clip path", path, { playItems });
-    if (playItems > 0) {
-      add(checks, "EXTERNAL_SOURCE_UNVERIFIED", "not-verified", "External BDMV STREAM file availability is not verified by the package audit", path, { playItems });
-      add(checks, "EXTERNAL_PLAYER_PROTOCOL_UNVERIFIED", "not-verified", "System URL Protocol association and player launch are not verified by the package audit", path);
-    }
-  }
+  if (!invalid) add(checks, "EXTERNAL_TARGETS_DECLARED", "pass", "Every external target is a declared BDMV STREAM clip path", path, { playItems });
 }
 
 function samePlayerProfile(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
@@ -274,12 +273,13 @@ function auditScript(text: string, source: string, checks: AuditCheck[], refs: R
   for (const m of text.matchAll(/(?:\.|\b)(?:src|href|poster)\s*=\s*["']([^"']+)["']/gi)) addUrlCheck(checks, refs, source, m[1]!);
   for (const match of text.matchAll(/(?:\.setAttribute|\[\s*(['"])setAttribute\1\s*\])\s*\(([^)]*)\)/gi)) {
     const args = (match[2] ?? "").split(",");
-    const attribute = args[0]?.trim() ?? "";
-    const value = args[1]?.trim() ?? "";
-    const attributeLiteral = /^(['"])(src|href|poster)\1$/i.exec(attribute);
-    const valueLiteral = /^(['"])(.*?)\1$/.exec(value);
-    if (attributeLiteral && valueLiteral) addUrlCheck(checks, refs, source, valueLiteral[2]!);
-    else if (attributeLiteral || attribute !== "") add(checks, "BUNDLE_DYNAMIC_URL_SINK", "not-verified", "setAttribute may write a runtime URL that cannot be resolved statically", source, { expression: match[0] });
+    const attributeName = /^(['"])(.*?)\1$/.exec(args[0]?.trim() ?? "")?.[2]?.toLowerCase();
+    // A literal attribute name that cannot carry a URL (`aria-label`, `readonly`,
+    // `data-*`) cannot sink a runtime URL, so it is not reported at all.
+    if (attributeName !== undefined && !URL_ATTRIBUTES.has(attributeName)) continue;
+    const valueLiteral = /^(['"])(.*?)\1$/.exec(args[1]?.trim() ?? "");
+    if (attributeName !== undefined && RESOLVABLE_URL_ATTRIBUTES.has(attributeName) && valueLiteral) addUrlCheck(checks, refs, source, valueLiteral[2]!);
+    else add(checks, "BUNDLE_DYNAMIC_URL_SINK", "not-verified", "setAttribute may write a runtime URL that cannot be resolved statically", source, { expression: match[0] });
   }
   for (const m of text.matchAll(/["'](?:url|src|href|relativePath)["']\s*:\s*["']([^"']+)["']/gi)) addUrlCheck(checks, refs, source, m[1]!);
   for (const m of text.matchAll(/["'](data:(?:image|audio)\/[^"']+)["']/gi)) addUrlCheck(checks, refs, source, m[1]!);
@@ -415,7 +415,6 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
           if (encodedPath !== undefined) bdmvPath = JSON.parse(encodedPath);
         } catch { bdmvPath = undefined; }
         if (typeof bdmvPath !== "string" || !bdmvPath || bdmvPath.includes("\0")) add(checks, "EXTERNAL_CONFIG_INVALID", "fail", "BDMV path configuration is invalid", path);
-        else add(checks, "EXTERNAL_CONFIG", "not-verified", "Configured BDMV path must be verified in the current environment", path);
         continue;
       }
       if (path === "external-targets.json") {
@@ -429,9 +428,5 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   const unlistedRuntime = unlisted.filter((path) => isPayloadEntry(path));
   for (const path of unlistedRuntime) add(checks, "PACKAGE_UNLISTED_PAYLOAD", "fail", "Runtime payload file is absent from manifest files", path);
   await auditRuntimeFiles(root, files, checks, isRecord(parsed) && parsed.launchMode === "local-jvm");
-  const staticChecks = checks.filter((check) => check.checkId.startsWith("OFFLINE_") || check.checkId.startsWith("BUNDLE_") || check.checkId === "ACTIVE_EMBED");
-  if (staticChecks.some((check) => check.result === "fail")) add(checks, "OFFLINE_STATIC_AUDIT", "fail", "One or more disallowed static URL, data payload, or bundle entrypoints were found");
-  else if (staticChecks.some((check) => check.result === "not-verified")) add(checks, "OFFLINE_STATIC_AUDIT", "not-verified", "One or more static runtime files could not be fully audited");
-  else add(checks, "OFFLINE_STATIC_AUDIT", "pass", "No disallowed static URL, data payload, or bundle entrypoint was found");
   return { schemaVersion: "1.0", packageRoot: root, manifestPath: manifestRel, checks, discoveredPayloadFiles: files.filter((p) => isPayloadEntry(p)) };
 }

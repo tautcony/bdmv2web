@@ -109,6 +109,7 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 3. `manifest.status` 与当前判定不一致时，追加 `MANIFEST_STATUS_UNVERIFIED`（`not-verified`），**不改写** manifest。
 4. 可写时写入 `dependency-audit.json`、更新 `reports.json.compatibility` 并写 `reports/release-summary.json`；验证结果保留 `reports.json.conversion`。任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。
 5. 退出码取 `releaseSummary.release.exitCode`。
+6. 文本输出只列 `gaps`（非 `pass` 检查，已合并去重），不再重复打印 `audit.checks`；`Limitation:` 只写进报告，不作为结论行打印。覆盖率不采集，`coverage` 记为空对象而不是 N/A 占位。
 
 ## 错误出口
 

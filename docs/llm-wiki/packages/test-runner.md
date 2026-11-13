@@ -33,7 +33,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
    - 禁止 `type="module"`、`import`、`importScripts`、`eval`/`Function`、`fetch`/`XMLHttpRequest`/`WebSocket`/`EventSource`。
    - 提取 `src`/`href`/`poster`/`url(...)`/`@import`/JSON 中的 `url|src|href|relativePath`，逐个解析到磁盘。
    - 越界、symlink、非普通文件、缺失都判 `fail`；能定位到包内普通文件判 `pass`。
-   - 动态访问（`globalThis[expr]`、计算 `setAttribute`）判 `not-verified`，不判失败。
+   - 动态访问（`globalThis[expr]`、计算 `setAttribute`）判 `not-verified`，不判失败。`setAttribute` 只在属性名是动态表达式或可承载 URL 的字面量（`src`/`href`/`poster`/`srcset`/`data`/`action`/`formaction`/`style`/`xlink:href`）时记录；`aria-label`、`readonly`、`data-*` 这类属性名直接跳过。
 8. `manifest.profile` 存在时，要求与 `reports.json.compatibility.profile`、`runtime/disc-data.js` 的 `profile` 一致，否则 `PLAYER_PROFILE_MISMATCH`。
 
 ### 检查项 ID
@@ -43,11 +43,11 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 根/遍历 | `PACKAGE_ROOT_MISSING`、`PACKAGE_ROOT_INVALID`、`PACKAGE_DIRECTORY_UNREADABLE`、`PACKAGE_SYMLINK`、`PACKAGE_FILE_TYPE` |
 | 入口/清单 | `PACKAGE_ENTRY_MISSING`、`PACKAGE_ENTRY_OPTIONAL`、`PACKAGE_ENTRY_UNLISTED`、`PACKAGE_UNLISTED_PAYLOAD`、`MANIFEST_MISSING`、`MANIFEST_UNREADABLE`、`MANIFEST_INVALID_JSON`、`MANIFEST_SCHEMA`、`MANIFEST_DUPLICATE_PATH`、`MANIFEST_PATH_RESERVED` |
 | 路径/文件 | `PACKAGE_PATH_INVALID`、`PACKAGE_PATH_ESCAPE`、`PACKAGE_FILE_INVALID`、`PACKAGE_MISSING_ASSET`、`PACKAGE_OPTIONAL_ASSET_MISSING` |
-| 静态资源引用 | `OFFLINE_URL_LOCAL`、`OFFLINE_URL_MISSING`、`OFFLINE_URL_ESCAPE`、`OFFLINE_URL_SYMLINK`、`OFFLINE_URL_NOT_FILE`、`OFFLINE_EXTERNAL_URL`、`OFFLINE_UNSAFE_URL`、`OFFLINE_STATIC_AUDIT` |
+| 静态资源引用 | `OFFLINE_URL_LOCAL`、`OFFLINE_URL_MISSING`、`OFFLINE_URL_ESCAPE`、`OFFLINE_URL_SYMLINK`、`OFFLINE_URL_NOT_FILE`、`OFFLINE_EXTERNAL_URL`、`OFFLINE_UNSAFE_URL` |
 | 脚本 | `BUNDLE_MODULE_SCRIPT`、`BUNDLE_IMPORT`、`BUNDLE_EVAL`、`BUNDLE_NETWORK_API`、`BUNDLE_DYNAMIC_ACCESS`、`BUNDLE_DYNAMIC_URL_SINK` |
 | 扫描预算 | `RUNTIME_FILE_TOO_LARGE`、`RUNTIME_FILE_UNREADABLE` |
 | 档案一致性 | `PLAYER_PROFILE_INVALID`、`PLAYER_PROFILE_MISMATCH`、`PLAYER_PROFILE_SYNC` |
-| 外部配置 | `EXTERNAL_CONFIG`、`EXTERNAL_CONFIG_INVALID` |
+| 外部配置 | `EXTERNAL_CONFIG_INVALID` |
 
 ## 状态判定
 
@@ -59,7 +59,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 可达性有未解析项 / 可达能力不支持 / 有 `error`（无 fatal）/ 诊断严重性未识别 | `partial`，退出码 0 |
 | 以上都没有 | `complete`，退出码 0 |
 
-`notVerified` 只记录缺失证据，**不降低状态**：没有检查（`NO_AUDIT_CHECKS`）、没给入口计数（`ENTRY_COUNTS_MISSING`）、能力事实不全（`CAPABILITY_FACTS_INCOMPLETE`）、所需证据不全（`REQUIRED_EVIDENCE_INCOMPLETE`）、覆盖率不全（`COVERAGE_INCOMPLETE`）。
+`notVerified` 只记录缺失证据，**不降低状态**：没有检查（`NO_AUDIT_CHECKS`）、没给入口计数（`ENTRY_COUNTS_MISSING`）、能力事实不全（`CAPABILITY_FACTS_INCOMPLETE`）。审计只报它实际执行的检查：外部 STREAM 是否可读、系统播放器是否接管、配置的 BDMV 路径是否存在都不在审计能力范围内，因此不产生占位检查项。
 
 `acknowledged` 的 `error` 仍保持 `partial`；确认只影响说明，不提升状态。
 
@@ -83,15 +83,15 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 `createReleaseSummary` 会忽略各报告的存储状态，用新鲜事实重算：
 
 - 没有审计检查 → 补 `PACKAGE_AUDIT_REQUIRED`（`not-verified`）。
-- 没有依赖检查 → 补 `DEPENDENCY_AUDIT_REQUIRED`。
-- 没有覆盖率 → 四个维度都按缺证据处理。
-- 没有对照证据 → `REFERENCE_EVIDENCE_REQUIRED`。
+- 审计跑过但没有任何依赖检查 → 依赖检查集为空、状态 `pass`（没有可检查的引用，不等于未验证）。
+- 完全没有审计检查时才补 `DEPENDENCY_AUDIT_REQUIRED`。
+- 覆盖率与对照证据只作为报告字段保存，不生成检查项、不进入 `gaps`，也不影响 `status`。
 
 `gaps` 只列 `fail` 与 `not-verified`，附 `action`（要做什么）与路径/实体。
 
 ## 覆盖与证据
 
-- `summarizeCoverage({ total, covered, ... })` → `{ covered, total, ratio, complete }`；`REQUIRED_COVERAGE = ["entries","instructions","media","tests"]`。
+- `summarizeCoverage({ total, covered, ... })` → `{ covered, total, ratio, complete }`。覆盖率是报告用度量，不参与交付判定。
 - 对照证据：`compareVmTraces(reference, actual)` 逐事件比较，首个差异返回索引与期望/实际；`compareIgRgbaFrames` 比较尺寸与像素，输出差异计数与最大通道差；`videoQualityNote` 明确视频编码质量不在 IG 像素比较范围内。
 
 ## 测试

@@ -2,7 +2,7 @@ import { errorText } from "@bdmv2web/utils";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { readJsonObject, writeGeneratedReport } from "../cli/output.js";
-import { auditOutputPackage, createDependencyAuditReport, createReleaseSummary, summarizeDeliveryCoverage } from "@bdmv2web/test-runner";
+import { auditOutputPackage, createDependencyAuditReport, createReleaseSummary } from "@bdmv2web/test-runner";
 import { resolve } from "node:path";
 import type { DeliveryDiagnostic } from "@bdmv2web/test-runner";
 
@@ -38,17 +38,13 @@ export async function validate(): Promise<void> {
     }));
   const declaredEntryCount = Number.isSafeInteger(manifest.declaredEntryCount) && (manifest.declaredEntryCount as number) >= 0 ? manifest.declaredEntryCount as number : undefined;
   const hdmvEntryCount = Number.isSafeInteger(manifest.hdmvEntryCount) && (manifest.hdmvEntryCount as number) >= 0 ? manifest.hdmvEntryCount as number : undefined;
-  const coverage = summarizeDeliveryCoverage({
-    entries: { reason: "Per-entry coverage evidence is not present in this package." },
-    instructions: { reason: "Per-instruction coverage evidence is not present in this package." },
-    media: { reason: "Per-media coverage evidence is not present in this package." },
-    tests: { reason: "Test-matrix evidence is not present in this package." },
-  });
+  // `validate` measures no per-category coverage, so it records none rather than
+  // writing an N/A placeholder for counts it never collected.
+  const coverage = null;
   const releaseSummaryInput = {
     audit,
     dependencyAudit: createDependencyAuditReport(audit),
     coverage,
-    referenceEvidence: [],
     decisionFacts: {
       limitations,
       diagnostics: manifestDiagnostics,
@@ -113,9 +109,13 @@ export async function validate(): Promise<void> {
     process.stdout.write(`Dependency audit: ${dependencyAudit.status}\n`);
     process.stdout.write(`Delivery decision: ${decision.status}\n`);
     if (manifestStatus !== undefined && manifestStatus !== decision.status) process.stdout.write(`Manifest status: ${manifestStatus} (not rewritten)\n`);
-    for (const check of audit.checks) if (check.result !== "pass") process.stdout.write(`${check.result.toUpperCase()} ${check.checkId}${check.path ? ` ${check.path}` : ""}: ${check.message}\n`);
-    for (const gap of releaseSummary.release.gaps) process.stdout.write(`GAP ${gap.result} ${gap.checkId}${gap.path ? ` ${gap.path}` : ""}: ${gap.message} Next: ${gap.action}\n`);
-    for (const reason of decision.reasons) process.stdout.write(`DECISION ${reason}\n`);
+    // `gaps` is the merged, deduplicated view of every check that is not `pass`;
+    // printing `audit.checks` as well would list each dependency finding twice.
+    for (const gap of releaseSummary.release.gaps) process.stdout.write(`${gap.result.toUpperCase()} ${gap.checkId}${gap.path ? ` ${gap.path}` : ""}: ${gap.message}\n`);
+    // Limitations describe what the package cannot promise; they are recorded in
+    // the reports but are not findings, so they never print as a verdict line.
+    const limitationNotes = new Set(limitations.map((item) => `Limitation: ${item}`));
+    for (const reason of decision.reasons) if (!limitationNotes.has(reason)) process.stdout.write(`DECISION ${reason}\n`);
   }
   process.exitCode = decision.exitCode;
 }

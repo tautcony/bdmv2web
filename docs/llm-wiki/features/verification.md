@@ -21,7 +21,7 @@ complete← 以上都没有
 
 关键点：
 
-- **缺证据不降低状态**。未执行的检查、未提供的入口计数、未验证的覆盖率只进 `notVerified`。这类包的 `complete` 表示没有已知失败。
+- **缺证据不降低状态**。未执行的检查、未提供的入口计数只进 `notVerified`。这类包的 `complete` 表示没有已知失败。
 - **状态决定退出码**。`complete` 与可接受的 `partial` 退出 0；`failed` 退出 1。
 - **acknowledged 的 error 仍是 partial**。确认只影响说明文字。
 - **limitations 不参与判定**，只出现在 `reasons` 与报告说明里。
@@ -98,22 +98,23 @@ complete← 以上都没有
 | 证据 | 产生方式 | 缺失时 |
 | --- | --- | --- |
 | 包审计 | `auditOutputPackage` | `PACKAGE_AUDIT_REQUIRED`（not-verified） |
-| 依赖审计 | `createDependencyAuditReport` | `DEPENDENCY_AUDIT_REQUIRED` |
-| 覆盖率 | `summarizeDeliveryCoverage` | 四维计数缺失，`COVERAGE_INCOMPLETE` |
-| 对照证据 | `compareVmTraces` / `compareIgRgbaFrames` | `REFERENCE_EVIDENCE_REQUIRED` |
+| 依赖审计 | `createDependencyAuditReport` | 审计跑过则为空集并记 `pass`；完全没有审计检查时 `DEPENDENCY_AUDIT_REQUIRED` |
+| 覆盖率 | `summarizeDeliveryCoverage` | 只记录在 `coverage` 字段，不产生检查项 |
+| 对照证据 | `compareVmTraces` / `compareIgRgbaFrames` | 只在 `compare` 命令内使用，`validate` 不采集也不占位 |
 
-当前 `validate` 不读取历史对照证据，固定传空数组，因此对照证据总是 `not-verified`。这不会把 `complete` 降级。
+审计只报它做过的检查：外部 STREAM 是否可读、系统是否把目标交给播放器、配置的 BDMV 路径是否存在，都超出包审计的观察范围，因此不生成 `not-verified` 占位项。
 
 ## 常见判断
 
 | 看到 | 含义 | 下一步 |
 | --- | --- | --- |
-| `status: complete` + 多条 `notVerified` | 没有已知失败，但证据不全 | 看 `notVerified` 决定补哪类证据 |
+| `status: complete` 且无 `gaps` | 没有已知失败，检查项全部跑过 | 无需动作 |
+| `status: complete` + 少量 `notVerified` | 没有已知失败，个别事实未采集（如入口计数） | 看 `notVerified` 决定补哪类事实 |
 | `status: partial` + `MANIFEST_STATUS_UNVERIFIED` | manifest 写的是旧结论 | 以 `decision.status` 为准；重新生成或接受差异 |
 | `status: failed` + `PACKAGE_MISSING_ASSET` | manifest 列了文件但磁盘没有 | 重新 `build`，或修生成逻辑 |
 | `OFFLINE_URL_MISSING` | 运行时引用的资产没打包 | 检查 `asset-manifest.json` 与 `disc-data.js` 引用 |
 | `BUNDLE_NETWORK_API` | 运行时代码出现网络 API | 改 `runtime-web`，不要改审计放行 |
-| `BUNDLE_DYNAMIC_ACCESS` | 动态访问全局 | `not-verified`，需要人工确认该表达式不会取到网络 API |
+| `BUNDLE_DYNAMIC_ACCESS` / `BUNDLE_DYNAMIC_URL_SINK` | 动态访问全局或写 URL 属性 | `not-verified`，需要人工确认该表达式不会指向网络资源 |
 
 ## 证据边界
 

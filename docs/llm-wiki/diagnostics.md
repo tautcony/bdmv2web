@@ -212,20 +212,18 @@ rg '"CODE_NAME"' packages apps
 | `OFFLINE_URL_LOCAL` | pass | 运行时 URL 指向包内文件 |
 | `OFFLINE_URL_MISSING` / `OFFLINE_URL_ESCAPE` / `OFFLINE_URL_SYMLINK` / `OFFLINE_URL_NOT_FILE` | fail | URL 目标缺失/逃逸/是 symlink/不是普通文件 |
 | `OFFLINE_EXTERNAL_URL` / `OFFLINE_UNSAFE_URL` | fail | 外部 URL 或不安全协议 |
-| `OFFLINE_STATIC_AUDIT` | pass/fail/not-verified | 静态运行资源审计汇总 |
 | `ACTIVE_EMBED` | fail | 包内出现 `<iframe>`/`<object>`/`<embed>` |
 | `BASE_URL_UNSUPPORTED` | fail | 包内出现 `<base>`，会改变 URL 解析基准 |
 | `INLINE_EVENT_HANDLER` | fail | 出现内联 HTML 事件属性（`on*`） |
 | `BUNDLE_MODULE_SCRIPT` / `BUNDLE_IMPORT` / `BUNDLE_EVAL` / `BUNDLE_NETWORK_API` | fail | 运行时不满足 classic 脚本约束 |
-| `BUNDLE_DYNAMIC_ACCESS` / `BUNDLE_DYNAMIC_URL_SINK` | not-verified | 动态访问，需人工确认 |
+| `BUNDLE_DYNAMIC_ACCESS` | not-verified | 计算属性访问全局，需人工确认 |
+| `BUNDLE_DYNAMIC_URL_SINK` | not-verified | `setAttribute` 的属性可承载 URL，但取值或属性名无法静态解析；属性名是 `aria-*`/`data-*`/`readonly` 这类不可能承载 URL 的字面量时不记录 |
 | `RUNTIME_FILE_TOO_LARGE` / `RUNTIME_FILE_UNREADABLE` | not-verified / fail | 审计跳过或读失败 |
 | `PLAYER_PROFILE_INVALID` / `PLAYER_PROFILE_MISMATCH` | fail | profile 非法或三处不一致 |
 | `PLAYER_PROFILE_SYNC` | pass | manifest 与运行时 profile 一致 |
-| `EXTERNAL_CONFIG` / `EXTERNAL_CONFIG_INVALID` | not-verified / fail | 外部播放配置需现场验证/非法 |
+| `EXTERNAL_CONFIG_INVALID` | fail | 外部播放配置的 BDMV 路径非法 |
 | `MANIFEST_STATUS_UNVERIFIED` | not-verified | manifest 记录状态与当前证据不一致 |
-| `PACKAGE_AUDIT_REQUIRED` / `DEPENDENCY_AUDIT_REQUIRED` | not-verified | 没有提供审计/依赖检查 |
-| `REFERENCE_EVIDENCE_REQUIRED` | not-verified | 未提供独立对照证据；提供时调用方以 `REFERENCE_COMPARISON` 作为检查 id 传入 |
-| `COVERAGE_INCOMPLETE` / `REQUIRED_EVIDENCE_INCOMPLETE` | not-verified | 覆盖率或所需证据不全 |
+| `PACKAGE_AUDIT_REQUIRED` / `DEPENDENCY_AUDIT_REQUIRED` | not-verified | 没有任何审计检查项；依赖检查集为空但有其他审计结果时记为 pass，不产生该码 |
 | `NO_AUDIT_CHECKS` | not-verified | 没有提供任何审计检查项 |
 | `ENTRY_COUNTS_MISSING` | not-verified | 缺声明入口数或 HDMV 入口数，无法判断入口一致性 |
 | `CAPABILITY_FACTS_INCOMPLETE` | not-verified | 缺必需资产/可达性/可达能力三类事实之一 |
