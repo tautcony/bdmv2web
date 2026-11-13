@@ -21,7 +21,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 | 路径 | 必需 | 内容 |
 | --- | --- | --- |
 | `index.html` | 是 | 舞台 + `<video id="menu-background">` + `<audio id="menu-audio">` + 两个 Canvas + 启动/静音按钮 + 状态区 |
-| `runtime/disc-data.js` | 是 | `globalThis.__BDMV_MENU_DATA__ = { ir, title, scene, popupScenes, menuScenes, menuPlaylistIds, menuPlaylistMarks, preMenuPlaylistIds, pgsTracks, vmPrograms, profile, limits, externalTargets, vmEntries, vmInitialProgramId, vmFirstPlayProgramId, inputConfig, sounds, media, menuMedia }` |
+| `runtime/disc-data.js` | 是 | `globalThis.__BDMV_MENU_DATA__ = { ir, title, scene, popupScenes, scenes, menuScenes, menuPlaylistIds, menuPlaylistMarks, preMenuPlaylistIds, pgsTracks, vmPrograms, profile, limits, externalTargets, vmEntries, vmInitialProgramId, vmFirstPlayProgramId, inputConfig, sounds, media, menuMedia }` |
 | `runtime/assets-data-NNN.js` | 是 | `globalThis.__BDMV_MENU_ASSETS__[i] = [{ id, dataUrl, byteLength }]`，PNG 以 data URL 嵌入 |
 | `runtime/app.bundle.js` | 是 | `runtime-web/src/browser.ts` 的 esbuild IIFE 产物 |
 | `runtime/style.css` | 是 | 全屏舞台、letterbox、状态提示、静音按钮样式 |
@@ -37,6 +37,33 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 
 `manifest.files` 排序按路径 `localeCompare("en")`；`reports.json` 与 `asset-manifest.json` 被显式排除（它们是报告元数据，不是载荷）。
 
+## 共享场景表
+
+`menuScenes` 是 PlayItem → 场景的索引，场景本体写在 `scenes` 里：
+
+```json
+"scenes": { "00005:5120:0:0:1048560": { "pages": [...] } },
+"menuScenes": [{ "playlistId": 3, "playItem": 0, "igStreamNumber": 1, "igStreamCount": 1, "sceneId": "00005:5120:0:0:1048560" }]
+```
+
+- 键是提取阶段的 scene `id`（`<clipId>:<pid>:…`）；没有 `id` 的场景按调用方传入的对象去重，键名为 `menu-scene-<n>`。
+- 一个菜单 Playlist 可以把同一个 clip/PID 声明给全部 PlayItem（样本盘 Top Menu：999 个 PlayItem 指向同一构图）。场景本体因此在 `scenes` 里只有一份，`disc-data.js` 的大小随不同构图数增长，不随 PlayItem 数增长。
+- `scene`（单数）是首播主场景，内联在包数据里；同一构图也在 `scenes` 表中，所以首播场景共两份拷贝。
+
+## 共享媒体表
+
+`manifest.json` 的 `assets` 与 `asset-manifest.json` 用同一套形状记录媒体：`media` / `menuMedia` 是 PlayItem → 计划的索引，计划的记录（`plan`、`outputSize`、`background`、`audioTracks`）每份只写一次，放在 `mediaPlans` 里，键就是它的计划路径：
+
+```json
+"mediaPlans": { "media-plans/playlist-00003-pi00-clip-00004.json": { "plan": {...}, "background": {...}, "audioTracks": [...] } },
+"media": { "playlistId": "00003", "playItemIndex": 0, "planPath": "media-plans/playlist-00003-pi00-clip-00004.json" },
+"menuMedia": [{ "playlistId": "00003", "playItemIndex": 1, "planPath": "media-plans/playlist-00003-pi00-clip-00004.json" }]
+```
+
+- 一个 `planPath` 在 `mediaPlans` 里只有一条记录，无论多少 PlayItem 指向它；`menuMedia` 仍按 PlayItem 各记一条指针，`playlistId`/`playItemIndex` 用它自己的。
+- 索引只放定位用的三样东西，`sourceIn45k`/`clipId` 这类判定要读 `mediaPlans[...].plan`，两条记录因此不会因计划字段变动而不一致。
+- `assets.media` 是首播 PlayItem 的指针，`assets.menuMedia` 是其余 PlayItem 的指针；两者指向同一张表。
+
 ## 产物片段生成器
 
 `buildMenuPackage` 内部用这些函数拼出单个产物，也可单独调用做局部改动：
@@ -46,7 +73,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 | `createReadme(title, backgroundLoops, externalPlayback, status)` | `README.md` 正文 |
 | `createCompatibility(metadata, externalPlayback)` | `reports.json.compatibility` 对象 |
 | `createAssetBatchScript(batch)` | 单个 `runtime/assets-data-NNN.js` 的内容 |
-| `packagedMediaMetadata(media)` | `manifest`/`asset-manifest` 里的媒体元数据 |
+| `packagedMediaMetadata(media)` | `mediaPlans[planPath]` 里那份编码单元的媒体记录 |
 | `runtimeAudioTrackMetadata(track)` | 单条音轨的 `streamNumber` 与 `psrStreamNumber` 映射 |
 
 ## 脚本与安全
@@ -76,9 +103,10 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 
 ## 媒体
 
-- 两种输入都走 `menuMediaPaths()`：目录 `assets/media/playlist-<id>-pi<n>-clip-<clipId>/`，计划 `media-plans/<同一名字>.json`。
+- 编码单元由 `menuMediaPaths()` 命名：目录 `assets/media/playlist-<id>-pi<n>-clip-<clipId>/`，计划 `media-plans/<同一名字>.json`。
 - `menuLoopMedia` → `exportMenuLoopMedia`，写 `background.mp4` 与音轨计划；`additionalMenuMedia` → 每个播放列表 PlayItem 一份，共用同一模板。目录名里的 `<id>` 是 `<id>.mpls` 的编号、`<clipId>` 是 `BDMV/STREAM/<clipId>.m2ts` 的编号，PlayItem 补零到两位。
 - 等价引用（同一 Playlist/PlayItem/clip/区间/流）共用一次转码，后来的输入引用先前的目录，不再单开一份；被引用的一方没有编码动作，所以 Builder 为它补一个 `state: "end"` 的 `onMediaProgress` 事件（`reused: true`），使进度按计划里的 clip 数推进。
+- 计划文件按编码单元存在：`media-plans/` 的文件数等于实际编码单元数。共用同一媒体的 PlayItem，其 `planPath` 都指向该单元的计划（计划里的 `playlistId`/`playItemIndex` 是实际编码的那个 PlayItem）。
 - `reuseMediaFromDirectory` 只在旧计划与本次输入完全匹配时复用，否则重编码（由 `media-export` 判定）。
 - 编码参数由 `mediaEncoding` 透传给两次导出调用，Builder 不写死 `preset`/`crf`。
 - 每个导出结果里的 `warnings`（HDR 色调映射缺失、H.264 + HDR 等）转成 `diagnostics` 条目，`severity: "warning"`，按 `code` 去重后写进 `manifest.json`。警告不改变 `status`，出包视为完成。

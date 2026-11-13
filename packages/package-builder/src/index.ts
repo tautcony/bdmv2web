@@ -61,7 +61,10 @@ export interface MenuPackageInput {
   scene: unknown;
   /** Extracted title popup IGS compositions, retained with their source clip/PID. */
   popupScenes?: unknown[];
-  /** Extracted IGS compositions keyed by their owning HDMV menu playlist number. */
+  /** Extracted IGS compositions keyed by their owning HDMV menu playlist number.
+   * Entries are indexed by PlayItem; the compositions themselves are written
+   * once into a shared table, so PlayItems that name the same clip/PID cost
+   * only their index record. */
   menuScenes?: Array<{ playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; scene: unknown }>;
   /** HDMV playlist numbers that carry a menu IGS stream. */
   menuPlaylistIds?: number[];
@@ -145,6 +148,35 @@ export function priorMenuMediaPaths(input: Pick<MenuLoopMediaInput, "playlistId"
   ];
 }
 
+/**
+ * Split menu scene entries into one shared table plus a per-PlayItem index.
+ *
+ * A menu playlist can name the same IGS composition from many PlayItems (this
+ * disc's Top Menu resolves all 999 of its PlayItems to one clip), so the table
+ * holds each composition once under its extracted id while entries keep every
+ * other field and name their composition through `sceneId`.
+ */
+function shareMenuScenes(entries: NonNullable<MenuPackageInput["menuScenes"]>): { scenes: Record<string, unknown>; menuScenes: Array<Record<string, unknown>> } {
+  const scenes: Record<string, unknown> = {};
+  const sceneIds = new Map<unknown, string>();
+  let anonymousCount = 0;
+  const menuScenes = entries.map(({ scene, ...entry }) => {
+    const declaredId = (scene as { id?: unknown } | null)?.id;
+    const identifiable = typeof declaredId === "string" && declaredId !== "";
+    // Compositions without an extracted id are keyed by the object the caller
+    // passed, so a caller that hands over one scene per PlayItem still gets one
+    // copy as long as those PlayItems share that object.
+    const key: unknown = identifiable ? `declared:${declaredId}` : scene;
+    const shared = sceneIds.get(key);
+    if (shared !== undefined) return { ...entry, sceneId: shared };
+    const sceneId = identifiable ? declaredId : `menu-scene-${anonymousCount++}`;
+    sceneIds.set(key, sceneId);
+    scenes[sceneId] = scene;
+    return { ...entry, sceneId };
+  });
+  return { scenes, menuScenes };
+}
+
 /** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
 export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
   const ir = parseDiscIR(input.ir);
@@ -184,14 +216,12 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     const key = menuMediaReuseKey(media, mediaEncoding);
     const existing = mediaByKey.get(key);
     if (existing) {
-      // The clip shares its bytes with one already exported: nothing is encoded,
-      // but it keeps a PlayItem-specific plan for future reuse.
+      // The PlayItem shares its bytes with one already exported, so it also
+      // shares that unit's plan file: `media-plans/` holds one plan per encoded
+      // unit, not per PlayItem.
       input.onMediaProgress?.({ state: "end", outTimeSeconds: existing.result.background.durationSeconds, durationSeconds: existing.result.background.durationSeconds, assetPath: existing.result.background.path, source: { playlistId: media.playlistId, playItemIndex: media.playItemIndex, clipId: media.clipId, kind: "background", pid: media.videoPid, videoMode: existing.result.plan.encoding.video.mode, reused: true } });
-      const { planPath } = menuMediaPaths(media);
       const result = referenceMenuMediaResult(existing.result, media);
-      await mkdir(resolve(output, dirname(planPath)), { recursive: true });
-      await writeFile(resolve(output, planPath), `${JSON.stringify(result.plan, null, 2)}\n`);
-      additionalMedia.push({ input: media, result, planPath });
+      additionalMedia.push({ input: media, result, planPath: existing.planPath });
       continue;
     }
     const { directory, planPath } = menuMediaPaths(media);
@@ -224,6 +254,18 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     background: { path: result.background.path, durationSeconds: result.background.durationSeconds, loop: result.background.loop, ...(result.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: result.background.loopStartSeconds }) },
     audioTracks: result.audioTracks.map(runtimeAudioTrackMetadata),
   }));
+  // Manifest media records are an index plus one record per exported plan: a
+  // menu playlist can name the same media unit from hundreds of PlayItems, and a
+  // full record per PlayItem put megabytes of identical plans into the manifest.
+  const mediaPlans = new Map<string, ReturnType<typeof packagedMediaMetadata>>();
+  const recordMediaPlan = (planPath: string, result: MenuLoopMediaResult): void => {
+    if (!mediaPlans.has(planPath)) mediaPlans.set(planPath, packagedMediaMetadata(result));
+  };
+  if (exportedMedia && primaryMedia) recordMediaPlan(primaryMedia.planPath, exportedMedia);
+  for (const { result, planPath } of additionalMedia) recordMediaPlan(planPath, result);
+  const primaryPointer = input.menuLoopMedia && primaryMedia && exportedMedia ? { playlistId: input.menuLoopMedia.playlistId, playItemIndex: input.menuLoopMedia.playItemIndex, planPath: primaryMedia.planPath } : undefined;
+  const menuMediaIndex = additionalMedia.map(({ input: media, planPath }) => ({ playlistId: media.playlistId, playItemIndex: media.playItemIndex, planPath }));
+  const packagedPlans = Object.fromEntries(mediaPlans);
   const metadata: MenuPackageMetadata = { schemaVersion: "1.0", runtimeVersion: input.runtimeVersion ?? "0.1.0", title: input.title, status: input.status ?? "partial", diagnostics };
   const files: Array<{ path: string; kind: string; required?: boolean }> = [
     { path: "index.html", kind: "html", required: true },
@@ -243,10 +285,11 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...(bdjRuntime ? [{ path: "runtime/bdj/bdj-host-api.jar", kind: "bdj-host", required: true }, { path: "runtime/bdj/session.json", kind: "bdj-session", required: true }] : []),
     ...bdjFiles.map((file) => ({ path: `bdj/${file.path}`, kind: "bdj", required: true })),
   ];
+  const sharedMenuScenes = input.menuScenes?.length ? shareMenuScenes(input.menuScenes) : undefined;
   input.onPhase?.("assets");
   await Promise.all([
     writeFile(resolve(output, "index.html"), createMenuIndexHtml(input.title, batches.length, sceneSize, !!input.externalTargets, bdjRuntime)),
-    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(bdjRuntime ? { bdjRuntime: true, bdjFiles: bdjFiles.map(({ path }) => ({ path, packagePath: `bdj/${path}` })), bdjHostApiPath: "runtime/bdj/bdj-host-api.jar" } : {}), ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(input.menuScenes?.length ? { menuScenes: input.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), playItem: exportedMedia.plan.playItemIndex, background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop, ...(exportedMedia.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: exportedMedia.background.loopStartSeconds }) }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
+    writeFile(resolve(runtimeDirectory, "disc-data.js"), createDataScript({ ir, title: input.title, scene: input.scene, ...(bdjRuntime ? { bdjRuntime: true, bdjFiles: bdjFiles.map(({ path }) => ({ path, packagePath: `bdj/${path}` })), bdjHostApiPath: "runtime/bdj/bdj-host-api.jar" } : {}), ...(input.popupScenes?.length ? { popupScenes: input.popupScenes } : {}), ...(sharedMenuScenes ? { scenes: sharedMenuScenes.scenes, menuScenes: sharedMenuScenes.menuScenes } : {}), ...(input.menuPlaylistIds?.length ? { menuPlaylistIds: input.menuPlaylistIds } : {}), ...(input.menuPlaylistMarks?.length ? { menuPlaylistMarks: input.menuPlaylistMarks } : {}), ...(input.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: input.preMenuPlaylistIds } : {}), ...(serializedPgsTracks.length ? { pgsTracks: serializedPgsTracks } : {}), vmPrograms: input.vmPrograms ?? [], ...(input.playerProfile ? { profile: input.playerProfile } : {}), ...(input.vmLimits ? { limits: input.vmLimits } : {}), ...(input.externalTargets ? { externalTargets: input.externalTargets } : {}), ...(input.vmEntries ? { vmEntries: input.vmEntries } : {}), ...(input.vmInitialProgramId !== undefined ? { vmInitialProgramId: input.vmInitialProgramId } : {}), ...(input.vmFirstPlayProgramId !== undefined ? { vmFirstPlayProgramId: input.vmFirstPlayProgramId } : {}), inputConfig: { escapeMapping: input.inputConfig?.escapeMapping ?? "popup" }, sounds: Object.fromEntries(sounds.map(({ index, path }) => [index, path])), ...(exportedMedia ? { media: { playlist: Number(input.menuLoopMedia!.playlistId), playItem: exportedMedia.plan.playItemIndex, background: { path: exportedMedia.background.path, durationSeconds: exportedMedia.background.durationSeconds, loop: exportedMedia.background.loop, ...(exportedMedia.background.loopStartSeconds === undefined ? {} : { loopStartSeconds: exportedMedia.background.loopStartSeconds }) }, audioTracks: exportedMedia.audioTracks.map(runtimeAudioTrackMetadata) } } : {}), ...(runtimeMenuMedia.length ? { menuMedia: runtimeMenuMedia } : {}) })),
     ...(input.externalTargets ? [writeFile(resolve(runtimeDirectory, "bdmv-config.js"), `globalThis.__BDMV_BDMV_PATH__=${serializeSafeScriptData(input.bdmvPath ?? "../BDMV")};\n`)] : []),
     ...bdjFiles.map(async (file) => {
       const target = resolve(output, "bdj", file.path);
@@ -260,7 +303,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...(input.externalTargets ? [writeFile(resolve(output, "external-targets.json"), `${JSON.stringify(input.externalTargets)}\n`)] : []),
     ...batches.map((batch) => writeFile(resolve(runtimeDirectory, `assets-data-${String(batch.index).padStart(3, "0")}.js`), createAssetBatchScript(batch))),
     ...soundResult.files.map(async ({ path, bytes }) => { await mkdir(resolve(output, "assets/audio"), { recursive: true }); await writeFile(resolve(output, path), bytes); }),
-    writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, bdjFiles: bdjFiles.map(({ bytes, ...file }) => ({ ...file, packagePath: `bdj/${file.path}`, byteLength: String(bytes.byteLength) })), ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
+    writeFile(resolve(output, "asset-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", sounds, bdjFiles: bdjFiles.map(({ bytes, ...file }) => ({ ...file, packagePath: `bdj/${file.path}`, byteLength: String(bytes.byteLength) })), ...(primaryPointer ? { media: primaryPointer } : {}), ...(mediaPlans.size ? { mediaPlans: packagedPlans } : {}), ...(menuMediaIndex.length ? { menuMedia: menuMediaIndex } : {}), pgsTracks: (input.pgsTracks ?? []).map(({ displaySets: _displaySets, ...track }) => ({ ...track, displaySetCount: _displaySets.length })) }, null, 2)}\n`),
   ]);
   input.onPhase?.("bundle");
   await writeFile(resolve(runtimeDirectory, "app.bundle.js"), await readFile(menuRuntimeBundlePath()));
@@ -283,7 +326,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   manifestFiles.sort((a, b) => a.path.localeCompare(b.path, "en"));
   const menuMediaLimitation = input.externalTargets ? "External player handoff reports process launch requests; external players own playback state." : exportedMedia ? exportedMedia.background.loop ? "Menu background uses a repeated single-clip loop." : "Menu background holds its final frame after the single PlayItem; declared audio ends with the PlayItem." : "Menu background media is unavailable";
   const pgsManifest = (input.pgsTracks ?? []).map(({ displaySets, ...track }) => ({ ...track, displaySetCount: displaySets.length }));
-  const manifest = { schemaVersion: "1.0", status: metadata.status, launchMode: bdjRuntime ? "local-jvm" : "hdmv", ...(bdjRuntime ? { runtimeRequirements: ["bdmv2web serve <package-directory>", "Java 21 or a compatible Java runtime with java.desktop", "loopback HTTP connection"] } : {}), ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(exportedMedia ? { media: packagedMediaMetadata(exportedMedia) } : {}), ...(additionalMedia.length ? { menuMedia: additionalMedia.map(({ result }) => packagedMediaMetadata(result)) } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, ...(bdjRuntime ? ["BD-J packages run through the local bdmv2web service and native Java process."] : []), "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
+  const manifest = { schemaVersion: "1.0", status: metadata.status, launchMode: bdjRuntime ? "local-jvm" : "hdmv", ...(bdjRuntime ? { runtimeRequirements: ["bdmv2web serve <package-directory>", "Java 21 or a compatible Java runtime with java.desktop", "loopback HTTP connection"] } : {}), ...(input.entryCounts ? { declaredEntryCount: input.entryCounts.declared, hdmvEntryCount: input.entryCounts.hdmv } : {}), files: manifestFiles, diagnostics: metadata.diagnostics, ...(input.playerProfile ? { profile: input.playerProfile } : {}), assets: { sounds, ...(primaryPointer ? { media: primaryPointer } : {}), ...(mediaPlans.size ? { mediaPlans: packagedPlans } : {}), ...(menuMediaIndex.length ? { menuMedia: menuMediaIndex } : {}), pgsTracks: pgsManifest }, limitations: [menuMediaLimitation, ...(bdjRuntime ? ["BD-J packages run through the local bdmv2web service and native Java process."] : []), "IGS effect sequences are rendered and presented; effect flag semantics are verified for the synthetic fixtures only"] };
   await writeFile(resolve(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   return { diagnostics: metadata.diagnostics };
 }
@@ -321,6 +364,12 @@ function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncodin
   });
 }
 
+/** Record a PlayItem that names media already exported for another one.
+ *
+ * The record keeps the requesting PlayItem and the shared asset paths, and no
+ * file is written: `planPath` points at the plan of the unit that was encoded,
+ * so a package with N PlayItems over one clip holds one plan.
+ */
 function referenceMenuMediaResult(media: MenuLoopMediaResult, input: MenuLoopMediaInput): MenuLoopMediaResult {
   return {
     ...media,

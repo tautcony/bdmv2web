@@ -12,7 +12,7 @@ BDMV-menu/
 ├── asset-manifest.json
 ├── reports.json
 ├── external-targets.json          # 有外部播放目标
-├── media-plans/                  # 每个导出单元一份计划
+├── media-plans/                  # 每个实际编码单元一份计划；共用媒体的 PlayItem 指向同一份
 │   ├── playlist-00003-pi00-clip-00004.json
 │   └── ...
 ├── runtime/
@@ -55,7 +55,8 @@ BDMV-menu/
 | `title` | `--title` 或目录名 | 文档标题 |
 | `scene` | `adaptIgsScene(主场景)` | 主菜单 |
 | `popupScenes` | 所有 `uiModel === 1` 场景 | 弹出菜单 |
-| `menuScenes` | 其他常显菜单场景 + 所属播放列表 | 切换菜单 |
+| `scenes` | 去重后的 `SerializedScene` 表 | `menuScenes[i].sceneId` 的实体 |
+| `menuScenes` | 常显菜单场景的 PlayItem 索引（`sceneId` 指向 `scenes`） | 切换菜单 |
 | `menuPlaylistIds` / `preMenuPlaylistIds` | 选择结果 | 播放列表 → 媒体映射 |
 | `menuPlaylistMarks` | 菜单播放列表的 mark → PlayItem 映射 | `PLAY_PLAYLIST_MARK` 场景路由 |
 | `vmPrograms` | `disc.movieObjects` | VM 程序 |

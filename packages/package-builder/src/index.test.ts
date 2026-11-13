@@ -229,11 +229,12 @@ describe("menu package primitives", () => {
     try {
       await buildMenuPackage({ outputDirectory, title: "Repeated menu", ir, scene, graphics: [], additionalMenuMedia: mediaWithDistinctSegment, mediaEncoding: { codec: "h264" }, mediaProcessRunner });
       const assetManifest = JSON.parse(await readFile(resolve(outputDirectory, "asset-manifest.json"), "utf8")) as {
-        menuMedia: Array<{ plan: { playlistId: string; playItemIndex: number }; background: { path: string }; audioTracks: Array<{ path: string }> }>;
+        menuMedia: Array<{ playlistId: string; playItemIndex: number; planPath: string }>;
+        mediaPlans: Record<string, { plan: { playItemIndex: number }; background: { path: string }; audioTracks: Array<{ path: string }> }>;
       };
       const runtime: { __BDMV_MENU_DATA__?: { menuMedia?: Array<{ playlist: number; playItem: number; background: { path: string }; audioTracks: Array<{ path: string }> }> } } = {};
       runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), runtime);
-      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string }> };
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string }>; assets: { menuMedia: Array<{ planPath: string }>; mediaPlans: Record<string, unknown> } };
       const physicalMediaFiles = manifest.files.filter((file) => file.kind === "media");
       expect(ffmpegCalls).toBe(2);
       expect(encodeOutputs).toHaveLength(6);
@@ -241,17 +242,67 @@ describe("menu package primitives", () => {
       expect(encodeOutputs.filter((path) => path.endsWith(".m4a"))).toHaveLength(4);
       expect(physicalMediaFiles).toHaveLength(6);
       expect(new Set(physicalMediaFiles.map((file) => file.path)).size).toBe(6);
-      expect(manifest.files.filter((file) => file.kind === "media-plan")).toHaveLength(1000);
+      // The 999 equivalent PlayItems share one encoded unit, so they also share
+      // its plan file; only the distinct segment gets a plan of its own.
+      expect(manifest.files.filter((file) => file.kind === "media-plan").map((file) => file.path).sort()).toEqual([
+        "media-plans/playlist-00003-pi00-clip-00004.json",
+        "media-plans/playlist-00003-pi999-clip-00004.json",
+      ]);
+      expect((await readdir(resolve(outputDirectory, "media-plans"))).sort()).toEqual([
+        "playlist-00003-pi00-clip-00004.json",
+        "playlist-00003-pi999-clip-00004.json",
+      ]);
+      // Each PlayItem is an index entry naming its plan; the plan's record sits
+      // once per encoded unit instead of once per PlayItem.
       expect(assetManifest.menuMedia).toHaveLength(1000);
-      expect(assetManifest.menuMedia.map((item) => item.plan.playItemIndex)).toEqual(mediaWithDistinctSegment.map((item) => item.playItemIndex));
-      expect(new Set(assetManifest.menuMedia.slice(0, 999).map((item) => item.background.path)).size).toBe(1);
-      expect(assetManifest.menuMedia[999]!.background.path).not.toBe(assetManifest.menuMedia[0]!.background.path);
-      expect(new Set(assetManifest.menuMedia.slice(0, 999).flatMap((item) => item.audioTracks.map((track) => track.path))).size).toBe(2);
-      expect(assetManifest.menuMedia[999]!.audioTracks.map((track) => track.path)).not.toEqual(assetManifest.menuMedia[0]!.audioTracks.map((track) => track.path));
+      expect(assetManifest.menuMedia.map((item) => item.playItemIndex)).toEqual(mediaWithDistinctSegment.map((item) => item.playItemIndex));
+      expect(Object.keys(assetManifest.mediaPlans).sort()).toEqual([
+        "media-plans/playlist-00003-pi00-clip-00004.json",
+        "media-plans/playlist-00003-pi999-clip-00004.json",
+      ]);
+      expect(new Set(assetManifest.menuMedia.slice(0, 999).map((item) => item.planPath)).size).toBe(1);
+      expect(assetManifest.menuMedia[999]!.planPath).not.toBe(assetManifest.menuMedia[0]!.planPath);
+      expect(manifest.assets.menuMedia).toHaveLength(1000);
+      expect(manifest.assets.menuMedia.map((item) => item.planPath)).toEqual(assetManifest.menuMedia.map((item) => item.planPath));
+      expect(Object.keys(manifest.assets.mediaPlans).sort()).toEqual(Object.keys(assetManifest.mediaPlans).sort());
       expect(runtime.__BDMV_MENU_DATA__?.menuMedia).toHaveLength(1000);
       expect(runtime.__BDMV_MENU_DATA__?.menuMedia?.map((item) => item.playItem)).toEqual(mediaWithDistinctSegment.map((item) => item.playItemIndex));
       expect(new Set(runtime.__BDMV_MENU_DATA__?.menuMedia?.slice(0, 999).map((item) => item.background.path)).size).toBe(1);
       expect(runtime.__BDMV_MENU_DATA__?.menuMedia?.[999]?.background.path).not.toBe(runtime.__BDMV_MENU_DATA__?.menuMedia?.[0]?.background.path);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+  it("writes one composition per distinct menu scene instead of one per PlayItem", async () => {
+    const parent = await mkdtemp(resolve(tmpdir(), "bdmv-menu-shared-scenes-"));
+    const outputDirectory = resolve(parent, "shared scenes");
+    const topMenu = { ...scene, id: "00005:5120:0:0:1048560", clipId: "00005", pid: 0x1400 };
+    const subMenu = { ...scene, id: "00006:4608:0:0", clipId: "00006", pid: 0x1200 };
+    const firstAnonymous = { ...scene, pages: [...scene.pages] };
+    const secondAnonymous = { ...scene, pages: [...scene.pages] };
+    try {
+      await buildMenuPackage({
+        outputDirectory, title: "Shared scenes", ir, scene, graphics: [],
+        menuScenes: [
+          ...Array.from({ length: 999 }, (_, playItem) => ({ playlistId: 3, playItem, igStreamNumber: 1, igStreamCount: 1, scene: topMenu })),
+          { playlistId: 3, playItem: 999, igStreamNumber: 2, igStreamCount: 2, scene: subMenu },
+          { playlistId: 4, playItem: 0, scene: firstAnonymous },
+          { playlistId: 4, playItem: 1, scene: secondAnonymous },
+        ],
+      });
+      const embedded: { __BDMV_MENU_DATA__?: { scenes?: Record<string, unknown>; menuScenes?: Array<Record<string, unknown>> } } = {};
+      runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
+      const data = embedded.__BDMV_MENU_DATA__;
+      // Extracted compositions are keyed by their own id; scenes without one are
+      // keyed by the object, so two different compositions stay two entries.
+      expect(Object.keys(data?.scenes ?? {})).toEqual(["00005:5120:0:0:1048560", "00006:4608:0:0", "menu-scene-0", "menu-scene-1"]);
+      expect(data?.scenes?.["00005:5120:0:0:1048560"]).toEqual(topMenu);
+      expect(data?.menuScenes).toHaveLength(1002);
+      expect(data?.menuScenes?.slice(0, 999).every((entry) => entry.sceneId === "00005:5120:0:0:1048560" && entry.scene === undefined)).toBe(true);
+      expect(data?.menuScenes?.[999]).toMatchObject({ playlistId: 3, playItem: 999, igStreamNumber: 2, igStreamCount: 2, sceneId: "00006:4608:0:0" });
+      expect(data?.menuScenes?.slice(1000).map((entry) => entry.sceneId)).toEqual(["menu-scene-0", "menu-scene-1"]);
+      // The payload holds one copy of the primary scene plus the shared table;
+      // nothing repeats the composition per PlayItem.
+      const payload = await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8");
+      expect(payload.match(/"pages":/g) ?? []).toHaveLength(5);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("embeds the configured HDMV limits in runtime data", async () => {
