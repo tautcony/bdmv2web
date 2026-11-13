@@ -514,9 +514,9 @@ export class HdmvVm {
         // playlist end finds no playing object and leaves the VM untouched
         // (_resume_from_play_pl()). Stop the wait before entering the target
         // object at PC 0 so the pending MEDIA_ENDED cannot overwrite the
-        // transfer.
+        // transfer. `_jump_object()` also queues PLAY_STOP for the player.
         if (Number.isInteger(target) && target >= 0 && this.tryTransfer(target, 0, source)) {
-          if (this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, source);
+          if (this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, source, true);
           this.status = "running";
           this.runTurn();
         }
@@ -587,7 +587,7 @@ export class HdmvVm {
         if (!this.programs.has(av)) { this.noteIgnoredInstruction("HDMV_INVALID_TARGET", `Target object ${av} does not exist`, d.source); return; }
         // _jump_object() keeps the suspended call object, stops the playing
         // object, and queues PLAY_STOP before entering the target at PC 0.
-        if (context === "ig_object" && this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, d.source);
+        if (context === "ig_object" && this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, d.source, true);
         this.tryTransfer(av, 0, d.source);
         return;
       case "CALL_OBJECT": {
@@ -599,7 +599,7 @@ export class HdmvVm {
         if (playing) {
           this.suspendedPlaylistContinuation = playing;
           this.suspendedPlaylistPlayback = { ...this.playback };
-          this.stopPlayingContinuation(playing, d.source);
+          this.stopPlayingContinuation(playing, d.source, true);
           this.callStack.splice(0, this.callStack.length, { programId: playing.nextProgramId, pc: playing.nextPc });
         } else {
           this.callStack.splice(0, this.callStack.length, { programId: this.programId, pc: this.pc });
@@ -619,7 +619,9 @@ export class HdmvVm {
       }
       case "JUMP_TITLE": {
         if (!this.tryValidateTitle(av, d.source)) return;
-        if (this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, d.source);
+        // _jump_title() drops the suspended wait without a PLAY_STOP; the player
+        // closes the current playlist when it acts on the queued title event.
+        if (this.hasPlaylistContinuation()) this.stopPlayingContinuation(this.continuation!, d.source, false);
         this.callStack.length = 0;
         this.suspendedPlaylistContinuation = null;
         this.suspendedPlaylistPlayback = null;
@@ -649,7 +651,8 @@ export class HdmvVm {
         if (playing) {
           this.suspendedPlaylistContinuation = playing;
           this.suspendedPlaylistPlayback = { ...this.playback };
-          this.stopPlayingContinuation(playing, d.source);
+          // _suspend_object() parks the wait; _call_title() queues no PLAY_STOP.
+          this.stopPlayingContinuation(playing, d.source, false);
           this.callStack.splice(0, this.callStack.length, { programId: playing.nextProgramId, pc: playing.nextPc });
         } else {
           this.callStack.splice(0, this.callStack.length, { programId: this.programId, pc: this.pc });
@@ -788,14 +791,19 @@ export class HdmvVm {
     const action = this.continuation?.action;
     return action?.waitFor === "ended" && (action.type === "PLAY_PLAYLIST" || action.type === "PLAY_PLAYLIST_ITEM" || action.type === "PLAY_PLAYLIST_MARK");
   }
-  private stopPlayingContinuation(playing: Continuation, source: SourceLocation): void {
+  /** Drop the suspended playlist wait the way libbluray's branching helpers do.
+   * `_jump_object()` and `_play_stop()` also queue HDMV_EVENT_PLAY_STOP, which the
+   * player turns into a playlist close; `_jump_title()` and `_call_title()` only
+   * clear `playing_object` and let the player close the playlist when it acts on
+   * the queued title event. */
+  private stopPlayingContinuation(playing: Continuation, source: SourceLocation, stopPlayback: boolean): void {
     this.removeAction(playing.action.id);
     // The response key stays unconsumed: a menu checkpoint that restores this
     // continuation remains resumable by a late MEDIA_ENDED. A response with no
     // restored continuation has no matching pending action and is ignored.
     this.continuation = null;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
-    this.emit("PLAY_STOP", { implicit: true }, source);
+    if (stopPlayback) this.emit("PLAY_STOP", {}, source);
   }
   /** Apply bd_menu_call()/hdmv_vm_suspend_pl(): keep the playing position when the MovieObject resume-intention flag is set. */
   private suspendPlayingForMenuCall(): void {

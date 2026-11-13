@@ -80,7 +80,7 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 - 普通指令 PC+1；`GOTO` 目标 ≥ 指令数视为对象结束（回到 `idle`，不 fault）。
 - `JUMP_OBJECT`：进入目标对象 PC 0，保留挂起的播放上下文；结束挂起播放时发 `PLAY_STOP`。
 - `CALL_OBJECT`：保存当前对象/下一 PC 与 PSR4–8、10–12 到备份 PSR；IG 按钮调用会停放播放并 `PLAY_STOP`，`RESUME` 重发停放的动作。
-- `JUMP_TITLE` / `CALL_TITLE`：发 `TITLE_SEARCH`，不设媒体等待；`CALL_TITLE` 会保存调用者，选定标题后可 `RESUME`。
+- `JUMP_TITLE` / `CALL_TITLE`：发 `TITLE_SEARCH`，不设媒体等待；挂起的播放列表等待只被撤销，不发 `PLAY_STOP`（播放器在标题生效时关闭播放列表）。`CALL_TITLE` 会保存调用者，选定标题后可 `RESUME`。
 - `PLAY_PL*`：挂起到 `ended`；在 IG 按钮上下文忽略。
 - `TERMINATE_PL`：发 `PLAY_STOP`，消费旧播放回信，恢复保存的 MovieObject PC。
 - `SET_STREAM` / `SET_SEC_STREAM`：解析 GPR 操作数，更新 PSR0/1/2/3（次级为 PSR14/2），动作载荷保留原始与解析后的字。
@@ -98,9 +98,9 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 | `GOTO` | 两种上下文均设置 PC 为目标；目标达到指令数时自然结束对象。 | 不发 action，不等待，无诊断。 | implemented；`control-flow.test.ts`：GOTO 目标 PC 与对象结束。 |
 | `BREAK` | 两种上下文均将 PC 置于对象末尾。 | 不发 action，不等待，无诊断。 | implemented；`opcode-reference.test.ts`：NOP 与 BREAK 执行。 |
 | `JUMP_OBJECT` | 两种上下文转到目标对象 PC 0；IG 上下文有播放等待时先发 `PLAY_STOP`。缺失目标保留当前位置并记录 `HDMV_INVALID_TARGET`。 | 可能发 `PLAY_STOP`；不建立等待。 | implemented；`control-flow.test.ts`：JUMP_OBJECT 与 RESUME 调用路径；`index.test.ts`：IG 跳转释放播放等待。 |
-| `JUMP_TITLE` | 两种上下文校验 title 后进入标题转换状态；未执行下一条指令。 | 发 `TITLE_SEARCH`，不设 VM wait；`selectTitle()` 完成转换或记录诊断。 | implemented；`control-flow.test.ts`：JUMP_TITLE 停止当前程序；`index.test.ts`：M1 entry 标题解析。 |
+| `JUMP_TITLE` | 两种上下文校验 title 后丢弃播放等待并进入标题转换状态；未执行下一条指令。 | 发 `TITLE_SEARCH`，不发 `PLAY_STOP`，不设 VM wait；`selectTitle()` 完成转换或记录诊断。 | implemented；`control-flow.test.ts`：JUMP_TITLE 停止当前程序；`index.test.ts`：M1 entry 标题解析、播放等待撤销不产生 `PLAY_STOP`。 |
 | `CALL_OBJECT` | 两种上下文保存一帧调用者与 PSR4–8、PSR10–12，再转到目标 PC 0；`maxCallDepth: 0` fault。缺失目标记录 `HDMV_INVALID_TARGET` 并继续。 | IG 播放等待会停放并发 `PLAY_STOP`；不设调用事件等待。 | implemented；`control-flow.test.ts`：嵌套调用与缺失目标；`index.test.ts`：调用与恢复。 |
-| `CALL_TITLE` | 保存一帧调用者与备份 PSR；HDMV entry 目标选定后从调用后 PC 继续。缺失 entry 记录 `HDMV_INVALID_TARGET`；BD-J 记录 `HDMV_UNVERIFIED_OPCODE`。 | 发 `TITLE_SEARCH`，不设 `responseTo` wait；`selectTitle()` 选择或释放失败状态。 | implemented for HDMV targets；`control-flow.test.ts`：标题调用恢复；`index.test.ts`：CALL_TITLE selection 与恢复。 |
+| `CALL_TITLE` | 保存一帧调用者与备份 PSR；HDMV entry 目标选定后从调用后 PC 继续。缺失 entry 记录 `HDMV_INVALID_TARGET`；BD-J 记录 `HDMV_UNVERIFIED_OPCODE`。 | 发 `TITLE_SEARCH`，不发 `PLAY_STOP`，不设 `responseTo` wait；停放中的播放等待由 `RESUME` 重发；`selectTitle()` 选择或释放失败状态。 | implemented for HDMV targets；`control-flow.test.ts`：标题调用恢复；`index.test.ts`：CALL_TITLE selection 与恢复。 |
 | `RESUME` | 弹出一帧并恢复调用者 PC 与备份 PSR；有停放的播放等待时重发播放 action。 | 没有调用帧且没有停放播放时记录 `HDMV_RESUME_WITHOUT_CALL`。 | implemented；`control-flow.test.ts`：RESUME 有无调用帧；`reference-golden.test.ts`：调用恢复检查点。 |
 | `PLAY_PL` | 仅 `object` 执行；PC 保存为 action 后一条。其他上下文继续执行并记录 `HDMV_OPCODE_CONTEXT_SKIPPED`。 | 发 `PLAY_PLAYLIST`，等待 `ended`。 | implemented；`index.test.ts`：Playlist 命令等待与 IG 上下文。 |
 | `PLAY_PL_PI` | 仅 `object` 执行；保留 playlist 与 PlayItem 操作数。其他上下文记录上下文诊断并继续。 | 发 `PLAY_PLAYLIST_ITEM`，等待 `ended`。 | implemented；`index.test.ts`：Playlist 命令等待与 IG 上下文。 |

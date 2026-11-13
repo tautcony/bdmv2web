@@ -586,9 +586,11 @@ describe("M3 HDMV fixtures", () => {
 
     const button = vm.executeButtonProgram([rawCommand(0x21830000, 1)], "ig_object");
     expect(button).toMatchObject({ status: "suspended", programId: 0, pc: 1, callStack: [{ programId: 0, pc: 1 }] });
-    expect(button.actions.map((action) => action.type)).toEqual(["PLAY_STOP", "TITLE_SEARCH"]);
-    expect(button.actions[1]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
-    expect(button.actions[1]).not.toHaveProperty("waitFor");
+    // _call_title() parks the playing object and queues only the title event;
+    // PLAY_STOP belongs to _jump_object() and _play_stop().
+    expect(button.actions.map((action) => action.type)).toEqual(["TITLE_SEARCH"]);
+    expect(button.actions[0]).toMatchObject({ type: "TITLE_SEARCH", payload: { title: 1 } });
+    expect(button.actions[0]).not.toHaveProperty("waitFor");
 
     const resumed = vm.selectTitle(1);
     const replayed = resumed.waiting!;
@@ -878,6 +880,22 @@ describe("M3 HDMV fixtures", () => {
     const afterLateMediaCompletion = vm.handleEvent({ type: "MEDIA_ENDED", generation: playlistAction.generation, responseTo: playlistAction.id });
     expect(afterLateMediaCompletion).toMatchObject({ status: "idle", programId: 1, waiting: null });
     expect(vm.trace.find((entry) => entry.decoded?.startsWith("JUMP_OBJECT"))).toMatchObject({ status: "running" });
+  });
+  it("drops an IG playlist wait on JUMP_TITLE without a PLAY_STOP", () => {
+    // libbluray _jump_title() clears playing_object and queues only the title
+    // event; the player closes the current playlist when it acts on it.
+    const vm = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }]);
+    vm.runTurn();
+    const playlistAction = vm.snapshot().waiting!;
+    vm.drainActions();
+
+    const result = vm.executeButtonProgram([rawCommand(0x21810000, 1)], "ig_object");
+
+    expect(result).toMatchObject({ status: "suspended", waiting: null });
+    expect(result.actions.map((action) => action.type)).toEqual(["TITLE_SEARCH"]);
+    const lateCompletion = vm.handleEvent({ type: "MEDIA_ENDED", generation: playlistAction.generation, responseTo: playlistAction.id });
+    expect(lateCompletion).toMatchObject({ status: "suspended", waiting: null });
+    expect(vm.trace.at(-1)?.diagnostic?.code).toBe("HDMV_IGNORED_EVENT");
   });
   it("keeps stopped and faulted VMs terminal when old events arrive", () => {
     const faulted = new HdmvVm([{ id: 0, instructions: [m3Fixtures.playPlaylist42, m3Fixtures.break] }], { maxQueueDepth: 1 });
