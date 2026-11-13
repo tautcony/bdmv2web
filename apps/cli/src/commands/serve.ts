@@ -41,6 +41,12 @@ interface MenuMediaTargetItem {
 
 interface PreparedMenuMediaItem { videoFile?: string; audioFiles: string[]; missing?: boolean; warning?: string; loopStartOffset90k?: string }
 
+/** `asset-manifest.json` media: one pointer per PlayItem, one record per plan. */
+interface PackagedMenuIndex {
+  pointers: Array<Record<string, unknown>>;
+  plans: Record<string, Record<string, unknown>>;
+}
+
 interface MenuMediaTarget {
   playlistId: string;
   items: MenuMediaTargetItem[];
@@ -79,7 +85,7 @@ export async function serve(): Promise<void> {
   const activePlayerTokens = new Set<string>();
   const menuMediaFiles = new Map<string, string>();
   const latestPlayerHandoffs = new Map<string, Record<string, unknown>>();
-  let packagedMenuMedia: Promise<Array<Record<string, unknown>>> | undefined;
+  let packagedMenuMedia: Promise<PackagedMenuIndex> | undefined;
   let activeTitle = 0xffff;
   let userFeatureTitleSelected = false;
   let pendingUserSelection = false;
@@ -110,9 +116,13 @@ export async function serve(): Promise<void> {
     latestPlayerHandoffs.clear();
     packagedMenuMedia = undefined;
   };
-  const packagedMenuItems = (): Promise<Array<Record<string, unknown>>> => packagedMenuMedia ??= readFile(resolve(root, "asset-manifest.json"), "utf8").then((json) => {
+  const packagedMenuItems = (): Promise<PackagedMenuIndex> => packagedMenuMedia ??= readFile(resolve(root, "asset-manifest.json"), "utf8").then((json) => {
     const manifest: unknown = JSON.parse(json);
-    return isRecord(manifest) && Array.isArray(manifest.menuMedia) ? manifest.menuMedia.filter(isRecord) : [];
+    if (!isRecord(manifest)) return { pointers: [], plans: {} };
+    return {
+      pointers: Array.isArray(manifest.menuMedia) ? manifest.menuMedia.filter(isRecord) : [],
+      plans: isRecord(manifest.mediaPlans) ? Object.fromEntries(Object.entries(manifest.mediaPlans).filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]))) : {},
+    };
   });
   const packagedMenuItem = async (item: MenuMediaTargetItem, playlistId: string, bdmvRoot: string): Promise<PreparedMenuMediaItem> => {
     if (!isDeclaredExternalStreamPath(item.clipId, item.streamPath)) throw new Error(`Menu playlist source '${item.streamPath}' is not a declared clip stream.`);
@@ -124,16 +134,18 @@ export async function serve(): Promise<void> {
     }
     const start = BigInt(item.sourceStart90k); const end = BigInt(item.sourceEnd90k);
     if (start % 2n !== 0n || end % 2n !== 0n || end <= start) throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} has an interval that cannot be represented on the MPLS 45 kHz clock.`);
-    const entries = await packagedMenuItems();
-    const match = entries.find((entry) => {
-      const plan = entry.plan;
-      return isRecord(plan) && plan.playlistId === playlistId && plan.playItemIndex === item.index && plan.clipId === item.clipId
-        && plan.sourceIn45k === Number(start / 2n) && plan.sourceOut45k === Number(end / 2n);
-    });
-    if (!match || !isRecord(match.background) || typeof match.background.path !== "string") throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} source ${item.streamPath} has no matching packaged playback asset; rebuild the package.`);
-    const audioFiles = Array.isArray(match.audioTracks) ? match.audioTracks.flatMap((track) => isRecord(track) && typeof track.path === "string" ? [resolve(root, track.path)] : []) : [];
-    const videoFile = resolve(root, match.background.path);
-    if (outsidePackage(videoFile)) throw new Error(`Packaged BD-J menu media path '${match.background.path}' is outside the package.`);
+    // `assets/media` indexes every PlayItem by (playlist, PlayItem) and names the
+    // plan it plays; the plan's own record is stored once per encoded unit.
+    const { pointers, plans } = await packagedMenuItems();
+    const pointer = pointers.find((entry) => entry.playlistId === playlistId && entry.playItemIndex === item.index && typeof entry.planPath === "string");
+    const record = pointer === undefined ? undefined : plans[String(pointer.planPath)];
+    const plan = record?.plan;
+    const background = record?.background;
+    if (!isRecord(plan) || !isRecord(background) || typeof background.path !== "string" || plan.clipId !== item.clipId
+      || plan.sourceIn45k !== Number(start / 2n) || plan.sourceOut45k !== Number(end / 2n)) throw new Error(`Menu playlist ${playlistId} PlayItem ${item.index} source ${item.streamPath} has no matching packaged playback asset; rebuild the package.`);
+    const audioFiles = Array.isArray(record?.audioTracks) ? record.audioTracks.flatMap((track) => isRecord(track) && typeof track.path === "string" ? [resolve(root, track.path)] : []) : [];
+    const videoFile = resolve(root, background.path);
+    if (outsidePackage(videoFile)) throw new Error(`Packaged BD-J menu media path '${background.path}' is outside the package.`);
     for (const audioFile of audioFiles) if (outsidePackage(audioFile)) throw new Error(`Packaged BD-J menu audio path '${audioFile}' is outside the package.`);
     return { videoFile, audioFiles };
   };

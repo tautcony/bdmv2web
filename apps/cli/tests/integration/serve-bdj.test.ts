@@ -121,10 +121,16 @@ it.skipIf(process.platform === "win32")("routes the startup BD-J playlist to pac
     await mkdir(join(packageData.root, "assets", "media"), { recursive: true });
     await writeFile(join(packageData.root, "assets", "media", "playlist-00100.mp4"), "fixture mp4");
     await writeFile(join(packageData.root, "assets", "media", "playlist-00100.m4a"), "fixture m4a");
-    await writeFile(join(packageData.root, "asset-manifest.json"), JSON.stringify({ menuMedia: [0, 1].map((playItemIndex) => ({
-      plan: { playlistId: "00100", playItemIndex, clipId: "00100", sourceIn45k: 500, sourceOut45k: 2500 },
-      background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
-    })) }));
+    // Both PlayItems play the same packaged unit, so the manifest lists two
+    // pointers into one plan record.
+    const sharedPlanPath = "media-plans/playlist-00100-pi00-clip-00100.json";
+    await writeFile(join(packageData.root, "asset-manifest.json"), JSON.stringify({
+      mediaPlans: { [sharedPlanPath]: {
+        plan: { playlistId: "00100", playItemIndex: 0, clipId: "00100", sourceIn45k: 500, sourceOut45k: 2500 },
+        background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
+      } },
+      menuMedia: [0, 1].map((playItemIndex) => ({ playlistId: "00100", playItemIndex, planPath: sharedPlanPath })),
+    }));
     const port = await freePort();
     serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);
@@ -194,10 +200,13 @@ it.skipIf(process.platform === "win32")("stops prepared BD-J media after a playl
     await mkdir(join(packageData.root, "assets", "media"), { recursive: true });
     await writeFile(join(packageData.root, "assets", "media", "playlist-00100.mp4"), "fixture mp4");
     await writeFile(join(packageData.root, "assets", "media", "playlist-00100.m4a"), "fixture m4a");
-    await writeFile(join(packageData.root, "asset-manifest.json"), JSON.stringify({ menuMedia: [{
-      plan: { playlistId: "00100", playItemIndex: 0, clipId: "00100", sourceIn45k: 0, sourceOut45k: 45000 },
-      background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
-    }] }));
+    await writeFile(join(packageData.root, "asset-manifest.json"), JSON.stringify({
+      mediaPlans: { "media-plans/playlist-00100-pi00-clip-00100.json": {
+        plan: { playlistId: "00100", playItemIndex: 0, clipId: "00100", sourceIn45k: 0, sourceOut45k: 45000 },
+        background: { path: "assets/media/playlist-00100.mp4" }, audioTracks: [{ path: "assets/media/playlist-00100.m4a" }],
+      } },
+      menuMedia: [{ playlistId: "00100", playItemIndex: 0, planPath: "media-plans/playlist-00100-pi00-clip-00100.json" }],
+    }));
     const port = await freePort();
     serverProcess = spawn(process.execPath, ["--import", "tsx", cli, "serve", packageData.root, "--port", String(port), "--java", packageData.java], { stdio: ["ignore", "pipe", "pipe"] });
     await waitForLine(serverProcess, `http://127.0.0.1:${port}/`);

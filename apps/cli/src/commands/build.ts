@@ -255,6 +255,17 @@ export async function build(): Promise<void> {
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
     };
+    // Adapt each extracted composition once: a menu playlist can name the same
+    // clip/PID from every one of its PlayItems (this disc: 999 PlayItems over one
+    // clip), and every adaptation is a full scene.
+    const adaptedCompositions = new Map<Parameters<typeof adaptIgsScene>[0], ReturnType<typeof adaptIgsScene>>();
+    const adaptComposition = (composition: Parameters<typeof adaptIgsScene>[0]): ReturnType<typeof adaptIgsScene> => {
+      const cached = adaptedCompositions.get(composition);
+      if (cached !== undefined) return cached;
+      const adapted = adaptIgsScene(composition, extraction.assets);
+      adaptedCompositions.set(composition, adapted);
+      return adapted;
+    };
     const firstPlayEntry = disc.entries.find((entry) => entry.kind === "firstPlay");
     const topMenuEntry = disc.entries.find((entry) => entry.kind === "topMenu");
     const initialBdjEntry = firstPlayEntry?.target.objectType === "BDJ" ? firstPlayEntry
@@ -271,13 +282,13 @@ export async function build(): Promise<void> {
       const externalTargets = createExternalMediaTargets(disc, mediaClosure);
       const mixedPlaylistSceneResults = disc.playlists.flatMap((playlist) => playlist.playItems.flatMap((playItem) => {
         const result = findMenuScene(disc, playlist, extraction.scenes, playItem.index);
-        return result.status === "found" ? [{ playlistId: Number(playlist.id), playItem: playItem.index, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }] : [];
+        return result.status === "found" ? [{ playlistId: Number(playlist.id), playItem: playItem.index, scene: result.scene, adapted: adaptComposition(result.scene) }] : [];
       }));
       const mixedMenuSceneResults = mixedPlaylistSceneResults.filter((item) => item.scene.uiModel === 0);
       const mixedMenuScenes = mixedMenuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
       const mixedMenuPlaylistIds = [...new Set(mixedMenuScenes.map((item) => item.playlistId))];
       const mixedMenuPlaylistMarks = collectMenuPlaylistMarks(disc, mixedMenuPlaylistIds);
-      const mixedPopupScenes = extraction.scenes.filter((item) => item.uiModel === 1).map((item) => adaptIgsScene(item, extraction.assets).scene);
+      const mixedPopupScenes = extraction.scenes.filter((item) => item.uiModel === 1).map((item) => adaptComposition(item).scene);
       const mixedReferencedAssets = referencedAssetIds([...mixedPopupScenes, ...mixedMenuScenes.map((item) => item.scene)]);
       const mixedGraphics = extraction.assets.filter((asset) => mixedReferencedAssets.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
       const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
@@ -360,7 +371,7 @@ export async function build(): Promise<void> {
       return;
     }
     const menuScene = menuSceneResult.scene;
-    const adapted = adaptIgsScene(menuScene, extraction.assets);
+    const adapted = adaptComposition(menuScene);
     const scene = adapted.scene;
     const mediaClosure = buildMediaClosure(disc, extraction.scenes);
     const externalTargets = createExternalMediaTargets(disc, mediaClosure);
@@ -376,7 +387,7 @@ export async function build(): Promise<void> {
         return streamNumbers.flatMap((igStreamNumber) => {
           const result = findMenuScene(disc, playlist, extraction.scenes, playItem, igStreamNumber);
           return result.status === "found"
-            ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, igStreamNumber, igStreamCount: streamCount, scene: result.scene, adapted: adaptIgsScene(result.scene, extraction.assets) }]
+            ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, igStreamNumber, igStreamCount: streamCount, scene: result.scene, adapted: adaptComposition(result.scene) }]
             : [];
         });
       });
@@ -418,7 +429,7 @@ export async function build(): Promise<void> {
         if (media) additionalMenuMedia.push(media);
       }
     }
-    const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptIgsScene(candidate, extraction.assets));
+    const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptComposition(candidate));
     const popupScenes = popupAdaptations.map((result) => result.scene);
     const vmPrograms = createVmPrograms(disc);
     const menuEntry = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number")
