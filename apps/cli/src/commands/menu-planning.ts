@@ -266,6 +266,6 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   return {
     sourcePath, sourceFile, playlistId: playlist.id, playItemIndex: repeatedTail ? last.index : first.index, clipId: first.clipId,
     inTime45k: spanStart, ...(loopStart45k !== undefined ? { loopStart45k } : {}), ...(copyStart45k !== undefined ? { copyStart45k } : {}), outTime45k: spanEnd, stillMode: loopItem.stillMode, repeatCount: options.purpose === "bdj-playback" ? 1 : Math.max(1, repeatCount), loopBackground: options.purpose === "bdj-playback" ? false : loopItem.stillMode === 2 || (repeatedTail || loopStart45k !== undefined), videoPid: video.pid,
-    audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language! })),
+    audioTracks: audioStreams.map((stream, index) => ({ streamNumber: index, pid: stream.pid!, language: stream.language!, codingType: stream.codingType! })),
   };
 }

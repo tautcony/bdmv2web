@@ -6,7 +6,7 @@ export interface MediaProcessProgress { outTimeSeconds: number; state: "continue
 export type MediaProcessRunner = (executable: string, args: string[], timeoutMs: number, signal?: AbortSignal, onProgress?: (progress: MediaProcessProgress) => void) => Promise<MediaProcessResult>;
 export interface MediaToolInvocation { executable: string; args: string[]; }
 
-export interface MediaAudioTrackInput { streamNumber: number; pid: number; language: string; }
+export interface MediaAudioTrackInput { streamNumber: number; pid: number; language: string; codingType?: number; }
 /** How the background video reaches MP4: encoded here, or copied from the source stream. */
 export type VideoExportMode = "encode" | "copy";
 export interface MenuLoopMediaInput {

@@ -85,6 +85,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const spans = new Map<number, Array<{ start: bigint; end: bigint; packetOffset: bigint; pesOffset: bigint; payloadOffset: bigint; pts: PtsValue | null }>>();
   const streamChunks = new Map<number, Uint8Array[]>();
   const streamByteLengths = new Map<number, number>();
+  let stoppedOnPidConflict = false;
   const processPes = (unit: PesPacket): void => {
     const mnuHeader = new Uint8Array(10);
     mnuHeader.set([0x49, 0x47]);
@@ -118,6 +119,14 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const processPacket = (packet: TsPacket): void => {
     const wasKnownIgPid = psi.streamsByPid.get(packet.pid) === 0x91;
     psi.push(packet);
+    if (expectedPidCues.length && psi.hasCompleteProgramTables()) {
+      const expectedPids = uniquePids(expectedPidCues);
+      const pmtPids = [...psi.streamsByPid].filter(([, type]) => type === 0x91).map(([pid]) => pid);
+      if (!pmtPids.length || pmtPids.some((pid) => !expectedPids.includes(pid)) || expectedPids.some((pid) => !pmtPids.includes(pid))) {
+        stoppedOnPidConflict = true;
+        return;
+      }
+    }
     if (packet.continuityError || packet.transportError || packet.discontinuity) {
       if (candidatePids.has(packet.pid) || wasKnownIgPid) {
         residuals.delete(packet.pid); streamBytes.delete(packet.pid); spans.delete(packet.pid);
@@ -134,15 +143,23 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     if (!candidatePids.has(packet.pid)) return;
     for (const unit of pes.push(packet)) processPes(unit);
   };
-  for await (const chunk of chunks) for (const packet of reader.feed(chunk)) processPacket(packet);
-  reader.end();
-  // An unbounded PES (declared length 0) still pending at EOF is committed by
-  // the assembler; its payload must reach the segment parser and the byte
-  // accounting like any completed PES.
-  for (const unit of pes.end()) processPes(unit);
-  for (const [pid, residual] of residuals) if (residual.length) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `PID ${pid} ended with ${residual.length} residual IG segment bytes`, source: source(clipId, pid, streamBytes.get(pid) ?? 0n), affectedSceneIds: [] });
-  for (const current of state.current.values()) diagnostics.push({ severity: "error", code: "IGS_UNCOMPLETED_DISPLAY_SET", message: "EOF before END segment; Display Set was not committed", source: current.source, affectedSceneIds: [] });
-  for (const pending of state.pendingObjects.values()) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `EOF with incomplete ODS object ${pending.id} version ${pending.version}`, source: pending.source, affectedSceneIds: [] });
+  for await (const chunk of chunks) {
+    for (const packet of reader.feed(chunk)) {
+      processPacket(packet);
+      if (stoppedOnPidConflict) break;
+    }
+    if (stoppedOnPidConflict) break;
+  }
+  if (!stoppedOnPidConflict) {
+    reader.end();
+    // An unbounded PES (declared length 0) still pending at EOF is committed by
+    // the assembler; its payload must reach the segment parser and the byte
+    // accounting like any completed PES.
+    for (const unit of pes.end()) processPes(unit);
+    for (const [pid, residual] of residuals) if (residual.length) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `PID ${pid} ended with ${residual.length} residual IG segment bytes`, source: source(clipId, pid, streamBytes.get(pid) ?? 0n), affectedSceneIds: [] });
+    for (const current of state.current.values()) diagnostics.push({ severity: "error", code: "IGS_UNCOMPLETED_DISPLAY_SET", message: "EOF before END segment; Display Set was not committed", source: current.source, affectedSceneIds: [] });
+    for (const pending of state.pendingObjects.values()) diagnostics.push({ severity: "error", code: "IGS_INVALID_SEGMENT", message: `EOF with incomplete ODS object ${pending.id} version ${pending.version}`, source: pending.source, affectedSceneIds: [] });
+  }
   const pmtIgsCues = [...psi.streamsByPid].filter(([, type]) => type === 0x91).map(([pid]) => ({ pid, source: psi.streamSourcesByPid.get(pid) ?? null }));
   const streamPids = pmtIgsCues.map((cue) => cue.pid);
   const cuePids = uniquePids(expectedPidCues);
@@ -153,7 +170,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     const pmtDescription = pmtEvidence.map((cue) => `${cue.streamPid} from clip ${cue.clipId ?? "?"} PMT PID ${cue.pmtPid ?? "?"} packet offset ${cue.packetOffset ?? "?"}`).join(", ");
     diagnostics.push({
       severity: "error", code: "IGS_PID_CONFLICT",
-      message: `MPLS/CLPI IG PID cue(s) [${structuralDescription || cuePids.join(", ")}] disagree with PMT IG PID(s) [${pmtDescription || streamPids.join(", ")}]`,
+      message: `MPLS/CLPI IG PID cue(s) for clip ${clipId} [${structuralDescription || cuePids.join(", ")}] disagree with PMT IG PID(s) [${pmtDescription || streamPids.join(", ")}]`,
       source: expectedPidCues[0] ? toIgsSource(expectedPidCues[0].source, { path: expectedPidCues[0].source.path, clipId, pid: expectedPidCues[0].pid, origin: expectedPidCues[0].source.origin }) : pmtIgsCues[0]?.source ?? null,
       affectedSceneIds: [],
       stage: expectedPidCues.length ? "structural" : "transport",

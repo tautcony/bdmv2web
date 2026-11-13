@@ -160,7 +160,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const seekSeconds = rawSeekSeconds < 0.000001 ? 0 : rawSeekSeconds;
   const videoStream = findPidStream(sourceProbe, input.videoPid, "video", input.sourcePath);
   if (!new Set(["h264", "hevc"]).has(videoStream.codec_name ?? "")) throw new Error(`Top Menu Clip ${input.clipId} video PID ${input.videoPid} uses unsupported codec ${videoStream.codec_name ?? "unknown"}; H.264 and HEVC inputs are supported.`);
-  for (const track of input.audioTracks) findPidStream(sourceProbe, track.pid, "audio", input.sourcePath);
+  const audioStreams = input.audioTracks.map((track) => findPidStream(sourceProbe, track.pid, "audio", input.sourcePath, track.codingType));
   const aspectRatio = displayAspectRatio(videoStream);
   const colorPlan = planVideoColor(readSourceColor(videoStream), {
     policy: hdrMode, codec,
@@ -191,14 +191,21 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
   const backgroundAbsolute = resolve(output, backgroundPath);
   const created: string[] = [];
   const reportBackground = (progress: MediaProcessProgress) => options.onProgress?.({ ...progress, assetPath: backgroundPath, durationSeconds: exportDuration, source: { playlistId: input.playlistId, playItemIndex: input.playItemIndex, clipId: input.clipId, kind: "background", pid: input.videoPid, videoMode } });
-  const audioOutputs = input.audioTracks.map((track) => {
+  const audioOutputs = input.audioTracks.map((track, index) => {
     const relativePath = `${assetDirectory}/audio-${track.pid.toString(16).padStart(4, "0")}-${safeLanguage(track.language)}.m4a`;
-    return { track, relativePath, absolutePath: resolve(output, relativePath) };
+    const sourceStream = audioStreams[index]!;
+    const pidMatchCount = sourceProbe.streams?.filter((stream) => stream.codec_type === "audio" && parseStreamId(stream.id) === track.pid).length ?? 0;
+    return {
+      track,
+      relativePath,
+      absolutePath: resolve(output, relativePath),
+      inputSpecifier: pidMatchCount > 1 ? indexedStreamSpecifier(sourceStream, track.pid, input.sourcePath) : pidSpecifier(track.pid),
+    };
   });
   const audioStartSeconds = videoMode === "copy" ? 0 : seekSeconds;
-  const audioArgs = audioOutputs.flatMap(({ track, absolutePath }) => [
+  const audioArgs = audioOutputs.flatMap(({ track, absolutePath, inputSpecifier }) => [
     ...(audioStartSeconds > 0.000001 ? ["-ss", String(audioStartSeconds)] : []),
-    "-map", pidSpecifier(track.pid), "-vn", "-sn", "-dn", "-t", String(exportDuration),
+    "-map", inputSpecifier, "-vn", "-sn", "-dn", "-t", String(exportDuration),
     "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
     "-metadata:s:a:0", `language=${safeLanguage(track.language)}`, "-f", "ipod", absolutePath,
   ]);
@@ -542,10 +549,43 @@ function outputInvalid(path: string, ffprobe: string, error: unknown): MediaJobE
   const message = `Encoded output '${path}' failed FFprobe validation: ${errorText(error)}`;
   return new MediaJobError({ code: "MEDIA_OUTPUT_INVALID", executable: ffprobe, args: probeArgs(path), message });
 }
-function findPidStream(probe: ProbeResult, pid: number, type: string, subject: string): ProbeStream {
-  const match = probe.streams?.find((stream) => stream.codec_type === type && parseStreamId(stream.id) === pid);
-  if (!match) throw new Error(`Clip media '${subject}' has no ${type} stream for declared PID ${pid}.`);
-  return match;
+function findPidStream(probe: ProbeResult, pid: number, type: string, subject: string, codingType?: number): ProbeStream {
+  const matches = probe.streams?.filter((stream) => stream.codec_type === type && parseStreamId(stream.id) === pid) ?? [];
+  if (matches.length === 0) throw new Error(`Clip media '${subject}' has no ${type} stream for declared PID ${pid}.`);
+  if (matches.length === 1) return matches[0]!;
+
+  const codecs = type === "audio" && codingType !== undefined ? audioCodecsForCodingType(codingType) : undefined;
+  const selected = codecs === undefined ? [] : matches.filter((stream) => stream.codec_name !== undefined && codecs.has(stream.codec_name));
+  if (selected.length === 1) return selected[0]!;
+  const found = matches.map((stream) => `${stream.codec_name ?? "unknown"} (index ${stream.index ?? "unknown"})`).join(", ");
+  const expected = codecs === undefined ? "a stream matching the declared coding type" : [...codecs].join(" or ");
+  throw new Error(`Clip media '${subject}' has ${matches.length} ${type} streams for PID ${pid} (${found}); expected one ${expected} stream for coding type ${codingType === undefined ? "unknown" : `0x${codingType.toString(16)}`}.`);
+}
+
+function audioCodecsForCodingType(codingType: number): ReadonlySet<string> | undefined {
+  switch (codingType) {
+    case 0x01: return new Set(["mp1"]);
+    case 0x02: return new Set(["mp2"]);
+    case 0x03: return new Set(["mp1", "mp2"]);
+    case 0x04: return new Set(["mp2"]);
+    case 0x80: return new Set(["pcm_bluray"]);
+    case 0x81: return new Set(["ac3"]);
+    case 0x82:
+    case 0x85:
+    case 0x86:
+    case 0xa2: return new Set(["dts"]);
+    case 0x83: return new Set(["truehd"]);
+    case 0x84:
+    case 0xa1: return new Set(["eac3"]);
+    default: return undefined;
+  }
+}
+
+function indexedStreamSpecifier(stream: ProbeStream, pid: number, subject: string): string {
+  if (!Number.isSafeInteger(stream.index) || stream.index! < 0) {
+    throw new Error(`Clip media '${subject}' has multiple streams for PID ${pid}, but ffprobe did not report a valid stream index for the selected audio stream.`);
+  }
+  return `0:${stream.index}`;
 }
 function parseStreamId(id: string | undefined): number | null { if (!id) return null; if (/^0x[0-9a-f]+$/i.test(id)) return Number.parseInt(id.slice(2), 16); if (/^[0-9]+$/.test(id)) return Number(id); return null; }
 function displayAspectRatio(stream: ProbeStream): string {

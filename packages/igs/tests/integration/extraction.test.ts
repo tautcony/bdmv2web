@@ -366,6 +366,19 @@ describe("synthetic IGS extraction", () => {
     expect(result.scenes).toHaveLength(0);
   });
 
+  it("stops reading a clip as soon as its complete PMT proves an IG PID conflict", async () => {
+    let requestedTail = false;
+    async function* clipChunks() {
+      yield concat(patPacket(), pmtPacket(IG_PID));
+      requestedTail = true;
+      yield syntheticClip();
+    }
+    const result = await extractIgsFromChunks("00001", clipChunks(), [{ pid: IG_PID + 1, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "99" } }]);
+    expect(requestedTail).toBe(false);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "IGS_PID_CONFLICT", severity: "error" }));
+    expect(result.scenes).toHaveLength(0);
+  });
+
   it("does not discover a PG PMT stream as IGS when no structural cue exists", async () => {
     const result = await extractIgsFromChunks("00001", chunks(syntheticClip({ streamType: 0x90 }), 192));
     expect(result.scenes).toHaveLength(0);

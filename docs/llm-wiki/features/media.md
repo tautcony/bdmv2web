@@ -80,7 +80,7 @@ Top Menu 同一连续 clip 区间导出为一个背景资产。播放列表跨 c
 
 复制时长取 `(out_time - in_time) + (in_time - 入口点)`，保证 `pts == out_time` 的那一帧（libbluray 会包含它）仍在片尾；误差上限即入口点量化误差，远小于一帧。
 
-复制后仍做校验：codec 必须仍为 H.264，分辨率与显示宽高比不变，色彩标记与源一致（复制是逐位保留，`mp4` 只承载源里的标记），时长与计划相差不超过 0.25s。校验失败会删掉复制结果并改走编码，并在 `warnings` 里给 `MEDIA_REMUX_UNAVAILABLE`；计划 `encoding.video.mode` 如实记 `copy` 或 `encode`，拒绝原因写进 `limitations`。该警告同样出现在 `manifest.json` 与 `report.json` 的 `diagnostics`（`severity: "warning"`），不改变交付状态。
+复制后仍做校验：codec 必须与源 H.264 或 HEVC 一致，分辨率与显示宽高比不变，色彩标记与源一致（复制是逐位保留，`mp4` 只承载源里的标记），时长与计划相差不超过 0.25s。校验失败会删掉复制结果并改走编码，并在 `warnings` 里给 `MEDIA_REMUX_UNAVAILABLE`；计划 `encoding.video.mode` 如实记 `copy` 或 `encode`，拒绝原因写进 `limitations`。该警告同样出现在 `manifest.json` 与 `report.json` 的 `diagnostics`（`severity: "warning"`），不改变交付状态。
 
 ### 一次解复用，多个输出
 

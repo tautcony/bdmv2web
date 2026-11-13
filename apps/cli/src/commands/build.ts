@@ -330,7 +330,10 @@ export async function build(): Promise<void> {
       return;
     }
     if (!extraction.scenes.length) {
-      await failMenuConversion("MENU_SCENE_NOT_FOUND", "Conversion did not produce a runnable package because no IGS scene was found in the BDMV input.");
+      const hasDeclaredIg = disc.playlists.some((playlist) => menuIgsSceneTargets(disc, playlist).length > 0);
+      await failMenuConversion("MENU_SCENE_NOT_FOUND", hasDeclaredIg
+        ? "The BDMV declares IGS streams, but no complete IGS scene was extracted from their referenced clips."
+        : "No IG stream is declared by any MPLS PlayItem or referenced CLPI program; the HDMV menu has no IGS scene to render.");
       return;
     }
     if (!menuPlaylist) {

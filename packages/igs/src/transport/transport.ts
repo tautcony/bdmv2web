@@ -132,6 +132,7 @@ export class PsiAssembler {
   readonly programs = new Map<number, number>();
   readonly streamsByPid = new Map<number, number>();
   readonly streamSourcesByPid = new Map<number, ReturnType<typeof source>>();
+  private readonly parsedProgramMapPids = new Set<number>();
   constructor(readonly diagnostics: IgsDiagnostic[], private readonly clipId: string) {}
 
   push(packet: TsPacket): PsiSection[] {
@@ -141,6 +142,7 @@ export class PsiAssembler {
         if (packet.pid === 0) this.programs.clear();
         this.streamsByPid.clear();
         this.streamSourcesByPid.clear();
+        this.parsedProgramMapPids.clear();
         const reason = packet.discontinuity ? "discontinuity" : packet.transportError ? "transport error" : "continuity error";
         this.diagnostics.push({ severity: "error", code: "PSI_INVALIDATED", message: `PID ${packet.pid} ${reason} discarded the pending PSI section`, source: source(this.clipId, packet.pid, packet.packetOffset), affectedSceneIds: [] });
       }
@@ -178,6 +180,7 @@ export class PsiAssembler {
   }
 
   private programsHasPid(pid: number): boolean { return [...this.programs.values()].includes(pid); }
+  hasCompleteProgramTables(): boolean { return this.programs.size > 0 && [...this.programs.values()].every((pid) => this.parsedProgramMapPids.has(pid)); }
   private limitsMax(): number { return 4096; }
   private process(section: Uint8Array, pid: number, at: bigint): void {
     if (!mpegCrcOkay(section)) { this.diagnostics.push({ severity: "warning", code: "PSI_CRC_INVALID", message: `PID ${pid} section CRC failed`, source: source(this.clipId, pid, at), affectedSceneIds: [] }); return; }
@@ -199,6 +202,7 @@ export class PsiAssembler {
         this.streamSourcesByPid.set(streamPid, source(this.clipId, pid, at));
         i += 5 + esLen;
       }
+      this.parsedProgramMapPids.add(pid);
     }
   }
 }
