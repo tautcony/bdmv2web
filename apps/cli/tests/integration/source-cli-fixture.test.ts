@@ -41,8 +41,8 @@ describe("source CLI commands on the existing synthetic BDMV fixture", () => {
   it("reports the unresolved Top Menu playlist from the existing fixture", async () => {
     const output = join(outputRoot, "build-unresolved-menu");
     await runCommand("build", fixture, "--out", output, "--menu-media", "none", "--no-progress");
-    const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
-    expect(report).toMatchObject({ status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" });
+    const report = JSON.parse(await readFile(join(output, "reports.json"), "utf8"));
+    expect(report).toMatchObject({ conversion: { status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" } });
   });
 });
 

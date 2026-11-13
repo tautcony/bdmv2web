@@ -2,7 +2,7 @@
 
 Menu preview. Delivery status: **{{STATUS}}**.{{#BACKGROUND_LOOP}} The detected menu playlist uses a repeated single-clip background loop with its declared primary audio tracks.{{/BACKGROUND_LOOP}}{{#BACKGROUND_SINGLE_PLAY_ITEM}} The detected menu playlist holds the final video frame after its single PlayItem; its declared primary audio tracks end with the PlayItem.{{/BACKGROUND_SINGLE_PLAY_ITEM}}{{#BACKGROUND_UNAVAILABLE}} Menu background media is omitted from this package.{{/BACKGROUND_UNAVAILABLE}}
 
-Run `bdmv2web validate <package-directory>` to refresh `compatibility.json`, `dependency-audit.json`, and `reports/release-summary.json`.
+Run `bdmv2web validate <package-directory>` to refresh `reports.json`, `dependency-audit.json`, and `reports/release-summary.json`.
 
 Open `index.html` in a browser. Use the mute button at the lower right to control menu audio.
 

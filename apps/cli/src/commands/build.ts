@@ -41,6 +41,18 @@ const CONVERT_STEPS = {
   report: "Write report and commit",
 } as const;
 
+async function writeConversionReport(outputDirectory: string, report: Record<string, unknown>): Promise<void> {
+  const existing = await readJsonObject(resolve(outputDirectory, "reports.json"));
+  const { schemaVersion, diagnostics, ...conversion } = report;
+  const reports = {
+    schemaVersion: typeof schemaVersion === "string" ? schemaVersion : "1.0",
+    ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(existing.compatibility === undefined ? {} : { compatibility: existing.compatibility }),
+    conversion,
+  };
+  await writeFile(resolve(outputDirectory, "reports.json"), `${JSON.stringify(reports, null, 2)}\n`);
+}
+
 /** `undefined` keeps the default: a live line on a terminal, silence when piped. */
 export function progressMode(): ProgressMode | undefined {
   const progress = optionState("--progress");
@@ -231,17 +243,15 @@ export async function build(): Promise<void> {
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
       progress.fail(CONVERT_STEPS.scene, code);
       await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu package\n\n${message}\n\nStatus: **failed**.\n`);
-      // The failure report keeps the same shape as the success report so a consumer
-      // can read one schema regardless of how the conversion ended (P2-P2-5).
       const diagnostics = deliveryDiagnostics([
         { code, message, severity: "error" },
         ...disc.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
         ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
       ]);
-      const report = { schemaVersion: "1.0", status: "failed", code, auditScope: "convert", reasons: [message], notVerified: [], diagnostics, blockingDiagnostics: classifyDiagnostics(diagnostics).blocking };
-      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
+      const report = { schemaVersion: "1.0", status: "failed", code, reasons: [message], diagnostics };
+      await writeConversionReport(transaction.stagingPath, report);
       await transaction.commit();
-      progress.finish("failed", [["output", roots.output], ["report", "report.json · status failed"]], code);
+      progress.finish("failed", [["output", roots.output], ["report", "reports.json · status failed"]], code);
       process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
       process.exitCode = 1;
     };
@@ -290,7 +300,6 @@ export async function build(): Promise<void> {
         hasMissingRequiredAsset: false,
         limitations: ["BD-J menu background and playlist media depend on the browser playback bridge."],
       });
-      const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
       progress.done(CONVERT_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
       const mediaEncoding = menuMediaEncoding();
       const mediaProgress = mediaExportProgress(bdjMenuMediaAssets, (ratio, detail) => progress.progress(ratio, detail));
@@ -320,12 +329,12 @@ export async function build(): Promise<void> {
         if (severity !== "warning" || decisionFacts.some((fact) => fact.code === code)) continue;
         decisionFacts.push({ severity, code, message: safeDiagnosticMessage(message, roots.input) });
       }
-      const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
-      await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
+      const report = { schemaVersion: "1.0", status: decision.status, reasons: decision.reasons, diagnostics: decisionFacts };
+      await writeConversionReport(transaction.stagingPath, report);
       await transaction.commit();
       progress.done(CONVERT_STEPS.report, `status ${decision.status}`);
       const packageText = await packageSummary(roots.output);
-      progress.finish(decision.status, [["output", roots.output], ...(packageText === undefined ? [] : [["package", packageText] as const]), ["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"], ["report", `report.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`]]);
+      progress.finish(decision.status, [["output", roots.output], ...(packageText === undefined ? [] : [["package", packageText] as const]), ["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"], ["report", `reports.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`]]);
       process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" })}\n`);
       return;
     }
@@ -464,7 +473,6 @@ export async function build(): Promise<void> {
       hasMissingRequiredAsset: false,
       limitations: menuMedia ? [] : [mediaScope === "none" ? "Menu media export is disabled by --menu-media none." : "Menu loop media is unavailable; the menu background holds its final frame."],
     });
-    const blockingDiagnostics = classifyDiagnostics(decisionFacts).blocking;
     const plannedMedia = [
       menuMedia === null ? null : "background",
       additionalMenuMedia.length ? countOf(additionalMenuMedia.length, "extra playlist", "extra playlists") : null,
@@ -512,8 +520,8 @@ export async function build(): Promise<void> {
       if (severity !== "warning" || decisionFacts.some((fact) => fact.code === code)) continue;
       decisionFacts.push({ severity, code, message: safeDiagnosticMessage(message, roots.input) });
     }
-    const report = { schemaVersion: "1.0", status: decision.status, auditScope: "convert", reasons: decision.reasons, notVerified: decision.notVerified, diagnostics: decisionFacts, blockingDiagnostics };
-    await writeFile(resolve(transaction.stagingPath, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
+    const report = { schemaVersion: "1.0", status: decision.status, reasons: decision.reasons, diagnostics: decisionFacts };
+    await writeConversionReport(transaction.stagingPath, report);
     await transaction.commit();
     progress.done(CONVERT_STEPS.report, `status ${decision.status}`);
     const packageText = await packageSummary(roots.output);
@@ -521,7 +529,7 @@ export async function build(): Promise<void> {
       ["output", roots.output],
       ...(packageText === undefined ? [] : [["package", packageText] as const]),
     ...(hasBdjEntries ? [["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"] as const] : []),
-      ["report", `report.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`],
+      ["report", `reports.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`],
     ]);
     process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, ...(hasBdjEntries ? { launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" } : {}) })}\n`);
     if (decision.exitCode !== 0) process.exitCode = decision.exitCode;

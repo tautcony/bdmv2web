@@ -11,14 +11,14 @@ import { encodeTimestampForFixture } from "@bdmv2web/igs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /**
- * A failed conversion must expose the same report fields as a successful one, so a
- * consumer reads one schema regardless of how the conversion ended (P2-P2-5).
+ * A failed conversion must expose the shared report structure and its conversion result.
  */
 function expectFailureReportSchema(report: Record<string, unknown>, code: string): void {
-  expect(report).toMatchObject({ status: "failed", code, auditScope: "convert" });
-  expect((report.reasons as string[]).length).toBeGreaterThan(0);
-  expect((report.blockingDiagnostics as Array<{ severity?: string; code?: string }>)[0]).toMatchObject({ severity: "error", code });
+  const conversion = report.conversion as Record<string, unknown>;
+  expect(conversion).toMatchObject({ status: "failed", code });
+  expect((conversion.reasons as string[]).length).toBeGreaterThan(0);
   expect((report.diagnostics as Array<{ severity?: string }>).every((item) => typeof item.severity === "string")).toBe(true);
+  expect(report.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ severity: "error", code })]));
 }
 
 describe("M4 build output", () => {
@@ -64,22 +64,30 @@ describe("M4 build output", () => {
         expect(stdout).not.toHaveProperty("mode");
         expect(result.stderr.toString()).toBe("");
 
-        const compatibility = JSON.parse(await readFile(join(output, "compatibility.json"), "utf8"));
+        const reports = JSON.parse(await readFile(join(output, "reports.json"), "utf8"));
+        const compatibility = reports.compatibility;
         const manifest = JSON.parse(await readFile(join(output, "manifest.json"), "utf8"));
         const assetManifest = JSON.parse(await readFile(join(output, "asset-manifest.json"), "utf8"));
         const discData = await readFile(join(output, "runtime", "disc-data.js"), "utf8");
         const readme = await readFile(join(output, "README.md"), "utf8");
-        const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
+        const report = reports.conversion;
         const html = await readFile(join(output, "index.html"), "utf8");
         expect(compatibility).toMatchObject({ status: "complete", externalDependencies: ["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"] });
         expect(manifest).toMatchObject({ status: "complete", declaredEntryCount: 2, hdmvEntryCount: 2 });
         expect(manifest).not.toHaveProperty("mode");
         expect(compatibility).not.toHaveProperty("mode");
-        // The three output sources share the delivery conclusion and report the
-        // missing audit evidence explicitly.
-        expect(report).toMatchObject({ status: "complete", auditScope: "convert" });
+        // The package and its conversion report share the delivery conclusion.
+        expect(reports.compatibility.status).toBe("complete");
+        expect(report).toMatchObject({ status: "complete" });
         expect(report).not.toHaveProperty("mode");
-        expect(report.notVerified).toEqual(expect.arrayContaining(["NO_AUDIT_CHECKS"]));
+        expect(report).not.toHaveProperty("auditScope");
+        expect(report).not.toHaveProperty("notVerified");
+        expect(report).not.toHaveProperty("blockingDiagnostics");
+        expect(reports).toHaveProperty("diagnostics");
+        expect(compatibility).not.toHaveProperty("diagnostics");
+        expect(report).not.toHaveProperty("diagnostics");
+        await expect(access(join(output, "compatibility.json"))).rejects.toThrow();
+        await expect(access(join(output, "report.json"))).rejects.toThrow();
         expect(assetManifest.schemaVersion).toBe("1.0");
         expect(readme).toMatch(/Menu preview\. Delivery status: \*\*complete\*\*/);
         expect(readme).toContain("External playback opens declared BDMV STREAM targets");
@@ -92,7 +100,7 @@ describe("M4 build output", () => {
         }
         const packageText = (await Promise.all([
           ...manifest.files.map((file: { path: string }) => readFile(join(output, file.path))),
-          readFile(join(output, "compatibility.json")), readFile(join(output, "asset-manifest.json")), readFile(join(output, "manifest.json")),
+          readFile(join(output, "reports.json")), readFile(join(output, "asset-manifest.json")), readFile(join(output, "manifest.json")),
         ])).map((bytes) => bytes.toString("utf8")).join("\n");
         expect(packageText).not.toContain(await realpath(disc));
         expect(await readFile(join(output, "runtime", "bdmv-config.js"), "utf8")).toContain('globalThis.__BDMV_BDMV_PATH__="../BDMV"');
@@ -242,16 +250,16 @@ describe("M4 build output", () => {
       const result = await runCommand(["build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_NOT_FOUND", output: await realpath(output) });
-      expect(JSON.parse(await readFile(join(output, "report.json"), "utf8"))).toMatchObject({ status: "failed", code: "MENU_SCENE_NOT_FOUND" });
+      expect(JSON.parse(await readFile(join(output, "reports.json"), "utf8"))).toMatchObject({ conversion: { status: "failed", code: "MENU_SCENE_NOT_FOUND" } });
       const readme = await readFile(join(output, "README.md"), "utf8");
       expect(readme).toContain("Status: **failed**.");
       expect(readme).toContain("No extracted IGS scene matches the stream and clip declarations in Top Menu playlist 00007");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
       // The failure report keeps the success schema: reasons, blocking diagnostics
       // and per-diagnostic severity must be readable the same way (P2-P2-5).
-      const failureReport = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
+      const failureReport = JSON.parse(await readFile(join(output, "reports.json"), "utf8"));
       expectFailureReportSchema(failureReport, "MENU_SCENE_NOT_FOUND");
-      expect(failureReport.reasons).toEqual([expect.stringContaining("No extracted IGS scene matches")]);
+      expect((failureReport.conversion as Record<string, unknown>).reasons).toEqual([expect.stringContaining("No extracted IGS scene matches")]);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
@@ -262,7 +270,7 @@ describe("M4 build output", () => {
       const result = await runCommand(["build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_PLAYLIST_NOT_RESOLVED" });
-      expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_PLAYLIST_NOT_RESOLVED");
+      expectFailureReportSchema(JSON.parse(await readFile(join(output, "reports.json"), "utf8")), "MENU_PLAYLIST_NOT_RESOLVED");
       expect(await readFile(join(output, "README.md"), "utf8")).toContain("no IGS scene was selected");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -315,7 +323,7 @@ describe("M4 build output", () => {
       const result = await runCommand(["build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
-      expectFailureReportSchema(JSON.parse(await readFile(join(output, "report.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
+      expectFailureReportSchema(JSON.parse(await readFile(join(output, "reports.json"), "utf8")), "MENU_SCENE_AMBIGUOUS");
       expect(await readFile(join(output, "README.md"), "utf8")).toContain("maps to multiple extracted IGS scenes");
       await expect(access(join(output, "index.html"))).rejects.toThrow();
     } finally { await rm(parent, { recursive: true, force: true }); }
@@ -328,7 +336,7 @@ describe("M4 build output", () => {
       const result = await runCommand(["build", disc, "--out", output]);
       expect(result.status).toBe(1);
       expect(JSON.parse(result.stdout.toString())).toMatchObject({ status: "failed", code: "MENU_SCENE_AMBIGUOUS" });
-      const report = JSON.parse(await readFile(join(output, "report.json"), "utf8"));
+      const report = JSON.parse(await readFile(join(output, "reports.json"), "utf8"));
       const message = report.diagnostics.find((item: { code: string }) => item.code === "MENU_SCENE_AMBIGUOUS")?.message as string;
       expect(message).toContain("00002:288:7:0:90000");
       expect(message.match(/@ byte /g)).toHaveLength(2);
@@ -654,7 +662,7 @@ describe("validate CLI", () => {
     const directory = await mkdtemp(join(tmpdir(), "bdmv validate 离线 "));
     try {
       await makePackage(directory, { "index.html": "<main>ready</main>" });
-      await writeFile(join(directory, "compatibility.json"), JSON.stringify({ profile: "portable", status: "complete", notVerified: ["media timeline and seek accuracy"] }));
+      await writeFile(join(directory, "reports.json"), JSON.stringify({ schemaVersion: "1.0", compatibility: { status: "complete", profile: "portable", notVerified: ["real-disc rendering", "media timeline and seek accuracy"] } }));
       const result = await runCommand(["validate", directory, "--format", "json"]);
       expect(result.status).toBe(0);
       expect(result.stderr.toString()).toBe("");
@@ -667,8 +675,10 @@ describe("validate CLI", () => {
       expect(audit.releaseSummary.release.gaps.map((gap: any) => gap.checkId)).toEqual(expect.arrayContaining(["REFERENCE_EVIDENCE_REQUIRED", "COVERAGE_ENTRIES", "COVERAGE_INSTRUCTIONS", "COVERAGE_MEDIA", "COVERAGE_TESTS"]));
       const report = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(report).toEqual(audit.dependencyAudit);
-      const compatibility = JSON.parse(await readFile(join(directory, "compatibility.json"), "utf8"));
-      expect(compatibility).toMatchObject({ status: "complete", profile: "portable", notVerified: expect.arrayContaining(["media timeline and seek accuracy", "REFERENCE_EVIDENCE_REQUIRED"]) });
+      const reports = JSON.parse(await readFile(join(directory, "reports.json"), "utf8"));
+      const compatibility = reports.compatibility;
+      expect(compatibility).toMatchObject({ status: "complete", profile: "portable", notVerified: expect.arrayContaining(["REFERENCE_EVIDENCE_REQUIRED"]) });
+      expect(compatibility.notVerified).not.toEqual(expect.arrayContaining(["real-disc rendering", "media timeline and seek accuracy"]));
       expect(compatibility).not.toHaveProperty("mode");
       expect(compatibility).not.toHaveProperty("browserEvidence");
       const release = JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8"));
@@ -693,7 +703,7 @@ describe("validate CLI", () => {
       }
       expect(await readFile(join(directory, "manifest.json"))).toEqual(before);
       await expect(access(join(directory, "dependency-audit.json"))).rejects.toThrow();
-      await expect(access(join(directory, "compatibility.json"))).rejects.toThrow();
+      await expect(access(join(directory, "reports.json"))).rejects.toThrow();
       await expect(access(join(directory, "reports"))).rejects.toThrow();
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
@@ -701,16 +711,16 @@ describe("validate CLI", () => {
   it("writes the same dependency audit to disk as to stdout for a package without static payload", async () => {
     const directory = await mkdtemp(join(tmpdir(), "bdmv validate no payload "));
     try {
-      // A failed conversion package: only README.md and report.json exist.
+      // A failed conversion package: only README.md and reports.json exist.
       await writeFile(join(directory, "README.md"), "# Menu package\n\nStatus: **failed**.\n");
-      await writeFile(join(directory, "report.json"), JSON.stringify({ schemaVersion: "1.0", status: "failed", code: "MENU_SCENE_NOT_FOUND", auditScope: "convert", reasons: ["no scene"], notVerified: [], diagnostics: [], blockingDiagnostics: [] }));
+      await writeFile(join(directory, "reports.json"), JSON.stringify({ schemaVersion: "1.0", diagnostics: [], conversion: { status: "failed", code: "MENU_SCENE_NOT_FOUND", reasons: ["no scene"] } }));
       const result = await runCommand(["validate", directory, "--format", "json"]);
       const audit = JSON.parse(result.stdout.toString());
       const disk = JSON.parse(await readFile(join(directory, "dependency-audit.json"), "utf8"));
       expect(disk).toEqual(audit.dependencyAudit);
       expect(disk.checks.map((check: { checkId: string }) => check.checkId)).toEqual(["DEPENDENCY_AUDIT_REQUIRED"]);
       expect(audit.decision).not.toHaveProperty("mode");
-      expect(JSON.parse(await readFile(join(directory, "compatibility.json"), "utf8"))).not.toHaveProperty("mode");
+      expect(JSON.parse(await readFile(join(directory, "reports.json"), "utf8")).compatibility).not.toHaveProperty("mode");
       expect(JSON.parse(await readFile(join(directory, "reports", "release-summary.json"), "utf8")).release).not.toHaveProperty("mode");
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
@@ -1060,11 +1070,11 @@ describe("validate CLI (M6)", () => {
         "index.html": "<main>ready</main>",
         "external-targets.json": targets("STREAM/00002.m2ts"),
         "runtime/bdmv-config.js": 'globalThis.__BDMV_BDMV_PATH__="/fake/BDMV";\n',
-        "compatibility.json": JSON.stringify({ externalDependencies: ["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"] }),
+        "reports.json": JSON.stringify({ schemaVersion: "1.0", compatibility: { externalDependencies: ["configured BDMV STREAM files", "an operating-system URL handler for declared BDMV STREAM targets"] } }),
       });
       const declaredManifestPath = join(declared, "manifest.json");
       const declaredManifest = JSON.parse(await readFile(declaredManifestPath, "utf8"));
-      declaredManifest.files = declaredManifest.files.filter((file: { path: string }) => file.path !== "compatibility.json");
+      declaredManifest.files = declaredManifest.files.filter((file: { path: string }) => file.path !== "reports.json");
       declaredManifest.files.find((file: { path: string }) => file.path === "runtime/bdmv-config.js").kind = "external-config";
       await writeFile(declaredManifestPath, JSON.stringify(declaredManifest));
       const ok = await validate(declared);

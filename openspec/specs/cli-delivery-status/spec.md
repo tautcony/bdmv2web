@@ -89,12 +89,12 @@
 #### Scenario: 生成菜单即完成
 
 - **WHEN** `convert` 成功产出菜单包，且诊断中没有 `error` 或 `fatal`
-- **THEN** `report.json`、`manifest.json`、`compatibility.json` 与 stdout 同为 `complete`，`report.json` 带 `auditScope: "convert"`
+- **THEN** `reports.json.compatibility.status`、`reports.json.conversion.status`、`manifest.json.status` 与 stdout 同为 `complete`
 
-#### Scenario: 结论来源只作标注
+#### Scenario: 转换与验证报告分开更新
 
 - **WHEN** 同一个包分别由 `convert` 与 `validate` 判定
-- **THEN** 两者使用同一套判定规则并给出相同状态，`auditScope` 只标注来源，不参与判定
+- **THEN** 两者使用同一套判定规则并给出相同状态；`build` 写入 `conversion`，`validate` 更新 `compatibility`
 
 #### Scenario: manifest 结论不被回写
 
@@ -152,7 +152,7 @@
 
 ### Requirement: 落盘报告与命令输出同源
 
-系统 SHALL 用同一份汇总结论生成 `dependency-audit.json`、`compatibility.json`、`reports/release-summary.json` 与 stdout，不得让磁盘与命令输出给出两套结论。
+系统 SHALL 用同一份汇总结论生成 `dependency-audit.json`、`reports.json`、`reports/release-summary.json` 与 stdout，不得让磁盘与命令输出给出两套结论。
 
 #### Scenario: 空检查集
 

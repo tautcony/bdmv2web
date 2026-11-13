@@ -66,7 +66,7 @@ interface EventEnvelope<T> {
 
 ## 4. 状态统一判定
 
-compatibility.json 至少含 schemaVersion/toolVersion/runtimeVersion/profile/status/diagnostics/coverage/notVerified。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
+`reports.json` 保存一个 `compatibility` 部分和一个 `conversion` 部分。共享结构版本与诊断各记录一次；两个部分分别记录自己的状态、原因和未验证项。`compatibility` 至少含 runtimeVersion/profile/status/coverage/notVerified。按下表从上到下判定，由 M6 实现汇总，各阶段提前遵守：
 
 | 条件 | 状态 | strict |
 | --- | --- | --- |

@@ -44,7 +44,7 @@ corepack pnpm test
 | `MEDIA_ENCODER_UNAVAILABLE` | ffmpeg 没带 `libx264` 或 `aac` | 换带这两个编码器的构建 |
 | 卡在 `[ffmpeg] ... %` | 编码长视频 | 等；`build` 的超时是 20 分钟/任务 |
 
-失败包仍会留下 `README.md` + `report.json`（`status: "failed"`），没有 `index.html`。不要把它当可运行包分发。
+失败包仍会留下 `README.md` + `reports.json`（`conversion.status: "failed"`），没有 `index.html`。
 
 ## 3. 包能生成但浏览器打不开
 
@@ -130,5 +130,5 @@ corepack pnpm test
 | 看场景来源 | `extract --type igs` 的 `igs/source-map.json`：场景/页/按钮/对象/调色板 → 文件偏移 |
 | 看命令来源 | `extract --type hdmv` 的 `hdmv/commands.json`（object + instructionIndex + offset） |
 | 看媒体决策 | `media-plan.json` / `media-plans/*.json` 的 `playlistId`、区间、轨道、编码参数 |
-| 看交付原因 | `report.json` 的 `reasons` / `notVerified`；`reports/release-summary.json` 的 `gaps` |
+| 看交付原因 | `reports.json` 的 `conversion.reasons` 和 `diagnostics`；`reports/release-summary.json` 的 `gaps` |
 | 复现解析差异 | 用 `packages/test-fixtures/src/bdmv.ts` 构造最小样本，不依赖真实碟片 |

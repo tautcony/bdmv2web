@@ -105,9 +105,9 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 ### `validate`
 
 1. `--format` 只接受 `json`（否则 `CLI_INVALID_FORMAT`，且在读写之前失败）。
-2. `auditOutputPackage` → 读 `manifest.json` / 旧 `compatibility.json` → `createReleaseSummary`。
+2. `auditOutputPackage` → 读 `manifest.json` / `reports.json.compatibility` → `createReleaseSummary`。
 3. `manifest.status` 与当前判定不一致时，追加 `MANIFEST_STATUS_UNVERIFIED`（`not-verified`），**不改写** manifest。
-4. 可写时依次写 `dependency-audit.json`、`compatibility.json`、`reports/release-summary.json`，三份都来自同一份 summary；任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。
+4. 可写时写入 `dependency-audit.json`、更新 `reports.json.compatibility` 并写 `reports/release-summary.json`；验证结果保留 `reports.json.conversion`。任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。
 5. 退出码取 `releaseSummary.release.exitCode`。
 
 ## 错误出口

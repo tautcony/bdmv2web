@@ -28,13 +28,13 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 3. `index.html` 必须存在；`manifest.json` 必须存在且可解析。
 4. 校验 manifest 形状：`schemaVersion === "1.0"`、`files` 为数组、每项 `path` + `kind` 字符串。
 5. 校验每个 manifest 条目：相对 POSIX 路径、无重复、不占用报告路径、`index.html` 必须 `required`、文件存在且是普通文件、解析后仍在包内。
-6. 报告文件（`manifest.json`、`compatibility.json`、`dependency-audit.json`、`reports/*`）不得出现在 `manifest.files`。
+6. 报告文件（`manifest.json`、`reports.json`、`dependency-audit.json`、`reports/*`）不得出现在 `manifest.files`。
 7. 静态扫描 `.html`/`.css`/`.js`/`.mjs`/`.json`（跳过报告文件）：
    - 禁止 `type="module"`、`import`、`importScripts`、`eval`/`Function`、`fetch`/`XMLHttpRequest`/`WebSocket`/`EventSource`。
    - 提取 `src`/`href`/`poster`/`url(...)`/`@import`/JSON 中的 `url|src|href|relativePath`，逐个解析到磁盘。
    - 越界、symlink、非普通文件、缺失都判 `fail`；能定位到包内普通文件判 `pass`。
    - 动态访问（`globalThis[expr]`、计算 `setAttribute`）判 `not-verified`，不判失败。
-8. `manifest.profile` 存在时，要求与 `compatibility.json`、`runtime/disc-data.js` 的 `profile` 一致，否则 `PLAYER_PROFILE_MISMATCH`。
+8. `manifest.profile` 存在时，要求与 `reports.json.compatibility.profile`、`runtime/disc-data.js` 的 `profile` 一致，否则 `PLAYER_PROFILE_MISMATCH`。
 
 ### 检查项 ID
 

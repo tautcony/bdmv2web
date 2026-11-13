@@ -13,7 +13,7 @@
 | `render` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
 | `build` | 生成菜单包；BD-J 包内含 Java host、应用文件和 session 数据 | `BDMV-menu/` 整目录 | 已实现 |
 | `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；支持 `--java <executable>` | 本地 URL | 已实现 |
-| `validate` | 重算菜单包审计 | `compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` | 已实现 |
+| `validate` | 重算菜单包审计 | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` | 已实现 |
 | `compare` | 参考对照 | — | 未实现，返回 `E_NOT_IMPLEMENTED` |
 
 命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。`convert` 是 `build` 的历史别名。
@@ -144,7 +144,7 @@ index.html
 README.md
 manifest.json
 asset-manifest.json
-compatibility.json
+reports.json
 external-targets.json          # 有外部播放目标时
 media-plans/playlist-*-pi*-clip-*.json   # 每个导出单元一份计划
 runtime/disc-data.js
@@ -155,11 +155,10 @@ runtime/bdmv-config.js         # 有外部播放时
 assets/audio/sound-N.wav
 assets/media/playlist-<id>-pi<n>-clip-<clipId>/background.mp4
 assets/media/playlist-<id>-pi<n>-clip-<clipId>/audio-*.m4a
-report.json                    # build 成功与失败路径都写
 reports/                       # validate 之后出现
 ```
 
-失败路径：无 IGS 场景（`MENU_SCENE_NOT_FOUND`）、Top Menu 播放列表解析失败（`MENU_PLAYLIST_NOT_RESOLVED`）、场景多义（`MENU_SCENE_AMBIGUOUS`）会写 `README.md` + `report.json`（`status: "failed"`）并提交目录，退出 1。
+失败路径：无 IGS 场景（`MENU_SCENE_NOT_FOUND`）、Top Menu 播放列表解析失败（`MENU_PLAYLIST_NOT_RESOLVED`）、场景多义（`MENU_SCENE_AMBIGUOUS`）会写 `README.md` + `reports.json`（`status: "failed"`）并提交目录，退出 1。
 
 ## `validate`
 

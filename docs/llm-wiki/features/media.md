@@ -80,7 +80,7 @@ Top Menu 同一连续 clip 区间导出为一个背景资产。播放列表跨 c
 
 复制时长取 `(out_time - in_time) + (in_time - 入口点)`，保证 `pts == out_time` 的那一帧（libbluray 会包含它）仍在片尾；误差上限即入口点量化误差，远小于一帧。
 
-复制后仍做校验：codec 必须与源 H.264 或 HEVC 一致，分辨率与显示宽高比不变，色彩标记与源一致（复制是逐位保留，`mp4` 只承载源里的标记），时长与计划相差不超过 0.25s。校验失败会删掉复制结果并改走编码，并在 `warnings` 里给 `MEDIA_REMUX_UNAVAILABLE`；计划 `encoding.video.mode` 如实记 `copy` 或 `encode`，拒绝原因写进 `limitations`。该警告同样出现在 `manifest.json` 与 `report.json` 的 `diagnostics`（`severity: "warning"`），不改变交付状态。
+复制后仍做校验：codec 必须与源 H.264 或 HEVC 一致，分辨率与显示宽高比不变，色彩标记与源一致（复制是逐位保留，`mp4` 只承载源里的标记），时长与计划相差不超过 0.25s。校验失败会删掉复制结果并改走编码，并在 `warnings` 里给 `MEDIA_REMUX_UNAVAILABLE`；计划 `encoding.video.mode` 如实记 `copy` 或 `encode`，拒绝原因写进 `limitations`。该警告同样出现在 `manifest.json` 与 `reports.json` 顶层 `diagnostics`（`severity: "warning"`），不改变交付状态。
 
 ### 一次解复用，多个输出
 
@@ -101,7 +101,7 @@ Top Menu 同一连续 clip 区间导出为一个背景资产。播放列表跨 c
 | HDR10 / HLG | 转 SDR BT.709，8-bit | 保留 BT.2020/PQ，10-bit |
 | SDR / 无标记 | 原标记透传，8-bit | 同左 |
 
-`tonemap` 依赖 `zscale`（libzimg）。缺该滤镜时导出继续：按 `preserve` 编码并写入 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告与 limitation，该素材计划（`media-plans/*.json`）的 `color.filterChain` 记为 `hdr-passthrough-fallback`。警告出现在 `manifest.json` 与 `report.json` 的 `diagnostics`（`severity: "warning"`），不改变交付状态。该产物在 SDR 显示器上对比度偏低。
+`tonemap` 依赖 `zscale`（libzimg）。缺该滤镜时导出继续：按 `preserve` 编码并写入 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告与 limitation，该素材计划（`media-plans/*.json`）的 `color.filterChain` 记为 `hdr-passthrough-fallback`。警告出现在 `manifest.json` 与 `reports.json` 顶层 `diagnostics`（`severity: "warning"`），不改变交付状态。该产物在 SDR 显示器上对比度偏低。
 
 Dolby Vision 只解基础层，`HDR10+` 动态元数据丢弃，均记录为 limitation。色彩标记通过 `-x264-params` / `-x265-params` 的 `colorprim` / `transfer` / `colormatrix` / `range` 写入；ffmpeg 的 `-color_trc` / `-color_primaries` 不写入 libx264 VUI。
 

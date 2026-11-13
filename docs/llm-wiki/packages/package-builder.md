@@ -8,7 +8,7 @@
 buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 ```
 
-`MenuPackageResult` 只含 `diagnostics`（即写进 `manifest.json` 的那一份）。交付状态不进返回值：`status` 由调用方在打包前决定，而媒体编码警告只有打包后才知道，所以用返回值把它们交出去，由调用方并入 `report.json`。
+`MenuPackageResult` 只含 `diagnostics`（即写进 `manifest.json` 的那一份）。交付状态不进返回值：`status` 由调用方在打包前决定，而媒体编码警告只有打包后才知道，所以用返回值把它们交出去，由调用方并入 `reports.json`。
 
 `MenuPackageInput` 关键字段：`outputDirectory`、`title`、`ir`、`scene`、`popupScenes`、`menuScenes`、`menuPlaylistIds`、`preMenuPlaylistIds`、`status`、`entryCounts`、`playerProfile`、`vmLimits`、`vmPrograms`、`vmEntries`、`externalTargets`、`bdmvPath`、`vmInitialProgramId`、`vmFirstPlayProgramId`、`graphics`、`pngLimits`、`pngLevel`（包内字幕画布的 deflate 档位，默认 6）、`soundEntries`、`soundBytes`、`menuLoopMedia`、`mediaEncoding`、`additionalMenuMedia`、`pgsTracks`、`pgsLimits`、`diagnostics`、`reuseMediaFromDirectory`、`onMediaProgress`、`runtimeVersion`。`pngLimits`、`pgsLimits`、`runtimeVersion` 为有默认值的可选项。
 
@@ -29,13 +29,13 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 | `README.md` | 是 | 状态、背景循环说明、静音/外部播放/校验命令 |
 | `manifest.json` | 是 | 状态、入口计数、文件清单（路径/类型/是否必需/字节数）、诊断、profile、资产 |
 | `asset-manifest.json` | 是 | 音效、媒体、PGS 轨道细节（不入 `manifest.files`） |
-| `compatibility.json` | 是 | profile、覆盖范围、未验证项（不入 `manifest.files`） |
+| `reports.json` | 是 | 顶层保存共享诊断；`compatibility` 保存交付状态、profile 和外部依赖（不入 `manifest.files`）。`validate` 写入当前检查与覆盖证据 |
 | `external-targets.json` | 有外部播放时 | 播放列表/PlayItem/Mark → 源 M2TS 目标 |
 | `media-plans/playlist-<id>-pi<n>-clip-<clipId>.json` | 有本地媒体时 | 每次 `exportMenuLoopMedia` 的计划 |
 | `assets/audio/sound-N.wav` | 被引用时 | 由 `sound.bdmv` 采样区间转 WAV |
 | `assets/media/playlist-<id>-pi<n>-clip-<clipId>/background.mp4`、`audio-*.m4a` | 有本地媒体时 | ffmpeg 产物 |
 
-`manifest.files` 排序按路径 `localeCompare("en")`；`compatibility.json` 与 `asset-manifest.json` 被显式排除（它们是报告元数据，不是载荷）。
+`manifest.files` 排序按路径 `localeCompare("en")`；`reports.json` 与 `asset-manifest.json` 被显式排除（它们是报告元数据，不是载荷）。
 
 ## 产物片段生成器
 
@@ -44,7 +44,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 | 函数 | 产出 / 作用 |
 | --- | --- |
 | `createReadme(title, backgroundLoops, externalPlayback, status)` | `README.md` 正文 |
-| `createCompatibility(metadata, externalPlayback)` | `compatibility.json` 对象 |
+| `createCompatibility(metadata, externalPlayback)` | `reports.json.compatibility` 对象 |
 | `createAssetBatchScript(batch)` | 单个 `runtime/assets-data-NNN.js` 的内容 |
 | `packagedMediaMetadata(media)` | `manifest`/`asset-manifest` 里的媒体元数据 |
 | `runtimeAudioTrackMetadata(track)` | 单条音轨的 `streamNumber` 与 `psrStreamNumber` 映射 |

@@ -19,7 +19,13 @@ export async function validate(): Promise<void> {
     // disagreement check below would silently report nothing.
     audit.checks.push({ checkId: "MANIFEST_REREAD_FAILED", result: "not-verified", message: `manifest.json could not be read for the delivery decision: ${message}`, path: audit.manifestPath });
   });
-  const previousCompatibility = await readJsonObject(resolve(audit.packageRoot, "compatibility.json"));
+  const reports = await readJsonObject(resolve(audit.packageRoot, "reports.json"));
+  const compatibility = typeof reports.compatibility === "object" && reports.compatibility !== null && !Array.isArray(reports.compatibility)
+    ? reports.compatibility as Record<string, unknown>
+    : undefined;
+  const conversion = typeof reports.conversion === "object" && reports.conversion !== null && !Array.isArray(reports.conversion)
+    ? reports.conversion as Record<string, unknown>
+    : undefined;
   const limitations = Array.isArray(manifest.limitations) ? manifest.limitations.filter((item): item is string => typeof item === "string") : [];
   // A package records the diagnostics that decided its own conversion. Re-reading
   // them keeps convert and validate on the same evidence instead of two verdicts.
@@ -61,16 +67,22 @@ export async function validate(): Promise<void> {
     audit.checks.push({ checkId: "MANIFEST_STATUS_UNVERIFIED", result: "not-verified", message: `manifest.json records status '${manifestStatus}' but the current evidence decides '${releaseSummary.release.status}'; the manifest is not rewritten.`, path: "manifest.json" });
     releaseSummary = createReleaseSummary(releaseSummaryInput);
   }
-  const priorNotVerified = Array.isArray(previousCompatibility.notVerified) ? previousCompatibility.notVerified.filter((item): item is string => typeof item === "string") : [];
   const currentGaps = releaseSummary.release.gaps.map((gap) => gap.checkId);
   releaseSummary = {
     ...releaseSummary,
     compatibility: {
       ...releaseSummary.compatibility,
-      ...(typeof previousCompatibility.profile === "string" ? { profile: previousCompatibility.profile } : {}),
-      externalDependencies: Array.isArray(previousCompatibility.externalDependencies) ? previousCompatibility.externalDependencies : [],
-      notVerified: [...new Set([...priorNotVerified, ...currentGaps])],
+      ...(typeof compatibility?.profile === "string" ? { profile: compatibility.profile } : {}),
+      externalDependencies: Array.isArray(compatibility?.externalDependencies) ? compatibility.externalDependencies : [],
+      notVerified: [...new Set(currentGaps)],
     },
+  };
+  const compatibilityDetails = { ...releaseSummary.compatibility } as Record<string, unknown>;
+  delete compatibilityDetails.schemaVersion;
+  const conversionDetails = conversion === undefined ? undefined : {
+    ...(typeof conversion.status === "string" ? { status: conversion.status } : {}),
+    ...(typeof conversion.code === "string" ? { code: conversion.code } : {}),
+    ...(Array.isArray(conversion.reasons) ? { reasons: conversion.reasons } : {}),
   };
   let dependencyAudit = releaseSummary.dependencyAudit;
   if (writable) {
@@ -79,7 +91,12 @@ export async function validate(): Promise<void> {
       // audit is written after the summary exists instead of from a pre-summary
       // intermediate value (D-12).
       await writeGeneratedReport(audit.packageRoot, "dependency-audit.json", `${JSON.stringify(releaseSummary.dependencyAudit, null, 2)}\n`);
-      await writeGeneratedReport(audit.packageRoot, "compatibility.json", `${JSON.stringify(releaseSummary.compatibility, null, 2)}\n`);
+      await writeGeneratedReport(audit.packageRoot, "reports.json", `${JSON.stringify({
+        schemaVersion: "1.0",
+        ...(Array.isArray(reports.diagnostics) ? { diagnostics: reports.diagnostics } : {}),
+        ...(conversionDetails === undefined ? {} : { conversion: conversionDetails }),
+        compatibility: compatibilityDetails,
+      }, null, 2)}\n`);
       await writeGeneratedReport(audit.packageRoot, "reports/release-summary.json", `${JSON.stringify(releaseSummary, null, 2)}\n`);
     } catch (error) {
       audit.checks.push({ checkId: "RELEASE_REPORT_WRITE_FAILED", result: "fail", message: errorText(error), path: "reports/release-summary.json" });

@@ -10,7 +10,7 @@ BDMV-menu/
 ├── README.md
 ├── manifest.json
 ├── asset-manifest.json
-├── compatibility.json
+├── reports.json
 ├── external-targets.json          # 有外部播放目标
 ├── media-plans/                  # 每个导出单元一份计划
 │   ├── playlist-00003-pi00-clip-00004.json
@@ -28,7 +28,6 @@ BDMV-menu/
 │   ├── media/background.mp4
 │   └── media/audio-1100-eng.m4a
 ├── bdj/BDMV/JAR/                 # 含 BD-J 时：应用 JAR 与 authored 文件
-├── report.json                    # build 成功与失败路径都写
 └── reports/                       # validate 之后
 ```
 
@@ -46,7 +45,7 @@ BDMV-menu/
 | 额外菜单 | 可达且非 Top Menu 的 `uiModel === 0` 播放列表 → 额外导出本地媒体 | 诊断 `M5_PLAYLIST_MEDIA_EXPORTED` |
 | 弹出菜单所在正片 | `uiModel === 1` 且属于正片播放列表 → 只保留场景，视频交给外部播放器 | 诊断 `M5_POPUP_CONTENT_MEDIA_EXTERNAL` |
 
-失败时仍写 `README.md` 与 `report.json`（`status: "failed"`），提交目录并退出 1；不生成 `index.html`，避免把半成品当可运行包。
+失败时仍写 `README.md` 与 `reports.json`（`conversion.status: "failed"`，诊断位于顶层，转换详情位于 `conversion`），提交目录并退出 1；不生成 `index.html`。
 
 ## `disc-data.js` 字段
 

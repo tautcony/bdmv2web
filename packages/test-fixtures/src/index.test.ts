@@ -29,6 +29,5 @@ describe("shared contract fixtures", () => {
       { input: "right", selectedButtonId: 2 },
       { input: "activate", actionType: "LINK_PLAY_ITEM", actionPayload: { playItem: 3 } },
     ]);
-    expect(menuInteractionFixture.verification.notVerified).toContain("real disc rendering and media timeline");
   });
 });

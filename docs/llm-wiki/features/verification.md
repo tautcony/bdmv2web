@@ -48,9 +48,9 @@ complete← 以上都没有
 | 输入 | 原 BDMV | 已生成的包目录 |
 | 判定依据 | 解析/提取/适配诊断 + 入口计数 | 包审计 + `manifest.diagnostics` + 入口计数 |
 | 写 `manifest.json` | 是（按 `decideDelivery` 结果） | 否 |
-| 写 `report.json` | 是 | 否 |
-| 写 `compatibility.json` / `dependency-audit.json` / `reports/release-summary.json` | 否 | 是，三者同源 |
-| 结论标注 | `auditScope: "convert"` | `auditScope` 不参与判定 |
+| 写 `reports.json` 的转换部分 | 是 | 否 |
+| 更新 `reports.json` 的兼容性部分 / 写 `dependency-audit.json` / `reports/release-summary.json` | 否 | 是，三者同源 |
+| 报告部分 | 写 `reports.json.conversion` | 更新 `reports.json.compatibility` |
 
 同一个包由两者判定应给出一致状态。若 `manifest.status` 与当前证据不一致：
 
@@ -76,7 +76,7 @@ complete← 以上都没有
 }
 ```
 
-`compatibility.json` 与 `asset-manifest.json` 是报告元数据，不出现在 `files`。
+`reports.json` 与 `asset-manifest.json` 是报告元数据，不出现在 `files`。
 
 ### `reports/release-summary.json`
 

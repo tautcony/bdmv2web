@@ -72,7 +72,6 @@
 | `status` | 交付是否完整（`build`/`validate`） |
 | `notVerified` | 未收集/未验证的证据；不降低状态 |
 | `gaps` | 发布汇总里 `fail` 与 `not-verified` 的条目 |
-| `auditScope` | 判定来源标注（`build`），不参与判定 |
 
 ## 常见缩写
 

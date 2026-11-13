@@ -121,7 +121,7 @@ export function decideDelivery(input: DeliveryDecisionInput): DeliveryDecision {
   ];
   if (input.hasUnresolvedReachability) reasons.push("Reachability contains unresolved or unknown paths.");
   if (input.hasUnsupportedReachableCapability) reasons.push("A reachable capability is unsupported.");
-  if (errorDiagnostic && !failedDiagnostic) reasons.push("An error diagnostic blocks complete status even when acknowledged.");
+  if (errorDiagnostic && !failedDiagnostic) reasons.push("Blocking error diagnostics prevent complete status.");
   if (unknownSeverity) reasons.push("A diagnostic uses an unrecognised severity.");
   // Limitations are explanatory only; they are listed but never decide the status.
   if (input.limitations?.length) reasons.push(...input.limitations.map((item) => `Limitation: ${item}`));

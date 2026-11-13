@@ -38,7 +38,7 @@
 | `MenuScene` / `SerializedScene` | `runtime-web`（`adaptIgsScene`） | `package-builder` → `runtime/disc-data.js` | 顶层 `pages`；`buttons`/`objects`/`effects` 嵌在 page 内 |
 | `MediaClosure` / `MediaPlan` | `media-export` | CLI、`package-builder` | 可达 `playlistIds`/`clipIds`、未知项、预算估算 |
 | 菜单包 | `package-builder` | 浏览器、`test-runner` | `index.html`、`runtime/*`、`assets/*`、`manifest.json` |
-| 交付报告 | `test-runner` + CLI | 人、CI | `report.json`、`compatibility.json`、`dependency-audit.json`、`reports/release-summary.json` |
+| 交付报告 | `test-runner` + CLI | 人、CI | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` |
 
 `ParsedDisc.analysisStage` 固定为 `structural`：结构解析成功不代表控制流已验证。`supportPrediction.status` 固定为 `partial`。
 
@@ -52,13 +52,13 @@
 4. `extractIgsScenes(disc)` 提取场景与 PNG（`renderAssets` 默认开启）。
 5. `findTopMenuPlaylist` 从 HDMV 入口解析 Top Menu 播放列表；`menuLoopMediaInput` 计算背景循环区间与音轨。
 6. `beginOutputTransaction` 建 staging；后续任一步失败都 `abort`，不提交半成品。
-7. 场景选择：`findMenuScene` 按播放列表的 clip/PID 匹配场景。无场景 → `MENU_SCENE_NOT_FOUND`；多义 → `MENU_SCENE_AMBIGUOUS`；无 Top Menu 播放列表 → `MENU_PLAYLIST_NOT_RESOLVED`。失败仍写 `README.md` + `report.json` 并提交，退出码 1。
+7. 场景选择：`findMenuScene` 按播放列表的 clip/PID 匹配场景。无场景 → `MENU_SCENE_NOT_FOUND`；多义 → `MENU_SCENE_AMBIGUOUS`；无 Top Menu 播放列表 → `MENU_PLAYLIST_NOT_RESOLVED`。失败仍写 `README.md` + `reports.json` 并提交，退出码 1。
 8. `adaptIgsScene` 序列化主导航场景；`uiModel === 0` 的场景作为菜单画面，`uiModel === 1` 作为弹出菜单；可达的其他菜单播放列表额外导出本地媒体。
 9. `buildMediaClosure` + `createExternalMediaTargets` 生成可达播放列表与外部播放目标。
 10. 收集：MovieObject 程序、入口表、音效字节、被引用 PNG、诊断。
 11. `decideDelivery` 先算状态（`checks: []`，只由诊断与事实决定），`buildMenuPackage` 按该状态写包，避免包自己造结论。
 12. `buildMenuPackage` 写文件、导出媒体、`esbuild` 打包 `runtime-web/src/browser.ts` 为 `runtime/app.bundle.js`、写 `manifest.json`。
-13. 写 `report.json`，`commit()`，stdout 输出 `{ status, output }`；`status !== complete` 时退出码按 `0/1/2` 规则。
+13. 写入 `reports.json`，`commit()`，stdout 输出 `{ status, output }`；`status !== complete` 时退出码按 `0/1/2` 规则。
 
 ## 产物与仓库目录
 

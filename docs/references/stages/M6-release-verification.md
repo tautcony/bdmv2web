@@ -14,7 +14,7 @@
 
 ## Compatibility and audit report fields
 
-`compatibility.json` records status, checks, coverage, reasons and validation evidence. `dependency-audit.json` records status, external references and checks. Neither report records the producing tool name or version, or provides a separate structured diagnostics list with source path, byte offset and stage. Compatibility checks carry `checkId`, `result`, `message` and optional `path`, `entityId` and `evidence`.
+`reports.json.compatibility` records status, checks, coverage, reasons and validation evidence. The top-level `reports.json` fields hold shared status and conversion diagnostics; `reports.json.conversion` holds conversion reasons and blocking diagnostics. `dependency-audit.json` records status, external references and checks. Compatibility checks carry `checkId`, `result`, `message` and optional `path`, `entityId` and `evidence`.
 
 The package manifest carries conversion diagnostics with severity, code and message. The package audit retains severity, code, acknowledgement and completion-blocking fields when it reads those diagnostics; it does not retain their message, source path, byte offset or stage. Release results therefore identify check failures and missing evidence, while tool-version provenance and source-located diagnostic detail remain unrecorded.
 

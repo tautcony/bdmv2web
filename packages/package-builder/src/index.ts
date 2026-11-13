@@ -20,7 +20,7 @@ export { convertSounds, type SoundMetadata, type SoundPayload } from "./sounds.j
 export { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, serializeSafeScriptData } from "./scripts.js";
 export { type MenuPackageDiagnostic, type MenuPackageMetadata, type MenuPackageStatus } from "./types.js";
 
-const RESERVED_REPORT_FILES = new Set(["compatibility.json", "asset-manifest.json"]);
+const RESERVED_REPORT_FILES = new Set(["reports.json", "asset-manifest.json"]);
 
 export interface BdjPackageFile { path: string; sourcePath: string; bytes: Uint8Array }
 
@@ -40,9 +40,7 @@ export function createCompatibility(metadata: MenuPackageMetadata, externalPlayb
   return {
     ...metadata,
     profile: "portable",
-    coverage: { igs: "unverified" },
     externalDependencies: externalPlayback ? ["configured BDMV STREAM files", bdjRuntime ? "an operating-system file association for whole-file playback" : "an operating-system URL handler for declared BDMV STREAM targets"] : [],
-    notVerified: ["package directory relocation", "real-disc rendering", "media timeline and seek accuracy"],
   };
 }
 
@@ -232,7 +230,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     { path: "runtime/disc-data.js", kind: "runtime", required: true },
     { path: "runtime/style.css", kind: "runtime", required: true },
     { path: "README.md", kind: "readme", required: true },
-    { path: "compatibility.json", kind: "compatibility", required: true },
+    { path: "reports.json", kind: "report", required: true },
     { path: "runtime/app.bundle.js", kind: "runtime", required: true },
     ...(bdjRuntime ? [{ path: "runtime/bdj-client.js", kind: "runtime", required: true }] : []),
     ...batches.map((batch) => ({ path: `runtime/assets-data-${String(batch.index).padStart(3, "0")}.js`, kind: "runtime", required: true })),
@@ -268,7 +266,16 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   await writeFile(resolve(runtimeDirectory, "app.bundle.js"), await readFile(menuRuntimeBundlePath()));
   if (bdjRuntime) await writeFile(resolve(runtimeDirectory, "bdj-client.js"), await readFile(bdjClientBundlePath()));
   input.onPhase?.("manifest");
-  await writeFile(resolve(output, "compatibility.json"), `${JSON.stringify(createCompatibility(metadata, !!input.externalTargets, bdjRuntime), null, 2)}\n`);
+  const compatibility = createCompatibility(metadata, !!input.externalTargets, bdjRuntime);
+  const reportDiagnostics = compatibility.diagnostics;
+  const compatibilityDetails = { ...compatibility };
+  delete compatibilityDetails.diagnostics;
+  delete compatibilityDetails.schemaVersion;
+  await writeFile(resolve(output, "reports.json"), `${JSON.stringify({
+    schemaVersion: "1.0",
+    diagnostics: reportDiagnostics,
+    compatibility: { ...compatibilityDetails, status: metadata.status },
+  }, null, 2)}\n`);
   const manifestFiles = await Promise.all(files.filter((file) => !RESERVED_REPORT_FILES.has(file.path)).map(async (file) => {
     const fileInfo = await stat(resolve(output, file.path));
     return { ...file, byteLength: String(fileInfo.size) };

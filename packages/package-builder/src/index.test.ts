@@ -95,10 +95,10 @@ describe("menu package primitives", () => {
     expect(() => makePngBatches([{ id: "raw-rgba", bytes: new Uint8Array(4) }])).toThrow(/encoded as PNG/);
     expect(() => makePngBatches([], { maxBatchBytes: 0 })).toThrow(/maxBatchBytes/);
   });
-  it("marks every generated preview partial without media or timeline evidence", () => {
+  it("creates compatibility details without placeholder coverage or verification state", () => {
     const report = createCompatibility({ schemaVersion: "1.0", runtimeVersion: "0.1.0", title: "Preview", status: "partial", diagnostics: [] });
-    expect(report.status).toBe("partial"); expect(report).not.toHaveProperty("browserEvidence"); expect(report.coverage).toEqual({ igs: "unverified" });
-    expect(report.notVerified).toEqual(expect.arrayContaining(["package directory relocation", "real-disc rendering", "media timeline and seek accuracy"]));
+    expect(report.status).toBe("partial"); expect(report).not.toHaveProperty("browserEvidence"); expect(report).not.toHaveProperty("coverage");
+    expect(report).not.toHaveProperty("notVerified");
   });
   it("reports player requirements for the selected package launch mode", () => {
     const metadata = { schemaVersion: "1.0" as const, runtimeVersion: "0.1.0", title: "Preview", status: "partial" as const, diagnostics: [] };
@@ -304,8 +304,8 @@ describe("menu package primitives", () => {
       expect(data).toContain('"clipId":"00001","pid":5120');
       expect(data).toContain('"uiModel":1');
       expect(data).toContain('"vmEntries":[{"id":"title:0"');
-      const report = JSON.parse(await readFile(resolve(outputDirectory, "compatibility.json"), "utf8"));
-      expect(report.status).toBe("partial"); expect(report.coverage.igs).toBe("unverified");
+      const report = JSON.parse(await readFile(resolve(outputDirectory, "reports.json"), "utf8"));
+      expect(report.compatibility.status).toBe("partial"); expect(report.compatibility).not.toHaveProperty("coverage");
       expect(await readFile(resolve(outputDirectory, "README.md"), "utf8")).toContain("bdmv2web validate <package-directory>");
       const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ path: string; kind: string; byteLength: string }> };
       expect(manifest.files.map((file) => file.path)).toEqual(["index.html", "README.md", "runtime/app.bundle.js", "runtime/assets-data-000.js", "runtime/disc-data.js", "runtime/style.css"]);

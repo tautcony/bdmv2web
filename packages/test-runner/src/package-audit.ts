@@ -6,7 +6,7 @@ import { isRecord, errorText } from "@bdmv2web/utils";
 import type { AuditCheck, DeliveryManifest, ManifestFile, OfflinePackageAudit } from "./types.js";
 
 const PAYLOAD_EXTENSIONS = new Set([".html", ".htm", ".js", ".mjs", ".css", ".json", ".png", ".wav", ".mp4", ".webm", ".vtt", ".jar", ".wasm", ".gz"]);
-const REPORT_FILES = new Set(["compatibility.json", "dependency-audit.json", "asset-manifest.json", "report.json"]);
+const REPORT_FILES = new Set(["reports.json", "dependency-audit.json", "asset-manifest.json"]);
 const NON_RUNTIME_KINDS = new Set(["parsed-disc", "raw-command-table", "readme", "report", "evidence", "compatibility", "dependency-audit", "asset-manifest"]);
 const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_BYTES = 16 * 1024 * 1024;
@@ -314,7 +314,7 @@ async function auditRuntimeFiles(root: string, files: string[], checks: AuditChe
     if (ext === ".html" || ext === ".htm") auditHtml(text, path, checks, refs);
     if (ext === ".css") auditCss(text, path, checks, refs);
     if (ext === ".js" || ext === ".mjs") auditScript(text, path, checks, refs, allowLocalSessionTransport && path === "runtime/bdj-client.js");
-    if (ext === ".json" && !["manifest.json", "compatibility.json", "dependency-audit.json"].includes(path)) auditJsonUrls(text, path, checks, refs);
+    if (ext === ".json" && !["manifest.json", "reports.json", "dependency-audit.json"].includes(path)) auditJsonUrls(text, path, checks, refs);
   }
   for (const ref of refs) {
     if (ref.decodedPath.startsWith("#")) continue;
@@ -369,12 +369,13 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
       add(checks, "PLAYER_PROFILE_INVALID", "fail", "manifest.json profile does not match the PlayerProfile contract", "manifest.json/profile");
     } else {
       try {
-        const compatibility: unknown = JSON.parse(await readFile(resolve(root, "compatibility.json"), "utf8"));
+        const reports: unknown = JSON.parse(await readFile(resolve(root, "reports.json"), "utf8"));
+        const compatibility = isRecord(reports) ? reports.compatibility : undefined;
         if (!isRecord(compatibility) || compatibility.profile !== manifestProfile.outputProfile) {
-          add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "compatibility.json profile label does not match manifest.json outputProfile", "compatibility.json/profile");
+          add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "reports.json compatibility profile does not match manifest.json outputProfile", "reports.json/compatibility/profile");
         }
       } catch {
-        add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "Could not read compatibility.json profile label", "compatibility.json/profile");
+        add(checks, "PLAYER_PROFILE_MISMATCH", "fail", "Could not read reports.json compatibility profile", "reports.json/compatibility/profile");
       }
       try {
         const runtimeScript = await readFile(resolve(root, "runtime/disc-data.js"), "utf8");
