@@ -259,8 +259,7 @@ export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc[
   const video = first.streams.find((stream) => stream.pid !== null && (stream.codingType === 0x1b || stream.codingType === 0x24) && stream.streamType === 1);
   const audioCodingTypes = new Set([0x03, 0x04, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0xa1, 0xa2]);
   const audioStreams = first.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType !== null && audioCodingTypes.has(stream.codingType) && stream.language !== null);
-  const stillWithoutAudio = playItems.length === 1 && first.stillMode === 2 && audioStreams.length === 0;
-  if (!video?.pid || (!stillWithoutAudio && audioStreams.length === 0) || audioStreams.some((stream) => !/^[A-Za-z]{3}$/.test(stream.language!))) return null;
+  if (!video?.pid || audioStreams.some((stream) => !/^[A-Za-z]{3}$/.test(stream.language!))) return null;
   const sourceFile = `BDMV/STREAM/${first.clipId}.m2ts`;
   const sourcePath = await resolveInputFile(disc.root, `STREAM/${first.clipId}.m2ts`);
   const copyStart45k = menuMediaEntryPoint45k(disc, first.clipId, loopStart45k ?? spanStart, video.pid);

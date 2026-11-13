@@ -184,12 +184,12 @@ rg '"CODE_NAME"' packages apps
 | `M4_MENU_PLAY_ITEM_NOT_PACKAGED` | Top Menu 播放列表的某个 PlayItem 声明了 IGS 流但没有匹配的场景，`LINK_PI` 跳过去仍停当前页（warning） | `list --type igs` 中该 PlayItem 的 clip/PID |
 | `M5_MENU_MEDIA_SCOPE_SKIPPED` | `--menu-media auto` 跳过了超出 900 秒的播放列表，消息列出编号与分钟数（info） | 需要时改用 `--menu-media all` |
 | `M5_MENU_MEDIA_DISABLED` | `--menu-media none` 明确关闭媒体导出，运行时把 `PLAY_PLAYLIST` 报为不可用（info） | 预期 |
-| `M5_MENU_LOOP_UNAVAILABLE` | 背景时间线无法表示为连续区间 | 播放列表 PlayItem 结构 |
-| `M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE` | 菜单 PlayItem 的背景媒体没有导出，该页沿用上一个背景（warning） | `menuLoopMediaInput` 的过滤条件与 ffmpeg 日志 |
+| `M5_MENU_LOOP_UNAVAILABLE` | 菜单页面需要的背景 PlayItem 没有导出 | 检查对应 PlayItem 的角度、视频流与媒体计划 |
+| `M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE` | 菜单 PlayItem 的背景媒体没有导出，该页沿用上一个背景（warning） | 检查对应 PlayItem 的角度、视频流与媒体计划 |
 | `M5_POPUP_CONTENT_MEDIA_EXTERNAL` | 弹出菜单所属正片交给外部播放器 | 预期 |
 | `M5_PLAYLIST_MEDIA_EXPORTED` | 额外菜单播放列表已导出本地媒体（info） | 包大小 |
 | `SOUND_REFERENCE_MISSING` / `SOUND_FORMAT_UNSUPPORTED` / `SOUND_RANGE_INVALID` / `SOUND_SOURCE_MISSING` | 音效缺失/格式不支持/区间非法/源缺失 | `sound.bdmv` 与按钮引用 |
-| `IGS_BUTTON_WITHOUT_BOG` / `IGS_BUTTON_MULTIPLE_BOGS` / `IGS_BUTTON_WITHOUT_HIT_GEOMETRY` / `IGS_INVALID_BOG_DEFAULT` | 按钮/BOG 关系异常 | 序列化后的场景 |
+| `IGS_BUTTON_WITHOUT_BOG` / `IGS_BUTTON_MULTIPLE_BOGS` / `IGS_BUTTON_WITHOUT_HIT_GEOMETRY` / `IGS_INVALID_BOG_DEFAULT` | 按钮/BOG 关系告警；无效 BOG 默认按钮使用页面默认、已保留选择或首个可用按钮回退 | 序列化后的场景 |
 | `IGS_UNRESOLVED_VISUAL_ASSET` / `IGS_UNRESOLVED_EFFECT_ASSET` | 序列化时资产缺失 | `adaptIgsScene` 的输入资产 |
 | `IGS_UNSUPPORTED_ANIMATION` | 动画帧率/对象不支持 | 场景帧率码与对象表 |
 | `IGS_INVALID` / `IGS_UNRESOLVED` | 场景数据非法/未解析 | 场景 JSON |

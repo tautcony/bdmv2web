@@ -88,7 +88,7 @@ export function buildProgram(version?: string): Command {
     .option("--preset <preset>", "encoder preset: ultrafast, veryfast, fast, medium", oneOf("preset", ["ultrafast", "veryfast", "fast", "medium"]))
     .option("--codec <codec>", "menu video codec: hevc (default) or h264", oneOf("codec", ["h264", "hevc"]))
     .option("--hdr <mode>", "HDR handling: tonemap (default) or preserve", oneOf("hdr", ["tonemap", "preserve"]))
-    .option("--video <mode>", "menu video pipeline: encode (default) or copy (remux the source H.264 stream)", oneOf("video", ["encode", "copy"]))
+    .option("--video <mode>", "menu video pipeline: encode (default) or copy (remux the source H.264 or HEVC stream)", oneOf("video", ["encode", "copy"]))
     .option("--menu-media <mode>", "menu media to export: auto (default, menus only), all, or none", oneOf("menu-media", ["auto", "all", "none"]))
     .option("--progress", "print step progress on stderr")
     .option("--no-progress", "keep stderr silent");

@@ -149,8 +149,8 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
     });
 
     page.bogs.forEach((bog, bogIndex) => {
-      if (!page.buttons.some((button) => button.id === bog.defaultButtonId && (bogByButton.get(button.id) ?? []).includes(bogIndex))) {
-        diagnostic("IGS_INVALID_BOG_DEFAULT", `BOG default button ${bog.defaultButtonId} is not a member of that BOG`, scene, diagnostics, page.id);
+      if (bog.defaultButtonId !== 0xffff && !page.buttons.some((button) => button.id === bog.defaultButtonId && (bogByButton.get(button.id) ?? []).includes(bogIndex))) {
+        diagnostic("IGS_INVALID_BOG_DEFAULT", `BOG default button ${bog.defaultButtonId} is not a member of that BOG; page selection falls back to the page default, preserved selection, or first usable button`, scene, diagnostics, page.id);
       }
     });
 
@@ -188,7 +188,7 @@ export function adaptIgsScene(scene: IgsScene, assets: readonly IgsAsset[], opti
       selectionTimeout90k: scene.selectionTimeout90k,
       pages,
     },
-    status: scene.complete && diagnostics.length === 0 ? "complete" : "partial",
+    status: scene.complete && !diagnostics.some((item) => item.severity === "error" || (item.severity === "warning" && item.code !== "IGS_INVALID_BOG_DEFAULT")) ? "complete" : "partial",
     diagnostics,
   };
 }
@@ -246,5 +246,5 @@ function sameSource(a: IgsSource, b: IgsSource): boolean {
 }
 
 function diagnostic(code: string, message: string, scene: IgsScene, output: IgsAdapterDiagnostic[], pageId?: number, buttonId?: number, details?: Record<string, number | string | boolean | null>): void {
-  output.push({ severity: code.startsWith("IGS_UNRESOLVED") || code.startsWith("IGS_INVALID") ? "error" : "warning", code, message, sceneId: scene.id, ...(pageId === undefined ? {} : { pageId }), ...(buttonId === undefined ? {} : { buttonId }), source: scene.source, ...(details ? { details } : {}) });
+  output.push({ severity: code.startsWith("IGS_UNRESOLVED") ? "error" : "warning", code, message, sceneId: scene.id, ...(pageId === undefined ? {} : { pageId }), ...(buttonId === undefined ? {} : { buttonId }), source: scene.source, ...(details ? { details } : {}) });
 }

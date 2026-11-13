@@ -64,17 +64,19 @@ BD-J 的 BDJO 常以 `accessToAll` 授权整碟，仅凭授权会把正片与花
 | `--preset <name>` | `ultrafast` / `veryfast` / `fast` / `medium` | `veryfast` |
 | `--codec <name>` | `h264` / `hevc` | `hevc` |
 | `--hdr <mode>` | `tonemap` / `preserve` | `tonemap` |
-| `--video <mode>` | `encode` / `copy` | `encode`（`copy` 时 `--codec` 缺省 `h264`） |
+| `--video <mode>` | `encode` / `copy` | `encode`（`copy` 时缺省 `h264`） |
 
 HEVC 产物带 `-tag:v hvc1`（Safari 只认可该品牌）。四类组合都可执行；`h264` + `preserve` 写入 `MEDIA_HDR_CODEC_UNSUPPORTED` 警告。
 
 ### 视频流复制（`--video copy`）
 
-蓝光菜单 clip 基本都是 H.264，浏览器可直接解码，所以复制比重新编码省时间：`ffmpeg -c:v copy` 把源视频流装进 MP4，码率与原盘一致（通常高于 `crf` 重编码，包会变大）。音频仍走 AAC，因为浏览器在 MP4 里不解码 AC-3 / DTS / LPCM。
+Top Menu 同一连续 clip 区间导出为一个背景资产。播放列表跨 clip 或区间不连续时，构建器按含 IGS 场景的 PlayItem 分别导出背景；`LinkPI` 切换到目标 PlayItem 的背景。视频可无音轨导出；缺少可用视频或多角度 PlayItem 时记录媒体告警。
+
+`ffmpeg -c:v copy` 把源 H.264 或 HEVC 视频流装进 MP4，码率与原盘一致（通常高于 `crf` 重编码，包会变大）。HEVC 输出使用 `hvc1` 标签。音频仍走 AAC，因为浏览器在 MP4 里不解码 AC-3 / DTS / LPCM。
 
 复制的硬性条件是「与播放器从同一帧起播」。BD 播放器不是从 `inTime45k` 精确切帧的：libbluray 用 `clpi_lookup_spn(in_time, before = 1)`（`bdnav/navigation.c`）取该时间点**之前最近的入口点**定位 SPN，再用 `m2ts_filter`（`decoders/m2ts_filter.c`）把 `pts < in_time` 的 PES 全部抹掉，所以播放器实际从「覆盖 in 点的那个关键帧」开始解码、并丢弃它之前的内容。因此复制起点取 `menuMediaEntryPoint45k()` 算出的入口点，与该行为一致。
 
-入口点时间在 EP map 里的存储格式是 `coarse << 18 | fine << 8`，即帧时间被**向下取整到 256 tick（45 kHz 下 5.689 ms）的栅格**，所以记录的 PTS 最多比真实帧时间早 255 tick。判定条件因此是 `0 ≤ inTime45k - 入口点 ≤ 256`：在这个窗口内，in 点就是该入口点那一帧；超出则说明 in 点落在 GOP 中间，复制会带上播放器根本不会显示的片头帧，退回编码。其余拒绝条件：源不是 H.264、请求的 `--codec hevc`、源为 HDR（需要 tonemap）、非 8-bit 4:2:0、奇数分辨率、EP map 里没有可用入口点。
+入口点时间在 EP map 里的存储格式是 `coarse << 18 | fine << 8`，即帧时间被**向下取整到 256 tick（45 kHz 下 5.689 ms）的栅格**，所以记录的 PTS 最多比真实帧时间早 255 tick。判定条件因此是 `0 ≤ inTime45k - 入口点 ≤ 256`：在这个窗口内，in 点就是该入口点那一帧；超出则说明 in 点落在 GOP 中间，复制会带上播放器根本不会显示的片头帧，退回编码。其余拒绝条件：源不是 H.264 或 HEVC、当前色彩策略需要滤镜、H.264 源不是 8-bit 4:2:0、奇数分辨率、EP map 里没有可用入口点。HEVC 片段的可解码性取决于目标浏览器和平台。
 
 复制时长取 `(out_time - in_time) + (in_time - 入口点)`，保证 `pts == out_time` 的那一帧（libbluray 会包含它）仍在片尾；误差上限即入口点量化误差，远小于一帧。
 

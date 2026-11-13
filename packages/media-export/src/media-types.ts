@@ -78,9 +78,9 @@ export interface MenuLoopMediaOptions {
   /** Dynamic-range policy for HDR sources. Defaults to `tonemap` (SDR BT.709). */
   hdrMode?: HdrMode;
   /**
-   * `copy` writes the source H.264 stream into MP4 without re-encoding it.
+   * `copy` writes the source H.264 or HEVC stream into MP4 without re-encoding it.
    * A copy requires an entry point no more than 256 ticks before the export
-   * start, even dimensions, and 8-bit 4:2:0 SDR H.264; other clips are encoded
+   * start, even dimensions, and SDR; H.264 additionally requires 8-bit 4:2:0. Other clips are encoded
    * and the plan records the reason. Defaults to `encode`.
    */
   videoMode?: VideoExportMode;

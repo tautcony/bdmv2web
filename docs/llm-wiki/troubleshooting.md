@@ -37,7 +37,7 @@ corepack pnpm test
 | `MENU_SCENE_NOT_FOUND` | 播放列表的 IGS clip/PID 与提取场景不匹配 | `list --type igs` 对比 clip/PID；`extract --type igs` 看 `scenes[].clipId/pid` |
 | `MENU_SCENE_AMBIGUOUS` | 同一 clip/PID 多个场景 | 看报错里的 `compositionNumber` 与 `segmentFileOffset`，确认哪一个是菜单 |
 | `M4_MENU_OBJECT_CONTEXT_MISSING` | 没有可用的 Top Menu/First Play Object | 入口表是否只有 BD-J；对象表是否为空 |
-| `M5_MENU_LOOP_UNAVAILABLE` | 背景无法表示为单段连续区间 | 看目标播放列表的 PlayItem 数与标记；菜单仍可用，只是背景停最后一帧 |
+| `M5_MENU_LOOP_UNAVAILABLE` | 菜单页面所需的背景 PlayItem 没有导出 | 检查该 PlayItem 的角度、视频流和媒体计划 |
 | `TARGET_EXISTS` | 输出目录已存在 | 换 `--out` 或加 `--overwrite` |
 | `PATH_OVERLAP` | 输出在输入内或反之 | 换独立目录 |
 | `MEDIA_TOOL_UNAVAILABLE` | `ffmpeg`/`ffprobe` 不在 `PATH` | 安装并确认 `ffmpeg -version` |
@@ -65,7 +65,7 @@ corepack pnpm test
 | `Enter` 无反应 | 按钮是否 `enabled`；当前页 UO mask 是否禁止；按钮命令是否为空 | `handle` → `activate`；`HDMV_UO_BLOCKED` |
 | 点击位置偏移 | 场景比例与视频比例是否相同；两者各自 `object-fit: contain` | `CanvasViewport.toSource` |
 | 黑边点击也命中 | 同上；`toSource` 应返回 `null` | `CanvasViewport` |
-| 切页后焦点悬空 | 新页是否有默认按钮/BOG 默认 | `selectPageDefault`、`IGS_INVALID_BOG_DEFAULT` |
+| 切页后焦点悬空 | 新页是否有可用按钮 | `selectPageDefault`、`IGS_INVALID_BOG_DEFAULT` |
 | 动画不结束 | `duration90k` 是否为 0 或极大；调度器是否被暂停 | `advanceWhileRunning`、`beginPageEffects` |
 | 切页后旧动画又触发 | 作用域是否被取消 | `changePage` 的 `cancelScope` |
 

@@ -6,7 +6,7 @@ import { hasEncoder, hasFilter } from "./tools/ffmpeg-capabilities.js";
 import { parseProbe, probeArgs, type ProbeResult, type ProbeStream } from "./tools/probe.js";
 import { runControlledProcess, runMonitoredProcess } from "./process/process-control.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates } from "./budget.js";
-import { assertEncodedColor, isHdrDynamicRange, normalizeColorTag, pixelFormatBitDepth, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type HdrMode, type VideoCodec, type VideoColorPlan } from "./color/color.js";
+import { assertEncodedColor, normalizeColorTag, pixelFormatBitDepth, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type HdrMode, type VideoCodec, type VideoColorPlan } from "./color/color.js";
 
 export * from "./closure.js";
 export * from "./external-targets.js";
@@ -213,7 +213,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
           "-hide_banner", "-nostdin", "-loglevel", "error", "-progress", "pipe:2", "-stats_period", "1", "-n",
           ...(copySeekSeconds > 0 ? ["-ss", String(copySeekSeconds)] : []), "-i", input.sourcePath,
           "-map", pidSpecifier(input.videoPid), "-an", "-sn", "-dn", "-t", String(copyDurationSeconds),
-          "-c:v", "copy", "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
+          "-c:v", "copy", ...(videoStream.codec_name === "hevc" ? ["-tag:v", "hvc1"] : []), "-movflags", "+faststart", "-metadata:s:v:0", "language=und", "-f", "mp4", backgroundAbsolute,
           ...audioArgs,
         ], timeoutMs, [backgroundAbsolute, ...audioOutputs.map(({ absolutePath }) => absolutePath)], options.maxAssetBytes, invoke, options.signal, reportBackground);
         audioWritten = audioOutputs.length > 0;
@@ -269,9 +269,10 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
       audioTracks.push({ ...asset, codec: "aac", pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: audioDuration, ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) });
     }
 
-    const encoding: MenuLoopEncoding = { mode: videoMode, codec, crf, preset, color: colorPlan };
+    const outputCodec: VideoCodec = videoMode === "copy" ? (videoStream.codec_name === "hevc" ? "hevc" : "h264") : codec;
+    const encoding: MenuLoopEncoding = { mode: videoMode, codec: outputCodec, crf, preset, color: colorPlan };
     const plan = makePlan(input, estimate, existingOutputBytes, options.maxAssetBytes ?? null, encoding, false, [
-      ...(videoMode === "copy" ? ["The background video is a bit-exact copy of the source H.264 stream; only its dimensions, colour signalling, and duration are verified."] : []),
+      ...(videoMode === "copy" ? [`The background video is a bit-exact copy of the source ${videoStream.codec_name === "hevc" ? "HEVC" : "H.264"} stream; only its dimensions, colour signalling, and duration are verified.`] : []),
       ...(copyRefusal === undefined ? [] : [`Video stream copy is unavailable for this clip: ${copyRefusal}`]),
     ], { background: backgroundPath, audioTracks: audioOutputs.map(({ relativePath }) => relativePath) });
     created.push(planAbsolute);
@@ -282,7 +283,7 @@ export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: Me
     const outputSize = { beforeBytes: existingOutputBytes.toString(), afterBytes: actualOutputBytes.toString() };
     return {
       plan, outputSize, tools: { ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, invocations },
-      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec, pid: input.videoPid, width: background.width, height: background.height, durationSeconds: videoDuration, loop: loopBackground(input), ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) },
+      background: { path: backgroundPath, absolutePath: backgroundAbsolute, byteLength: backgroundStat.size, codec: outputCodec, pid: input.videoPid, width: background.width, height: background.height, durationSeconds: videoDuration, loop: loopBackground(input), ...(loopStartSeconds === undefined ? {} : { loopStartSeconds }) },
       audioTracks, files, warnings,
     };
   } catch (error) {
@@ -466,13 +467,13 @@ export function pidSpecifier(pid: number): string { validatePid(pid); return `0:
  */
 const ENTRY_POINT_QUANTUM_45K = 256;
 
-function copyRefusalReason(stream: ProbeStream, plan: VideoColorPlan, headroom45k: number | undefined, codec: VideoCodec): string | undefined {
-  if (codec !== "h264") return `the requested codec is ${codec}`;
-  if (stream.codec_name !== "h264") return `the source video is ${stream.codec_name ?? "an unknown codec"}`;
-  if (isHdrDynamicRange(plan.source.dynamicRange)) return `the source is ${plan.source.dynamicRange} and needs tone mapping`;
+function copyRefusalReason(stream: ProbeStream, plan: VideoColorPlan, headroom45k: number | undefined, _codec: VideoCodec): string | undefined {
+  if (stream.codec_name !== "h264" && stream.codec_name !== "hevc") return `the source video is ${stream.codec_name ?? "an unknown codec"}`;
   if (plan.filterChain !== "passthrough") return `the colour plan needs the ${plan.filterChain} pipeline`;
-  const bitDepth = pixelFormatBitDepth(stream.pix_fmt);
-  if (bitDepth !== 8 || stream.pix_fmt?.includes("420") !== true) return `the source pixel format is ${stream.pix_fmt ?? "unknown"}`;
+  if (stream.codec_name === "h264") {
+    const bitDepth = pixelFormatBitDepth(stream.pix_fmt);
+    if (bitDepth !== 8 || stream.pix_fmt?.includes("420") !== true) return `the source pixel format is ${stream.pix_fmt ?? "unknown"}`;
+  }
   if (!positive(stream.width) || !positive(stream.height) || stream.width % 2 !== 0 || stream.height % 2 !== 0) return `the source frame is ${stream.width ?? "?"}x${stream.height ?? "?"}`;
   if (headroom45k === undefined) return "the clip entry point for the segment is unknown";
   if (headroom45k < 0) return `the segment starts ${(-headroom45k / 45_000).toFixed(3)}s before its clip entry point`;

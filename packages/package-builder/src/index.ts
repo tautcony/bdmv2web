@@ -52,7 +52,7 @@ export interface MenuMediaEncoding {
   preset?: "medium" | "fast" | "veryfast" | "ultrafast";
   codec?: VideoCodec;
   hdrMode?: HdrMode;
-  /** `copy` remuxes the source H.264 stream instead of re-encoding it; see `exportMenuLoopMedia`. */
+  /** `copy` remuxes the source H.264 or HEVC stream instead of re-encoding it; see `exportMenuLoopMedia`. */
   videoMode?: VideoExportMode;
 }
 
