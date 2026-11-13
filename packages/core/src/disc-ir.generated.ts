@@ -1,5 +1,3 @@
-"";
-
 export type NavigationDescriptor =
   | {
       type: "HDMV";

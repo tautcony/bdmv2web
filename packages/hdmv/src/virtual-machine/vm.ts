@@ -795,7 +795,7 @@ export class HdmvVm {
     // restored continuation has no matching pending action and is ignored.
     this.continuation = null;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
-    this.emit("PLAY_STOP", {}, source);
+    this.emit("PLAY_STOP", { implicit: true }, source);
   }
   /** Apply bd_menu_call()/hdmv_vm_suspend_pl(): keep the playing position when the MovieObject resume-intention flag is set. */
   private suspendPlayingForMenuCall(): void {

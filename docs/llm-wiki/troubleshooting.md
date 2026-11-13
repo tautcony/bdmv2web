@@ -96,7 +96,7 @@ corepack pnpm test
 | 外部播放器未启动 | `bdmv2web serve` 的 `--player` / `--player-executable` 设置；播放器进程是否可启动 |
 | system adapter 报 capability unavailable | 目标包含有界播放或多片段；诊断的 source 指向播放列表/PlayItem/Mark |
 | 路径错误 | `runtime/bdmv-config.js` 的 `__BDMV_BDMV_PATH__`；相对路径基于 `index.html` |
-| `EXTERNAL_STREAM_MISSING` | 源 `STREAM/*.m2ts` 被移动或重命名 |
+| 正片跳转显示源文件缺失警告 | 运行时仍会请求映射的 `STREAM/*.m2ts` 路径；确认 `runtime/bdmv-config.js` 指向的 BDMV 目录包含该文件 |
 
 ## 8. `validate` 报错
 

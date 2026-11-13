@@ -254,7 +254,8 @@ main {
   stroke-linejoin: round;
 }
 
-#audio-mute-toggle .sound-off {
+#audio-mute-toggle .sound-off,
+#audio-mute-toggle .play-menu {
   display: none;
 }
 
@@ -263,6 +264,15 @@ main {
 }
 
 #audio-mute-toggle[aria-pressed="true"] .sound-off {
+  display: block;
+}
+
+#audio-mute-toggle[data-playback-stopped="true"] .sound-on,
+#audio-mute-toggle[data-playback-stopped="true"] .sound-off {
+  display: none;
+}
+
+#audio-mute-toggle[data-playback-stopped="true"] .play-menu {
   display: block;
 }
 

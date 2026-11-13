@@ -29,6 +29,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
   const audioUrls: string[] = [];
   const audioElements: Array<{ url: string; muted: boolean }> = [];
   const mediaPlayCalls: string[] = [];
+  const mediaPauseCalls: string[] = [];
   const imageUrls: string[] = [];
   const mediaPlayErrors = [...(options.mediaPlayErrors ?? [])];
   const windowEvents = new Map<string, Array<(...args: unknown[]) => unknown>>();
@@ -64,9 +65,10 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
       play() {
         mediaPlayCalls.push(id);
         const name = mediaPlayErrors.shift();
+        if (!name) this.paused = false;
         return name ? Promise.reject(Object.assign(new Error("fixture playback failure"), { name })) : Promise.resolve();
       },
-      pause() {}, load() {},
+      pause() { mediaPauseCalls.push(id); this.paused = true; }, load() {},
     };
   };
   for (const id of ["runtime-status", "runtime-status-copy", "runtime-diagnostics", "start-menu", "audio-mute-toggle", "menu-canvas", "popup-canvas", "menu-background", "menu-audio", "bdj-runtime-root"]) elements.set(id, element(id));
@@ -103,7 +105,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
   vi.stubGlobal("Audio", FakeAudio);
   vi.stubGlobal("__BDMV_MENU_DATA__", options.data);
   vi.stubGlobal("__BDMV_MENU_ASSETS__", options.assetBatches ?? []);
-  return { elements, audioUrls, audioElements, imageUrls, mediaPlayCalls, fakeWindow };
+  return { elements, audioUrls, audioElements, imageUrls, mediaPlayCalls, mediaPauseCalls, fakeWindow };
 }
 
 async function launch(data: Record<string, unknown>, options: { assetBatches?: unknown[][]; imageFailure?: boolean; mediaPlayErrors?: string[] } = {}) {
@@ -141,7 +143,7 @@ it("runs the initial VM turn and keeps menu input active when the package has no
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   expect(host.elements.get("runtime-status")?.textContent).toContain("Menu preview ready");
-  expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
+  expect(host.fakeWindow.listenerCount("keydown")).toBe(2);
   expect(trace.mock.calls.flat().join(" ")).toContain("7:0 MOVE gpr[0],#5");
   expect(trace.mock.calls.flat().join(" ")).toContain("status=idle");
 
@@ -197,7 +199,7 @@ describe("browser boot", () => {
     await vi.waitFor(() => expect(requests.some((request) => request.url === "/api/bdj/input")).toBe(true));
     expect(requests.find((request) => request.url === "/api/bdj/input")?.init?.body).toBe(JSON.stringify({ kind: "key", keyCode: 10, modifiers: 0, type: "pressed" }));
     eventSource.emit("trace", { line: "Spider-Man fixture BD-J trace" });
-    await host.fakeWindow.fire("pagehide");
+    await host.fakeWindow.fire("pagehide", { persisted: false });
     expect(eventSource.closed).toBe(true);
   });
 
@@ -259,11 +261,11 @@ describe("browser boot", () => {
       expect(host.elements.get("runtime-status")?.textContent).toContain("Images decoded");
       expect(host.elements.get("runtime-status")?.classes.has("is-visible")).toBe(true);
       expect(start.hidden).toBe(false);
-      expect(host.fakeWindow.listenerCount("keydown")).toBe(0);
+      expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
 
       await start.fire("click");
       expect(start.hidden).toBe(true);
-      expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
+      expect(host.fakeWindow.listenerCount("keydown")).toBe(2);
       await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
       await Promise.resolve();
       expect(host.audioUrls).toEqual(["assets/audio/sound-4.wav"]);
@@ -389,7 +391,7 @@ describe("browser boot", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     // The startup dispatch switched to the playlist-9 scene and installed its
     // input listeners; the final installation must replace, not stack.
-    expect(host.fakeWindow.listenerCount("keydown")).toBe(1);
+    expect(host.fakeWindow.listenerCount("keydown")).toBe(2);
     expect(host.elements.get("menu-canvas")?.listenerCount("pointerdown")).toBe(1);
   });
 
@@ -449,10 +451,33 @@ describe("browser boot", () => {
     });
     const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
     await host.elements.get("start-menu")!.fire("click");
+    const pausesBeforeJump = host.mediaPauseCalls.length;
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await new Promise((resolve) => setTimeout(resolve, 0));
     // Mark 1 maps to PlayItem 1, whose scene requests playlist 43.
     expect(location.href).toBe("iina://open?url=file%3A%2F%2F%2Ffake%2FBDMV%2FSTREAM%2F00007.m2ts&mpv_start=0");
+    expect(host.mediaPauseCalls).toHaveLength(pausesBeforeJump);
+    expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    await host.elements.get("audio-mute-toggle")!.fire("click");
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
+    expect(host.elements.get("menu-audio")?.paused).toBe(false);
+  });
+
+  it("stops on TERMINATE_PL and resumes playback from the control", async () => {
+    const scene = packageData().scene as { pages: Array<{ buttons: Array<{ commands: unknown[] }> }> };
+    scene.pages[0]!.buttons[0]!.commands = [{ bytes: m3Fixtures.terminatePlaylist.bytes }];
+    const data = packageData({ scene, vmPrograms: [{ id: 7, instructions: ["228000000000000900000000"] }], media: { playlist: 9, background: { path: "assets/media/background.mp4", loop: true }, audioTracks: [{ streamNumber: 0, path: "assets/audio/menu.m4a" }] } });
+    const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    await host.elements.get("start-menu")!.fire("click");
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    const control = host.elements.get("audio-mute-toggle")!;
+    expect(host.elements.get("menu-audio")?.paused).toBe(true);
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
+    expect(control.attributes.get("data-playback-stopped")).toBe("true");
+    await control.fire("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.elements.get("menu-audio")?.paused).toBe(false);
+    expect(control.attributes.get("data-playback-stopped")).toBe("false");
   });
 
   it("plays packaged playlist media when the package has no primary menu media", async () => {
@@ -508,23 +533,39 @@ describe("browser boot", () => {
       }] }] },
     });
     const host = await launch(data, { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+    expect(host.elements.get("audio-mute-toggle")?.attributes.get("aria-pressed")).toBe("false");
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
     await host.elements.get("start-menu")!.fire("click");
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(host.elements.get("menu-background")?.muted).toBe(true);
     expect(host.elements.get("menu-audio")?.muted).toBe(true);
     expect(host.audioElements.at(-1)?.muted).toBe(true);
+    expect(host.elements.get("audio-mute-toggle")?.attributes.get("aria-pressed")).toBe("true");
 
-    await host.fakeWindow.fire("keydown", { code: "ArrowRight", preventDefault() {} });
+    await host.fakeWindow.fire("pagehide", { persisted: true });
+    await host.fakeWindow.fire("click", { type: "click", detail: 0, target: null });
     expect(host.elements.get("menu-background")?.muted).toBe(false);
     expect(host.elements.get("menu-audio")?.muted).toBe(false);
     expect(host.audioElements.every((audio) => !audio.muted)).toBe(true);
+    expect(host.elements.get("audio-mute-toggle")?.attributes.get("aria-pressed")).toBe("false");
 
     await host.fakeWindow.fire("keyup", { code: "Enter" });
     await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(host.elements.get("menu-background")?.muted).toBe(true);
     expect(host.elements.get("menu-audio")?.muted).toBe(true);
+    const muteToggle = host.elements.get("audio-mute-toggle")!;
+    const playCount = host.mediaPlayCalls.length;
+    await host.fakeWindow.fire("pointerdown", { type: "pointerdown", target: muteToggle });
+    await host.fakeWindow.fire("click", { type: "click", detail: 1, target: muteToggle });
+    await muteToggle.fire("click");
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
+    expect(muteToggle.attributes.get("aria-pressed")).toBe("false");
+    expect(host.mediaPlayCalls).toHaveLength(playCount);
+    await host.fakeWindow.fire("keyup", { code: "Enter" });
+    await host.fakeWindow.fire("keydown", { code: "Enter", preventDefault() {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await host.fakeWindow.fire("pointerdown", { target: null });
     expect(host.elements.get("menu-background")?.muted).toBe(false);
     expect(host.elements.get("menu-audio")?.muted).toBe(false);
@@ -537,6 +578,9 @@ describe("browser boot", () => {
     expect(host.elements.get("menu-background")?.muted).toBe(true);
     expect(host.elements.get("menu-audio")?.muted).toBe(true);
     expect(host.audioElements.every((audio) => audio.muted)).toBe(true);
+    await host.elements.get("audio-mute-toggle")!.fire("click");
+    expect(host.elements.get("menu-audio")?.muted).toBe(false);
+    expect(host.elements.get("audio-mute-toggle")?.attributes.get("aria-pressed")).toBe("false");
   });
 
   it("keeps a manual mute across an external handoff and later page input", async () => {

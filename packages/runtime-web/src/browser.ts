@@ -202,7 +202,13 @@ async function boot(): Promise<void> {
       while (pendingActions.length) {
         const action = pendingActions.shift()!;
         const inputController = popupController ?? controller;
-        if (action.type === "SET_STREAM") {
+        if (action.type === "PLAY_STOP" && action.payload.implicit === true) {
+          continue;
+        } else if (action.type === "PLAY_STOP" && playbackBridge.resumeStoppedMenu) {
+          menuStopped = true;
+          updateAudioControl();
+          mediaActions.push(Promise.resolve(playbackBridge.dispatch(action)));
+        } else if (action.type === "SET_STREAM") {
           if (typeof action.payload.interactiveGraphicsStream === "number") activeIgStreamNumber = currentIgStreamNumber();
           if (typeof action.payload.interactiveGraphicsStream === "number" && activeMenuPlaylist !== null && data.menuPlaylistIds?.includes(activeMenuPlaylist)) {
             const target = menuSceneTarget(activeMenuPlaylist, activeMenuPlayItem, currentIgStreamNumber(), false);
@@ -323,9 +329,16 @@ async function boot(): Promise<void> {
           continue;
         } else if (data.externalTargets && ["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK"].includes(action.type) && !(action.type === "PLAY_PLAYLIST" && typeof action.payload.playlist === "number" && playlistHasMedia(action.payload.playlist))) {
           closePopup();
-          const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest);
+          if (!menuStopped) setMenuMuted(true);
+          const result = resolveExternalPlayTarget(data.externalTargets, { type: action.type, ...action.payload } as ExternalPlayRequest, { allowMissing: true });
           const bdmvPath = globalThis.__BDMV_BDMV_PATH__;
-          const handoff = requestExternalPlayback({ target: result, bdmvPath, platform: navigator.userAgent, pageUrl: location.href, navigate: (url) => { location.href = url; } });
+          const handoff = requestExternalPlayback({
+            target: result,
+            bdmvPath,
+            platform: navigator.userAgent,
+            pageUrl: location.href,
+            navigate: (url) => { location.href = url; },
+          });
           if (handoff.status !== "requested") {
             const source = handoff.source ? ` (${handoff.source.path} @ ${handoff.source.offset})` : "";
             const diagnostic = `${handoff.code}: ${handoff.message}${source}`;
@@ -334,9 +347,9 @@ async function boot(): Promise<void> {
             vm.releaseExternalPlayback(action);
             continue;
           }
-          setMenuMuted(true);
           report(`${action.type} ${action.payload.playlist ?? action.payload.playMark ?? "?"} → ${handoff.status} ${handoff.target.item.streamPath}${handoff.target.seekTime90k !== null ? ` at ${format90kSeconds(handoff.target.seekTime90k)}s` : ""}`);
-          showStatus(`Requested ${handoff.target.item.streamPath} in the external player.`);
+          if (handoff.target.item.present) showStatus(`Requested ${handoff.target.item.streamPath} in the external player.`);
+          else showStatus(`Warning: ${handoff.target.item.streamPath} is marked missing; the external player request was sent.`, { persist: true });
           vm.releaseExternalPlayback(action);
         } else {
           if (["PLAY_PLAYLIST", "PLAY_PLAYLIST_ITEM", "PLAY_PLAYLIST_MARK", "TOP_MENU", "MENU_RETURN"].includes(action.type)) closePopup();
@@ -536,63 +549,48 @@ async function boot(): Promise<void> {
     };
     let menuMuted = false;
     let manualMuted = false;
-    let removeAutoMuteRestore: (() => void) | null = null;
-    let armAutoMuteTimer: ReturnType<typeof setTimeout> | undefined;
+    let menuStopped = false;
+    const updateAudioControl = () => {
+      muteToggle.setAttribute("data-playback-stopped", String(menuStopped));
+      muteToggle.setAttribute("aria-pressed", String(menuMuted));
+      muteToggle.setAttribute("aria-label", menuStopped ? "Resume menu playback" : menuMuted ? "Unmute menu audio" : "Mute menu audio");
+      muteToggle.title = menuStopped ? "Resume menu playback" : menuMuted ? "Unmute menu audio" : "Mute menu audio";
+    };
     const applyMenuMuted = (muted: boolean) => {
       menuMuted = muted;
       if (video) video.muted = muted;
       if (audio) audio.muted = muted;
       soundPlayer.setMuted(muted);
-      muteToggle.setAttribute("aria-pressed", String(muted));
-      muteToggle.setAttribute("aria-label", muted ? "Unmute menu audio" : "Mute menu audio");
-      muteToggle.title = muted ? "Unmute menu audio" : "Mute menu audio";
-    };
-    const disarmAutoMuteRestore = () => {
-      if (armAutoMuteTimer !== undefined) clearTimeout(armAutoMuteTimer);
-      armAutoMuteTimer = undefined;
-      removeAutoMuteRestore?.();
-      removeAutoMuteRestore = null;
+      updateAudioControl();
     };
     // An external handoff mutes the page without expressing user intent. Restore
     // that automatic mute on the next input; keep an explicit mute in place.
     const isMuteControl = (event: Event): boolean => {
+      if (event.composedPath?.().includes(muteToggle)) return true;
       const target = event.target as (Element & { closest?: (selector: string) => Element | null }) | null;
       if (target === muteToggle) return true;
       return !!target && typeof target.closest === "function" && target.closest("#audio-mute-toggle") !== null;
     };
     const restoreAutoMutedMenu = (event: Event) => {
-      if (manualMuted || !menuMuted || isMuteControl(event)) return;
+      if (menuStopped || manualMuted || !menuMuted || isMuteControl(event) || (event.type === "click" && (event as MouseEvent).detail > 0)) return;
       applyMenuMuted(false);
-      disarmAutoMuteRestore();
     };
-    const armAutoMuteRestore = () => {
-      if (removeAutoMuteRestore) return;
-      window.addEventListener("keydown", restoreAutoMutedMenu, true);
-      window.addEventListener("pointerdown", restoreAutoMutedMenu, true);
-      window.addEventListener("click", restoreAutoMutedMenu, true);
-      removeAutoMuteRestore = () => {
-        window.removeEventListener("keydown", restoreAutoMutedMenu, true);
-        window.removeEventListener("pointerdown", restoreAutoMutedMenu, true);
-        window.removeEventListener("click", restoreAutoMutedMenu, true);
-      };
-    };
-    const armAutoMuteRestoreAfterDispatch = () => {
-      if (armAutoMuteTimer !== undefined) clearTimeout(armAutoMuteTimer);
-      armAutoMuteTimer = setTimeout(() => {
-        armAutoMuteTimer = undefined;
-        if (menuMuted && !manualMuted) armAutoMuteRestore();
-      }, 0);
-    };
+    window.addEventListener("keydown", restoreAutoMutedMenu, true);
+    window.addEventListener("pointerdown", restoreAutoMutedMenu, true);
+    window.addEventListener("click", restoreAutoMutedMenu, true);
     const setMenuMuted = (muted: boolean, manual = false) => {
-      if (manual) {
-        manualMuted = muted;
-        disarmAutoMuteRestore();
-      }
+      if (manual) manualMuted = muted;
       applyMenuMuted(muted);
-      if (muted && !manual && !manualMuted) armAutoMuteRestoreAfterDispatch();
-      else if (!muted) disarmAutoMuteRestore();
     };
-    muteToggle.addEventListener("click", () => setMenuMuted(!menuMuted, true));
+    applyMenuMuted(false);
+    muteToggle.addEventListener("click", () => {
+      if (!menuStopped) { setMenuMuted(!menuMuted, true); return; }
+      void playbackBridge.resumeStoppedMenu?.().then((started) => {
+        if (started) { menuStopped = false; updateAudioControl(); }
+      });
+    });
+    muteToggle.addEventListener("keydown", (event) => event.stopPropagation());
+    muteToggle.addEventListener("keyup", (event) => event.stopPropagation());
     const redraw = () => {
       if (!controller || !scene) return;
       const rect = canvas.getBoundingClientRect(); const context = canvas.getContext("2d");
@@ -666,11 +664,14 @@ async function boot(): Promise<void> {
     // stays async and returns the preview promise.
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     start.addEventListener("click", startMenuPreview);
-    window.addEventListener("pagehide", () => {
+    window.addEventListener("pagehide", (event) => {
+      if (event.persisted) return;
       removeKeyboard?.(); removePointer?.();
       removeBdjKeyboard?.(); removeBdjPointer?.(); bdjRuntimeHandle?.close();
-      disarmAutoMuteRestore();
-    }, { once: true });
+      window.removeEventListener("keydown", restoreAutoMutedMenu, true);
+      window.removeEventListener("pointerdown", restoreAutoMutedMenu, true);
+      window.removeEventListener("click", restoreAutoMutedMenu, true);
+    });
   } catch (error) { visibleError(error); }
 }
 

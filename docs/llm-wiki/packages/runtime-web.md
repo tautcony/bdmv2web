@@ -79,7 +79,7 @@ new MenuController(scene: MenuScene, vm: RuntimeVmPort, hooks?: RuntimeHooks, sc
 | `MenuLoopPlaybackBridge` | 包内 `background.mp4` + 音轨 | 播放/切列表/切音轨；`ended` → `MEDIA_ENDED`；`timeupdate` 每秒 → `TIME_UPDATED`（45 kHz）；循环背景不结束；缺资产 → `MEDIA_UNAVAILABLE` |
 | `LinearPlaybackBridge` | 线性拼接资产 | 每个资产带自己的时间线映射，`PLAY_PLAYLIST_ITEM`/`MARK` 通过显式操作数表换算，不用文件名或 ID 算术 |
 
-`MenuLoopPlaybackBridge` 会在外部播放请求时自动静音菜单音频；按键/点击恢复自动静音，手动静音保持不变。
+`MenuLoopPlaybackBridge` 会在外部播放请求时自动静音菜单音频；按键/点击恢复自动静音，手动静音保持不变。右下角图标显示静音开关状态；媒体尚未启动时，图标仍显示当前静音状态。
 
 ## 时钟
 

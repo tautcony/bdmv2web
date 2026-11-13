@@ -33,6 +33,7 @@ export interface PlaybackBridge {
   /** Primary audio stream number confirmed by the active package media element. */
   readonly selectedPrimaryAudioStream?: number | null;
   startMenuBackground?(): Promise<boolean>;
+  resumeStoppedMenu?(): Promise<boolean>;
   /** Switch the background to a packaged PlayItem without a VM playback wait.
    * `LinkPI` moves inside the current playlist and never emits a media response,
    * so the scene switch must not be correlated with a VM event. */
@@ -221,6 +222,9 @@ export class MenuLoopPlaybackBridge implements PlaybackBridge {
     }
     return this.startMedia();
   }
+
+
+  async resumeStoppedMenu(): Promise<boolean> { return this.startMedia(); }
 
   private async startMedia(response?: PlaybackAction): Promise<boolean> {
     const mediaSequence = this.mediaSequence;
