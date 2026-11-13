@@ -67,10 +67,10 @@ export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["play
       if (igStreamNumber !== undefined && streamNumber !== igStreamNumber) continue;
       if (stream.pid === null) continue;
       if (stream.streamType === 1) {
-        targets.push({ clipId: item.clipId, pid: stream.pid!, igStreamNumber: streamNumber });
+        targets.push({ clipId: item.clipId, pid: stream.pid, igStreamNumber: streamNumber });
       } else if (stream.streamType === 2 && stream.subPathId !== null && stream.subClipId !== null) {
         const clip = playlist.subPaths[stream.subPathId]?.items[stream.subClipId];
-        if (clip) targets.push({ clipId: clip.clipId, pid: stream.pid!, igStreamNumber: streamNumber });
+        if (clip) targets.push({ clipId: clip.clipId, pid: stream.pid, igStreamNumber: streamNumber });
       }
     }
     if (igStreams.length === 0) {
@@ -84,8 +84,8 @@ export function menuIgsSceneTargets(disc: ParsedDisc, playlist: ParsedDisc["play
 function clpiPrimaryIgsTargets(disc: ParsedDisc, clipId: string): MenuIgsSceneTarget[] {
   const clipInfo = disc.clips.find((clip) => clip.id.toLocaleLowerCase("en-US") === clipId.toLocaleLowerCase("en-US"));
   return (clipInfo?.programs.flatMap((program) => program.streams) ?? [])
-    .filter((stream) => stream.codingType === 0x91 && stream.pid !== null)
-    .map((stream, index) => ({ clipId, pid: stream.pid!, igStreamNumber: index + 1 }));
+    .filter((stream) => stream.codingType === 0x91)
+    .map((stream, index) => ({ clipId, pid: stream.pid, igStreamNumber: index + 1 }));
 }
 
 export function findMenuScene(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number], scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], playItemIndex?: number, igStreamNumber?: number) {
