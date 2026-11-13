@@ -55,7 +55,7 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 
 1. 校验输入与时间区间；`loopStart45k` 缺省时从 `inTime45k` 起。
 2. 大小记录：开始时统计现有输出目录大小，并按配置码率估算视频与音频大小；单个资产估算超过 `maxAssetBytes` 时编码前失败。
-3. `reuseFromDirectory` 时先尝试复用：只有旧计划（`planPath`，默认 `media-plan.json`）与本次播放列表、clip、区间、流、编码参数一致才复用，否则重编码。`reuseAlternatives` 提供该单元在旧版本里的目录/计划位置，按顺序在前一次失败后尝试，因此目录模板改名后仍能从旧包或旧 staging 复用；资产复制到本次的名字下。旧目录带 `asset-manifest.json` 时按其中记录的流的 codec 与时长复用；只有计划与资产时由 `ffprobe` 读回这些事实，资产时长与计划的差超过 0.25s 视为未写完，该 clip 重编码。
+3. `reuseFromDirectory` 时先尝试复用：只有旧计划（`planPath`，默认 `media-plan.json`）与本次播放列表、clip、区间、流、编码参数一致才复用，否则重编码。`reuseAlternatives` 提供该单元在旧版本里的目录/计划位置，按顺序在前一次失败后尝试，因此目录模板改名后仍能从旧包或旧 staging 复用；资产复制到本次的名字下。旧目录带 `asset-manifest.json` 时，按其中 `media`/`menuMedia` 里 `playlistId`+`playItemIndex` 的指针找到 `mediaPlans[planPath]` 记录，用它的 codec 与时长复用；只有计划与资产时由 `ffprobe` 读回这些事实，资产时长与计划的差超过 0.25s 视为未写完，该 clip 重编码。
 4. 检查工具：`ffmpeg -version`、`ffprobe -version`、`ffmpeg -filters`；`ffmpeg -encoders` 必须含所选视频编码器（`codec: "hevc"` → `libx265`，`"h264"` → `libx264`）与 `aac`（缺 → `MEDIA_ENCODER_UNAVAILABLE`）；工具不存在 → `MEDIA_TOOL_UNAVAILABLE`。这四次探测按 `MediaProcessRunner` 缓存在 `WeakMap` 里（`toolFacts()`），一个包内只跑一次；探测失败不缓存，下一次调用重试。
 5. `ffprobe` 读取源时间线与流；`codec` 只接受 `h264` / `hevc`；按 PID 找视频与音频流。视频流的色彩字段（`pix_fmt`、`color_*`、`bits_per_raw_sample`、`side_data_list`）交由 `readSourceColor` 归类动态范围。
 6. 由 `planVideoColor` 定下输出色彩标签、位深与滤镜链（见下节「HDR 与色彩管线」）。

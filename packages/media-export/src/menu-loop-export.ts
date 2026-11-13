@@ -305,17 +305,12 @@ async function reuseMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMe
   const priorPlanPath = prior?.planPath ?? planPath;
   const priorPlan = await readPriorPlan(resolve(sourceDirectory, priorPlanPath));
   if (priorPlan === null || !matchesReusablePlan(priorPlan, input, encoding)) return null;
-  const priorManifest = await readPriorManifest(sourceDirectory) ?? await probePriorManifest(sourceDirectory, input, priorDirectory, priorPlan, probe);
-  if (priorManifest === null) return null;
+  const priorManifest = await readPriorManifest(sourceDirectory);
+  const media = priorManifest === null ? await probePriorManifest(sourceDirectory, input, priorDirectory, priorPlan, probe) : packagedMediaFor(priorManifest, input);
+  if (media === null) return null;
   const reusableEncoding: MenuLoopEncoding = { mode: priorPlan.encoding.video.mode, codec: encoding.codec, crf: encoding.crf, preset: encoding.preset, color: priorPlan.encoding.video.color };
-  type PriorPackagedMedia = { plan?: { playlistId?: string; playItemIndex?: number }; background?: Record<string, unknown>; audioTracks?: Array<Record<string, unknown>> };
-  const priorMenuMedia = Array.isArray(priorManifest.menuMedia) ? priorManifest.menuMedia as PriorPackagedMedia[] : [];
-  // One menu playlist can carry several packaged PlayItems; the plan must match
-  // the PlayItem as well as the playlist or a sub-menu reuses the Top Menu media.
-  const media = [priorManifest.media as PriorPackagedMedia | undefined, ...priorMenuMedia]
-    .find((candidate) => candidate?.plan?.playlistId === input.playlistId && (candidate.plan.playItemIndex ?? 0) === input.playItemIndex);
-  const priorBackground = media?.background;
-  const priorAudioTracks = media?.audioTracks;
+  const priorBackground = media.background;
+  const priorAudioTracks = media.audioTracks;
   const priorBackgroundPath = safePriorPath(priorBackground?.path) ?? safePriorPath(priorPlan.assetPaths?.background) ?? `${priorDirectory}/background.mp4`;
   const backgroundPath = `${assetDirectory}/background.mp4`;
   if (!priorBackground || priorBackground.path !== priorBackgroundPath || priorBackground.codec !== encoding.codec || priorBackground.pid !== input.videoPid
@@ -416,6 +411,34 @@ async function readPriorManifest(sourceDirectory: string): Promise<Record<string
   try { return JSON.parse(await readFile(resolve(sourceDirectory, "asset-manifest.json"), "utf8")) as Record<string, unknown>; } catch { return null; }
 }
 
+/** One encoded media unit as the package manifests record it. */
+type PriorPackagedMedia = {
+  plan?: { playlistId?: string; playItemIndex?: number };
+  background?: Record<string, unknown>;
+  audioTracks?: Array<Record<string, unknown>>;
+};
+
+/**
+ * The packaged record a manifest indexes for one PlayItem.
+ *
+ * `media` and `menuMedia` list each PlayItem once as
+ * `{ playlistId, playItemIndex, planPath }`; the plan's own record — plan,
+ * background, audio tracks — sits once per encoded unit in `mediaPlans`, because
+ * a menu playlist can point hundreds of PlayItems at one encoded unit.
+ */
+function packagedMediaFor(manifest: Record<string, unknown>, input: MenuLoopMediaInput): PriorPackagedMedia | null {
+  const plans: Record<string, unknown> = isRecordValue(manifest.mediaPlans) ? manifest.mediaPlans : {};
+  const listed: unknown[] = Array.isArray(manifest.menuMedia) ? manifest.menuMedia as unknown[] : [];
+  const pointers: unknown[] = [manifest.media, ...listed];
+  const pointer = pointers.find((candidate) => isRecordValue(candidate) && candidate.playlistId === input.playlistId && (candidate.playItemIndex ?? 0) === input.playItemIndex);
+  const record = isRecordValue(pointer) && typeof pointer.planPath === "string" ? plans[pointer.planPath] : undefined;
+  return isRecordValue(record) ? record : null;
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /**
  * Manifest facts for a directory that has none.
  *
@@ -425,7 +448,7 @@ async function readPriorManifest(sourceDirectory: string): Promise<Record<string
  * planned kind and match the plan's duration, which keeps a partly written file out
  * of the reuse path and sends that clip back through the encoder.
  */
-async function probePriorManifest(sourceDirectory: string, input: MenuLoopMediaInput, assetDirectory: string, planned: MediaPlan, probe: ReuseProbe): Promise<Record<string, unknown> | null> {
+async function probePriorManifest(sourceDirectory: string, input: MenuLoopMediaInput, assetDirectory: string, planned: MediaPlan, probe: ReuseProbe): Promise<PriorPackagedMedia | null> {
   const backgroundPath = safePriorPath(planned.assetPaths?.background) ?? `${assetDirectory}/background.mp4`;
   try {
     const backgroundProbe = await probeEncodedOutput(probe.ffprobe, resolve(sourceDirectory, backgroundPath), probe.timeoutMs, probe.invoke);
@@ -442,11 +465,11 @@ async function probePriorManifest(sourceDirectory: string, input: MenuLoopMediaI
       assertDuration(duration, planned.durationSeconds, path);
       audioTracks.push({ path, codec: audio.codec_name, pid: track.pid, streamNumber: track.streamNumber, language: track.language, durationSeconds: duration });
     }
-    return { media: {
+    return {
       plan: { playlistId: planned.playlistId, playItemIndex: planned.playItemIndex },
       background: { path: backgroundPath, codec: background.codec_name, pid: planned.videoPid, width: background.width, height: background.height, durationSeconds: backgroundDuration, loop: loopBackground(input) },
       audioTracks,
-    } };
+    };
   } catch { return null; }
 }
 

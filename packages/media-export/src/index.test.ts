@@ -39,11 +39,11 @@ function mediaRunner(forInput: MenuLoopMediaInput, calls: Array<{ executable: st
 }
 
 async function writeReusableMediaManifest(directory: string, result: Awaited<ReturnType<typeof exportMenuLoopMedia>>): Promise<void> {
-  await writeFile(join(directory, "asset-manifest.json"), JSON.stringify({ media: {
-    plan: { playlistId: result.plan.playlistId, playItemIndex: result.plan.playItemIndex },
-    background: result.background,
-    audioTracks: result.audioTracks,
-  } }));
+  const planPath = "media-plans/playlist-00003-pi00-clip-00004.json";
+  await writeFile(join(directory, "asset-manifest.json"), JSON.stringify({
+    mediaPlans: { [planPath]: { plan: { playlistId: result.plan.playlistId, playItemIndex: result.plan.playItemIndex }, background: result.background, audioTracks: result.audioTracks } },
+    media: { playlistId: result.plan.playlistId, playItemIndex: result.plan.playItemIndex, planPath },
+  }));
 }
 
 describe("menu-loop media export", () => {
