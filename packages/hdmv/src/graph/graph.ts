@@ -1,5 +1,5 @@
 import type { MovieObject, ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
-import { decodeInstruction, type OpcodeName } from "../bytecode/decode.js";
+import { decodeInstruction, type DecodedInstruction, type OpcodeName } from "../bytecode/decode.js";
 import type { VmProgram } from "../virtual-machine/vm.js";
 
 export interface NavigationGraphNode { id: string; kind: "object" | "command"; objectId: number; commandIndex?: number; source: SourceLocation | null; status: "known" | "unknown"; }
@@ -8,10 +8,48 @@ export interface NavigationGraph { nodes: NavigationGraphNode[]; edges: Navigati
 export interface GraphOptions { maxStates?: number; entries?: ParsedDisc["entries"]; context?: "object" | "playlist"; }
 const UNKNOWN_SOURCE: SourceLocation = { path: "<unknown-command>", origin: "primary", offset: "0" };
 
+const COMPARE_OPCODES: ReadonlySet<OpcodeName> = new Set(["BC", "EQ", "NE", "GE", "GT", "LE", "LT"]);
+const JUMP_OPCODES: ReadonlySet<OpcodeName> = new Set(["JUMP_OBJECT", "CALL_OBJECT", "JUMP_TITLE", "CALL_TITLE", "PLAY_PL"]);
+
 function terminatesFlow(opcode: OpcodeName | null | undefined, context: "object" | "playlist"): boolean {
   if (opcode === "JUMP_TITLE") return true;
   if (["LINK_PI", "LINK_MK", "TERMINATE_PL"].includes(opcode ?? "")) return context === "playlist";
   return ["GOTO", "BREAK", "JUMP_OBJECT", "CALL_OBJECT", "CALL_TITLE", "RESUME", "PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"].includes(opcode ?? "");
+}
+
+/**
+ * Register immediates a navigation jump can rely on. A `MOVE gpr, IMMEDIATE`
+ * directly before a jump carries that constant on every path to the jump, so
+ * the jump resolves through it. Guards keep this conservative: the jump must
+ * have the linear predecessor as its only path (no `GOTO` lands on it), and
+ * the `MOVE` must run unconditionally (no compare skips it).
+ */
+function createConstantPropagation(decoded: Array<DecodedInstruction | undefined>): (opcode: OpcodeName, index: number) => number | null {
+  const gotoTargets = new Set<number>();
+  let untrackedGoto = false;
+  for (let index = 0; index < decoded.length; index++) {
+    const d = decoded[index];
+    if (d?.opcode !== "GOTO") continue;
+    const operand = d.operands[0];
+    if (operand?.kind === "immediate") gotoTargets.add(operand.value);
+    else untrackedGoto = true;
+  }
+  const compareSkipped = new Set<number>();
+  for (let index = 0; index < decoded.length; index++) {
+    const opcode = decoded[index]?.opcode;
+    if (opcode && COMPARE_OPCODES.has(opcode)) compareSkipped.add(index + 1);
+  }
+  if (untrackedGoto) return () => null;
+  return (opcode, index) => {
+    if (!JUMP_OPCODES.has(opcode)) return null;
+    const operand = decoded[index]?.operands[0];
+    if (operand?.kind !== "gpr" || gotoTargets.has(index) || compareSkipped.has(index - 1)) return null;
+    const prev = decoded[index - 1];
+    if (prev?.opcode !== "MOVE" || prev.status === "invalid") return null;
+    const [dst, src] = prev.operands;
+    if (dst?.kind !== "gpr" || dst.value !== operand.value || src?.kind !== "immediate") return null;
+    return src.value;
+  };
 }
 
 export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, appendedPrograms: VmProgram[] = [], options: GraphOptions = {}): NavigationGraph {
@@ -22,6 +60,8 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
   for (const p of all) {
     const program = p; const objectSource = "source" in program ? program.source : null;
     nodes.push({ id: `object:${p.id}`, kind: "object", objectId: p.id, source: objectSource, status: "known" });
+    const decoded: Array<DecodedInstruction | undefined> = program.instructions.map((row) => { try { return decodeInstruction(row); } catch { return undefined; } });
+    const constantAt = createConstantPropagation(decoded);
     for (let index = 0; index < program.instructions.length; index++) {
       if (explored >= maxStates) {
         complete = false; diagnostics.push("VM_EXECUTION_LIMIT: graph state budget exhausted; unexplored states remain unknown");
@@ -29,8 +69,8 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
         break;
       }
       explored++;
-      const row = program.instructions[index]!; let d;
-      try { d = decodeInstruction(row); } catch { diagnostics.push(`decode-failed:${p.id}:${index}`); }
+      const row = program.instructions[index]!; const d = decoded[index];
+      if (d === undefined) diagnostics.push(`decode-failed:${p.id}:${index}`);
       const id = `command:${p.id}:${index}`; const source = d?.source ?? (typeof row === "object" && !(row instanceof Uint8Array) && "source" in row ? row.source : UNKNOWN_SOURCE);
       nodes.push({ id, kind: "command", objectId: p.id, commandIndex: index, source: source ?? null, status: d?.opcode && d.status !== "invalid" ? "known" : "unknown" });
       if (d?.status === "invalid") {
@@ -42,16 +82,20 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
         const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : null; const known = target !== null && target < program.instructions.length;
         edges.push({ from: id, to: known ? `command:${p.id}:${target}` : null, kind: "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
       } else if (d?.opcode === "JUMP_OBJECT" || d?.opcode === "CALL_OBJECT") {
-        const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : null; const known = target !== null && byId.has(target);
+        const operand = d.operands[0]; const target = operand?.kind === "immediate" ? operand.value : constantAt(d.opcode, index);
+        const known = target !== null && byId.has(target);
         edges.push({ from: id, to: known ? `object:${target}` : null, kind: d.opcode === "CALL_OBJECT" ? "call" : "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
         if (!known) diagnostics.push(`dynamic-or-missing-target:${p.id}:${index}`);
       } else if (["PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"].includes(d?.opcode ?? "")) {
         const operand = d?.operands[0];
-        const target = operand?.kind === "immediate" && operand.value <= 99999 ? `playlist:${String(operand.value).padStart(5, "0")}` : null;
+        const immediate = operand?.kind === "immediate" && operand.value <= 99999 ? operand.value : null;
+        const propagated = d?.opcode === "PLAY_PL" && operand?.kind === "gpr" ? constantAt(d.opcode, index) : null;
+        const playlist = immediate ?? (propagated !== null && propagated <= 99999 ? propagated : null);
+        const target = playlist !== null ? `playlist:${String(playlist).padStart(5, "0")}` : null;
         edges.push({ from: id, to: target, kind: "play", condition: null, source, resolution: target === null ? "unresolved" : "resolved" });
         if (index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: "after playlist returns", source, resolution: "resolved" });
       } else if (d?.opcode === "JUMP_TITLE" || d?.opcode === "CALL_TITLE") {
-        const operand = d.operands[0]; const title = operand?.kind === "immediate" ? operand.value : null;
+        const operand = d.operands[0]; const title = operand?.kind === "immediate" ? operand.value : constantAt(d.opcode, index);
         const entries = options.entries;
         const entry = title === 0 ? entries?.find((item) => item.kind === "topMenu")
           : title === 0xffff ? entries?.find((item) => item.kind === "firstPlay")

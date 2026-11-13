@@ -38,13 +38,14 @@ describe("Tamako current-source headless navigation", () => {
     const adapted = adaptIgsScene(rawScene!, extraction.assets, { allowMissingAssets: true });
     const scene = adapted.scene as unknown as MenuScene;
     const vmPrograms = disc.movieObjects.map(({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }) => ({ id, instructions, resumeIntention, menuCallMask, titleSearchMask }));
-    const movieGraph = buildNavigationGraph(disc.movieObjects, [], { entries: disc.entries });
     // IGS command sourceOffset is inside the decoded ICS command records; scene.packetOffset is a transport byte offset mapped by the sparse-packet sidecar.
-    const buttonGraphs = rawScene!.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length).map((button, id) => buildNavigationGraph([{ id, instructions: button.commands.map((command) => {
+    // Button programs share the MovieObject graph so title/object jumps resolve; the id base keeps `object:<id>` unique.
+    const buttonPrograms = rawScene!.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length)).map((button, programId) => ({ id: 1_000_000 + programId, instructions: button.commands.map((command) => {
       const bytes = Buffer.from(command.bytes);
       return { bytes: bytes.toString("hex"), words: [bytes.readUInt32BE(0), bytes.readUInt32BE(4), bytes.readUInt32BE(8)] as [number, number, number], source: { path: `BDMV/STREAM/${rawScene!.clipId}.m2ts`, origin: "primary" as const, offset: command.sourceOffset } };
-    }) }])));
-    const targets = createExternalMediaTargets(disc, computeMediaClosure(disc, movieGraph, buttonGraphs));
+    }) }));
+    const buttonRoots = buttonPrograms.map((program, programId) => ({ nodeId: `object:${program.id}`, programId }));
+    const targets = createExternalMediaTargets(disc, computeMediaClosure(disc, buildNavigationGraph(disc.movieObjects, buttonPrograms, { entries: disc.entries }), buttonRoots));
     const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && typeof entry.target.target === "number");
     expect(firstPlay).toBeDefined();
     type RouteStep = { page: number; button: number; via: "keyboard" | "pointer" };

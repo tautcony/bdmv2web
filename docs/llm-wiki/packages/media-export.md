@@ -31,11 +31,12 @@
 ## 媒体闭包
 
 ```ts
-computeMediaClosure(disc, movieGraph, buttonGraphs?, { maxStates?: number }): MediaClosure
+computeMediaClosure(disc, movieGraph, buttonRoots?, { maxStates?: number }): MediaClosure
 ```
 
-- 输入：M1 结构图 + M3 MovieObject 导航图 + 按钮程序图。
-- 合并规则：条件边只要目标已知就按并集遍历；目标未知/寄存器目标/预算耗尽 → 记 `unknown`，并把范围放宽到全部已声明播放列表（保守）。
+- 输入：M1 结构图 + 一张同时承载 MovieObject 与全部按钮程序的导航图；`buttonRoots`（`{ nodeId, programId }`）声明每个按钮程序作为独立根。按钮程序的 `CALL_TITLE`/`JUMP_TITLE`/`*_OBJECT` 与 MovieObject 共用同一 object table 解析。
+- 合并规则：条件边只要目标已知就按并集遍历；紧邻 `MOVE gpr, IMMEDIATE` 装载的寄存器跳转按常量解析（`MOVE` 与跳转需直连、跳转不得是 `GOTO` 目标、`MOVE` 不得被比较指令条件跳过）；其余寄存器目标/预算耗尽 → 记 `unknown`，并把范围放宽到全部已声明播放列表（保守）。
+- `maxStates` 按整个闭包中去重的导航节点计数：按钮根重走共享图收集 route 证据时不重复扣减预算。
 - 输出：`playlistIds`、`clipIds`、`streamIds`、`requiredNodeIds`、`routes`（每条含 `origin: entry|button-program|conservative-fallback` 与边来源）、`unknown`、`complete`、`explored`。
 - 路由去重按 `playlistId + origin + entryId + buttonProgramId + 边签名`。
 

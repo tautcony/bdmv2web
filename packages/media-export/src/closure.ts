@@ -11,6 +11,13 @@ export interface MediaClosureRoute {
   buttonProgramId: number | null;
   navigationEdges: Array<{ from: string; to: string | null; kind: string; condition: string | null; source: SourceLocation }>;
 }
+/** A button program explored from the same navigation graph that holds the MovieObjects. */
+export interface MediaClosureButtonRoot {
+  /** Node id of the button program inside that graph. */
+  nodeId: string;
+  /** Disc-local button program number used for route provenance and diagnostics. */
+  programId: number;
+}
 export interface MediaClosure {
   playlistIds: string[];
   clipIds: string[];
@@ -28,11 +35,15 @@ const MEDIA_NODE_TYPES = new Set(["playlist", "playItem", "subPath", "clip", "cl
  * Merge M1 structural roots with M3 object/control-flow graphs. Conditional
  * edges with known destinations are both traversed as a union. Unresolved
  * navigation widens the package to every declared playlist and remains unknown.
+ *
+ * `movieGraph` must hold the MovieObjects and every explored button program.
+ * Button programs resolve `CALL_TITLE`/`JUMP_TITLE`/`*_OBJECT` through the same
+ * object table, so a title jump from a menu button reaches its playlists.
  */
 export function computeMediaClosure(
   disc: ParsedDisc,
   movieGraph: NavigationGraph,
-  buttonGraphs: readonly NavigationGraph[] = [],
+  buttonRoots: readonly MediaClosureButtonRoot[] = [],
   options: MediaClosureOptions = {},
 ): MediaClosure {
   const maxStates = options.maxStates ?? 100_000;
@@ -104,12 +115,27 @@ export function computeMediaClosure(
     }
   };
 
+  // One navigation graph now carries every MovieObject and button program, and
+  // each button root walks it. Index each graph once instead of per root; the
+  // index also tracks first-ever visits so root re-walks of the shared graph
+  // collect route provenance without re-charging the exploration budget.
+  const graphIndexes = new Map<NavigationGraph, { nodes: Map<string, NavigationGraphNode>; edges: Map<string, NavigationGraphEdge[]>; visited: Set<string> }>();
+  const indexGraph = (graph: NavigationGraph) => {
+    const cached = graphIndexes.get(graph);
+    if (cached) return cached;
+    const edges = new Map<string, NavigationGraphEdge[]>();
+    for (const edge of graph.edges) edges.set(edge.from, [...(edges.get(edge.from) ?? []), edge]);
+    const index = { nodes: new Map(graph.nodes.map((node) => [node.id, node])), edges, visited: new Set<string>() };
+    graphIndexes.set(graph, index);
+    return index;
+  };
+  const reportedIncomplete = new Set<NavigationGraph>();
+
   const runNavigation = (graph: NavigationGraph, roots: Array<{ id: string; entryId: string | null; entrySource: SourceLocation | null; buttonProgramId: number | null; origin: "entry" | "button-program" }>, label: string): void => {
-    const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
-    const edgesBySource = new Map<string, NavigationGraphEdge[]>();
-    for (const edge of graph.edges) edgesBySource.set(edge.from, [...(edgesBySource.get(edge.from) ?? []), edge]);
-    if (!graph.complete) {
-      markUnknown("MEDIA_NAVIGATION_INCOMPLETE", `${label} navigation graph is incomplete: ${graph.diagnostics.join("; ") || "unresolved states remain"}.`);
+    const { nodes, edges: edgesBySource, visited } = indexGraph(graph);
+    if (!graph.complete && !reportedIncomplete.has(graph)) {
+      reportedIncomplete.add(graph);
+      markUnknown("MEDIA_NAVIGATION_INCOMPLETE", `navigation graph is incomplete: ${graph.diagnostics.join("; ") || "unresolved states remain"}.`);
       widenToAllPlaylists();
     }
     for (const root of roots) {
@@ -139,7 +165,7 @@ export function computeMediaClosure(
         widenToAllPlaylists();
         return;
       }
-      explored++;
+      if (!visited.has(id)) { visited.add(id); explored++; }
       for (const edge of edgesBySource.get(id) ?? []) {
         observedEdges.set(`${edge.from}\0${edge.to ?? ""}\0${edge.kind}\0${edge.condition ?? ""}\0${edge.source.path}\0${edge.source.offset}`, edge);
         followNavigationEdge(edge, nodes, pending, label, root, [...observedEdges.values()]);
@@ -197,7 +223,9 @@ export function computeMediaClosure(
     }
   }
   runNavigation(movieGraph, entryRoots, "MovieObject");
-  buttonGraphs.forEach((graph, index) => runNavigation(graph, graph.nodes.filter((node) => node.kind === "object").map((node) => ({ id: node.id, entryId: null, entrySource: null, buttonProgramId: node.objectId, origin: "button-program" as const })), `button program ${index}`));
+  for (const root of buttonRoots) {
+    runNavigation(movieGraph, [{ id: root.nodeId, entryId: null, entrySource: null, buttonProgramId: root.programId, origin: "button-program" }], `button program ${root.programId}`);
+  }
 
   if (budgetExhausted || unknown.length > 0) widenToAllPlaylists();
   for (const playlistId of selectedPlaylists) if (!routes.some((route) => route.playlistId === playlistId)) recordRoute({ playlistId, origin: "conservative-fallback", entryId: null, entrySource: null, buttonProgramId: null, navigationEdges: [] });

@@ -74,10 +74,10 @@ reset(programId) ──▶ runTurn() ──▶ 快照（idle/suspended/stopped/f
 | 层 | 函数 | 粒度 | 未解析时的处理 |
 | --- | --- | --- | --- |
 | 结构图 | `bdmv-parser` `buildGraph` | 文件引用（entry→object→playlist→clip→stream） | 边标 `missing`/`unresolved` |
-| 指令图 | `hdmv` `buildNavigationGraph` | 对象与命令 | 动态目标保留 `unresolved`，不判不可达 |
+| 指令图 | `hdmv` `buildNavigationGraph` | 对象与命令 | 紧邻 `MOVE gpr, IMMEDIATE` 的寄存器跳转按常量解析；其余动态目标保留 `unresolved`，不判不可达 |
 | 媒体闭包 | `media-export` `computeMediaClosure` | 可达播放列表/clip/stream | 有未知项时放宽到全部播放列表，`complete: false` |
 
-`computeMediaClosure` 的输入是结构图 + MovieObject 图 + 按钮程序图。条件边按并集遍历；`routes` 记录每条到达路径的来源，便于回答“这个播放列表为什么被导出”。
+`computeMediaClosure` 的输入是结构图 + 一张同时承载 MovieObject 与按钮程序的导航图，按钮程序作为独立根走图并共用同一 object table 解析标题/对象跳转。条件边按并集遍历；`routes` 记录每条到达路径的来源，便于回答“这个播放列表为什么被导出”。
 
 `findStaticNavigationLoops` 只做静态回边检测，用来发现潜在死循环和高频路径；它不执行 VM，也不判断可达性。
 

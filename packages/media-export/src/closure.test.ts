@@ -47,6 +47,7 @@ describe("conservative M1/M3 media closure", () => {
         { id: "command:0:0", kind: "command", objectId: 0, commandIndex: 0, source, status: "known" },
         { id: "command:0:1", kind: "command", objectId: 0, commandIndex: 1, source, status: "known" },
         { id: "command:0:2", kind: "command", objectId: 0, commandIndex: 2, source, status: "known" },
+        { id: "object:99", kind: "object", objectId: 99, source, status: "known" },
       ],
       edges: [
         { from: "object:0", to: "command:0:0", kind: "sequence", condition: null, source, resolution: "resolved" },
@@ -54,19 +55,36 @@ describe("conservative M1/M3 media closure", () => {
         { from: "command:0:0", to: "command:0:2", kind: "conditional", condition: "false branch", source, resolution: "unresolved" },
         { from: "command:0:1", to: "playlist:00001", kind: "play", condition: "true branch", source, resolution: "resolved" },
         { from: "command:0:2", to: "playlist:00002", kind: "play", condition: "false branch", source, resolution: "resolved" },
+        { from: "object:99", to: "playlist:00002", kind: "play", condition: null, source, resolution: "resolved" },
       ],
     });
-    const buttonGraph = navigationGraph({
-      nodes: [{ id: "object:99", kind: "object", objectId: 99, source, status: "known" }],
-      edges: [{ from: "object:99", to: "playlist:00002", kind: "play", condition: null, source, resolution: "resolved" }],
-    });
 
-    const closure = computeMediaClosure(discFixture(), movieGraph, [buttonGraph]);
+    const closure = computeMediaClosure(discFixture(), movieGraph, [{ nodeId: "object:99", programId: 99 }]);
     expect(closure.playlistIds).toEqual(["playlist:00001", "playlist:00002"]);
     expect(closure.clipIds).toEqual(["00001", "00002"]);
     expect(closure.streamIds).toEqual(["stream:00001:4113", "stream:00002:4113"]);
     expect(closure.complete).toBe(true);
     expect(closure.unknown).toEqual([]);
+  });
+
+  it("resolves a menu button's CALL_TITLE through the shared MovieObject graph", () => {
+    const disc = discFixture();
+    disc.graph.nodes.push({ id: "movieObject:1", type: "movieObject", state: "present", source });
+    disc.entries.push({ id: "topMenu", kind: "topMenu", target: { objectType: "HDMV", playbackType: 1, target: 1, source }, source });
+    const graph = buildNavigationGraph(
+      [{ id: 0, instructions: [m3Fixtures.playPlaylist1] }, { id: 1, instructions: [m3Fixtures.playPlaylist1] }],
+      [{ id: 1_000_000, instructions: [m3Fixtures.callTitle0] }],
+      { entries: disc.entries },
+    );
+    expect(graph.edges).toContainEqual(expect.objectContaining({ from: "command:1000000:0", to: "object:1", kind: "call", resolution: "resolved" }));
+
+    const closure = computeMediaClosure(disc, graph, [{ nodeId: "object:1000000", programId: 0 }]);
+    expect(closure.unknown).toEqual([]);
+    expect(closure.playlistIds).toEqual(["playlist:00001"]);
+    expect(closure.routes).toContainEqual(expect.objectContaining({
+      playlistId: "playlist:00001", origin: "button-program", buttonProgramId: 0,
+      navigationEdges: expect.arrayContaining([expect.objectContaining({ from: "command:1000000:0", to: "object:1", kind: "call" })]),
+    }));
   });
 
   it("keeps unresolved title/dynamic navigation unknown and widens to all structural media", () => {
@@ -106,6 +124,37 @@ describe("conservative M1/M3 media closure", () => {
     expect(closure.requiredNodeIds).toContain("clip:00002");
     expect(closure.complete).toBe(false);
     expect(closure.unknown.some((item) => item.code === "MEDIA_CLOSURE_BUDGET")).toBe(true);
+  });
+
+  it("charges the budget per distinct node so shared-graph button roots keep their routes", () => {
+    const graph = navigationGraph({
+      nodes: [
+        { id: "object:0", kind: "object", objectId: 0, source, status: "known" },
+        { id: "command:0:0", kind: "command", objectId: 0, commandIndex: 0, source, status: "known" },
+        { id: "object:100", kind: "object", objectId: 100, source, status: "known" },
+        { id: "command:100:0", kind: "command", objectId: 100, commandIndex: 0, source, status: "known" },
+        { id: "object:101", kind: "object", objectId: 101, source, status: "known" },
+        { id: "command:101:0", kind: "command", objectId: 101, commandIndex: 0, source, status: "known" },
+      ],
+      edges: [
+        { from: "object:0", to: "command:0:0", kind: "sequence", condition: null, source, resolution: "resolved" },
+        { from: "command:0:0", to: "playlist:00001", kind: "play", condition: null, source, resolution: "resolved" },
+        { from: "object:100", to: "command:100:0", kind: "sequence", condition: null, source, resolution: "resolved" },
+        { from: "object:101", to: "command:101:0", kind: "sequence", condition: null, source, resolution: "resolved" },
+        { from: "command:100:0", to: "object:0", kind: "call", condition: null, source, resolution: "resolved" },
+        { from: "command:101:0", to: "object:0", kind: "call", condition: null, source, resolution: "resolved" },
+      ],
+    });
+    // Six distinct navigation nodes serve the three roots (ten per-root visits),
+    // and the structural closure re-walks add the rest; twenty-eight fits the
+    // distinct-node total while a per-root budget trips during re-walks.
+    const closure = computeMediaClosure(discFixture(), graph, [{ nodeId: "object:100", programId: 0 }, { nodeId: "object:101", programId: 1 }], { maxStates: 28 });
+    expect(closure.unknown.some((item) => item.code === "MEDIA_CLOSURE_BUDGET")).toBe(false);
+    expect(closure.routes.filter((route) => route.origin === "button-program")).toEqual([
+      expect.objectContaining({ playlistId: "playlist:00001", origin: "button-program", buttonProgramId: 0 }),
+      expect.objectContaining({ playlistId: "playlist:00001", origin: "button-program", buttonProgramId: 1 }),
+    ]);
+    expect(closure.complete).toBe(true);
   });
 });
 
@@ -174,17 +223,17 @@ describe("media plan adaptation", () => {
       playlistFixture("00002", [{ index: 0, clipId: "00002", inTime45k: 0, outTime45k: 45_000 }]),
     ];
     const movieGraph = navigationGraph({
-      nodes: [{ id: "object:0", kind: "object", objectId: 0, source, status: "known" }],
+      nodes: [
+        { id: "object:0", kind: "object", objectId: 0, source, status: "known" },
+        { id: "object:99", kind: "object", objectId: 99, source, status: "known" },
+      ],
       edges: [
         { from: "object:0", to: "playlist:00001", kind: "play", condition: "condition A", source, resolution: "resolved" },
         { from: "object:0", to: "playlist:00002", kind: "play", condition: "condition B", source, resolution: "resolved" },
+        { from: "object:99", to: "playlist:00002", kind: "play", condition: null, source, resolution: "resolved" },
       ],
     });
-    const buttonGraph = navigationGraph({
-      nodes: [{ id: "object:99", kind: "object", objectId: 99, source, status: "known" }],
-      edges: [{ from: "object:99", to: "playlist:00002", kind: "play", condition: null, source, resolution: "resolved" }],
-    });
-    const closure = computeMediaClosure(disc, movieGraph, [buttonGraph]);
+    const closure = computeMediaClosure(disc, movieGraph, [{ nodeId: "object:99", programId: 99 }]);
     const plan = createMediaPlan(disc, closure, { estimatedVideoBitsPerSecond: 1_000_000, estimatedAudioBitsPerSecond: 100_000, containerOverheadPercent: 0 });
     expect(plan.requirements.map((requirement) => requirement.playlistId)).toEqual(["00001", "00002"]);
     const first = plan.requirements[0]!;

@@ -62,3 +62,77 @@ describe("navigation graph flow termination", () => {
     expect(reachable.has("command:1:1")).toBe(false);
   });
 });
+
+describe("navigation graph register constant propagation", () => {
+  const source = m3Fixtures.break.source;
+  const titleEntries = (target: number) => [{ id: "title:1", kind: "title" as const, source, target: { objectType: "HDMV" as const, playbackType: 0, target, source } }];
+
+  it("resolves JUMP_TITLE through a preceding MOVE immediate to the same register", () => {
+    const graph = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.move1, m3Fixtures.jumpTitleGpr0] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(graph.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "jump", to: "object:2", resolution: "resolved" }));
+  });
+
+  it("resolves CALL_TITLE, CALL_OBJECT and PLAY_PL through the same propagation", () => {
+    const callTitle = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.move1, m3Fixtures.callTitleGpr0] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(callTitle.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "call", to: "object:2", resolution: "resolved" }));
+
+    const callObject = buildNavigationGraph([{ id: 1, instructions: [m3Fixtures.move1, m3Fixtures.callObjectGpr0] }]);
+    expect(callObject.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "call", to: "object:1", resolution: "resolved" }));
+
+    const playPlaylist = buildNavigationGraph([{ id: 1, instructions: [m3Fixtures.move5, m3Fixtures.playPlaylistGpr0] }]);
+    expect(playPlaylist.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "play", to: "playlist:00005", resolution: "resolved" }));
+  });
+
+  it("keeps a register jump unresolved when a GOTO lands on it", () => {
+    const graph = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.move1, m3Fixtures.jumpTitleGpr0, m3Fixtures.goto1] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(graph.edges.filter((edge) => edge.from === "command:1:1" && edge.kind === "jump")).toEqual([
+      expect.objectContaining({ from: "command:1:1", kind: "jump", to: null, resolution: "unresolved" }),
+    ]);
+  });
+
+  it("keeps a register jump unresolved when a compare skips the MOVE", () => {
+    const graph = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.compareEq7, m3Fixtures.move1, m3Fixtures.jumpTitleGpr0] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(graph.edges.filter((edge) => edge.from === "command:1:2" && edge.kind === "jump")).toEqual([
+      expect.objectContaining({ from: "command:1:2", kind: "jump", to: null, resolution: "unresolved" }),
+    ]);
+  });
+
+  it("keeps register jumps unresolved for mismatched registers, register sources and non-MOVE arithmetic", () => {
+    const mismatched = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.move1, m3Fixtures.jumpTitleGpr1] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(mismatched.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "jump", to: null, resolution: "unresolved" }));
+
+    const registerSource = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.moveGpr1ToGpr0, m3Fixtures.jumpTitleGpr0] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(registerSource.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "jump", to: null, resolution: "unresolved" }));
+
+    const arithmetic = buildNavigationGraph(
+      [{ id: 1, instructions: [m3Fixtures.add7, m3Fixtures.jumpTitleGpr0] }, { id: 2, instructions: [m3Fixtures.break] }],
+      [],
+      { entries: titleEntries(2) },
+    );
+    expect(arithmetic.edges).toContainEqual(expect.objectContaining({ from: "command:1:1", kind: "jump", to: null, resolution: "unresolved" }));
+  });
+});
