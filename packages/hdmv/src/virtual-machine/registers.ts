@@ -34,9 +34,12 @@ export class RegisterFault extends Error { constructor(readonly code: string, me
 export class RegisterFile {
   readonly gpr = new Uint32Array(GPR_COUNT);
   readonly psr = new Uint32Array(PSR_COUNT);
+  /** Writes since the last takeDelta(): the per-instruction register delta. */
+  private dirty: Array<{ kind: "gpr" | "psr"; index: number; before: number }> = [];
   constructor(profile: PlayerProfile = {}) { this.reset(profile); }
   reset(profile: PlayerProfile = {}): void {
     this.gpr.fill(0); this.psr.fill(0);
+    this.dirty = [];
     const defaults: Record<number, number> = { 0: 1, 1: 0xff, 2: 0x0fff0fff, 3: 1, 4: 0xffff, 5: 0xffff, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0xffff, 11: 0, 12: 0xff, 13: 0xff, 14: 0xffff, 15: 0xaaaa, 16: 0xffffff, 17: 0xffffff, 18: 0xffffff, 19: 0xffff, 20: 2, 21: 0, 22: 0, 23: 0, 24: 0, 25: 0, 26: 0, 27: 0, 28: 0, 29: 0x03, 30: 0x1ffff, 31: 0x00030200, 36: 0xffff, 37: 0xffff, 38: 0, 39: 0, 40: 0, 42: 0xffff, 43: 0, 44: 0xff };
     for (const [index, value] of Object.entries(defaults)) this.psr[Number(index)] = value;
     // Missing settings preserve the pinned libbluray initializer (all-ones
@@ -76,9 +79,32 @@ export class RegisterFile {
     this.writeSlot(this.psr, index, value);
   }
   snapshot(): { gpr: number[]; psr: number[] } { return { gpr: [...this.gpr], psr: [...this.psr] }; }
+  /** Marks the current write-log position for a later deltaSinceMark(). */
+  mark(): number { return this.dirty.length; }
+  /**
+   * Registers changed since the mark: the same per-instruction delta the
+   * before/after snapshot comparison produces, computed from the writes the
+   * register file recorded instead of two full state copies.
+   */
+  deltaSinceMark(mark: number): { gpr: Record<number, number>; psr: Record<number, number> } {
+    const gpr: Record<number, number> = {}, psr: Record<number, number> = {};
+    const first = new Map<string, { kind: "gpr" | "psr"; index: number; before: number }>();
+    for (let i = mark; i < this.dirty.length; i++) {
+      const entry = this.dirty[i]!;
+      const key = entry.kind + ":" + entry.index;
+      if (!first.has(key)) first.set(key, entry);
+    }
+    for (const [key, entry] of first) {
+      const current = entry.kind === "gpr" ? (this.gpr[entry.index] ?? 0) : (this.psr[entry.index] ?? 0);
+      if (current !== entry.before) (entry.kind === "gpr" ? gpr : psr)[entry.index] = current;
+    }
+    return { gpr, psr };
+  }
   private writeSlot(slot: Uint32Array, index: number, value: number): void {
     this.validateIndex(slot, index);
     if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw new RegisterFault("INVALID_REGISTER_VALUE", `Register value ${value} is not uint32`);
+    const before = slot[index]!;
+    if (before !== value >>> 0) this.dirty.push({ kind: slot === this.gpr ? "gpr" : "psr", index: index, before: before });
     slot[index] = value >>> 0;
   }
   private validateIndex(slot: Uint32Array, index: number, kind = "Register"): void {

@@ -24,7 +24,7 @@ export interface HdmvVmCheckpoint {
   consumedResponses: string[]; eventQueue: VmEvent[]; actionQueue: NavigationAction[];
   trace: TraceEntry[]; actions: NavigationAction[]; diagnostics: VmDiagnostic[];
 }
-export interface VmOptions { limits?: Limits; maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; }
+export interface VmOptions { limits?: Limits; maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; /** Store the full register state on every trace entry. Defaults to true. */ traceRegisters?: boolean; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
 export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
 export type ButtonCommandContext = "object" | "ig_object";

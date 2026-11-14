@@ -27,6 +27,7 @@ export class HdmvVm {
   readonly actions: NavigationAction[] = [];
   readonly diagnostics: VmDiagnostic[] = [];
   status: VmStatus = "idle";
+  private traceRegisters = true;
   programId = 0; pc = 0; generation = 0; instructionsThisTurn = 0; diagnostic: VmDiagnostic | null = null;
   private readonly programs = new Map<number, VmProgram>(); private readonly callStack: Array<{ programId: number; pc: number }> = [];
   private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private suspendedPlaylistPlayback: PlaybackContext | null = null; private pendingTitleCall: number | null = null; private titleTransition = false; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: VmTuning;
@@ -37,6 +38,7 @@ export class HdmvVm {
   private readonly onTrace: VmOptions["onTrace"];
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
   constructor(programs: Array<VmProgram | MovieObject>, options: VmOptions = {}) {
+    this.traceRegisters = options.traceRegisters ?? true;
     this.limits = Object.freeze(validateLimits(options.limits ?? {
       ...DEFAULT_LIMITS,
       ...(options.maxInstructionsPerTurn === undefined ? {} : { maxInstructionsPerTurn: options.maxInstructionsPerTurn }),
@@ -113,12 +115,12 @@ export class HdmvVm {
     if (selectedButtonId !== null && (!Number.isInteger(selectedButtonId) || selectedButtonId < 0 || selectedButtonId > 0xffff)) {
       throw new RangeError("Selected button ID must be a 16-bit unsigned integer or null");
     }
-    const before = this.registers.snapshot();
+    const before = this.registers.mark();
     this.registers.systemWrite(10, selectedButtonId ?? 0xffff);
     this.registers.systemWrite(11, pageId);
     this.record({
       source: null, raw: null, decoded: `MENU_CONTEXT page=${pageId} button=${selectedButtonId ?? "none"}`,
-      registerDelta: delta(before, this.registers.snapshot()), status: this.status,
+      registerDelta: this.registers.deltaSinceMark(before), status: this.status,
     });
   }
   /** Capture the live menu context before a user action can transfer control to a feature. */
@@ -163,7 +165,7 @@ export class HdmvVm {
     this.resumeAfterPlaylistStop = false;
     this.instructionsThisTurn = 0;
     const savedPlaylistContinuation = this.hasPlaylistContinuation() ? this.continuation : null;
-    const before = this.registers.snapshot(); const from = { programId: this.programId, pc: this.pc };
+    const before = this.registers.mark(); const from = { programId: this.programId, pc: this.pc };
     let d: DecodedInstruction;
     try { d = decodeInstruction(command, source); }
     catch (error) {
@@ -189,7 +191,7 @@ export class HdmvVm {
       // GOTO and compare operate on a button command sequence, not on the
       // MovieObject PC. executeButtonProgram() owns that sequence-local PC.
       this.noteIgnoredInstruction("HDMV_BUTTON_COMMAND_REQUIRES_PROGRAM", `${d.opcode} requires a button command sequence; use executeButtonProgram()`, d.source);
-      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
+      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
       this.instructionDiagnostic = null;
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
@@ -207,7 +209,7 @@ export class HdmvVm {
       this.failButtonProgram(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", errorText(error), d.source, d, before, from);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
-    this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
+    this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
     this.lastAction = undefined; this.instructionDiagnostic = null;
     if (this.resumeAfterPlaylistStop && this.status === "running") {
       this.resumeAfterPlaylistStop = false;
@@ -249,7 +251,7 @@ export class HdmvVm {
       }
       const instructionPc = pc; pc += 1; this.instructionsThisTurn++;
       this.instructionDiagnostic = null;
-      const before = this.registers.snapshot(); const [a, b] = d.operands;
+      const before = this.registers.mark(); const [a, b] = d.operands;
       if (d.status === "invalid" || !d.opcode) {
         this.failButtonProgram(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
         break;
@@ -272,7 +274,7 @@ export class HdmvVm {
         this.failButtonProgram(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", errorText(error), d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
         break;
       }
-      this.record({ programId: ownerProgramId, pc: instructionPc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
+      this.record({ programId: ownerProgramId, pc: instructionPc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
       this.lastAction = undefined; this.instructionDiagnostic = null;
       if (terminated || this.status !== "running" || this.programId !== ownerProgramId || this.pc !== ownerPc) break;
     }
@@ -307,7 +309,7 @@ export class HdmvVm {
       let d: DecodedInstruction;
       try { d = decodeInstruction(row); } catch (error) { this.fail("HDMV_INVALID_INSTRUCTION", String(error), null); break; }
       this.instructionsThisTurn++;
-      const before = this.registers.snapshot(); const from = { programId: this.programId, pc: this.pc }; this.pc++;
+      const before = this.registers.mark(); const from = { programId: this.programId, pc: this.pc }; this.pc++;
       this.instructionDiagnostic = null;
       if (d.status === "invalid" || !d.opcode) { this.fail(d.issues[0] ?? "HDMV_UNKNOWN_OPCODE", `Cannot execute ${d.opcode ?? "unknown encoding"}: ${d.issues.join(", ") || d.bytes}`, d.source, d, before, from); break; }
       try {
@@ -315,7 +317,7 @@ export class HdmvVm {
       } catch (error) {
         this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", errorText(error), d.source, d, before, from); break;
       }
-      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: delta(before, this.registers.snapshot()), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) }); this.lastAction = undefined; this.instructionDiagnostic = null;
+      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) }); this.lastAction = undefined; this.instructionDiagnostic = null;
     }
     return this.snapshot();
   }
@@ -345,10 +347,10 @@ export class HdmvVm {
       if (!isCallReturn) this.continuation = null;
       this.pendingTitleCall = null; this.titleTransition = false;
       this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
-      const before = this.registers.snapshot();
+      const before = this.registers.mark();
       this.registers.systemWrite(4, title);
       this.programId = entry.target.target; this.pc = 0; this.status = "running";
-      this.record({ source: entry.source, raw: null, decoded: `TITLE_SELECTED title=${title} object=${entry.target.target}`, registerDelta: delta(before, this.registers.snapshot()), status: this.status });
+      this.record({ source: entry.source, raw: null, decoded: `TITLE_SELECTED title=${title} object=${entry.target.target}`, registerDelta: this.registers.deltaSinceMark(before), status: this.status });
       return this.runTurn();
     } catch (error) {
       // A title search that cannot be resolved is a rejected player request,
@@ -377,9 +379,9 @@ export class HdmvVm {
       this.pendingTitleCall = null; this.titleTransition = false; this.eventQueue.length = 0;
       this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
       this.programId = 0; this.pc = 0; this.status = "idle";
-      const before = this.registers.snapshot();
+      const before = this.registers.mark();
       this.registers.systemWrite(4, title);
-      this.record({ source: entry.source, raw: null, decoded: `BDJ_TITLE_SELECTED title=${title} bdjo=${entry.target.target}`, registerDelta: delta(before, this.registers.snapshot()), status: this.status });
+      this.record({ source: entry.source, raw: null, decoded: `BDJ_TITLE_SELECTED title=${title} bdjo=${entry.target.target}`, registerDelta: this.registers.deltaSinceMark(before), status: this.status });
       return this.snapshot();
     } catch (error) {
       const issue = { code: error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", message: errorText(error), source: null };
@@ -472,11 +474,11 @@ export class HdmvVm {
     }
     if (!eventMatches(pending.action.waitFor, event.type)) { this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: { code: "HDMV_EVENT_NOT_READY", message: `Waiting for ${pending.action.waitFor}; received ${event.type}`, source: pending.action.source } }); return this.snapshot(); }
     this.consumedResponses.add(eventKey); this.removeAction(pending.action.id);
-    const before = this.registers.snapshot(); this.continuation = null; this.programId = pending.nextProgramId; this.pc = pending.nextPc;
+    const before = this.registers.mark(); this.continuation = null; this.programId = pending.nextProgramId; this.pc = pending.nextPc;
     if (event.type === "MEDIA_ENDED") this.playback.status = "ended";
     this.playback.pendingActionId = null;
     this.status = "running";
-    this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: delta(before, this.registers.snapshot()), status: this.status });
+    this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: this.registers.deltaSinceMark(before), status: this.status });
     return this.runTurn();
   }
   private applyPlaybackStatusEvent(event: VmEvent): void {
@@ -972,21 +974,21 @@ export class HdmvVm {
   }
   private removeAction(id: string): void { const index = this.actionQueue.findIndex((action) => action.id === id); if (index >= 0) this.actionQueue.splice(index, 1); }
   private currentSource(): SourceLocation | null { const row = this.programs.get(this.programId)?.instructions[this.pc]; if (!row) return null; try { return decodeInstruction(row).source; } catch { return null; } }
-  private fail(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: ReturnType<RegisterFile["snapshot"]>, location?: { programId: number; pc: number }): void {
+  private fail(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: number, location?: { programId: number; pc: number }): void {
     if (this.continuation) this.removeAction(this.continuation.action.id);
     this.continuation = null; this.pendingTitleCall = null; this.titleTransition = false; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.playback.pendingActionId = null;
     const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
-    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
+    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   /** Record a fault raised while executing a button (interactive composition) program. libbluray _vm_run() clears only the faulting object (p->object = NULL); the MovieObject waiting for playlist end (playing_object) and any suspended call object stay untouched, so the pending playlist end can still resume the MovieObject. */
-  private failButtonProgram(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: ReturnType<RegisterFile["snapshot"]>, location?: { programId: number; pc: number }): void {
+  private failButtonProgram(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: number, location?: { programId: number; pc: number }): void {
     const issue = { code, message, source };
     this.diagnostic = issue; this.diagnostics.push(issue);
     this.status = this.continuation ? "suspended" : "faulted";
-    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before ? delta(before, this.registers.snapshot()) : EMPTY_DELTA, status: this.status, diagnostic: issue });
+    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
-    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
+    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, ...(this.traceRegisters ? { registers: entry.registers } : {}), callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
     this.trace.push(trace);
     try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }
