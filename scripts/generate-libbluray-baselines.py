@@ -303,11 +303,35 @@ def operand_value(text: str) -> tuple[str, int | None]:
     return "register", None
 
 
+def _register_id(token: str) -> int | None:
+    """GPR id of a `r<n>` operand token; None for PSRs or immediates."""
+    match = re.fullmatch(r"r(\d+)", token)
+    return int(match.group(1)) if match else None
+
+
+def _move_immediate_to(disasm: str, register: int) -> int | None:
+    """Source value when the line is `move r<n>, <immediate>` for this register."""
+    parts = disasm.split(" ", 1)
+    if OPCODE_MAP.get(parts[0]) != "MOVE" or len(parts) != 2:
+        return None
+    operands = parts[1].split(",")
+    if len(operands) != 2:
+        return None
+    destination = _register_id(operands[0].strip())
+    kind, value = operand_value(operands[1].strip())
+    return value if destination == register and kind == "immediate" else None
+
+
 def derive_graph(objects: list[dict], index: dict) -> list[list]:
     """Independently derive the CFG from libbluray's disassembly.
 
     Nodes/edges follow the control-flow meaning of libbluray's own mnemonics;
     the derived edges are compared with this project's buildNavigationGraph.
+    A register operand resolves when the command directly before it loads the
+    same GPR with `move r<n>, <immediate>`: the move must run unconditionally
+    (no compare skips it), the jump must not be a GOTO target (the linear
+    predecessor is then its only path), and the object must contain no
+    register-targeted GOTO whose landing spot the derivation cannot track.
     """
     object_ids = {o["id"] for o in objects}
     titles = index["titleIdRefs"]
@@ -321,33 +345,53 @@ def derive_graph(objects: list[dict], index: dict) -> list[list]:
     for obj in objects:
         oid = obj["id"]
         length = obj["numCommands"]
-        for cmd in obj["commands"]:
+        commands = obj["commands"]
+        goto_targets = set()
+        untracked_goto = False
+        compare_pcs = set()
+        for cmd in commands:
+            parts = cmd["disasm"].split(" ", 1)
+            opcode_name = OPCODE_MAP.get(parts[0])
+            if opcode_name == "GOTO" and len(parts) == 2:
+                kind, value = operand_value(parts[1])
+                if kind == "immediate":
+                    goto_targets.add(cmd["pc"])
+                else:
+                    untracked_goto = True
+            elif opcode_name in CONDITIONALS:
+                compare_pcs.add(cmd["pc"])
+        for cmd in commands:
             pc = cmd["pc"]
             frm = f"command:{oid}:{pc}"
             mnemonic, _, rest = cmd["disasm"].partition(" ")
             opcode = OPCODE_MAP.get(mnemonic)
             kind, value = operand_value(rest)
+            if kind == "register" and not untracked_goto:
+                register = _register_id(rest.split(",")[0].strip())
+                if register is not None and pc not in goto_targets \
+                        and not (pc >= 2 and commands[pc - 2]["pc"] in compare_pcs) and pc >= 1:
+                    value = _move_immediate_to(commands[pc - 1]["disasm"], register)
             if opcode is None:
                 add(frm, None, "unknown", "unresolved")
                 continue
 
             if opcode == "GOTO":
-                target = value if kind == "immediate" and value is not None and value < length else None
+                target = value if value is not None and value < length else None
                 add(frm, f"command:{oid}:{target}" if target is not None else None, "jump",
                     "resolved" if target is not None else "unresolved")
             elif opcode in ("JUMP_OBJECT", "CALL_OBJECT"):
-                target = value if kind == "immediate" and value in object_ids else None
+                target = value if value is not None and value in object_ids else None
                 add(frm, f"object:{target}" if target is not None else None,
                     "call" if opcode == "CALL_OBJECT" else "jump",
                     "resolved" if target is not None else "unresolved")
             elif opcode in ("PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"):
-                target = value if kind == "immediate" and value is not None and value <= 99999 else None
+                target = value if value is not None and value <= 99999 else None
                 add(frm, f"playlist:{target:05d}" if target is not None else None, "play",
                     "resolved" if target is not None else "unresolved")
                 if pc + 1 < length:
                     add(frm, f"command:{oid}:{pc + 1}", "sequence", "resolved")
             elif opcode in ("JUMP_TITLE", "CALL_TITLE"):
-                title = value if kind == "immediate" else None
+                title = value
                 ref = None
                 if title == 0:
                     ref = top_menu
