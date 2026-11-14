@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, open, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdtemp, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
@@ -115,6 +115,89 @@ export async function prepareCase(caseDef, root) {
       return describe(parsed, d, { value: units[0], unit: units[1] });
     };
     return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), sourceBytes: bytes.length, fullLength }, fixture: caseDef.fixture };
+  }
+  if (caseDef.category === "vm") {
+    const [parser, hdmv, igsExtract] = await Promise.all([
+      dist(root, "parser", "packages/bdmv-parser/dist/index.js"),
+      dist(root, "hdmv", "packages/hdmv/dist/index.js"),
+      dist(root, "igsExtract", "packages/igs/dist/scene/extract.js"),
+    ]);
+    const bdmvDir = resolveInput(root, o.bdmvDir);
+    const parsed = await parser.parseBdmv(bdmvDir);
+    const igDumps = (await walkFiles(join(bdmvDir, "STREAM"))).filter((file) => file.endsWith(".m2ts_ig-packets.bin"));
+    const scenes = [];
+    for (const dump of igDumps) {
+      const clipId = basename(dump).slice(0, 5);
+      const igBytes = new Uint8Array(await readFile(dump));
+      async function* chunks() { for (let at = 0; at < igBytes.length; at += 4093) yield igBytes.subarray(at, Math.min(igBytes.length, at + 4093)); }
+      const extracted = await igsExtract.extractIgsFromChunks(clipId, chunks(), [{ pid: 0x1400, source: { path: "BDMV/CLIPINF/" + clipId + ".clpi", origin: "primary", offset: "0" } }], { captureStreams: false, renderAssets: false });
+      scenes.push(...extracted.scenes);
+    }
+    const programs = scenes.flatMap((scene) => scene.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length).map((button) => ({ scene, button }))));
+    const buttonPrograms = programs.map(({ scene, button }, programId) => ({ id: 1000000 + programId, instructions: button.commands.map((command) => command.bytes.toString("hex")) }));
+    const allPrograms = [...parsed.movieObjects, ...buttonPrograms];
+    const describeValue = (result) => describe(result, { programs: result.programs, executed: result.executed, turns: result.turns }, { value: result.executed, unit: "vm instructions" });
+    const run = () => {
+      let executed = 0, turns = 0;
+      for (const program of allPrograms) {
+        const vm = new hdmv.HdmvVm([program], { maxInstructionsPerTurn: 10_000 });
+        vm.runTurn();
+        executed += vm.trace.filter((entry) => entry.raw !== null).length;
+        turns++;
+      }
+      return { programs: allPrograms.length, executed: executed, turns: turns };
+    };
+    const vmInput = { path: toPortablePath(root, o.bdmvDir), preParsed: true, programs: allPrograms.length, movieObjects: parsed.movieObjects.length, buttons: buttonPrograms.length };
+    return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: vmInput, fixture: caseDef.fixture };
+  }
+  if (caseDef.category === "menu-loop") {
+    const [parser, mediaExport, menuPlanning] = await Promise.all([
+      dist(root, "parser", "packages/bdmv-parser/dist/index.js"),
+      dist(root, "mediaExport", "packages/media-export/dist/index.js"),
+      dist(root, "menuPlanning", "apps/cli/dist/commands/menu-planning.js"),
+    ]);
+    const graphTree = o.files?.length ? await (await import("./fixture-input.mjs")).materializeBdmvFiles(caseDef.fixtureRoot, o.files) : null;
+    if (!graphTree) throw new Error("menu-loop case needs input files");
+    const bdmvDir = graphTree.directory;
+    const parsed = await parser.parseBdmv(bdmvDir);
+    const playlist = parsed.playlists.find((candidate) => candidate.id === o.playlistId);
+    const input = await menuPlanning.menuLoopMediaInput(parsed, playlist, { playItemIndex: 0, purpose: "bdj-playback" });
+    if (!input) throw new Error("menu-loop case has no loop media input for playlist " + o.playlistId);
+    globalThis.__navDebug = { sourcePath: input.sourcePath, sourceFile: input.sourceFile, keys: Object.keys(input) };
+    // Scripted media tools: the measured code is the pipeline itself (tool
+    // facts, source probe, plan building, invocation assembly, output checks).
+    const outputFiles = [];
+    const runProcess = async (executable, args) => {
+      if (args[0] === "-version") return { stdout: executable + " version scripted", stderr: "" };
+      if (args.includes("-encoders")) return { stdout: " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n V....D libx265 H.265 / HEVC\n A....D aac AAC (Advanced Audio Coding)\n", stderr: "" };
+      if (args.includes("-filters")) return { stdout: " TS zscale            V->V       Apply resizing, colorspace and dithering.\n .. tonemap           V->V       Conversion to/from different dynamic ranges.\n", stderr: "" };
+      if (executable === "ffprobe") {
+        const probedPath = args.at(-1);
+        const duration = String(Math.round(((input.outTime45k - input.inTime45k) / 45000) * 1000) / 1000);
+        if (probedPath && probedPath.endsWith(".mp4")) {
+          return { stdout: JSON.stringify({ streams: [{ index: 0, id: "0x0", codec_type: "video", codec_name: "h264", width: 1920, height: 1080, duration: duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" }], format: { duration: duration } }), stderr: "" };
+        }
+        if (probedPath && probedPath.endsWith(".m4a")) {
+          return { stdout: JSON.stringify({ streams: [{ index: 0, id: "0x0", codec_type: "audio", codec_name: "aac", duration: duration }], format: { duration: duration } }), stderr: "" };
+        }
+        const streams = [{ index: 0, id: "0x" + input.videoPid.toString(16), codec_type: "video", codec_name: "h264", width: 1920, height: 1080, display_aspect_ratio: "16:9", duration: duration, pix_fmt: "yuv420p", color_primaries: "bt709", color_transfer: "bt709", color_space: "bt709" }];
+        for (const [index, track] of input.audioTracks.entries()) streams.push({ index: index + 1, id: "0x" + track.pid.toString(16), codec_type: "audio", codec_name: "dts", duration: duration });
+        return { stdout: JSON.stringify({ streams: streams, format: { start_time: "0", duration: duration } }), stderr: "" };
+      }
+      for (const out of args.filter((arg) => arg.endsWith(".mp4") || arg.endsWith(".m4a"))) { await writeFile(out, "scripted media"); outputFiles.push(out); }
+      return { stdout: "", stderr: "" };
+    };
+    const describeValue = (result) => describe(result, { outputBytes: Number(result.outputSize.afterBytes), audioTracks: result.audioTracks.length, warnings: result.warnings.length, invocations: result.tools.invocations.length }, { value: Number(result.outputSize.afterBytes), unit: "output bytes" });
+    const run = async () => {
+      try {
+        return await mediaExport.exportMenuLoopMedia(input, { outputDirectory: join(tmpdir(), "bench-menu-loop-" + process.pid + "-" + Math.random().toString(36).slice(2)), assetDirectory: "assets/media", planPath: "media-plans/plan.json", videoMode: o.videoMode ?? "copy", timeoutMs: 180000, runProcess: runProcess });
+      } catch (error) {
+        throw new Error(String(error.message) + " || sourcePath=" + input.sourcePath);
+      }
+    };
+    const cleanup = async () => { for (const file of outputFiles) await rm(file, { force: true }); };
+    const menuInput = { path: toPortablePath(root, input.sourcePath), preParsed: true, playlistId: o.playlistId, videoMode: o.videoMode ?? "copy" };
+    return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: menuInput, fixture: caseDef.fixture, afterMeasurement: cleanup };
   }
   if (caseDef.category === "nav-graph") {
     const [parser, hdmv, mediaExport, igsExtract] = await Promise.all([

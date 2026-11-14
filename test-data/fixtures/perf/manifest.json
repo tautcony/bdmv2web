@@ -519,6 +519,52 @@
           "height": 1080
         }
       }
+    },
+    {
+      "caseId": "media.menu-loop-tamako.copy",
+      "suite": "real",
+      "category": "menu-loop",
+      "name": "Menu loop media export pipeline (stream copy, scripted media tools)",
+      "sample": "tamako-love-story-menu-loop",
+      "fixture": {
+        "id": "menu-loop-tamako-v1",
+        "version": "1",
+        "parameters": {
+          "kind": "menuLoop",
+          "videoMode": "copy"
+        }
+      },
+      "scope": "menu-loop-export",
+      "input": {
+        "files": [
+          {
+            "path": "../hdmv-navigation/disc-data/tamako/BDMV/index.bdmv",
+            "virtualPath": "BDMV/index.bdmv"
+          },
+          {
+            "path": "../hdmv-navigation/disc-data/tamako/BDMV/MovieObject.bdmv",
+            "virtualPath": "BDMV/MovieObject.bdmv"
+          },
+          {
+            "path": "../hdmv-navigation/disc-data/tamako/BDMV/PLAYLIST/00003.mpls",
+            "virtualPath": "BDMV/PLAYLIST/00003.mpls"
+          },
+          {
+            "path": "../hdmv-navigation/disc-data/tamako/BDMV/CLIPINF/00004.clpi",
+            "virtualPath": "BDMV/CLIPINF/00004.clpi"
+          },
+          {
+            "path": "menu-loop/00004-menu-stub.m2ts",
+            "virtualPath": "BDMV/STREAM/00004.m2ts"
+          }
+        ]
+      },
+      "options": {
+        "kind": "menuLoop",
+        "playlistId": "00003",
+        "videoMode": "copy",
+        "operation": "export"
+      }
     }
   ]
 }
