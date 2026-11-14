@@ -13,8 +13,8 @@ export async function exportAssets(): Promise<void> {
   const type = outputTypeOption();
   const noAssets = optionState("--assets") === false;
   if (noAssets && flagEnabled("--render")) fail("CLI_EXPORT_SELECTION", "--no-assets writes no containers or PNGs; drop --render");
-  // Without `--type` an export writes the containers it always wrote. `--no-assets`
-  // is the metadata-only shape that the retired `extract` command used to be.
+  // Without `--type` an export writes the containers. `--no-assets` selects the
+  // metadata-only shape of the same run.
   const run: GraphicsRun = { ...EXPORT_COMMAND, outputs: exportOutputs(type, !noAssets) };
   return runGraphicsInput(run, input, resolve(out), type, assetSelection());
 }

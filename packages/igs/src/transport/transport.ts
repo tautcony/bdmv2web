@@ -166,9 +166,7 @@ export class PsiAssembler {
     let cursor = 0;
     while (bytes.length - cursor >= 3) {
       // 0xff starts stuffing, which ends the section stream for this packet: drop
-      // everything from here instead of carrying it over. Retaining it made every
-      // following packet concatenate the previous packet's stuffing, so the buffer
-      // grew by one payload per packet and push became quadratic on long streams.
+      // everything from here and leave no buffer for the next packet.
       if (bytes[cursor] === 0xff) { cursor = bytes.length; break; }
       const len = ((bytes[cursor + 1]! & 15) << 8) | bytes[cursor + 2]!;
       const total = 3 + len;

@@ -79,7 +79,7 @@
 #### Scenario: UHD 元数据损坏
 
 - **WHEN** INDX 扩展区长度、entry 上界或 3.1 payload 损坏
-- **THEN** `entries` 仍完整保留，`discInfo.uhd` 为 null，产生 `warning` 级诊断，`inspect` / `extract` / `convert` 不因此退出 1
+- **THEN** `entries` 仍完整保留，`discInfo.uhd` 为 null，产生 `warning` 级诊断，`inspect` / `export` / `convert` 不因此退出 1
 
 #### Scenario: 声明长度不自洽
 
@@ -107,7 +107,7 @@
 
 ### Requirement: 检查与提取
 
-系统 SHALL inspect/extract 输出来源可追踪的结构、全部声明及诊断，区分结构预测与最终交付状态。
+系统 SHALL 让 inspect/export 输出来源可追踪的结构、全部声明及诊断，区分结构预测与最终交付状态。
 
 #### Scenario: 混合入口
 

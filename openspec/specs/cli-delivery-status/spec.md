@@ -12,12 +12,12 @@
 
 #### Scenario: 结构成功但无菜单
 
-- **WHEN** `extract` 完成结构阶段且未生成播放器
+- **WHEN** `export --no-assets` 完成结构阶段且未生成播放器
 - **THEN** 报告 `stageStatus: "complete"`，交付状态仍为未完成，不出现 `status: "complete"`
 
 #### Scenario: 报告字段可区分
 
-- **WHEN** 读取 `inspect` / `extract` 的机器输出
+- **WHEN** 读取 `inspect` / `export` 的机器输出
 - **THEN** 阶段结论位于 `stageStatus`，交付结论只出现在 `validate` / `convert` 的 `status`
 
 ### Requirement: fatal 诊断不得成功退出
@@ -27,11 +27,11 @@
 #### Scenario: 缺少必需入口
 
 - **WHEN** 输入的 BDMV 缺少 `index.bdmv`，解析记录 `fatal BDMV_REQUIRED_FILE_MISSING`
-- **THEN** `extract` 不提交 staging、不生成正式输出目录，stdout 报 `stageStatus: "failed"` 与错误码，进程退出码为 1
+- **THEN** `export --no-assets` 不提交 staging、不生成正式输出目录，stdout 报 `stageStatus: "failed"` 与错误码，进程退出码为 1
 
 #### Scenario: 失败对象与成功对象同字段
 
-- **WHEN** `inspect` / `extract` 以失败结束
+- **WHEN** `inspect` / `export` 以失败结束
 - **THEN** 失败对象同样使用 `stageStatus`，不出现只表示交付结论的 `status`
 
 #### Scenario: 转换期 fatal

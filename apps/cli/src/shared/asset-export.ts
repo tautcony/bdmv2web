@@ -28,8 +28,8 @@ import { basename, dirname, resolve } from "node:path";
  * What one run of the graphics pipeline writes.
  *
  * `export` and `render` share this pipeline and differ only in `outputs`, so both
- * produce byte-identical PNGs and manifest records for the same input instead of
- * drifting apart. `--no-assets` is the metadata-only shape of the same run.
+ * produce byte-identical PNGs and manifest records for the same input.
+ * `--no-assets` is the metadata-only shape of the same run.
  */
 export interface GraphicsRun {
   /** Command name shown in the progress header. */

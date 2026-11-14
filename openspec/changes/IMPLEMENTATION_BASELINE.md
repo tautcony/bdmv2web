@@ -9,7 +9,7 @@
 | Change | 拥有模块 | 必须交给下游的产物 |
 | --- | --- | --- |
 | M0 core | core、bdmv-io、工作区、CLI 骨架、test-fixtures | Schema、精确时间、来源/诊断/事件契约、安全读写、合成样本构建器 |
-| M1 structure | bdmv-parser、ir-builder 结构图、inspect/extract 结构阶段 | ParsedDisc、入口/播放列表/Clip/轨道/sound、原始命令、结构引用图 |
+| M1 structure | bdmv-parser、ir-builder 结构图、inspect/export 结构阶段 | ParsedDisc、入口/播放列表/Clip/轨道/sound、原始命令、结构引用图 |
 | M2 IGS | m2ts-demux、igs-decoder、场景归一化 | Display Set、MenuScene、PNG、对象/调色板映射、按钮原始命令 |
 | M3 VM | navigation-hdmv、导航边分析 | 解码命令、执行器、操作码支持矩阵、NavigationGraph、trace |
 | M4 runtime | runtime-web、package-builder、音效输出、convert 菜单管线 | classic bundle、portable 菜单包、交互桥、WAV、资产清单 |
@@ -55,12 +55,12 @@ interface EventEnvelope<T> {
 | 命令 | 输出 | 缺省策略 |
 | --- | --- | --- |
 | inspect INPUT --format json --out FILE | 结构、入口、诊断、支持预测 | 不把预测写成最终完成度 |
-| extract INPUT --out DIR | 结构/原始命令，M2 接入后含 IG/PNG | 明确已完成与未完成阶段，不生成播放器 |
+| export INPUT --out DIR --no-assets | 结构、来源映射、IG 场景与 SUP 索引，不写容器与 PNG | 明确已完成与未完成阶段，不生成播放器 |
 | convert INPUT [--out DIR] | 统一菜单包，影片交给默认关联程序打开实际 M2TS | 默认在发现的 BDMV 目录同级生成 `BDMV-menu`；`--out` 可指定不重叠的其他目标；strict 开启 |
 | validate DIR [--strict] | 重算资源/依赖/支持/证据报告 | 不读原碟、不改媒体 |
 | compare INPUT --actual FILE [--reference FILE] [--reference-tool NAME] [--reference-version V] [--out FILE] | 指定输入序列的参考比较 | 开发命令，可用原碟和参考工具；退出码 0/1/2 由 M6 规格固定，参考缺席或未记录工具版本为 not-verified（退出 2），参考文件不得与被测 trace 相同 |
 
-`--strict/--no-strict` 显式覆盖默认值。inspect/extract 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
+`--strict/--no-strict` 显式覆盖默认值。inspect/export 的命令执行结果与交付状态分开，不把结构成功称为完整交付。退出码：0 按策略完成（非 strict 可接受 partial，但摘要和报告必须显著标明）；1 为 failed/参数或 I/O 错误；2 为 strict 拒绝 partial。机器 JSON 的进度写 stderr。
 
 菜单直接以 `file://` 打开；影片动作由前端按操作系统调用 URL Protocol：macOS/IINA 使用 `iina://open?url=`，Windows/PotPlayer 使用 `potplayer://`。`runtime/bdmv-config.js` 保存可编辑的 BDMV 路径，修改后重新加载菜单生效。输入只读；CLI 转换拒绝输入与输出/缓存重叠及 symlink 逃逸。源 BDMV STREAM 中的 M2TS 是影片交接的外部依赖；菜单运行资源保存在包内。默认拒绝已存在的输出目录；`--overwrite` 使用 staging/backup 事务替换菜单包，并在媒体计划匹配时复用背景视频和音轨。strict 模式拒绝 partial 交付。
 

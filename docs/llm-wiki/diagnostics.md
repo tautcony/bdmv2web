@@ -17,7 +17,7 @@ rg '"CODE_NAME"' packages apps
 | `PATH_NOT_FILE` / `PATH_NOT_DIRECTORY` | error | 期望文件/目录但类型不符 | 输入路径 |
 | `SYMLINK_REJECTED` | error | 输入树、BDMV 根、包内文件不接受 symlink | 换真实路径 |
 | `FILE_NOT_REGISTERED` | error | 引用了不在已验证文件表中的路径 | `discoverBdmvInput` 的遍历结果 |
-| `FILE_REFERENCE_AMBIGUOUS` | error | 虚拟 BDMV 路径命中多个已验证输入路径 | `extract` 的虚拟路径解析；输入目录重复
+| `FILE_REFERENCE_AMBIGUOUS` | error | 虚拟 BDMV 路径命中多个已验证输入路径 | IGS 场景提取的虚拟路径解析（`export`/`render`）；输入目录重复 |
 | `DUPLICATE_FILE_PATH` | error | 文件表出现重复相对路径 | 输入目录大小写变体 |
 | `TARGET_EXISTS` | error | 输出目标已存在且未 `--overwrite`，或运行期间出现 | 换目录或加 `--overwrite` |
 | `TARGET_NOT_DIRECTORY` | error | 覆盖目标不是目录 | 清理同名文件 |

@@ -122,7 +122,7 @@ Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS
 
 `--type` names the outputs a command writes, never the input: `igs` and `sup` are the `.mnu`/`.sup` containers (with `--render`, their PNGs), `hdmv` is the command table and source map, and `metadata` is the whole structural set — `manifest.json`, `hdmv/*.json`, `igs/*.json`, and `sup/tracks.json`. `all` is everything the command can write. Without `--type`, `export` writes the containers.
 
-`--no-assets` writes no containers and no PNGs: on its own it is the whole metadata set, and with `--type igs` or `--type sup` it is that one metadata section — the two shapes the retired `extract` command used to have. `export` and `render` share one pipeline; `render` fixes the selection to PNGs and is the only command that decodes a standalone `.mnu`/`.sup` file, which it detects from the file itself.
+`--no-assets` writes no containers and no PNGs: on its own it writes the whole metadata set, and with `--type igs` or `--type sup` that one metadata section. `export` and `render` share one pipeline; `render` fixes the selection to PNGs and is the only command that decodes a standalone `.mnu`/`.sup` file, which it detects from the file itself.
 
 `--png-level 0-9` sets the deflate level for PNGs written by `export --render` and `render`; the default is level 1 for IGS elements and level 6 for PGS canvases. A run with no asset side writes no `assets-manifest.json`.
 

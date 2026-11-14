@@ -10,7 +10,7 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 
 `export` SHALL 用 `--type all|metadata|hdmv|igs|sup` 选择输出，`--type` SHALL NOT 表示输入类型。`igs`/`sup` SHALL 写对应 `.mnu`/`.sup` 容器（配合 `--render` 还写其 PNG），`hdmv` SHALL 写命令表与来源映射，`metadata` SHALL 写整套结构元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` SHALL 写该命令能写出的全部产物。省略 `--type` 时 `export` SHALL 只写容器。非法值 SHALL 以 `CLI_INVALID_ASSET_TYPE` 失败。
 
-`--no-assets` SHALL 关闭资产侧（不写容器、不写 PNG），保留元数据侧：与省略 `--type` 或 `--type all` 连用时 SHALL 写整套元数据，与 `--type igs|sup` 连用时 SHALL 只写该段元数据，与 `--type hdmv` 连用时行为不变。`--no-assets` 与 `--render` 连用 SHALL 以 `CLI_EXPORT_SELECTION` 失败。
+`--no-assets` SHALL 关闭资产侧（不写容器、不写 PNG），保留元数据侧：与省略 `--type` 或 `--type all` 连用时 SHALL 写整套元数据，与 `--type igs|sup` 连用时 SHALL 只写该段元数据，与 `--type hdmv` 连用时 SHALL 只写 HDMV 元数据。`--no-assets` 与 `--render` 连用 SHALL 以 `CLI_EXPORT_SELECTION` 失败。
 
 #### Scenario: 导出元数据而不写资产
 - **WHEN** `export <BDMV> --out DIR --type metadata`
@@ -28,7 +28,7 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 - **WHEN** `export <BDMV> --out DIR --type all`
 - **THEN** 输出目录同时含 `.mnu`/`.sup` 容器、`assets-manifest.json` 与元数据产物
 
-#### Scenario: 默认值保持不变
+#### Scenario: 默认只写容器
 - **WHEN** `export <BDMV> --out DIR`（不给 `--type`）
 - **THEN** 只写 `.mnu`/`.sup` 容器与 `assets-manifest.json`，不写元数据
 
@@ -68,7 +68,7 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 - **THEN** 输出包含可达 IGS 流的 `.mnu`、可达 PGS 轨道的 `.sup`、显示集 PNG、`assets-manifest.json` 与结构元数据，产物路径与既有命名一致
 
 ### Requirement: 独立流文件输入
-`export` SHALL 接受单个 `.m2ts` 或 `.rsks` 常规文件作为输入，从文件自身的 PAT/PMT 发现图形流；流模式下 `--m2ts` SHALL 以 `CLI_EXPORT_SELECTION` 拒绝。BDMV 输入的识别与错误路径 SHALL 保持不变。
+`export` SHALL 接受单个 `.m2ts` 或 `.rsks` 常规文件作为输入，从文件自身的 PAT/PMT 发现图形流；流模式下 `--m2ts` SHALL 以 `CLI_EXPORT_SELECTION` 拒绝。BDMV 输入 SHALL 按目录结构识别，错误 SHALL 沿用 `BDMV_*` 契约码。
 
 #### Scenario: .rsks 输入导出 SUP
 - **WHEN** export 以内容为 m2ts 流的 `.rsks` 文件运行且 `--type sup`
@@ -188,7 +188,7 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 
 ### Requirement: 导出进度报告
 
-`export` SHALL 支持 `--progress` 与 `--no-progress`，并 SHALL 使用与 `build` 相同的步骤渲染（`x/N` 计数、运行中标记、`[███░░░]` 进度条、每步耗时、结尾 `Done in`）。stdout 的 `{stageStatus, output, assetCount}` JSON 契约 SHALL 保持不变，进度 SHALL 只写 stderr。默认行为 SHALL 与 `build` 一致：交互式终端一条实时行，管道静默。
+`export` SHALL 支持 `--progress` 与 `--no-progress`，并 SHALL 使用与 `build` 相同的步骤渲染（`x/N` 计数、运行中标记、`[███░░░]` 进度条、每步耗时、结尾 `Done in`）。stdout 的 JSON SHALL 只含 `{stageStatus, output, assetCount}`，进度 SHALL 只写 stderr。默认行为 SHALL 与 `build` 一致：交互式终端一条实时行，管道静默。
 
 #### Scenario: 终端默认实时进度
 - **WHEN** `export --render` 在 stderr 为 TTY 时运行
@@ -244,21 +244,21 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 
 ### Requirement: extract 命令移除
 
-`bdmv2web` SHALL NOT 注册 `extract` 命令。它作为 `export` 元数据形态的两种用法 SHALL 由 `export --no-assets`（整套元数据）与 `export --type igs|sup --no-assets`（单段元数据）承担。`CLI_EXTRACT_SELECTION` 与 `CLI_INVALID_EXTRACT_TYPE` SHALL 不再出现；`extract` 作为未知命令 SHALL 以 `CLI_USAGE` 失败。
+`bdmv2web` SHALL NOT 注册 `extract` 命令。`export --no-assets` SHALL 写整套元数据，`export --type igs|sup --no-assets` SHALL 写该段元数据。`CLI_EXTRACT_SELECTION` 与 `CLI_INVALID_EXTRACT_TYPE` SHALL 不出现；`extract` 作为未知命令 SHALL 以 `CLI_USAGE` 失败。
 
-#### Scenario: extract 不再是命令
+#### Scenario: 未知命令被拒绝
 - **WHEN** `bdmv2web extract <BDMV> --out DIR`
 - **THEN** 以 `CLI_USAGE` 失败，提示未知命令，不写任何产物
 
-#### Scenario: 产物等价
-- **WHEN** 同一 BDMV 分别运行旧 `extract --all` 与 `export --no-assets`
-- **THEN** 两个输出目录内容相同（`limitations` 文案随命令名调整）
+#### Scenario: 两种元数据形态
+- **WHEN** 同一 BDMV 分别运行 `export --out DIR --no-assets` 与 `export --out DIR --type igs --no-assets`
+- **THEN** 前者写 `manifest.json`、`hdmv/*.json`、`igs/*.json` 与 `sup/tracks.json`；后者只写 `igs/scenes.json`、`igs/diagnostics.json`、`igs/source-map.json` 与 `manifest.json`，不写 `hdmv/`、`sup/` 与 `assets-manifest.json`
 
 ### Requirement: render 按输入校验选项
 
-`render` SHALL 删除 `--mnu`/`--sup`，只接受位置参数。`.mnu`/`.sup` 输入 SHALL 拒绝 `--type` 与 `--m2ts`，`.sup` SHALL 拒绝 `--pid`，`.mnu` SHALL 拒绝 `--language`；盘与流输入 SHALL 拒绝 `--language`。以上错配 SHALL 报 `CLI_RENDER_SELECTION`。`render` SHALL NOT 写 `.mnu`/`.sup` 容器，也 SHALL NOT 写元数据产物。
+`render` SHALL NOT 接受 `--mnu`/`--sup`，只接受位置参数。`.mnu`/`.sup` 输入 SHALL 拒绝 `--type` 与 `--m2ts`，`.sup` SHALL 拒绝 `--pid`，`.mnu` SHALL 拒绝 `--language`；盘与流输入 SHALL 拒绝 `--language`。以上错配 SHALL 报 `CLI_RENDER_SELECTION`。`render` SHALL NOT 写 `.mnu`/`.sup` 容器，也 SHALL NOT 写元数据产物。
 
-#### Scenario: 独立 MNU 不再需要开关
+#### Scenario: 独立 MNU 直接渲染
 - **WHEN** `render <file>.mnu --out DIR`
 - **THEN** 写出 IGS 元素 PNG 与 `assets-manifest.json`，不写 `.mnu` 容器
 

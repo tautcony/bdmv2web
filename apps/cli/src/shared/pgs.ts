@@ -124,7 +124,7 @@ export interface PgsTrackPngPlanOptions {
 /**
  * PNG plan for one SUP track. Every command that renders display sets builds the
  * plan here, so `export` and `render` write the same manifest record for the same
- * display set instead of each spelling out its own record shape.
+ * display set.
  */
 export function pgsTrackPngPlan(options: PgsTrackPngPlanOptions): DisplaySetPngPlan {
   return {

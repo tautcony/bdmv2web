@@ -1,8 +1,8 @@
 /**
  * Progress step vocabulary shared by `export` and `render`.
  *
- * Both commands run the same pipelines, so they must print the same step names:
- * a user comparing `export --render` with `render` sees identical progress.
+ * Both commands run the same pipelines and print the same step names, so
+ * `export --render` and `render` report the same progress line by line.
  */
 export const BDMV_STEPS = {
   structure: "Parse BDMV structure",

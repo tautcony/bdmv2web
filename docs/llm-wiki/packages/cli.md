@@ -78,13 +78,13 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 4. `--format json` 时把完整 JSON 写 stdout；否则打印摘要表。
 5. `--allow-partial` 强制退出 0，报告里仍是 `stageStatus: "failed"`。
 
-### `export --no-assets`（原 `extract`）
+### `export --no-assets`
 
-1. `extract` 已并入 `export`：`--no-assets` 走同一套 `runGraphicsInput`（输入分类 + 同一条管线），`GraphicsRun.outputs` 只开元数据、容器与 PNG 恒关。非法 `--type` 报 `CLI_INVALID_ASSET_TYPE`；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`；`--no-assets` 与 `--render` 同时给出也报 `CLI_EXPORT_SELECTION`。
+1. `--no-assets` 走同一套 `runGraphicsInput`（输入分类 + 同一条管线），`GraphicsRun.outputs` 只开元数据、容器与 PNG 恒关。非法 `--type` 报 `CLI_INVALID_ASSET_TYPE`；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`；`--no-assets` 与 `--render` 同时给出也报 `CLI_EXPORT_SELECTION`。
 2. 先解析；有 `fatal` 直接失败，不扫描 STREAM。
 3. `--type` 需要 IGS/SUP 段落时先 `extractIgsScenes(..., { renderAssets: false })`，再 `decideStageOutcome`；`failed` 不建事务。
 4. `beginOutputTransaction` 后按类型写：
-   - `hdmv/commands.json`（全部 12 字节命令 + 来源）、`hdmv/parsed-disc.json`；`--all` 另写 `hdmv/external-media-targets.json`。
+   - `hdmv/commands.json`（全部 12 字节命令 + 来源）、`hdmv/parsed-disc.json`；`--type all`/`--type metadata` 另写 `hdmv/external-media-targets.json`。
    - `igs/scenes.json`、`igs/diagnostics.json`、`igs/source-map.json`。
    - `sup/tracks.json`（只记轨道索引与显示集数量，`.sup` 文件写完即删）。
 5. `manifest.json` 记录 `stageStatus`、`selectedTypes`、文件清单、limitations。
@@ -104,13 +104,13 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 - `--render` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
 - 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`igs-png` 记录 `width`/`height`/`objectId`/`objectVersion`/`paletteId`/`paletteVersion`；`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`，秒值以轨道起点为 0，流模式以首个显示集为 0。
 - 流模式不传 `timestampOffset90k`，`.sup` 保留源 90kHz 时间轴；清单 `sup` 记 `language: "und"` 与发现序号。`--m2ts` 与未在 PMT 声明的 `--pid` 报 `CLI_EXPORT_SELECTION`；无 PAT/PMT 或声明 PID 无显示集报 `EXPORT_INVALID_STREAM`。
-- 显示集 PNG 由 `shared/pgs.ts` 的 `writeDisplaySetPngs` 写出：`mapWithConcurrency` 限 4 路（libuv 默认线程池），每路 `renderPgsDisplaySetAsync` 合成后把 deflate 丢给线程池；目录创建按目录缓存同一个 `mkdir` promise（并发写同一目录不会抢在创建之前），记录按显示集顺序返回，清单因此与串行实现逐字节一致。清单记录形状由 `pgsTrackPngPlan` 统一，`export` 与 `render` 不再各写一份。
+- 显示集 PNG 由 `shared/pgs.ts` 的 `writeDisplaySetPngs` 写出：`mapWithConcurrency` 限 4 路（libuv 默认线程池），每路 `renderPgsDisplaySetAsync` 合成后把 deflate 丢给线程池；目录创建按目录缓存同一个 `mkdir` promise（并发写同一目录不会抢在创建之前），记录按显示集顺序返回。清单记录形状由 `pgsTrackPngPlan` 统一，`export` 与 `render` 共用同一份实现。
 - 进度：`progress.ts` 的 `commandProgress` 统一读 `--progress`/`--no-progress` 并构造 `ProgressReporter`，`build`（7 步）与 `export`（BDMV 5 步 / 流 4 步）都只声明自己的步骤，步骤词表在 `shared/steps.ts`；`countOf` 同在此模块。
 
 ### `render`
 
-- 输入为 BDMV、`.m2ts`/`.rsks` 流文件或位置参数 `.mnu`/`.sup`，类型由 `classifyInput` 判定，不需要 `--mnu`/`--sup`；后两种不需要 BDMV。
-- BDMV 与流输入直接复用 `shared/asset-export.ts` 的管线：`pngOutputs(--type)` 只开 PNG、容器与元数据恒关，所以 `export --render` 与 `render` 的差别仅在容器与元数据。因此同一输入下 PNG 字节、路径、清单记录与进度步骤完全相同，`render` 的清单等于 `export --render` 清单的 `igs-png`/`sup-png` 顺序子集。
+- 输入为 BDMV、`.m2ts`/`.rsks` 流文件或位置参数 `.mnu`/`.sup`，类型由 `classifyInput` 判定；后两种不需要 BDMV。
+- BDMV 与流输入直接复用 `shared/asset-export.ts` 的管线：`pngOutputs(--type)` 只开 PNG、容器与元数据恒关。同一输入下 PNG 字节、路径、清单记录与进度步骤与 `export --render` 相同；`render` 的清单是 `export --render` 清单中 `igs-png`/`sup-png` 条目的有序子集。
 - 独立 SUP 与 MNU 是 `render` 独有入口：SUP 用 `parsePgsSup` 解析后交给同一个 `writeDisplaySetPngs`（秒数以首个显示集为 0），MNU 用 `parseIgsMnu`；两者都不写 `.mnu`/`.sup`，`--png-level 0-9` 覆盖默认档位。
 
 ### `build`

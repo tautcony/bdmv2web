@@ -1,6 +1,6 @@
 # 功能：CLI 命令
 
-九个命令全部实现：`inspect`、`list`、`export`、`render`、`build`、`validate`、`compare`、`serve`、`visualize`。原先的 `extract` 已并入 `export`：`export --no-assets` 就是它的元数据形态。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
+九个命令全部实现：`inspect`、`list`、`export`、`render`、`build`、`validate`、`compare`、`serve`、`visualize`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
@@ -56,9 +56,9 @@
 | `--progress` | stderr 非终端时也逐行输出进度（默认自动） |
 | `--no-progress` | 关闭进度输出 |
 
-`--type` 只选输出，不表示输入：`igs`/`sup` 写对应容器（配合 `--render` 还写其 PNG），`hdmv` 写命令表与来源映射，`metadata` 写整套元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` 写全部。省略 `--type` 时只写容器，即历史默认。`--type metadata` 与 `--type hdmv` 拒绝 `--render`（没有可解码的帧）；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`（流内没有 HDMV 命令表）。
+`--type` 只选输出，不表示输入：`igs`/`sup` 写对应容器（配合 `--render` 还写其 PNG），`hdmv` 写命令表与来源映射，`metadata` 写整套元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` 写全部。省略 `--type` 时只写容器。`--type metadata` 与 `--type hdmv` 拒绝 `--render`（没有可解码的帧）；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`（流内没有 HDMV 命令表）。
 
-`--no-assets` 关掉资产侧、保留元数据侧，因此它就是原 `extract` 的两种形态：不带 `--type` 时写整套元数据，`--type igs` 或 `--type sup` 时只写那一段。`--no-assets` 与 `--render` 同时给出会以 `CLI_EXPORT_SELECTION` 失败（没有可写的东西）。元数据产物落在同一个输出事务里：
+`--no-assets` 关掉资产侧、保留元数据侧：不带 `--type` 时写整套元数据，`--type igs` 或 `--type sup` 时只写那一段。`--no-assets` 与 `--render` 同时给出会以 `CLI_EXPORT_SELECTION` 失败（没有可写的东西）。元数据产物落在同一个输出事务里：
 
 ```text
 <out>/
@@ -74,9 +74,9 @@
 
 元数据运行不写 `assets-manifest.json`，stdout 也只有 `{ stageStatus, output }`。
 
-进度输出（stderr）与 `build` 同一套渲染。BDMV 输入五步：解析 BDMV 结构、提取 IGS 场景、提取 SUP 轨道、解码显示集、写清单并提交；独立流输入四步：探测流表、提取图形流、解码显示集、写清单并提交。不适用于 `--type` 的步骤标为跳过。只有「解码显示集」能测比例：以全部轨道的显示集总数为分母，跨轨道单调递增，明细为 `<已完成>/<总数> display sets`；其余步骤显示耗时。`--render` 未启用时该步跳过。结尾为 `Done in …` / `Done in … · partial` / `Failed in … · <code>` 与输出目录、资产数。stderr 不是终端时默认静默，`--progress` 强制逐行输出（每步一行 + 每 10% 一行）。stdout 仍只有一行 JSON。`render` 使用同一套步骤名与同一行格式，因此两个命令的进度可以逐行对照。
+进度输出（stderr）与 `build` 同一套渲染。BDMV 输入五步：解析 BDMV 结构、提取 IGS 场景、提取 SUP 轨道、解码显示集、写清单并提交；独立流输入四步：探测流表、提取图形流、解码显示集、写清单并提交。不适用于 `--type` 的步骤标为跳过。只有「解码显示集」能测比例：以全部轨道的显示集总数为分母，跨轨道单调递增，明细为 `<已完成>/<总数> display sets`；其余步骤显示耗时。`--render` 未启用时该步跳过。结尾为 `Done in …` / `Done in … · partial` / `Failed in … · <code>` 与输出目录、资产数。stderr 不是终端时默认静默，`--progress` 强制逐行输出（每步一行 + 每 10% 一行）。stdout 仍只有一行 JSON。`render` 使用同一套步骤名与同一行格式，两个命令的进度逐行对应。
 
-显示集 PNG 的 deflate 在线程池上并发执行（4 路，等于 libuv 默认线程池大小），合成仍在主线程；`assets-manifest.json` 的记录顺序保持「每条 SUP 记录后紧跟其显示集 PNG」，与串行实现逐字节一致。
+显示集 PNG 的 deflate 在线程池上并发执行（4 路，等于 libuv 默认线程池大小），合成仍在主线程；`assets-manifest.json` 的记录顺序保持「每条 SUP 记录后紧跟其显示集 PNG」。
 
 产物：
 
@@ -91,14 +91,14 @@
 
 独立流文件输入（单个 `.m2ts`/`.rsks` 常规文件）：
 
-- 图形流由文件自身的 PAT/PMT 发现：`stream_type` `0x90` 为 PGS、`0x91` 为 IGS；保留 PID（`< 0x20`）上的声明忽略，因此社区封装里的假条目不会被当成流。
+- 图形流由文件自身的 PAT/PMT 发现：`stream_type` `0x90` 为 PGS、`0x91` 为 IGS；保留 PID（`< 0x20`）上的声明忽略，社区封装里的假条目不进入导出集。
 - 流模式的 `--m2ts` 以 `CLI_EXPORT_SELECTION` 拒绝；`--pid` 必须是 PMT 已声明的图形 PID，否则同样以 `CLI_EXPORT_SELECTION` 失败。
 - 产物以文件 stem 代替 `clipId`：`assets/igs/<stem>-pid-<pid>.mnu`、`assets/subtitles/<stem>-pid-<pid>.sup`。清单 `sup` 记录 `language: "und"`（流内没有语言声明），`streamNumber` 为 PMT 中的发现序号。
 - `.sup` 保留源 90kHz 时间轴；`sup-png` 的秒数以轨道首个显示集为 0，与 `render` 的独立 SUP 语义一致。
 - 没有图形流声明时记 warning `EXPORT_NO_GRAPHICS_STREAM`，写出空清单并以 0 退出；文件不含 PAT/PMT，或声明的 PGS PID 没有完整显示集时以 `EXPORT_INVALID_STREAM` 在写产物前失败。
 - 传输/PSI 诊断与 BDMV 模式同一判定：尾部杂讯等 error 级诊断降级为 `partial`（exit 0），不影响已发现的流。
 - 输出目录可以与流文件同处一级：流文件是只读输入，不存在 BDMV 根那样的覆盖风险。
-- 同一个流文件交给 `render` 时复用这条发现路径与同一套解码管线：PNG 字节、路径与清单条目逐字节相同，只是不写 `.mnu`/`.sup`；选择错误改报 `CLI_RENDER_SELECTION`，无效流仍是 `EXPORT_INVALID_STREAM`。
+- 同一个流文件交给 `render` 时复用这条发现路径与同一套解码管线：PNG 字节、路径与清单条目逐字节相同，只是不写 `.mnu`/`.sup`；选择错误报 `CLI_RENDER_SELECTION`，无效流仍是 `EXPORT_INVALID_STREAM`。
 
 ## `render`
 

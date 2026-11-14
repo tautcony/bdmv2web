@@ -90,9 +90,8 @@ function metadataFor(type: OutputType | undefined, assets: boolean) {
 
 /**
  * `export` writes the containers by default and the structural set on request.
- * `--no-assets` keeps the metadata side, which is how the retired `extract`
- * command is spelled now: `--no-assets` alone is the whole metadata set,
- * `--type igs --no-assets` is its IGS section only.
+ * `--no-assets` keeps the metadata side: alone it is the whole metadata set,
+ * `--type igs --no-assets` is the IGS section only.
  */
 export function exportOutputs(type: OutputType | undefined, assets = true): OutputSelection {
   const families = assets ? familiesFor(type) : NO_FAMILIES;

@@ -122,7 +122,7 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 
 `--type` 指定命令写出哪些产物，与输入类型无关：`igs`、`sup` 是 `.mnu`/`.sup` 容器（配合 `--render` 还包括其 PNG），`hdmv` 是命令表与来源映射，`metadata` 是整套结构元数据——`manifest.json`、`hdmv/*.json`、`igs/*.json` 与 `sup/tracks.json`；`all` 是该命令能写出的全部产物。省略 `--type` 时，`export` 写容器。
 
-`--no-assets` 不写容器也不写 PNG：单独使用时写出整套元数据，配合 `--type igs` 或 `--type sup` 时只写对应的那一段元数据——这正是原先 `extract` 命令的两种形态，该命令已并入 `export`。`export` 与 `render` 共用一条管线；`render` 把选择固定为 PNG，并且是唯一能解码独立 `.mnu`/`.sup` 文件的命令，输入类型由文件本身判定。
+`--no-assets` 不写容器也不写 PNG：单独使用时写出整套元数据，配合 `--type igs` 或 `--type sup` 时只写对应的那一段元数据。`export` 与 `render` 共用一条管线；`render` 把选择固定为 PNG，并且是唯一能解码独立 `.mnu`/`.sup` 文件的命令，输入类型由文件本身判定。
 
 `--png-level 0-9` 设置 `export --render` 与 `render` 写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。没有资产侧的运行不写 `assets-manifest.json`。
 

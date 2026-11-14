@@ -37,7 +37,7 @@ bdmv2web validate ./BDMV-menu
 | --- | --- |
 | `inspect <INPUT>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`) |
 | `list <INPUT>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
-| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally PNGs and metadata (`--type`, `--no-assets`, `--m2ts`, `--pid`, `--render`); `--no-assets` writes the metadata set that `extract` used to write |
+| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally PNGs and metadata (`--type`, `--no-assets`, `--m2ts`, `--pid`, `--render`) |
 | `render <INPUT>` | Render PNG from a BDMV, `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
 | `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`) |
 | `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`) |
