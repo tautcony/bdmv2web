@@ -11,6 +11,7 @@ const legacy = [
   ["mnu.battle-royale-00002.parse-4k-chunks", "real", "mnu", "MNU parse over 4 KiB packet chunks", "battle-royale-00002", { source: "ig-packets", file: "test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/STREAM/00002.m2ts_ig-packets.bin", clipId: "00002", pid: 0x1400, chunkBytes: 4093, operation: "parse" }],
   ["pgs.synthetic-32-128x72.parse", "synthetic", "pgs", "PGS parse and bitmap decode", "synthetic-32-128x72", { source: "synthetic", displaySetCount: 32, width: 128, height: 72, canvasWidth: 1920, canvasHeight: 1080, displaySet: "largest", operation: "parse" }],
   ["pgs.synthetic-32-128x72.compose", "synthetic", "pgs", "PGS compose and PNG encode", "synthetic-32-128x72", { source: "synthetic", displaySetCount: 32, width: 128, height: 72, canvasWidth: 1920, canvasHeight: 1080, displaySet: "largest", operation: "compose" }],
+  ["hdmv.nav-graph-tamako.build", "real", "nav-graph", "HDMV navigation graph + media closure build", "tamako-love-story-nav", { kind: "navGraph", bdmvDir: "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV", operation: "build", expected: { graphNodes: 6612, graphEdges: 7561, playlists: 26, routes: 474, unknown: 2124 } }],
 ].map(([caseId, suite, category, name, sample, options]) => ({
   caseId, suite, category, name, sample,
   fixture: { id: sample, version: "1", parameters: Object.fromEntries(Object.entries(options).filter(([key]) => !["file", "bdmvDir"].includes(key))) },

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdtemp, open, readFile, readdir, rm, stat } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { Bench } from "tinybench";
@@ -115,6 +115,42 @@ export async function prepareCase(caseDef, root) {
       return describe(parsed, d, { value: units[0], unit: units[1] });
     };
     return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), sourceBytes: bytes.length, fullLength }, fixture: caseDef.fixture };
+  }
+  if (caseDef.category === "nav-graph") {
+    const [parser, hdmv, mediaExport, igsExtract] = await Promise.all([
+      dist(root, "parser", "packages/bdmv-parser/dist/index.js"),
+      dist(root, "hdmv", "packages/hdmv/dist/index.js"),
+      dist(root, "mediaExport", "packages/media-export/dist/index.js"),
+      dist(root, "igsExtract", "packages/igs/dist/scene/extract.js"),
+    ]);
+    const bdmvDir = resolveInput(root, o.bdmvDir);
+    const parsed = await parser.parseBdmv(bdmvDir);
+    // Menu button programs come from the IG packet dumps under STREAM (the
+    // corpus stores demuxed IGS packets instead of full m2ts streams).
+    const igDumps = (await walkFiles(join(bdmvDir, "STREAM"))).filter((file) => file.endsWith(".m2ts_ig-packets.bin"));
+    const scenes = [];
+    for (const dump of igDumps) {
+      const clipId = basename(dump).slice(0, 5);
+      const igBytes = new Uint8Array(await readFile(dump));
+      async function* chunks() { for (let at = 0; at < igBytes.length; at += 4093) yield igBytes.subarray(at, Math.min(igBytes.length, at + 4093)); }
+      const extracted = await igsExtract.extractIgsFromChunks(clipId, chunks(), [{ pid: 0x1400, source: { path: `BDMV/CLIPINF/${clipId}.clpi`, origin: "primary", offset: "0" } }], { captureStreams: false, renderAssets: false });
+      scenes.push(...extracted.scenes);
+    }
+    // Button programs mirror apps/cli/src/shared/media.ts buildMediaClosure.
+    const programs = scenes.flatMap((scene) => scene.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length).map((button) => ({ scene, button }))));
+    const buttonPrograms = programs.map(({ scene, button }, programId) => ({ id: 1_000_000 + programId, instructions: button.commands.map((command) => {
+      const bytes = Buffer.from(command.bytes); const words = [bytes.readUInt32BE(0), bytes.readUInt32BE(4), bytes.readUInt32BE(8)];
+      return { bytes: bytes.toString("hex"), words, source: { path: `BDMV/STREAM/${scene.clipId}.m2ts`, origin: "primary", offset: command.sourceOffset } };
+    }) }));
+    const buttonRoots = buttonPrograms.map((program, programId) => ({ nodeId: `object:${1_000_000 + programId}`, programId }));
+    const describeValue = (result) => describe(result, { graphNodes: result.graph.nodes.length, graphEdges: result.graph.edges.length, playlists: result.closure.playlistIds.length, routes: result.closure.routes.length, unknown: result.closure.unknown.length }, { value: result.graph.edges.length, unit: "graph edges" });
+    const run = () => {
+      const graph = hdmv.buildNavigationGraph(parsed.movieObjects, buttonPrograms, { entries: parsed.entries });
+      const closure = mediaExport.computeMediaClosure(parsed, graph, buttonRoots);
+      return { graph, closure };
+    };
+    const navInput = { path: toPortablePath(root, o.bdmvDir), preParsed: true, buttonPrograms: buttonPrograms.length, movieObjects: parsed.movieObjects.length };
+    return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: navInput, fixture: caseDef.fixture };
   }
   if (caseDef.category === "graph") {
     const [parser, parserSteps] = await Promise.all([dist(root, "parser", "packages/bdmv-parser/dist/index.js"), dist(root, "parserSteps", "packages/bdmv-parser/dist/parsing/parser.js")]);
