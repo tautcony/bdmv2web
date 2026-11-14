@@ -17,7 +17,7 @@ test("scenario registry exposes stable scale, CLI, and browser cases with actual
     "scale.pes-1x.extract", "scale.pes-2x.extract", "scale.pes-4x.extract",
     "perf.index.small.parse", "perf.igs.battle-royale.parse", "perf.igs.battle-royale.render",
     "perf.pgs.baja.parse", "perf.pgs.baja.compose", "perf.package.igs-assembly",
-    "cli.perf.metadata.inspect", "cli.perf.metadata.extract", "cli.perf.igs.render", "cli.synthetic-package.validate",
+    "cli.perf.metadata.inspect", "cli.perf.metadata.export", "cli.perf.igs.render", "cli.synthetic-package.validate",
     "browser.synthetic-menu.file-navigation",
   ]) assert.ok(ids.has(id), `missing ${id}`);
   const casesById = new Map(cases.map((item) => [item.caseId, item]));

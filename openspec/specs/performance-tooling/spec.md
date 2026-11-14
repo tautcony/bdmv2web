@@ -97,14 +97,14 @@ The reporting tool SHALL present compatible runs as trends and retain links to p
 - **THEN** the reporting tool emits static HTML/SVG, Markdown, or JSON from archived run records
 
 ### Requirement: Representative benchmark coverage
-The benchmark suite SHALL include synthetic scale cases, real component cases, CLI inspect/extract/render on prepared supported inputs, package assembly from prepared scene and PNG inputs, and generated local-package browser execution through `file://`.
+The benchmark suite SHALL include synthetic scale cases, real component cases, CLI inspect/export/render on prepared supported inputs, package assembly from prepared scene and PNG inputs, and generated local-package browser execution through `file://`.
 
 #### Scenario: Synthetic scale coverage runs
 - **WHEN** synthetic cases execute at configured increasing input sizes
 - **THEN** each result records its fixture parameters and supports comparison of scaling across sizes
 
 #### Scenario: Prepared data CLI and package assembly
-- **WHEN** the CLI inspect, extract, and render cases run on prepared supported inputs and the package assembly case consumes a prepared scene and PNG inputs
+- **WHEN** the CLI inspect, export, and render cases run on prepared supported inputs and the package assembly case consumes a prepared scene and PNG inputs
 - **THEN** the report distinguishes component, CLI, and package assembly timing and identifies each case's fixture and scope
 
 #### Scenario: Generated package opens locally

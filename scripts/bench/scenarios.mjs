@@ -42,7 +42,7 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     const files = (graphCase.options.files ?? []).map((file) => ({ path: file.path, virtualPath: file.virtualPath }));
     for (const [operation, scope, name] of [
       ["inspect", "cli-metadata-inspect", "CLI inspect metadata-only BDMV"],
-      ["extract", "cli-hdmv-extract", "CLI HDMV extraction from metadata-only BDMV"],
+      ["export", "cli-metadata-export", "CLI metadata export from metadata-only BDMV"],
     ]) {
       result.push({
         caseId: `cli.perf.metadata.${operation}`, suite: "scenario", category: "cli", name, sample: graphCase.sample,
@@ -145,7 +145,7 @@ async function runCli(root, caseDef, outputDir, sequence) {
   let args;
   if (caseDef.options.operation === "version") args = ["--version"];
   else if (caseDef.options.operation === "inspect") args = ["inspect", input, "--allow-partial", "--format", "json"];
-  else if (caseDef.options.operation === "extract") args = ["extract", input, "--type", "hdmv", "--out", output];
+  else if (caseDef.options.operation === "export") args = ["export", input, "--type", "hdmv", "--out", output];
   else if (caseDef.options.operation === "render") args = ["render", input, "--out", output];
   else if (caseDef.options.operation === "validate") args = ["validate", input, "--format", "json"];
   else throw new Error(`Unsupported prepared CLI operation: ${caseDef.options.operation}`);
@@ -160,8 +160,8 @@ async function runCli(root, caseDef, outputDir, sequence) {
   // process start and argument parsing that every CLI case also pays for.
   if (args[0] === "--version") return { command: "version", stdoutBytes: Buffer.byteLength(stdout.trim()), output: null };
   if (args[0] === "inspect" && !["complete", "partial"].includes(report.stageStatus)) throw new Error(`CLI inspect stageStatus is ${String(report.stageStatus)}`);
-  if (args[0] === "extract" || args[0] === "render") {
-    const stageReportPath = args[0] === "extract" ? join(output, "manifest.json") : join(output, "assets-manifest.json");
+  if (args[0] === "export" || args[0] === "render") {
+    const stageReportPath = args[0] === "render" ? join(output, "assets-manifest.json") : join(output, "manifest.json");
     const stageReport = JSON.parse(await readFile(stageReportPath, "utf8"));
     if (stageReport.stageStatus === "failed" || stageReport.status === "failed") throw new Error(`CLI ${args[0]} stage status is failed`);
   }
