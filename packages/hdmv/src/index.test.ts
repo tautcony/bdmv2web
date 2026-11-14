@@ -48,6 +48,19 @@ describe("M3 HDMV fixtures", () => {
     expect(vm.trace.flatMap((x) => Object.entries(x.registerDelta.gpr))).toContainEqual(["0", 12]);
     expect(vm.trace.find((x) => x.decoded?.startsWith("MOVE"))?.pc).toBe(0);
   });
+  it("records the full register file only for a VM constructed with traceRegisters", () => {
+    const programs = () => [{ id: 0, instructions: [m3Fixtures.move5, m3Fixtures.add7, m3Fixtures.break] }];
+    const lean = new HdmvVm(programs());
+    expect(lean.runTurn().registers.gpr[0]).toBe(12);
+    expect(lean.trace.some((entry) => "registers" in entry)).toBe(false);
+    const full = new HdmvVm(programs(), { traceRegisters: true });
+    expect(full.runTurn().registers.gpr[0]).toBe(12);
+    const move = full.trace.find((entry) => entry.decoded?.startsWith("MOVE"));
+    const add = full.trace.find((entry) => entry.decoded?.startsWith("ADD"));
+    expect(move?.registers).toMatchObject({ gpr: expect.arrayContaining([5]), psr: expect.any(Array) });
+    expect(add?.registers?.gpr[0]).toBe(12);
+    expect(add?.registers?.gpr).toHaveLength(4096); expect(add?.registers?.psr).toHaveLength(128);
+  });
   it("uses the pinned libbluray LCG sequence for RND and restores it with checkpoints", () => {
     const rnd = rawCommand(0x50400008, 0, 5);
     const vm = new HdmvVm([{ id: 0, instructions: [rnd, rnd, rnd, m3Fixtures.break] }], { randomSeed: 1 });

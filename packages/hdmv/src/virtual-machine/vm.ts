@@ -5,7 +5,7 @@ import { decodeInstruction, type DecodedInstruction, type Operand } from "../byt
 import { RegisterFile, RegisterFault, type PlayerProfile } from "./registers.js";
 import {
   COMPARE_OPCODES, EMPTY_DELTA, RANDOM_MASK, RANDOM_MULTIPLIER, WAIT_BY_ACTION,
-  comparisonSkips, delta, eventMatches, normalizeProfile, normalizeRandomSeed,
+  comparisonSkips, eventMatches, normalizeProfile, normalizeRandomSeed,
   playbackTicks, stableProfile, textInstruction,
 } from "./vm-semantics.js";
 import type {
@@ -27,7 +27,7 @@ export class HdmvVm {
   readonly actions: NavigationAction[] = [];
   readonly diagnostics: VmDiagnostic[] = [];
   status: VmStatus = "idle";
-  private traceRegisters = true;
+  private traceRegisters = false;
   programId = 0; pc = 0; generation = 0; instructionsThisTurn = 0; diagnostic: VmDiagnostic | null = null;
   private readonly programs = new Map<number, VmProgram>(); private readonly callStack: Array<{ programId: number; pc: number }> = [];
   private continuation: Continuation | null = null; private suspendedPlaylistContinuation: Continuation | null = null; private suspendedPlaylistPlayback: PlaybackContext | null = null; private pendingTitleCall: number | null = null; private titleTransition = false; private menuCheckpoint: MenuCheckpoint | null = null; private sequence = 0; private readonly opts: VmTuning;
@@ -38,7 +38,7 @@ export class HdmvVm {
   private readonly onTrace: VmOptions["onTrace"];
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
   constructor(programs: Array<VmProgram | MovieObject>, options: VmOptions = {}) {
-    this.traceRegisters = options.traceRegisters ?? true;
+    this.traceRegisters = options.traceRegisters ?? false;
     this.limits = Object.freeze(validateLimits(options.limits ?? {
       ...DEFAULT_LIMITS,
       ...(options.maxInstructionsPerTurn === undefined ? {} : { maxInstructionsPerTurn: options.maxInstructionsPerTurn }),
@@ -987,8 +987,8 @@ export class HdmvVm {
     this.status = this.continuation ? "suspended" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
-  private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
-    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, ...(this.traceRegisters ? { registers: entry.registers } : {}), callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
+  private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits" | "registers"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
+    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, ...(this.traceRegisters ? { registers: this.registers.snapshot() } : {}), callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
     this.trace.push(trace);
     try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }

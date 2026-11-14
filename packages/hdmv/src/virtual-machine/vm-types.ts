@@ -11,7 +11,7 @@ export type MediaEventType = "MEDIA_STARTED" | "MEDIA_SEEKED" | "PLAYITEM_CHANGE
 export interface VmEvent { type: MediaEventType; generation?: number; responseTo?: string; payload?: Record<string, unknown>; input?: string | number; channel?: "keyboard" | "pointer" | "system"; }
 export interface VmDiagnostic { code: string; message: string; source: SourceLocation | null; }
 export interface PlaybackContext { status: "idle" | "requested" | "playing" | "ended" | "error" | "unavailable"; playlist: number | null; playItem: number | null; presentationTime: number | null; pendingActionId: string | null; }
-export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; limits: Readonly<Limits>; status: VmStatus; diagnostic?: VmDiagnostic; }
+export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; limits: Readonly<Limits>; status: VmStatus; diagnostic?: VmDiagnostic; /** Register file state at record time; filled when the VM runs with `traceRegisters`. */ registers?: ReturnType<RegisterFile["snapshot"]>; }
 export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
 export interface HdmvVmCheckpoint {
   status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>;
@@ -24,7 +24,7 @@ export interface HdmvVmCheckpoint {
   consumedResponses: string[]; eventQueue: VmEvent[]; actionQueue: NavigationAction[];
   trace: TraceEntry[]; actions: NavigationAction[]; diagnostics: VmDiagnostic[];
 }
-export interface VmOptions { limits?: Limits; maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; /** Store the full register state on every trace entry. Defaults to true. */ traceRegisters?: boolean; }
+export interface VmOptions { limits?: Limits; maxInstructionsPerTurn?: number; maxCallDepth?: number; maxQueueDepth?: number; profile?: PlayerProfile; entries?: ParsedDisc["entries"]; onTrace?: (entry: TraceEntry) => void; randomSeed?: number; /** Copy the full register file onto every trace entry for tools that inspect register state per step. Defaults to false. */ traceRegisters?: boolean; }
 export interface VmProgram { id: number; instructions: Array<MovieInstruction | RawCommand | Uint8Array | string>; resumeIntention?: boolean; menuCallMask?: boolean; titleSearchMask?: boolean; }
 export type ButtonCommand = MovieInstruction | RawCommand | Uint8Array | string;
 export type ButtonCommandContext = "object" | "ig_object";
