@@ -46,6 +46,7 @@ describe("HDMV multi-disc VM execution DFS coverage", () => {
       cases: Array<{
         case: string;
         discInfo: { firstPlay: boolean; topMenu: boolean; hdmvTitles: number };
+        objects: Array<{ commands: Array<{ disasm: string }> }>;
         graph: Array<[string, string | null, string, string]>;
         vmTrace: { playlists: number[] };
       }>;
