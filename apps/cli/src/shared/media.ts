@@ -10,13 +10,33 @@ import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
  */
 export const BUTTON_PROGRAM_ID_BASE = 1_000_000;
 
-export function buildMediaClosure(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
+/** One menu button's command list as a virtual-machine program with provenance. */
+export interface ButtonProgramEntry {
+  /** Disc-local flat button index, used for route provenance and diagnostics. */
+  programId: number;
+  /** Graph node id offset: `BUTTON_PROGRAM_ID_BASE + programId`. */
+  vmId: number;
+  program: VmProgram;
+  streamClipId: string;
+}
+
+export function buildButtonPrograms(scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]): ButtonProgramEntry[] {
   const programs = scenes.flatMap((scene) => scene.pages.flatMap((page) => page.buttons.filter((button) => button.commands.length).map((button) => ({ scene, button }))));
-  const buttonPrograms: VmProgram[] = programs.map(({ scene, button }, programId) => ({ id: BUTTON_PROGRAM_ID_BASE + programId, instructions: button.commands.map((command) => {
-    const bytes = Buffer.from(command.bytes); const words: [number, number, number] = [bytes.readUInt32BE(0), bytes.readUInt32BE(4), bytes.readUInt32BE(8)];
-    return { bytes: bytes.toString("hex"), words, source: { path: `BDMV/STREAM/${scene.clipId}.m2ts`, origin: "primary" as const, offset: command.sourceOffset } };
-  }) }));
-  const buttonRoots: MediaClosureButtonRoot[] = buttonPrograms.map((program, programId) => ({ nodeId: `object:${program.id}`, programId }));
+  return programs.map(({ scene, button }, programId) => ({
+    programId,
+    vmId: BUTTON_PROGRAM_ID_BASE + programId,
+    program: { id: BUTTON_PROGRAM_ID_BASE + programId, instructions: button.commands.map((command) => {
+      const bytes = Buffer.from(command.bytes); const words: [number, number, number] = [bytes.readUInt32BE(0), bytes.readUInt32BE(4), bytes.readUInt32BE(8)];
+      return { bytes: bytes.toString("hex"), words, source: { path: `BDMV/STREAM/${scene.clipId}.m2ts`, origin: "primary" as const, offset: command.sourceOffset } };
+    }) },
+    streamClipId: scene.clipId,
+  }));
+}
+
+export function buildMediaClosure(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
+  const buttonEntries = buildButtonPrograms(scenes);
+  const buttonPrograms = buttonEntries.map((entry) => entry.program);
+  const buttonRoots: MediaClosureButtonRoot[] = buttonEntries.map((entry) => ({ nodeId: `object:${entry.vmId}`, programId: entry.programId }));
   return computeMediaClosure(disc, buildNavigationGraph(disc.movieObjects, buttonPrograms, { entries: disc.entries }), buttonRoots);
 }
 

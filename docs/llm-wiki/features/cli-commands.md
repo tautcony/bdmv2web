@@ -211,8 +211,13 @@ bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-c
 ```text
 <out>/
   index.html              # 自包含交互查看器：数据内嵌、无外部资源，file:// 直接打开；
-                          # 侧栏按程序/playlist/unknown 过滤，主画布分层布局支持拖拽缩放，
-                          # 点击块看逐条反汇编，Overview 视图展示 entry → 程序 → playlist 全景
+                          # 侧栏按程序/playlist/unknown 过滤（unknown 汇总为单一入口，点开为
+                          # 全量表格），主画布分层布局支持拖拽缩放，
+                          # 点击块看逐条反汇编；Overview 以程序粒度聚合展示全局导航拓扑；
+                          # 程序视图里点击外部对象节点跳入目标 MO，MO 视图顶部显示跳入它的
+                          # 按钮入口（点击进入按钮流程图），↩ Back 沿跳转路径返回；
+                          # 布局可在 Layered（分层）与 Force（力导向模拟）间切换，Force 下节点可拖拽、
+                          # 松开固定在落点，拖拽与切换实时重排
   graph.json              # 与查看器相同的载荷：分程序基本块、块级边、playlist 边界与 route 来源
   overview.md             # mermaid 总览：entry → MovieObject → playlist，按钮程序按来源流聚合
   programs/mobj-<id>.md   # 单程序基本块流程图；按钮程序为 button-<id>.md（1000000 起的图内编号）

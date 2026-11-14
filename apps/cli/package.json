@@ -29,7 +29,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-viewer-assets.mjs",
     "bundle": "node ../../scripts/bundle-cli.mjs",
     "prepack": "node ../../scripts/bundle-cli.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -49,5 +49,8 @@
     "@bdmv2web/utils": "workspace:*",
     "@types/node": "24.10.0",
     "commander": "^15.0.0"
+  },
+  "dependencies": {
+    "d3-force": "^3.0.1"
   }
 }

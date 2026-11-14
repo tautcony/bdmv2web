@@ -5,8 +5,25 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": "./dist/index.js", "./external-targets": "./dist/external-targets.js" },
-  "scripts": { "build": "tsc -p tsconfig.build.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
-  "dependencies": { "@bdmv2web/bdmv-parser": "workspace:*", "@bdmv2web/hdmv": "workspace:*", "@bdmv2web/igs": "workspace:*", "@bdmv2web/utils": "workspace:*" },
-  "devDependencies": { "@bdmv2web/test-fixtures": "workspace:*", "@types/node": "24.10.0" }
+  "exports": {
+    ".": "./dist/index.js",
+    "./diagram/overview-mermaid": "./dist/diagram/overview-mermaid.js",
+    "./diagram/viewer-data": "./dist/diagram/viewer-data.js",
+    "./external-targets": "./dist/external-targets.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bdmv2web/bdmv-parser": "workspace:*",
+    "@bdmv2web/hdmv": "workspace:*",
+    "@bdmv2web/igs": "workspace:*",
+    "@bdmv2web/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@bdmv2web/test-fixtures": "workspace:*",
+    "@types/node": "24.10.0"
+  }
 }

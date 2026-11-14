@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from "commander";
 import { setActiveCommand, type ParsedOptions } from "./context.js";
 
-export type CommandName = "inspect" | "extract" | "build" | "validate" | "compare" | "list" | "export" | "render" | "serve";
+export type CommandName = "inspect" | "extract" | "build" | "validate" | "compare" | "list" | "export" | "render" | "serve" | "visualize";
 
 /**
  * One command module per name, imported on first use. Loading every command up
@@ -18,6 +18,7 @@ const loaders: Record<CommandName, () => Promise<() => Promise<void>>> = {
   export: async () => (await import("../commands/export.js")).exportAssets,
   render: async () => (await import("../commands/render.js")).renderPng,
   serve: async () => (await import("../commands/serve.js")).serve,
+  visualize: async () => (await import("../commands/visualize.js")).visualize,
 };
 
 /** Commander parses and dispatches; each command body reads the snapshot this leaves behind. */
@@ -109,6 +110,22 @@ export function buildProgram(version?: string): Command {
   serveCommand.option("--player <adapter>", "feature player adapter: system", oneOf("player", ["system"]));
   serveCommand.option("--player-executable <path>", "executable for the selected player adapter", nonEmpty);
   serveCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("serve", input, options));
+
+  const visualizeCommand = program.command("visualize")
+    .description("Export the navigation graph as an interactive viewer and mermaid diagrams")
+    .argument("[input]", "BDMV root or its parent directory")
+    .option("--out <dir>", "output directory (default: BDMV-graph next to the disc)", nonEmpty)
+    .option("--programs <ids>", "comma-separated program ids to render as per-program diagrams", nonEmpty)
+    .option("--max-blocks <n>", "blocks drawn per program diagram before truncation (default: 400)", (value) => {
+      if (!/^\d+$/.test(value)) throw new InvalidArgumentError("max-blocks must be a non-negative integer");
+      const parsed = Number(value);
+      if (parsed === 0) throw new InvalidArgumentError("max-blocks must be at least 1");
+      return parsed;
+    })
+    .option("--no-closure", "skip the media closure (no IGS extraction; playlist reachability is omitted)")
+    .option("--overwrite", "replace an existing output directory")
+    .option("--format <format>", "table or json", nonEmpty);
+  visualizeCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("visualize", input, options));
 
   const compareCommand = program.command("compare")
     .description("Compare an actual VM trace against an independent reference trace")

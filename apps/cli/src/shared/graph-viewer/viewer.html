@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bdmv2web · navigation graph</title>
+<style>
+__STYLES__
+</style>
+</style>
+
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div id="brand">bdmv2web <span>navigation graph</span></div>
+  <div id="stats"></div>
+  <div class="actions">
+    <button id="btn-back" disabled title="previous view">↩ Back</button>
+    <button id="btn-overview">Overview</button>
+    <button id="btn-layout-layered">Layered</button>
+    <button id="btn-layout-force">Force</button>
+    <button id="btn-fit">Fit</button>
+    <button id="btn-legend">Legend</button>
+  </div>
+</header>
+<div id="main">
+  <aside id="sidebar">
+    <input id="search" type="search" placeholder="Filter id / label / stream…" autocomplete="off">
+    <div id="closure-chip"></div>
+    <h3>MovieObjects</h3>
+    <div id="list-mobj"></div>
+    <h3>Button programs</h3>
+    <div id="list-buttons"></div>
+    <h3>Playlists</h3>
+    <div id="list-playlists"></div>
+    <h3>Unknown</h3>
+    <div id="list-unknown"></div>
+  </aside>
+  <div id="canvas-wrap">
+    <svg id="canvas"><defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"></path></marker>
+    </defs><g id="viewport"><g id="edges-layer"></g><g id="nodes-layer"></g></g></svg>
+    <div id="detail" class="hidden"><header><span id="detail-title"></span><button id="detail-close">✕</button></header><div id="detail-body"></div></div>
+    <div id="legend">
+      <h4>Legend</h4>
+      <div class="row"><span class="sw" style="background:#10233c;border:1.5px solid #4da3ff"></span> basic block</div>
+      <div class="row"><span class="sw" style="background:#0c2b1c;border:1.5px solid #2fd98a"></span> playlist (media)</div>
+      <div class="row"><span class="sw" style="background:#201a3d;border:1.5px solid #9d7bff"></span> program / object</div>
+      <div class="row"><span class="sw" style="background:#3a1c0a;border:1.5px dashed #ff9a4d"></span> dynamic / unresolved</div>
+      <div class="row"><span class="sw" style="background:transparent;border-top:2px solid #ff5d5d;height:4px"></span> loop back-edge</div>
+    </div>
+    <div id="hint">drag · pan&nbsp;&nbsp;wheel · zoom&nbsp;&nbsp;click block · disassembly</div>
+  </div>
+</div>
+<script>__D3_FORCE__</script>
+<script type="application/json" id="payload">__PAYLOAD__</script>
+<script>
+__RUNTIME__
+</script>
+</body>
+</html>
