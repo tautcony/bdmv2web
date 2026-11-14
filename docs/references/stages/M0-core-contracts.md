@@ -10,4 +10,4 @@
 | [Node.js 发布状态](https://nodejs.org/en/about/previous-releases) / [pnpm 安装](https://pnpm.io/installation) / [Vitest 配置](https://vitest.dev/config/) | 1.1, 3.3 | 官方工具链入口。选受支持 Node LTS、精确 pnpm 版本和 lockfile；Vitest 用于仓库测试配置。 | 页面滚动；不替项目锁版本。Vitest 不是协议正确性证据。来源 `NODE-RELEASES`, `PNPM-INSTALL`, `VITEST-CONFIG`。 |
 | [JSON Schema license](https://github.com/json-schema-org/json-schema-spec/blob/main/LICENSE) | 1.2 | 官方规范仓库许可说明。 | 不把完整外部标准内容复制进实现文档。来源 `JSON-SCHEMA-LICENSE`。 |
 
-参考实现可选用 libbluray 的 bitstream/file helpers 作解析器健壮性对照（`LIBBLURAY-1.5.0`，LGPL-2.1-or-later），不能把其 API schema 当作本项目 IR。另见 [来源机器清单](../sources.json)。
+参考实现可选用 libbluray 的 bitstream/file helpers 作解析器健壮性对照（`LIBBLURAY-1.5.0`，`COPYING` 为 LGPL-2.1 文本、源文件头声明 or-later 选项），不能把其 API schema 当作本项目 IR。另见 [来源机器清单](../sources.json)。

@@ -6,10 +6,12 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `src/parser.ts` | 五个格式解析器、主备选择、版本门、`parseBdmv` 编排 |
+| `src/parsing/parser.ts` | 五个格式解析器、主备选择、版本门、`parseBdmv` 编排 |
+| `src/parsing/source-location.ts` | `SourceLocation` 相对 BDMV 根的路径与偏移 |
 | `src/model.ts` | `ParsedDisc` 及所有结构类型 |
-| `src/graph.ts` | `traverseGraph`：按引用边遍历，带节点预算 |
-| `src/index.ts` | 仅导出 `discoverBdmvRoot`、`parseBdmv`、`traverseGraph` 与类型 |
+| `src/graph/graph.ts` | `traverseGraph`：按引用边遍历，带节点预算 |
+| `src/graph/graph-builder.ts` | 从解析结果装配引用图 |
+| `src/index.ts` | 导出 `discoverBdmvRoot`、`parseBdmv`、`parseBdmvWithInputTable`、`traverseGraph` 与类型 |
 
 ## 公开接口
 
@@ -97,7 +99,7 @@ traverseGraph(graph, roots: readonly string[], maxNodes?: number): GraphTraversa
 
 | 文件 | 覆盖 |
 | --- | --- |
-| `src/parser.test.ts` | 五种格式的正例、版本门、主备回退/冲突、截断与计数越界、可选 UHD 元数据损坏、HEVC `0x24` 属性、Mark 越界、STN/CLPI PID 冲突、真实样本（工作区本地）断言 |
+| `src/parsing/parser.test.ts` | 五种格式的正例、版本门、主备回退/冲突、截断与计数越界、可选 UHD 元数据损坏、HEVC `0x24` 属性、Mark 越界、STN/CLPI PID 冲突、真实样本（工作区本地）断言 |
 
 跨包一站式覆盖见 `apps/cli/tests/integration/synthetic-all-features.test.ts`（`test-data/fixtures/synthetic-all-features/`）。
 

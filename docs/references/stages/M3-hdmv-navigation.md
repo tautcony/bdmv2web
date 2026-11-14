@@ -23,18 +23,19 @@
   | `mobj_dump -d <disc>/BDMV/MovieObject.bdmv` | 固定源码 `src/devtools/mobj_dump.c` 与 `src/libbluray/hdmv/mobj_print.c` 编译出的逐对象逐指令反汇编 |
   | `bd_get_disc_info()` + `bd_play()` / `bd_read_ext()` | title id_refs 与 HDMV VM 的 PLAYLIST / TITLE 事件 |
 
-- **原始命令字还原：** `mobj_print.c` 的 `_cmd_to_u32()` 输出 `HDMV_INSN` 位域重新序列化的值。生成脚本的 `raw_command_word()` 按位域布局还原盘上原始 word0，4 个盘 5225 条命令与 `parseBdmv()` 的 12 字节逐字节一致，opcode 一致。
-- **index 布局：** `_fill_disc_info()` 把 `titles[0]` 留给 Top Menu、`titles[num_titles+1]` 留给 First Play，index titles 从 `titles[1]` 起。生成脚本按此读取，4 个盘派生的 CFG 与 `buildNavigationGraph()` 逐边一致。
-- **入库证据：** [libbluray-1.5.0-navigation-baseline.json](../../../test-data/baselines/libbluray-1.5.0-navigation-baseline.json)。4 盘、50 个 MovieObject、5225 条命令、6224 条 CFG 边。边 `[from,to,kind,resolution]` 由 libbluray 自身反汇编的助记符和它解析出的 index id_refs 独立派生。
+- **原始命令字还原：** `mobj_print.c` 的 `_cmd_to_u32()` 输出 `HDMV_INSN` 位域重新序列化的值。生成脚本的 `raw_command_word()` 按位域布局还原盘上原始 word0，5 个盘 5241 条命令与 `parseBdmv()` 的 12 字节逐字节一致，opcode 一致。
+- **index 布局：** `_fill_disc_info()` 把 `titles[0]` 留给 Top Menu、`titles[num_titles+1]` 留给 First Play，index titles 从 `titles[1]` 起。生成脚本按此读取，5 个盘派生的 CFG 与 `buildNavigationGraph()` 逐边一致。
+- **入库证据：** [libbluray-1.5.0-navigation-baseline.json](../../../test-data/baselines/libbluray-1.5.0-navigation-baseline.json)。5 盘、54 个 MovieObject、5241 条命令、6286 条 CFG 边。边 `[from,to,kind,resolution]` 由 libbluray 自身反汇编的助记符和它解析出的 index id_refs 独立派生。基线由 `scripts/generate-libbluray-baselines.py` 再生成；再生成后重新统计本节与 `docs/llm-wiki/testing.md` 引用的盘数、MovieObject、命令与 CFG 边计数并同步。
 
   | Case | MovieObject | 命令 | CFG 边 | title | VM playlist 事件 |
   | --- | ---: | ---: | ---: | ---: | --- |
-  | tamako | 17 | 4969 | 5894 | 26 | 1, 2, 3, 57 |
-  | kyoani-ova | 5 | 87 | 103 | 5 | 0, 1, 4 |
-  | bang-dream-mygo-vol1 | 4 | 56 | 82 | 4 | 0, 2, 3 |
-  | battle-royale-uhd | 24 | 113 | 145 | 22 | 1997, 1999 |
+  | tamako | 17 | 4969 | 5907 | 26 | 1, 2, 3, 57 |
+  | kyoani-ova | 5 | 87 | 108 | 5 | 0, 1, 4 |
+  | bang-dream-mygo-vol1 | 4 | 56 | 86 | 4 | 0, 2, 3 |
+  | battle-royale-uhd | 24 | 113 | 168 | 22 | 1997, 1999 |
+  | synthetic-all-features | 4 | 16 | 17 | 3 | 1 |
 
-- **自动化对照：** `apps/cli/src/libbluray-navigation-baseline.test.ts`（5 例）。逐盘对照 `parseBdmv()` 的 index 条目与对象引用和 `bd_info` / `bd_get_disc_info()`、5225 条命令的字节与 opcode 和 `mobj_dump -d`、`bd_list_titles -a` 的 playlist / clip / chapter 结构，并逐边对照完整 CFG。VM playlist 事件由 `bd_list_titles` 声明且被本项目解析。测试只读入库 JSON 与夹具，运行时不需要本机 libbluray。
-- **结果：** 4 个盘全部逐边一致（missing 0 / extra 0）；5225 条命令 byteMismatch 0、opcodeMismatch 0；playlist 结构 missing 0、clipDiff 0、markDiff 0。
-- **适用范围：** VM 事件覆盖 `bd_play()` 本次到达的 playlist；静态 CFG 覆盖反汇编出的全部命令。`packages/runtime-web/src/hdmv-navigation-corpus-dfs.test.ts` 的 DFS 统计是本项目探索器的实现回归 pin，其索引条目数与静态 PLAY_PL 目标由本基线驱动。BD-J 执行属于 runtime-web，不属于 M3 的 HDMV VM 一致性范围。
+- **自动化对照：** `apps/cli/tests/integration/libbluray-navigation-baseline.test.ts`（5 例）。逐盘对照 `parseBdmv()` 的 index 条目与对象引用和 `bd_info` / `bd_get_disc_info()`、5241 条命令的字节与 opcode 和 `mobj_dump -d`、`bd_list_titles -a` 的 playlist / clip / chapter 结构，并逐边对照完整 CFG。VM playlist 事件由 `bd_list_titles` 声明且被本项目解析。测试只读入库 JSON 与夹具，运行时不需要本机 libbluray。
+- **结果：** 5 个盘全部逐边一致（missing 0 / extra 0）；5241 条命令 byteMismatch 0、opcodeMismatch 0；playlist 结构 missing 0、clipDiff 0、markDiff 0。
+- **适用范围：** VM 事件覆盖 `bd_play()` 本次到达的 playlist；静态 CFG 覆盖反汇编出的全部命令。`packages/runtime-web/tests/integration/hdmv-navigation-corpus-dfs.test.ts` 的 DFS 统计是本项目探索器的实现回归 pin，其索引条目数与静态 PLAY_PL 目标由本基线驱动。BD-J 执行属于 runtime-web，不属于 M3 的 HDMV VM 一致性范围。
 - **其他参考工具记录：** 固定 commit `ec0e5b27d2852ca6b008719f66aa3324c0b43f28` 的 libhdmv `hdmv-inspect` 在当时登记的 5 个语料盘均以 index 解析 `unexpected end of data` 结束；`hdmv-insn` crate 可独立编译，其分支/opcode 映射输出与 libbluray 当前基准不一致，未纳入入库基线。

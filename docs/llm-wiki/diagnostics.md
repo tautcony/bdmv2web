@@ -51,7 +51,6 @@ rg '"CODE_NAME"' packages apps
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 | 输入文件格式与完整性 |
 | `INVALID_LIMITS_FILE` | `--limits` 文件不是合法 JSON | 文件内容 |
 | `INVALID_LIMIT` | limits 键未知或值非法 | 允许键与取值范围 |
-| `E_NOT_IMPLEMENTED` | 命令已注册但未实现（`compare`），退出码 1 | 改走现有 `build` + `validate` 组合 |
 | `STAGE_FAILED` | 阶段失败时的兜底码：无 `fatal` 诊断时取首条诊断码，取不到才用它 | 同一次运行的完整诊断列表 |
 | `E_IO` | 非 `ContractError` 的异常统一出口 | stderr 的 `message` |
 

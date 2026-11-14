@@ -76,7 +76,7 @@ interface PlayerProfile {
 
 - CLI 校验走 `profileWord`（大写国家码、小写语言码），非法值报 `CLI_INVALID_PROFILE`。
 - `outputProfile` 只是产物标签，没有 PSR 映射；PSR21 用独立的 `outputPreference`。
-- `videoProfiles`/`audioProfiles` 当前不推导能力位；需要覆盖能力时用 `PlayerProfile.capabilityValues`（只接受 PSR15、23–31、48–61）。
+- `videoProfiles`/`audioProfiles` 当前不推导能力位；需要覆盖能力时用 `@bdmv2web/hdmv` 的 `PlayerProfile.capabilityValues`（`packages/hdmv/src/virtual-machine/registers.ts`，只接受 PSR15、23–31、48–61）。
 - 同一 profile 必须同时进入转换期 VM 和包内 VM（`runtime/disc-data.js` 的 `profile` 字段），否则 PSR 相关按钮行为在浏览器里不一致。
 
 ## Limits
@@ -106,8 +106,8 @@ interface PlayerProfile {
 | 类型 | 位置 | 字段 |
 | --- | --- | --- |
 | `ParseDiagnostic` | `packages/bdmv-parser/src/model.ts` | `severity: info\|warning\|error\|fatal`、`code`、`message`、`sourcePath`、`offset`、`entityId`、`action`、`recoverable`、`stage: "structural"`、`affectedEntryIds` |
-| `IgsDiagnostic` | `packages/igs/src/types.ts` | `severity: info\|warning\|error`、`code`、`message`、`source: IgsSource \| null`、`affectedSceneIds`、`details` |
-| `VmDiagnostic` | `packages/hdmv/src/vm.ts` | `code`、`message`、`source: SourceLocation \| null` |
+| `IgsDiagnostic` | `packages/igs/src/scene/types.ts` | `severity: info\|warning\|error`、`code`、`message`、`source: IgsSource \| null`、`affectedSceneIds`、`details` |
+| `VmDiagnostic` | `packages/hdmv/src/virtual-machine/vm-types.ts` | `code`、`message`、`source: SourceLocation \| null` |
 | `Diagnostic`（DiscIR） | `packages/core` | 含 `severity`/`code`/`message`/`sourcePath`/`offset`/`entityId`/`action`/`recoverable`/`stage`/`affectedEntryIds` |
 | `DeliveryDiagnostic` | `packages/test-runner/src/decisions.ts` | `severity`、`code?`、`acknowledged?`、`blocksComplete?`、`message?`、`acknowledgement?` |
 

@@ -6,9 +6,10 @@
 
 ```text
 src/
-  index.ts              入口：main、CommanderError → 契约码、统一 catch
+  index.ts              shim：读包版本并调用 cli/run.ts
   progress.ts           stderr 进度渲染
   cli/
+    run.ts              main、CommanderError → 契约码、统一 catch
     program.ts          commander 命令与选项声明、dispatch、COMMANDER_CODES
     context.ts          当前命令的解析结果：optionValue/flagEnabled/optionState/inputPath
     errors.ts           fail、outputFormat
@@ -18,14 +19,17 @@ src/
     assets.ts           AssetRecord、--type/--m2ts/--pid/--decode 解析、资产路径命名
   commands/
     inspect.ts extract.ts list.ts export.ts render.ts build.ts validate.ts compare.ts
+    serve.ts visualize.ts menu-planning.ts media-progress.ts
   shared/
     media.ts            buildMediaClosure、buildExternalTargets
     pgs.ts              reachablePgsReferences、extractReachablePgsTracks
+    bdj-files.ts bdj-host.ts disc-id.ts external-player.ts graph-viewer-html.ts
 ```
 
 | 文件 | 职责 |
 | --- | --- |
-| `index.ts` | 只做入口：`main` 调 `buildProgram`，把 `CommanderError` 映射成契约码，最后统一输出错误。 |
+| `index.ts` | 入口 shim：读包版本并调用 `cli/run.ts`。 |
+| `cli/run.ts` | `main` 调 `buildProgram`，把 `CommanderError` 映射成契约码，最后统一输出错误。 |
 | `cli/program.ts` | 一个命令一个 `program.command(...)`，含位置参数与选项；`dispatch` 把解析结果交给对应实现。 |
 | `cli/context.ts` | `dispatch` 保存解析结果，命令体用 `optionValue("--out")` 等读取；`optionState` 用于 `--progress/--no-progress` 这种三态 flag。 |
 | `commands/*` | 每个命令一个文件，只做“参数语义校验 → 调包 → 事务 → 输出”。 |
@@ -40,6 +44,8 @@ inspect   [input]  --out --format --allow-partial
 extract   [input]  --out --type --all --format
 build     [input]  --out --title --player-profile --limits --disc-id --overwrite --resume --crf --preset --codec --hdr --video --menu-media --progress/--no-progress
 validate  [input]  --format
+serve     [input]  --port --java --disc-id --player --player-executable
+visualize [input]  --out --programs --max-blocks --no-closure --overwrite --format
 compare   [input]  --actual --reference --reference-tool --reference-version --out --format
 list      [input]  --type --m2ts --pid --out --format
 export    [input]  --out --type --m2ts --pid --decode --png-level --format
@@ -109,7 +115,7 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 3. `manifest.status` 与当前判定不一致时，追加 `MANIFEST_STATUS_UNVERIFIED`（`not-verified`），**不改写** manifest。
 4. 可写时写入 `dependency-audit.json`、更新 `reports.json.compatibility` 并写 `reports/release-summary.json`；验证结果保留 `reports.json.conversion`。任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。
 5. 退出码取 `releaseSummary.release.exitCode`。
-6. 文本输出只列 `gaps`（非 `pass` 检查，已合并去重），不再重复打印 `audit.checks`；`Limitation:` 只写进报告，不作为结论行打印。覆盖率不采集，`coverage` 记为空对象而不是 N/A 占位。
+6. 文本输出只列 `gaps`（非 `pass` 检查，已合并去重）；`audit.checks` 不打印，`Limitation:` 只写进报告。覆盖率不采集，`coverage` 记为空对象。
 
 ## 错误出口
 
@@ -130,11 +136,11 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 | 成功，`complete` / `partial` | 0 |
 | `failed` / 参数错误 / `fatal` | 1 |
 
-`inspect --allow-partial` 例外：始终 0。`compare` 始终 1。
+`inspect --allow-partial` 例外：始终 0。`compare` 按结果退出：`pass` 0、分歧或输入错误 1、`not-verified` 2。
 
 ## 测试
 
-`tests/e2e/index.test.ts`（31 例）：profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度、资产与 PNG 导出。参数解析本身由 `commander` 覆盖，测试不再重复断言未知选项、缺值与多余位置参数。`tests/integration/synthetic-all-features.test.ts`（8 例）在 `test-data/fixtures/synthetic-all-features/` 上覆盖解析、HDMV 解码与 VM、IGS 多页与弹出菜单、双语言 PGS、循环点、按钮音效与一站式交接。
+`tests/integration/` 覆盖命令契约与行为：`cli-commands.test.ts`（profile 校验、limits 传播、事务与不落盘、stage/delivery 分离、`validate` 不写 manifest、`--format` 校验先于 IO、stderr 逐步进度、资产与 PNG 导出），另有 `build-menu-media-option`、`build-resume-option`、`menu-media-encoding`、`list`、`inspect-structural-records`、`serve-bdj`、`external-player-launch`、`visualize-command`、`source-cli-fixture` 各专题用例。未知选项、缺值与多余位置参数由 `commander` 处理。`tests/integration/synthetic-all-features.test.ts`（8 例）在 `test-data/fixtures/synthetic-all-features/` 上覆盖解析、HDMV 解码与 VM、IGS 多页与弹出菜单、双语言 PGS、循环点、按钮音效与一站式交接。
 
 ## 改动入口
 

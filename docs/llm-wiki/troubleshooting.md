@@ -117,7 +117,7 @@ corepack pnpm test
 | 停在某个 PC 不动 | trace 最后一条是否有动作等待；`MEDIA_*` 回信是否匹配 `generation`/`responseTo` |
 | 指令没生效 | 该指令是否在 `HDMV_OPCODE_CONTEXT_SKIPPED`（上下文不允许） |
 | 循环卡死 | `VM_EXECUTION_LIMIT`；用 `--limits` 提高预算前先确认不是逻辑死循环 |
-| 对比参考实现不一致 | `docs/review-2026-11-06-hdmv-vm-conformance/index.md`；`reference-golden.test.ts` 报首个差异检查点 |
+| 对比参考实现不一致 | `docs/archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md`；`reference-golden.test.ts` 报首个差异检查点 |
 | 想看清整条路径 | `corepack pnpm build && node scripts/visualize-hdmv-vm-flow.mjs <BDMV> /tmp/flow.md` |
 
 浏览器里 VM trace 以 `console.info("[VM] ...")` 批量输出，包含步数、命令、动作、事件、诊断与状态。

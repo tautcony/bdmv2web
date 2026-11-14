@@ -4,7 +4,7 @@
 
 ## 1. 可达范围：媒体闭包
 
-`computeMediaClosure(disc, movieGraph, buttonGraphs?)` 输出：
+`computeMediaClosure(disc, movieGraph, buttonRoots?)` 输出：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -52,7 +52,7 @@
 | `all` | VM 可达播放列表的全部 PlayItem | BDJO 授权播放列表的全部 PlayItem |
 | `none` | 不导出 | 不导出 |
 
-BD-J 的 BDJO 常以 `accessToAll` 授权整碟，仅凭授权会把正片与花絮一并导出（两小时正片加花絮可达几十 GB），因此 `auto` 用时长上限区分菜单级内容，被跳过的播放列表写 `M5_MENU_MEDIA_SCOPE_SKIPPED` 并列出编号与分钟数。`all` 是显式的整碟选择；`none` 只打包结构与场景，写 `M5_MENU_MEDIA_DISABLED`。
+BD-J 模式下 `auto` 以播放列表总时长 ≤ 900 秒为菜单级判据，超出的播放列表写 `M5_MENU_MEDIA_SCOPE_SKIPPED` 并列出编号与分钟数。`all` 是显式的整碟选择；`none` 只打包结构与场景，写 `M5_MENU_MEDIA_DISABLED`。
 
 ### 编码参数
 
@@ -84,11 +84,9 @@ Top Menu 同一连续 clip 区间导出为一个背景资产。播放列表跨 c
 
 ### 一次解复用，多个输出
 
-一个 clip 只起一个 `ffmpeg` 进程：`-i` 解复用一次，同一个命令里先写 `background.mp4`，再按 `audioTracks` 逐个 `-map <audio pid> ... -f ipod audio-<pid>-<lang>.m4a`。复制与编码两条路径都这样拼参数，音频参数（`audioArgs`）直接接在视频输出之后。
+一个 clip 只起一个 `ffmpeg` 进程：`-i` 解复用一次，同一个命令里先写 `background.mp4`，再按 `audioTracks` 逐个 `-map <audio pid> ... -f ipod audio-<pid>-<lang>.m4a`。复制与编码两条路径都这样拼参数，音频参数（`audioArgs`）直接接在视频输出之后；进程存活时间由最慢的输出决定。
 
-此前是「视频一次 + 每条音轨各一次」，每次都要把整段 clip 重新读一遍。6 音轨的 2.2 GB 菜单 clip 因此读 7 遍，走 SMB 时同一段字节要付 7 次代价：实测每遍音轨约 110 s，单进程后整段 658 s 的菜单 15 s 写完（565% CPU）。音频也不再串行排在视频后面——进程的存活时间由最慢的输出决定，而不是由输出个数决定。
-
-两个细节：复制路径已经在输入侧 `-ss` 到声明起点，音频输出不再单独 `-ss`，否则会双重偏移；复制产物校验失败重编码时，音频已经在同一进程里写好了，重编码只重做视频（`audioWritten`）。`-ss` 的落点按「该时刻所在或之前的关键帧」计算，所以复制与音频起点都取声明起点而不是 EP 入口点，否则会退到上一关键帧（实测 6 音轨时长少 11.6 s、首帧与源 in 点不符）。
+两个细节：复制路径在输入侧 `-ss` 到声明起点，音频输出不附加 `-ss`，再偏移会双重偏移；复制产物校验失败重编码时，音频已经在同一进程里写好了，重编码只重做视频（`audioWritten`）。`-ss` 的落点按「该时刻所在或之前的关键帧」计算，所以复制与音频起点都取声明起点而不是 EP 入口点。
 
 ### 进度与计数
 

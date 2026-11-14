@@ -2,7 +2,7 @@
 
 ## Package
 
-`bdmv2web` is published from `apps/cli` as one self-contained ESM entry plus the menu runtime it copies into each generated package.
+`bdmv2web` is published from `apps/cli` as one self-contained ESM entry plus the menu runtime and BD-J runtime files it copies into the tarball.
 
 ```sh
 npm install -g bdmv2web
@@ -29,7 +29,7 @@ npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
 /tmp/bdmv2web-prefix/bin/bdmv2web --version
 ```
 
-`pnpm pack` runs the `prepack` script, which bundles `apps/cli/src/index.ts` with esbuild and copies the menu runtime. `packages/*/dist` must already exist, so run `corepack pnpm build` first.
+`pnpm pack` runs the `prepack` script (`scripts/bundle-cli.mjs`), which bundles `apps/cli/src/index.ts` with esbuild, copies the menu runtime and the BD-J client bundle, builds the BD-J host API JAR, copies the package-builder templates, and writes the build-mode marker. `packages/*/dist` must already exist, so run `corepack pnpm build` first.
 
 ## Package contents
 
@@ -37,7 +37,11 @@ npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
 | --- | --- |
 | `dist/index.js` | Bundled CLI entry with the `bdmv2web` bin mapping |
 | `dist/runtime/app.bundle.js` | Menu runtime read while packaging a disc |
-| `package.json`, `LICENSE` | Package metadata and licence |
+| `dist/runtime/bdj-client.bundle.js` | Browser-side BD-J session client |
+| `dist/runtime/bdj-host-api.jar` | BD-J host API JAR written into BD-J packages |
+| `dist/templates/` | Package-builder templates (menu `index.html`, styles, README) |
+| `dist/bench-build-mode.json` | Build-mode marker written by the bundle script |
+| `package.json`, `README.md` | Package metadata |
 
 `pnpm pack` rewrites the `workspace:*` entries of `devDependencies` to fixed versions. `dist/index.js` inlines every workspace package, and the published dependency graph lists no workspace entries.
 
@@ -89,4 +93,4 @@ Prerelease versions publish to the `latest` dist-tag; the workflow passes no `--
 
 ## Menu runtime bundle
 
-`corepack pnpm build` emits `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`. Packaging a disc copies that file to `dist/runtime/app.bundle.js` and then to `runtime/app.bundle.js` inside the generated package. `scripts/bundle-cli.mjs` performs the same copy for the published CLI.
+`corepack pnpm build` emits `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`. Packaging a disc copies that file to `dist/runtime/app.bundle.js` and then to `runtime/app.bundle.js` inside the generated package. `scripts/bundle-cli.mjs` performs the same copy for the published CLI, together with the BD-J client bundle, the host API JAR, and the templates.

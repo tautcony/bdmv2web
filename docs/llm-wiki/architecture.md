@@ -4,7 +4,7 @@
 
 | 阶段 | 运行环境 | 允许 | 禁止 |
 | --- | --- | --- | --- |
-| 转换 | Node.js ≥ 24.18.0 且 < 25 | 读源盘、`ffmpeg`/`ffprobe`、写输出事务 | 把解密/DRM 当能力 |
+| 转换 | Node.js ≥ 24.18.0（`.node-version` 固定 24.18.0；CLI 包 engines 为 `>=22`） | 读源盘、`ffmpeg`/`ffprobe`、写输出事务 | 把解密/DRM 当能力 |
 | 交付 | 静态 HDMV/IGS 包通过 `file://`；BD-J 包通过 `bdmv2web serve` | 静态文件、Canvas、`HTMLMediaElement`、键鼠/触摸；BD-J 使用本地 Java 进程和回环会话 API | BD-J Java 进程按启动账户权限访问本机资源 |
 | 校验 | Node.js | 只读包目录、重算报告 | 改写 `manifest.status`、读原盘 |
 
@@ -15,18 +15,19 @@
 | 包 | 依赖（workspace） | 角色 |
 | --- | --- | --- |
 | `@bdmv2web/core` | —（运行时仅 `ajv`） | DiscIR schema/类型、Time90k、Limits、PlayerProfile、诊断与事件信封 |
-| `@bdmv2web/bdmv-io` | core | 输入发现、按表读文件、限流读流、输出事务、路径隔离 |
-| `@bdmv2web/bdmv-parser` | core, bdmv-io | BDMV 元数据解析、主备回退、结构引用图 |
-| `@bdmv2web/hdmv` | core, bdmv-parser | 指令解码、寄存器、VM、导航图、静态循环 |
-| `@bdmv2web/igs` | core, bdmv-io, bdmv-parser | M2TS/TS/PES 重组、IGS 段与场景、PNG |
-| `@bdmv2web/media-export` | bdmv-parser, hdmv, igs | 媒体闭包、媒体计划、ffmpeg 导出、PGS、外部目标 |
-| `@bdmv2web/package-builder` | core, hdmv, media-export（+ `esbuild`） | 菜单包文件、脚本嵌入、音效、manifest |
-| `@bdmv2web/runtime-web` | bdmv-parser, hdmv, igs, media-export | 浏览器菜单运行时；被 package-builder 打成 IIFE |
-| `@bdmv2web/test-runner` | — | 包审计、状态判定、覆盖率、报告 |
+| `@bdmv2web/utils` | — | 共享 Node 工具（`node-fs` 文件系统工具等），被除 `core`/`test-fixtures` 外的全部包依赖 |
+| `@bdmv2web/bdmv-io` | core, utils | 输入发现、按表读文件、限流读流、输出事务、路径隔离 |
+| `@bdmv2web/bdmv-parser` | bdmv-io, core, utils | BDMV 元数据解析、主备回退、结构引用图 |
+| `@bdmv2web/hdmv` | bdmv-parser, core, utils | 指令解码、寄存器、VM、导航图、静态循环 |
+| `@bdmv2web/igs` | bdmv-io, bdmv-parser, core, utils | M2TS/TS/PES 重组、IGS 段与场景、PNG |
+| `@bdmv2web/media-export` | bdmv-parser, hdmv, igs, utils | 媒体闭包、媒体计划、ffmpeg 导出、PGS、外部目标 |
+| `@bdmv2web/package-builder` | media-export, runtime-web, hdmv, core, utils | 菜单包文件、脚本嵌入、音效、manifest |
+| `@bdmv2web/runtime-web` | media-export, igs, hdmv, bdmv-parser, core, utils | 浏览器菜单运行时；被 package-builder 打成 IIFE |
+| `@bdmv2web/test-runner` | utils | 包审计、状态判定、覆盖率、报告 |
 | `@bdmv2web/test-fixtures` | core | 合成 BDMV 字节构造器与运行时夹具 |
-| `bdmv2web` | 以上全部 | 命令编排与退出码 |
+| `bdmv2web` | 以上全部（经打包内联） | 命令编排与退出码 |
 
-依赖方向单向：`core ← io ← parser ← {hdmv, igs} ← media-export ← {package-builder, runtime-web} ← cli`。`test-runner` 不依赖业务包，只消费 JSON/文件事实。
+依赖方向单向：`{core, utils} ← bdmv-io ← bdmv-parser ← {hdmv, igs} ← media-export ← {package-builder, runtime-web} ← cli`；`utils` 不依赖其他 workspace 包。`test-runner` 不依赖业务包，只消费 JSON/文件事实。
 
 ## 数据形态
 
@@ -57,7 +58,7 @@
 9. `buildMediaClosure` + `createExternalMediaTargets` 生成可达播放列表与外部播放目标。
 10. 收集：MovieObject 程序、入口表、音效字节、被引用 PNG、诊断。
 11. `decideDelivery` 先算状态（`checks: []`，只由诊断与事实决定），`buildMenuPackage` 按该状态写包，避免包自己造结论。
-12. `buildMenuPackage` 写文件、导出媒体、`esbuild` 打包 `runtime-web/src/browser.ts` 为 `runtime/app.bundle.js`、写 `manifest.json`。
+12. `buildMenuPackage` 写文件、导出媒体、复制 `runtime-web/dist/browser.bundle.js` 为 `runtime/app.bundle.js`（bundle 由 workspace build 期的 `scripts/build-runtime-browser.mjs` 用 esbuild 产出）、写 `manifest.json`。
 13. 写入 `reports.json`，`commit()`，stdout 输出 `{ status, output }`；`status !== complete` 时退出码按 `0/1/2` 规则。
 
 ## 产物与仓库目录
@@ -65,9 +66,11 @@
 | 路径 | 内容 |
 | --- | --- |
 | `test-data/bdmv/` | 工作区本地真实样本（不入库保密内容，路径含真实目录名） |
-| `test-data/fixtures/` | 合成/打包夹具：`synthetic-all-features/`、`hdmv-navigation/`、`igs-parser/` |
+| `test-data/fixtures/` | 合成/打包夹具：`synthetic-all-features/`、`hdmv-navigation/`、`igs-parser/`、`perf/` |
 | `test-data/baselines/` | 测试读取的参考基线：libbluray IGS/导航、pinned igstools 逐元素 RGBA 摘要 |
 | `test-data/output/` | 手工验收产出的菜单包与资产，不参与自动测试 |
+| `test-data/bench/` | 性能工具的本地 run 记录、配对与报告（`.gitignore` 排除；CI 上传自己的 artifact） |
+| `test-data/remote-corpus/` | 远端真实样本的本地清单与元数据（样本本体不入库） |
 | `.reference-cache/` | 固定 revision 的上游参考源码（libbluray / libhdmv / igstools / bdmvkit），被 `.gitignore` 排除 |
 | `docs/references/stages/` | M0–M6 阶段索引与证据 |
 

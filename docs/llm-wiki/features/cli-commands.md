@@ -1,6 +1,6 @@
 # 功能：CLI 命令
 
-九个命令中八个已实现，`compare` 未实现。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`render` 也接受独立的 `.mnu`/`.sup` 文件。
+十个命令全部实现：`inspect`、`extract`、`build`、`validate`、`serve`、`visualize`、`compare`、`list`、`export`、`render`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`render` 也接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
@@ -12,13 +12,14 @@
 | `export` | 导出 `.mnu`/`.sup` 原始资源 | `assets-manifest.json` + 资产 | 已实现 |
 | `render` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
 | `build` | 生成菜单包；BD-J 包内含 Java host、应用文件和 session 数据 | `BDMV-menu/` 整目录 | 已实现 |
-| `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；支持 `--java <executable>` | 本地 URL | 已实现 |
+| `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；选项 `--port`、`--java`、`--disc-id`、`--player system`、`--player-executable` | 本地 URL | 已实现 |
+| `visualize` | 导出导航图交互查看器与 mermaid 总览/分程序流程图 | `BDMV-graph/`（`index.html`、`graph.json`、`overview.md`、`programs/`） | 已实现 |
 | `validate` | 重算菜单包审计 | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` | 已实现 |
-| `compare` | 参考对照 | — | 未实现，返回 `E_NOT_IMPLEMENTED` |
+| `compare` | 对照 VM trace 与独立参考 trace | stdout 比对报告 JSON；可选 `--out` | 已实现 |
 
-命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。`convert` 是 `build` 的历史别名。
+命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。`convert` 是 `build` 的别名。
 
-`--format` 的生效范围：`inspect`、`list` 用它选择 `table|json`；`validate` 只校验取值必须为 `json`；`compare` 用它决定错误输出格式；`extract`、`build`、`export`、`render` 接受该选项但不改变输出。
+`--format` 的生效范围：`inspect`、`list`、`visualize` 用它选择 `table|json`；`validate`、`compare` 只校验取值必须为 `json`；`extract`、`export`、`render` 接受该选项但不改变输出。
 
 ## `inspect`
 
@@ -133,9 +134,9 @@ IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与
 
 编码参数的生效范围：`--codec`/`--crf`/`--preset`/`--hdr` 只在重编码背景视频时起作用。`--video copy` 成功时背景流按比特复制，这四个值只写入 media plan 参与复用匹配；`--menu-media none` 或盘上无可导媒体时不发生编码，它们仍记录进 `mediaEncoding` 但不参与导出。
 
-`--menu-media` 的三种取值在两种导航模式下含义相同，判定证据不同：HDMV 由 IGS 场景确定哪些 PlayItem 属于菜单，`auto` 即「场景匹配到的菜单媒体」；BD-J 没有场景证据，BDJO 又常以 `accessToAll` 授权整碟，`auto` 改以播放列表总时长不超过 900 秒作为菜单级判据，超出的写 `M5_MENU_MEDIA_SCOPE_SKIPPED`（列出编号与分钟数，提示可用 `--menu-media all`）。`all` 在两种模式下都导出全部可达 PlayItem（HDMV 取 VM 可达集合，BD-J 取 BDJO 授权集合），会包含正片，开销接近整碟。`none` 只打包结构与场景，运行时把 `PLAY_PLAYLIST` 报为不可用，并写 `M5_MENU_MEDIA_DISABLED`。
+`--menu-media` 的三种取值在两种导航模式下含义相同，判定证据不同：HDMV 由 IGS 场景确定哪些 PlayItem 属于菜单，`auto` 即「场景匹配到的菜单媒体」；BD-J 没有场景证据，`auto` 以播放列表总时长不超过 900 秒作为菜单级判据，超出的写 `M5_MENU_MEDIA_SCOPE_SKIPPED`（列出编号与分钟数，提示可用 `--menu-media all`）。`all` 在两种模式下都导出全部可达 PlayItem（HDMV 取 VM 可达集合，BD-J 取 BDJO 授权集合），会包含正片，开销接近整碟。`none` 只打包结构与场景，运行时把 `PLAY_PLAYLIST` 报为不可用，并写 `M5_MENU_MEDIA_DISABLED`。
 
-进度输出（stderr）：开头是 `input`、`output`、`title`、`profile` 四行，`--resume` 时另加 `resume` 行给出复用来源，随后是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，行首标记随计时器持续动画，无媒体可导时该步标记为跳过。媒体导出期间该步按 **clip** 聚合：一个 clip 的背景与它的全部音轨算一个单位，音轨再多也只推进一次，百分比与 `clip i/N` 同步，复用的 clip 也计入已完成（它主动上报一个已完成事件，所以 `--resume` 续跑同样能走到 100%）。明细为 `clip i/N · Clip · 流 · 已编码/总时长`，其中 `i/N` 是计划内的 clip 位置，背景流那一项写作 `background copy` 或 `background encode`，直接给出该 clip 实际走的是复制还是重编码（请求了 `--video copy` 但被拒绝时这里显示 `encode`，不再静默回退），复用时另带 `· reused`。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 不是终端时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
+进度输出（stderr）：开头是 `input`、`output`、`title`、`profile` 四行，`--resume` 时另加 `resume` 行给出复用来源，随后是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，行首标记随计时器持续动画，无媒体可导时该步标记为跳过。媒体导出期间该步按 **clip** 聚合：一个 clip 的背景与它的全部音轨算一个单位，音轨再多也只推进一次，百分比与 `clip i/N` 同步，复用的 clip 也计入已完成（它主动上报一个已完成事件，所以 `--resume` 续跑同样能走到 100%）。明细为 `clip i/N · Clip · 流 · 已编码/总时长`，其中 `i/N` 是计划内的 clip 位置，背景流那一项写作 `background copy` 或 `background encode`，直接给出该 clip 实际走的是复制还是重编码（请求了 `--video copy` 但被拒绝时这里显示 `encode`），复用时另带 `· reused`。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 不是终端时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
 
 产物目录：
 
@@ -176,10 +177,48 @@ reports/                       # validate 之后出现
 ## `compare`
 
 ```sh
-bdmv2web compare <input> [--format json]
+bdmv2web compare <input> --actual <trace.json> [--reference <trace.json>] [--reference-tool NAME] [--reference-version VERSION] [--out FILE] [--format json]
 ```
 
-未实现：stderr 输出 `{ code: "E_NOT_IMPLEMENTED", command, message }`，退出 1。`test-runner` 里已有 `compareVmTraces` / `compareIgRgbaFrames` / `createReferenceCompareReport`，可直接用于实现该命令。
+| 选项 | 作用 |
+| --- | --- |
+| `--actual FILE` | 必填；实际运行产生的 VM trace 事件数组 JSON |
+| `--reference FILE` | 可选；独立参考 trace，必须与 `--actual` 是不同文件 |
+| `--reference-tool NAME` | 参考工具名，缺省 `unspecified` |
+| `--reference-version VERSION` | 参考工具版本 |
+| `--out FILE` | 额外把报告写入该文件 |
+| `--format json` | 只接受 `json` |
+
+`<input>` 是确定性输入序列 JSON（profile、寄存器、稳定入口、seed 与有序事件），报告由 `@bdmv2web/test-runner` 的 `createReferenceCompareReport` 生成并打印到 stdout。缺参考或缺参考工具版本时 `result: not-verified`。
+
+## `visualize`
+
+```sh
+bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-closure] [--overwrite] [--format json]
+```
+
+| 选项 | 作用 |
+| --- | --- |
+| `--out DIR` | 输出目录，缺省为盘旁的 `BDMV-graph/` |
+| `--programs IDS` | 逗号分隔的程序 id；只影响分程序流程图的写出，查看器始终包含全部程序 |
+| `--max-blocks N` | 单个程序流程图绘制的块数上限（缺省 400），超出的块折叠为一个提示节点 |
+| `--no-closure` | 跳过媒体闭包（不做 IGS 提取），输出不含 playlist 可达性与 route 来源 |
+| `--overwrite` | 替换已存在的输出目录，否则报 `TARGET_EXISTS` |
+| `--format json` | stdout 输出摘要 JSON；缺省打印汇总表 |
+
+产物：
+
+```text
+<out>/
+  index.html              # 自包含交互查看器：数据内嵌、无外部资源，file:// 直接打开；
+                          # 侧栏按程序/playlist/unknown 过滤，主画布分层布局支持拖拽缩放，
+                          # 点击块看逐条反汇编，Overview 视图展示 entry → 程序 → playlist 全景
+  graph.json              # 与查看器相同的载荷：分程序基本块、块级边、playlist 边界与 route 来源
+  overview.md             # mermaid 总览：entry → MovieObject → playlist，按钮程序按来源流聚合
+  programs/mobj-<id>.md   # 单程序基本块流程图；按钮程序为 button-<id>.md（1000000 起的图内编号）
+```
+
+媒体闭包的完成状态与 unknown 明细在 `graph.json` 的 `mediaClosure` 中；分程序图里绿色 playlist 节点是媒体落点，橙色虚线边为静态不可确定的目标，红色边为静态回边（潜在循环，非运行时证据）。
 
 ## 通用退出码
 
@@ -188,7 +227,7 @@ bdmv2web compare <input> [--format json]
 | `complete`、`partial` | 0 |
 | `failed`、参数错误、`fatal` | 1 |
 
-`inspect --allow-partial` 始终 0；`compare` 始终 1。
+`inspect --allow-partial` 始终 0；`compare` 按结果退出：`pass` 0、分歧或输入错误 1、`not-verified` 2。
 
 ## 参数错误码
 
@@ -208,6 +247,11 @@ bdmv2web compare <input> [--format json]
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 |
 | `CLI_RENDER_SELECTION` | `render` 混用 BDMV 与 `.mnu`/`.sup`，或选项不适用于输入类型 |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 |
+| `CLI_INVALID_PNG_LEVEL` | `--png-level` 不是 0–9 |
+| `CLI_INVALID_RESUME` | `build --resume` 没有找到或不是可用的 staging 目录 |
+| `CLI_INVALID_DISC_ID` / `CLI_INVALID_PORT` | `--disc-id` 不是 32 位十六进制 / `--port` 不是 1–65535 整数 |
+| `CLI_SERVE_ROOT_MISSING` / `CLI_SERVE_ROOT_INVALID` / `CLI_SERVE_FAILED` | serve 的包目录缺失 / 非法 / 服务运行失败 |
+| `COMPARE_MISSING_ACTUAL` / `COMPARE_INPUT_INVALID` / `COMPARE_ACTUAL_INVALID` / `COMPARE_REFERENCE_INVALID` / `COMPARE_REFERENCE_NOT_INDEPENDENT` | `compare` 的输入序列、trace 或参考文件校验失败；参考与实际同文件时报 `COMPARE_REFERENCE_NOT_INDEPENDENT` |
 
 ## 小抄
 
@@ -219,6 +263,9 @@ corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/assets --type igs
 corepack pnpm run cli:dev render "/path/BDMV" --out /tmp/png --type sup
 corepack pnpm run cli:dev render --sup /tmp/subtitle.sup --out /tmp/png
 corepack pnpm run cli:dev build "/path/BDMV" --out /tmp/menu --player-profile profile.json
+corepack pnpm run cli:dev serve /tmp/menu
+corepack pnpm run cli:dev visualize "/path/BDMV" --out /tmp/graph
+corepack pnpm run cli:dev compare input.json --actual actual.json --reference reference.json
 corepack pnpm run cli:dev validate /tmp/menu
 ```
 

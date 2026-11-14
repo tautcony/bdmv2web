@@ -6,11 +6,12 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `src/transport.ts` | `M2tsPacketReader`（192 字节源包）、`PsiAssembler`（PAT/PMT）、`PesAssembler`、`decodeTimestamp`、`source()` |
-| `src/igs.ts` | `parseSegments`、`consumeSegment`、`decodeRle`、`createIgsState`、`IgsError` |
-| `src/png.ts` | `renderSceneAssets`、`renderIgsAssets`、`validateIgsSceneAssets`、`encodeIndexedPng`、`encodeRgbaPng`、`paletteRgbaTable` |
-| `src/extract.ts` | `extractIgsScenes`（基于 `ParsedDisc`）、`extractIgsFromChunks`（任意分块输入） |
-| `src/types.ts` | `IgsScene`、`IgsPage`、`IgsButton`、`IgsAsset`、`IgsExtraction`、`IgsOptions` |
+| `src/transport/transport.ts` | `M2tsPacketReader`（192 字节源包）、`PsiAssembler`（PAT/PMT）、`PesAssembler`、`decodeTimestamp`、`source()` |
+| `src/scene/igs.ts` | `parseSegments`、`consumeSegment`、`decodeRle`、`createIgsState`、`IgsError` |
+| `src/rendering/png.ts` | `renderSceneAssets`、`renderIgsAssets`、`validateIgsSceneAssets`、`encodeIndexedPng`、`encodeRgbaPng`、`paletteRgbaTable` |
+| `src/rendering/mnu.ts` | `parseIgsMnu`（igstools 兼容 `.mnu`） |
+| `src/scene/extract.ts` | `extractIgsScenes`（基于 `ParsedDisc`）、`extractIgsFromChunks`（任意分块输入） |
+| `src/scene/types.ts` | `IgsScene`、`IgsPage`、`IgsButton`、`IgsAsset`、`IgsExtraction`、`IgsOptions`、`IgsDiagnostic` |
 
 ## 公开接口
 
@@ -60,7 +61,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | `0x80` END | 结束当前 Display Set |
 
 8. 场景完整后才 `complete: true`；损坏数据、未解析对象/调色板、未完成对象序列都使其不完整。
-9. `renderAssets` 时对每个被引用对象按当前调色板做 RLE 解码，直接写成调色板索引 PNG（color type 3 + `PLTE` + `tRNS`），不再展开成 RGBA：像素与展开后逐字节一致，deflate 输入只有四分之一。
+9. `renderAssets` 时对每个被引用对象按当前调色板做 RLE 解码，直接写成调色板索引 PNG（color type 3 + `PLTE` + `tRNS`）：像素与展开后逐字节一致，deflate 输入只有 RGBA 展开的四分之一。
 10. 汇总 `status`：有 `error` 且无场景 → `failed`；有 `error` 或有 `warning` 或无场景 → `partial`；否则 `complete`。
 
 ## 场景模型
@@ -94,7 +95,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 
 ## 边界（与 `docs/support/igs-support.md` 一致）
 
-- BT.709 limited-range、round-to-nearest、保留 alpha；只在固定向量与八个包级夹具上对照过 igstools。
+- BT.709 limited-range、round-to-nearest、保留 alpha；只在固定向量与九个包级夹具上对照过 igstools。
 - 效果、动画、窗口裁剪、组合生命周期规则未完整验证；未知效果保留原始字节并让场景不完整。
 - 稀疏调色板按 libbluray 的零初始化 256 项表处理：缺省索引为全透明。
 - 不解析 PGS（`0x90`），那是 `media-export` 的职责。
@@ -103,7 +104,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 
 | 文件 | 覆盖 |
 | --- | --- |
-| `packages/igs/src/transport.test.ts` | 192B 包、PSI/PES、PTS 回绕、连续性错误 |
+| `packages/igs/src/transport/transport.test.ts` | 192B 包、PSI/PES、PTS 回绕、连续性错误 |
 | `packages/igs/tests/integration/extraction.test.ts` | 段拼装、版本缓存、RLE、场景完整性 |
 | `packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
 | `packages/igs/tests/integration/igs-reference-element-summary.test.ts` | 重算 9 个 clip、892 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `test-data/baselines/igs-reference-element-summary.json` |

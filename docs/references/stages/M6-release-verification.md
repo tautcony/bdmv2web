@@ -12,11 +12,11 @@
 | `LIBBLURAY-1.5.0`, `IGSTOOLS-2019`, `LIBHDMV-2026-03` | 3.1–3.3 | M1/M2/M3 固定版本的实现源码可用于交叉比较。 | 不同语言或仓库不代表来源独立；应检查算法/代码沿袭，使用另外建立的 expected 数据，并记录来源版本和许可。 |
 | `BDA-BDMV-SPECS` / `BDA-PUBLIC-WHITEPAPERS` | 2.1–2.3 | 规范书访问状态和历史公开白皮书的背景来源，分别见 [`sources.json`](../sources.json)。 | 白皮书不作规范性依据；未取得授权书籍不是发布验证前置。按固定实现、独立 golden、真实环境验证及其具体缺口作结论。 |
 
-## Compatibility and audit report fields
+## 兼容性与审计报告字段
 
-`reports.json.compatibility` records status, checks, coverage, reasons and validation evidence. The top-level `reports.json` fields hold shared status and conversion diagnostics; `reports.json.conversion` holds conversion reasons and blocking diagnostics. `dependency-audit.json` records status, external references and checks. Compatibility checks carry `checkId`, `result`, `message` and optional `path`, `entityId` and `evidence`.
+`reports.json.compatibility` 记录 status、checks、coverage、reasons 与验证证据。`reports.json` 顶层字段承载共享状态与转换诊断；`reports.json.conversion` 承载转换原因与阻断性诊断。`dependency-audit.json` 记录 status、外部引用与 checks。兼容性检查项带 `checkId`、`result`、`message` 与可选的 `path`、`entityId`、`evidence`。
 
-The package manifest carries conversion diagnostics with severity, code and message. The package audit retains severity, code, acknowledgement and completion-blocking fields when it reads those diagnostics; it does not retain their message, source path, byte offset or stage. Release results therefore identify check failures and missing evidence, while tool-version provenance and source-located diagnostic detail remain unrecorded.
+包 manifest 携带带 severity、code、message 的转换诊断。包审计读取这些诊断时保留 severity、code、acknowledgement 与阻断完成字段；不保留 message、source path、byte offset 与 stage。因此发布结果能识别检查失败与缺失证据，工具版本溯源与源定位的诊断细节不在记录范围。
 
 ## Task 3.4 安全回归证据
 
@@ -37,7 +37,7 @@ M6 complete 门槛以 [实施基线状态决策表](../../../openspec/changes/IM
 <a id="v1-chrome-file-evidence"></a>
 ## Chrome `file://` 历史实测记录 — 2026-11-03
 
-**结论：2026-11-03 在 macOS Chrome `file://` 下完成过一次手工运行。** 浏览器环境验收已移出当前交付门槛，本节只保留当时的观察记录，不构成发布条件，也不代表跨浏览器支持。
+**结论：2026-11-03 在 macOS Chrome `file://` 下完成过一次手工运行。** 浏览器环境验收不在当前交付门槛内，本节只保留当时的观察记录，不构成发布条件，也不代表跨浏览器支持。
 
 | 项目 | 结果 |
 | --- | --- |

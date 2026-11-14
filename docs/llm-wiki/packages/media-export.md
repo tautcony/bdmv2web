@@ -8,14 +8,15 @@
 | --- | --- | --- |
 | `src/closure.ts` | `computeMediaClosure` | CLI `build`、库调用 |
 | `src/media-plan.ts` | `createMediaPlan` | 库/测试（`build` 未调用） |
-| `src/index.ts` | `exportMenuLoopMedia`、`extractPgsTrack`、`pidSpecifier`、`durationSeconds`、`resolveMenuLoopStart45k`、`runMediaProcess` | CLI、`package-builder` |
-| `src/color.ts` | `readSourceColor`、`planVideoColor`、`videoEncoderArgs`、`assertEncodedColor`、`pixelFormatBitDepth` | `index.ts`、`linear.ts` |
+| `src/menu-loop-export.ts` | `exportMenuLoopMedia`、`pidSpecifier`、`durationSeconds`、`resolveMenuLoopStart45k`、`runMediaProcess`，并桶式再导出 `pgs/*`（`src/index.ts` 从这里与 `diagram/` 桶式导出） | CLI、`package-builder` |
+| `src/pgs/pgs-extract.ts` | `extractPgsTracks`、`extractPgsTrack`（经 `menu-loop-export.ts` 再导出） | CLI 资产导出 |
+| `src/color/color.ts` | `readSourceColor`、`planVideoColor`、`videoEncoderArgs`、`assertEncodedColor`、`pixelFormatBitDepth` | `menu-loop-export.ts`、`linear.ts` |
 | `src/linear.ts` | `exportLinearMedia`、`primaryAudioStreamNumberForLanguage` | 库/测试（`build` 未调用） |
-| `src/pgs.ts` | `parsePgsSup`、`PgsSubtitleTimeline` | CLI 资产导出、`runtime-web` 的字幕数据 |
+| `src/pgs/pgs.ts` | `parsePgsSup`、`PgsSubtitleTimeline` | CLI 资产导出、`runtime-web` 的字幕数据 |
 | `src/timeline.ts` | `MediaTimelineMap`、`normalizeSourceTime` | 库/测试 |
 | `src/seek.ts` | `seekTimeline`、`MEDIA_HAVE_METADATA`/`MEDIA_HAVE_CURRENT_DATA` | 库/测试 |
 | `src/external-targets.ts` | `createExternalMediaTargets`、`resolveExternalPlayTarget` | CLI、`runtime-web` |
-| `src/budget.ts` | `estimateMenuLoopBudget`、资产大小限制 | `index.ts`、`linear.ts` |
+| `src/budget.ts` | `estimateMenuLoopBudget`、资产大小限制 | `menu-loop-export.ts`、`linear.ts` |
 
 ## 错误类型
 
@@ -61,9 +62,9 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 5. `ffprobe` 读取源时间线与流；`codec` 只接受 `h264` / `hevc`；按 PID 找视频与音频流。视频流的色彩字段（`pix_fmt`、`color_*`、`bits_per_raw_sample`、`side_data_list`）交由 `readSourceColor` 归类动态范围。
 6. 由 `planVideoColor` 定下输出色彩标签、位深与滤镜链（见下节「HDR 与色彩管线」）。
 7. `videoMode: "copy"` 且 `copyRefusalReason` 无拒绝理由时，从 `copyStart45k`（入口点）用 `-c:v copy` 把源 H.264 或 HEVC 视频流装进 `background.mp4`，HEVC 使用 `hvc1` 标签；只校验编码格式、尺寸、显示宽高比、色彩标记与时长。拒绝条件：源不是 H.264 或 HEVC、当前色彩策略需要滤镜、H.264 源不是 8-bit 4:2:0、奇数分辨率、`copyStart45k` 缺失（EP map 无入口点）、`copyStart45k` 晚于 `exportStart45k`、或领先超过 256 tick（入口点量化栅格，45 kHz 下 5.689 ms）。复制时长按 `exportDuration + (exportStart45k - copyStart45k)` 计算，保证 `pts == out_time` 的帧仍在片尾。视频按实际大小受 `maxAssetBytes` 约束，估算只用于编码路径。
-8. 输出 `assets/media/background.mp4` 与 `assets/media/audio-<pid>-<lang>.m4a`（AAC），另写 `media-plan.json`（`encoding.video.mode` 记 `copy` 或 `encode`，拒绝原因写进 `limitations`）；结束时按本次写出的字节数累加目录大小，不再重扫整包。结果的 `outputSize` 含 `beforeBytes`、`afterBytes`；`package-builder` 将它写入 `manifest.json` 和 `asset-manifest.json`。`warnings` 一并回到调用方。
+8. 输出 `assets/media/background.mp4` 与 `assets/media/audio-<pid>-<lang>.m4a`（AAC），另写 `media-plan.json`（`encoding.video.mode` 记 `copy` 或 `encode`，拒绝原因写进 `limitations`）；结束时按本次写出的字节数累加目录大小。结果的 `outputSize` 含 `beforeBytes`、`afterBytes`；`package-builder` 将它写入 `manifest.json` 和 `asset-manifest.json`。`warnings` 一并回到调用方。
 
-   背景与全部音轨由同一个 `ffmpeg` 进程写出：一次 `-i` 解复用，`-map` 视频后接 `-f mp4 background.mp4`，再按音轨追加 `-map <pid> -c:a aac -f ipod audio-<pid>-<lang>.m4a`（`audioArgs`）。因此一个 clip 只读一遍源，音频也不再排在视频之后（进程结束时间由最慢的输出决定）。复制路径的输入侧 `-ss` 已把每个输出对齐到声明起点，音频不再单独 `-ss`；复制校验失败改走编码时只重做视频（`audioWritten`），音频沿用同一进程已写好的文件。
+   背景与全部音轨由同一个 `ffmpeg` 进程写出：一次 `-i` 解复用，`-map` 视频后接 `-f mp4 background.mp4`，再按音轨追加 `-map <pid> -c:a aac -f ipod audio-<pid>-<lang>.m4a`（`audioArgs`）。一个 clip 只读一遍源，进程结束时间由最慢的输出决定。复制路径的输入侧 `-ss` 已把每个输出对齐到声明起点，音频输出不附加 `-ss`；复制校验失败改走编码时只重做视频（`audioWritten`），音频沿用同一进程已写好的文件。
 9. 编码后 `ffprobe` 校验产物的 `codec_name`、`color_primaries`/`color_transfer`/`color_space` 与位深必须与计划一致，否则 `MEDIA_OUTPUT_INVALID`。复制产物改比源流的这些字段（复制逐位保留源标记），不一致同样删掉复制结果并退回编码，记 `MEDIA_REMUX_UNAVAILABLE`。
 10. 超时默认 20 分钟；取消/超时 → `MEDIA_JOB_CANCELLED` / `MEDIA_JOB_TIMEOUT`；进程失败 → `MEDIA_PROCESS_FAILED`；输出不可探测 → `MEDIA_OUTPUT_INVALID`。
 
@@ -149,7 +150,7 @@ resolveExternalPlayTarget(targets, request): ExternalPlayTarget
 
 ## 测试
 
-`src/index.test.ts`（工具调用、预算、复用、超时、HDR 降级）、`color.test.ts`（动态范围归类、滤镜链选择、编码参数、产物色彩校验）、`closure.test.ts`（闭包与计划）、`linear*.test.ts`、`pgs.test.ts`、`seek.test.ts`、`timeline.test.ts`、`external-targets.test.ts`。测试通过注入 `runProcess` 伪造 ffmpeg，不要求本机安装。
+`src/index.test.ts`（工具调用、预算、复用、超时、HDR 降级）、`color/color.test.ts`（动态范围归类、滤镜链选择、编码参数、产物色彩校验）、`closure.test.ts`（闭包与计划）、`linear*.test.ts`、`pgs/pgs.test.ts`、`seek.test.ts`、`timeline.test.ts`、`external-targets.test.ts`。测试通过注入 `runProcess` 伪造 ffmpeg，不要求本机安装。
 
 ## 改动入口
 

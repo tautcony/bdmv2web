@@ -11,6 +11,7 @@
 | `src/index.ts` | `DiscIR` 类型、`parseDiscIR`、Time90k、`Limits` 工具、`ActionEnvelope`/`EventEnvelope`、`PlayerProfile` |
 | `src/limits.ts` | `DEFAULT_LIMITS`、`validateLimits` |
 | `src/defaults.ts` | `DEFAULT_PLAYER_PROFILE` |
+| `src/disc-path.ts` | `applicationJarPath`、`bdmvRelativePath`（经 `./disc-path` 子路径导出） |
 | `src/binary-cursor.ts` | `BinaryCursor`：有界读取 `u8/u16be/u32be/u64be/bytes/seek/subview` |
 | `src/contract-error.ts` | `ContractError(code, path, message)` |
 | `src/browser.ts` | 浏览器入口，仅重导出无 Node 依赖的部分 |

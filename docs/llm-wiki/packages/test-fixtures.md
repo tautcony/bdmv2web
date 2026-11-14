@@ -8,6 +8,7 @@
 | --- | --- |
 | `src/index.ts` | `minimalHdmvGolden`、`mixedBdjGolden`、`damagedUnknownVersion`、`damagedDanglingReference`、`loadGolden`、`buildCursorSample`、`simulatedBridge` |
 | `src/bdmv.ts` | M1 字节构造器：`buildM1Index`、`buildM1MovieObject`、`buildM1Playlist*`、`buildM1ClipInfo*`、`buildM1Sound*`、`m1MovieObjectExpected` |
+| `src/hdmv.ts` | `m3Fixtures`：M3 合成指令向量（测试用，不是协议 golden） |
 | `src/menu-runtime.ts` | `menuInteractionFixture`：两按钮场景 + 方向键/确认的期望动作 |
 
 ## 构造器用途

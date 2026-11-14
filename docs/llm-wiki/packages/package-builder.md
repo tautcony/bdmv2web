@@ -70,8 +70,8 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 
 | 函数 | 产出 / 作用 |
 | --- | --- |
-| `createReadme(title, backgroundLoops, externalPlayback, status)` | `README.md` 正文 |
-| `createCompatibility(metadata, externalPlayback)` | `reports.json.compatibility` 对象 |
+| `createReadme(title, backgroundLoops, externalPlayback, status, bdjRuntime)` | `README.md` 正文 |
+| `createCompatibility(metadata, externalPlayback, bdjRuntime)` | `reports.json.compatibility` 对象 |
 | `createAssetBatchScript(batch)` | 单个 `runtime/assets-data-NNN.js` 的内容 |
 | `packagedMediaMetadata(media)` | `mediaPlans[planPath]` 里那份编码单元的媒体记录 |
 | `runtimeAudioTrackMetadata(track)` | 单条音轨的 `streamNumber` 与 `psrStreamNumber` 映射 |
@@ -105,7 +105,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>
 
 - 编码单元由 `menuMediaPaths()` 命名：目录 `assets/media/playlist-<id>-pi<n>-clip-<clipId>/`，计划 `media-plans/<同一名字>.json`。
 - `menuLoopMedia` → `exportMenuLoopMedia`，写 `background.mp4` 与音轨计划；`additionalMenuMedia` → 每个播放列表 PlayItem 一份，共用同一模板。目录名里的 `<id>` 是 `<id>.mpls` 的编号、`<clipId>` 是 `BDMV/STREAM/<clipId>.m2ts` 的编号，PlayItem 补零到两位。
-- 等价引用（同一 Playlist/PlayItem/clip/区间/流）共用一次转码，后来的输入引用先前的目录，不再单开一份；被引用的一方没有编码动作，所以 Builder 为它补一个 `state: "end"` 的 `onMediaProgress` 事件（`reused: true`），使进度按计划里的 clip 数推进。
+- 等价引用（同一 Playlist/PlayItem/clip/区间/流）共用一次转码，后来的输入引用先前的目录；被引用的一方没有编码动作，所以 Builder 为它补一个 `state: "end"` 的 `onMediaProgress` 事件（`reused: true`），使进度按计划里的 clip 数推进。
 - 计划文件按编码单元存在：`media-plans/` 的文件数等于实际编码单元数。共用同一媒体的 PlayItem，其 `planPath` 都指向该单元的计划（计划里的 `playlistId`/`playItemIndex` 是实际编码的那个 PlayItem）。
 - `reuseMediaFromDirectory` 只在旧计划与本次输入完全匹配时复用，否则重编码（由 `media-export` 判定）。
 - 编码参数由 `mediaEncoding` 透传给两次导出调用，Builder 不写死 `preset`/`crf`。

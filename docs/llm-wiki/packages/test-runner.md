@@ -96,7 +96,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 
 ## 测试
 
-`src/index.test.ts`（审计主路径）、`coverage.test.ts`、`compare.test.ts`、`release-summary.test.ts`。
+`src/index.test.ts`（审计主路径）、`package-audit.test.ts`、`coverage.test.ts`、`compare.test.ts`、`release-summary.test.ts`。
 
 ## 改动入口
 

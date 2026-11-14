@@ -67,14 +67,14 @@ reset(programId) ──▶ runTurn() ──▶ 快照（idle/suspended/stopped/f
    - 遇到 `TITLE_SEARCH` → `selectTitle(目标)` 继续。
 4. 64 步耗尽 → 返回 `fallbackTarget`（可能为空）。
 
-这条链解释了为什么有些碟片的菜单不是“第一个 `PLAY_PLAYLIST`”：前面可能有 logo、警告或正片片段。
+菜单播放列表从 First Play 起逐跳解析得出，中间可能经过 logo、警告或正片片段的播放列表，所以它不必是某个 MovieObject 的第一个 `PLAY_PLAYLIST`。
 
 ## 4. 导航图与媒体闭包
 
 | 层 | 函数 | 粒度 | 未解析时的处理 |
 | --- | --- | --- | --- |
 | 结构图 | `bdmv-parser` `buildGraph` | 文件引用（entry→object→playlist→clip→stream） | 边标 `missing`/`unresolved` |
-| 指令图 | `hdmv` `buildNavigationGraph` | 对象与命令 | 紧邻 `MOVE gpr, IMMEDIATE` 的寄存器跳转按常量解析；其余动态目标保留 `unresolved`，不判不可达 |
+| 指令图 | `hdmv` `buildNavigationGraph` | 对象与命令 | 紧邻无条件 `MOVE gpr, IMMEDIATE` 的寄存器跳转按常量解析（跳转不得是 `GOTO` 落点，`MOVE` 不得被比较指令跳过）；其余动态目标保留 `unresolved`，不判不可达 |
 | 媒体闭包 | `media-export` `computeMediaClosure` | 可达播放列表/clip/stream | 有未知项时放宽到全部播放列表，`complete: false` |
 
 `computeMediaClosure` 的输入是结构图 + 一张同时承载 MovieObject 与按钮程序的导航图，按钮程序作为独立根走图并共用同一 object table 解析标题/对象跳转。条件边按并集遍历；`routes` 记录每条到达路径的来源，便于回答“这个播放列表为什么被导出”。
@@ -98,6 +98,6 @@ reset(programId) ──▶ runTurn() ──▶ 快照（idle/suspended/stopped/f
 
 ## 证据与边界
 
-- opcode 语义以固定 revision 的 libbluray 1.5.0 为基准；多数行标 `reference-only / unverified`，表示缺独立 golden，不是未实现。
+- opcode 语义以固定 revision 的 libbluray 1.5.0 为基准；`reference-only / unverified` 行表示缺独立 golden。
 - `maxCallDepth` 当前是 CALL 开关，不是嵌套深度限制。
-- `docs/review-2026-11-06-hdmv-vm-conformance/index.md` 记录逐指令核对、运行模型差异与修复顺序。
+- `docs/archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md` 记录逐指令核对、运行模型差异与修复顺序。

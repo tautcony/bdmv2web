@@ -3,7 +3,7 @@
 ## 运行方式
 
 ```sh
-corepack pnpm test                      # 各包 vitest run（fail-fast 语义由各包决定）
+corepack pnpm test                      # 各包 vitest run，随后跑 bench:test 的脚本测试
 corepack pnpm test:all                  # -r --no-bail，收集全部失败
 corepack pnpm test:coverage             # 各包运行测试并生成 workspace 覆盖率总览
 corepack pnpm --filter @bdmv2web/igs test
@@ -24,6 +24,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 包 | 命令 | 覆盖 |
 | --- | --- | --- |
 | `@bdmv2web/core` | `corepack pnpm --filter @bdmv2web/core test` | 契约、游标、时间 |
+| `@bdmv2web/utils` | `corepack pnpm --filter @bdmv2web/utils test` | 文件系统工具与分支 |
 | `@bdmv2web/bdmv-io` | `corepack pnpm --filter @bdmv2web/bdmv-io test` | 目录发现、事务 |
 | `@bdmv2web/bdmv-parser` | `corepack pnpm --filter @bdmv2web/bdmv-parser test` | 五种格式 + 主备 + 损坏分支 |
 | `@bdmv2web/igs` | `corepack pnpm --filter @bdmv2web/igs test` | 传输、场景、真实样本、igstools 与 libbluray 元素级对照 |
@@ -42,7 +43,7 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | 单元 | `packages/*/src/*.test.ts` | 与被测代码同目录 |
 | 集成 | `packages/*/tests/integration/`、`apps/cli/tests/integration/` | 跨模块或跨包，读 `test-data` 夹具与基线 |
 | 辅助 | `packages/*/tests/helpers/` | 仅供测试使用的夹具构造，不进 `dist` |
-| 端到端 | `apps/cli/tests/e2e/index.test.ts` | spawn 构建后的 `dist/index.js`，检查完整菜单包 |
+| 端到端 | `apps/cli/tests/e2e/` | spawn 构建后的 `dist/index.js` 的用例放这里；当前目录为空 |
 | 无头导航 | `runtime-web/tests/integration/*headless*.test.ts` | 用工作区样本跑 DFS/按钮路径 |
 | 真实样本 | `igs/tests/integration/tamako-external-navigation.test.ts`、`runtime-web/tests/integration/tamako-*` | 数据缺失时跳过 |
 | 一站式 | `apps/cli/tests/integration/synthetic-all-features.test.ts` | 全特性自写合成盘跨包集成 |
@@ -61,8 +62,8 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | IG 包夹具 | `test-data/fixtures/hdmv-navigation/` | 由 `scripts/export-igs-packet-fixtures.mjs` 生成 |
 | 外部 ICS 样本 | `test-data/fixtures/igs-parser/` | 带来源与 MIT 许可说明 |
 | igstools 参考摘要 | `test-data/baselines/igs-reference-element-summary.json` | pinned igstools 参考 PNG 的元素级 RGBA 值；测试不读取 `.reference-cache` |
-| libbluray IGS 基线 | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | 固定 revision `d75c88e` 的 `graphics_processor_decode_ts()` 输出，8 clip / 872 对象 |
-| libbluray 导航基线 | `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` | 固定 revision `d75c88e` 的 `bd_info`、`bd_list_titles -a`、`mobj_dump -d` 与 `bd_play()` 事件，4 盘 / 5225 命令 / 6224 CFG 边 |
+| libbluray IGS 基线 | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | 固定 revision `d75c88e` 的 `graphics_processor_decode_ts()` 输出，9 clip / 873 对象 |
+| libbluray 导航基线 | `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` | 固定 revision `d75c88e` 的 `bd_info`、`bd_list_titles -a`、`mobj_dump -d` 与 `bd_play()` 事件，5 盘 / 5241 命令 / 6286 CFG 边 |
 | 工作区本地样本 | `test-data/bdmv/` | 仅本机存在，测试按需跳过 |
 
 规则：新夹具 > 1 MiB 必须用脚本从 manifest 生成，不直接提交二进制；不在夹具/测试名/日志写真实标题、机器路径、`file://` URL。

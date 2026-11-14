@@ -2,16 +2,23 @@
 
 浏览器菜单运行时：把序列化场景渲染到 Canvas，处理键鼠/触摸输入，驱动 `HdmvVm` 的动作与事件，播放包内菜单媒体与音效。
 
-打包时 `package-builder` 把 `src/browser.ts` 用 esbuild 打成 `runtime/app.bundle.js`（IIFE，ES2020）。包内脚本不是 ES module。
+workspace build 期 `scripts/build-runtime-browser.mjs` 把 `src/browser.ts` 用 esbuild 打成 `dist/browser.bundle.js`（IIFE，ES2020）；打包时 `package-builder` 复制为 `runtime/app.bundle.js`。包内脚本不是 ES module。
 
 ## 文件
 
 | 文件 | 内容 |
 | --- | --- |
-| `src/index.ts` | `MenuController`、`MenuSoundPlayer`、`CanvasViewport`、`EventScheduler`、`drawMenu`、两个播放桥、输入绑定 |
+| `src/index.ts` | 从 `src/menu/menu-runtime.ts` 桶式导出 |
+| `src/menu/menu-runtime.ts` | `MenuController`、`MenuSoundPlayer`、`CanvasViewport`、`EventScheduler`、`drawMenu`、输入绑定 |
 | `src/browser.ts` | 浏览器入口：`boot()`、`createMenuVm`、`createStatusToast`、外链播放 |
+| `src/menu-playback.ts` | 两个播放桥（菜单循环与外部媒体）的实现 |
 | `src/igs-adapter.ts` | `adaptIgsScene`（IGS 场景 → 可序列化 `SerializedScene`）、`selectPopupScene` |
+| `src/scene-normalizer.ts` | 场景归一化与 `menuSceneKey` |
 | `src/linear-playback.ts` | `LinearPlaybackBridge`：按显式时间线播放线性资产 |
+| `src/media-loop.ts` | 菜单循环媒体的视频元素控制 |
+| `src/bdmv-url.ts` | 包内 URL/参数解析与时间格式化 |
+| `src/bdj-runtime.ts` / `bdj-menu-media.ts` / `bdj-client-entry.ts` | BD-J 会话客户端、菜单媒体观察上报与 BD-J 启动入口 |
+| `src/runtime-diagnostics.ts` / `runtime-status.ts` | 运行时诊断收集与状态提示 |
 
 ## 场景数据
 
@@ -116,7 +123,7 @@ HDMV VM actions resolve through `external-targets.json`. `bdmv2web serve <packag
 
 ## 测试
 
-`src/index.test.ts`（控制器/输入/效果/音效/检查点）、`browser.test.ts`（boot、弹窗、媒体策略、状态提示）、`igs-adapter.test.ts`、`linear-playback.test.ts`、`tests/integration/headless-menu-synthetic.test.ts`、`tests/integration/hdmv-navigation-corpus-dfs.test.ts`（4 个真实盘与 1 个合成盘 case 的 DFS 实现回归 pin：状态数、覆盖边、unsupportedEdges 为空；索引条目数与静态 PLAY_PL 目标由 `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` 驱动）、`tests/integration/tamako-headless-navigation.test.ts`。弹出菜单适配与场景选取的跨包覆盖见 `apps/cli/tests/integration/synthetic-all-features.test.ts`。
+`src/index.test.ts`（控制器/输入/效果/音效/检查点）、`browser.test.ts`（boot、弹窗、媒体策略、状态提示）、`igs-adapter.test.ts`、`linear-playback.test.ts`、`bdj-menu-media.test.ts`、`bdmv-url.test.ts`、`tests/integration/headless-menu-synthetic.test.ts`、`tests/integration/hdmv-navigation-corpus-dfs.test.ts`（4 个真实盘与 1 个合成盘 case 的 DFS 实现回归 pin：状态数、覆盖边、unsupportedEdges 为空；索引条目数与静态 PLAY_PL 目标由 `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` 驱动）、`tests/integration/tamako-headless-navigation.test.ts`、BD-J 集成 `tests/integration/bdj-host-api.test.ts`、`bdj-ixc.test.ts`、`bdj-lifecycle.test.ts`。弹出菜单适配与场景选取的跨包覆盖见 `apps/cli/tests/integration/synthetic-all-features.test.ts`。
 
 真实盘导航的独立基线在 `apps/cli/tests/integration/libbluray-navigation-baseline.test.ts`：逐命令对照 libbluray `mobj_dump -d` 反汇编、`bd_info` index、`bd_list_titles -a` 标题结构，并逐边对照由 libbluray 反汇编独立派生的完整 CFG。DFS 统计本身是本项目探索器的回归 pin。
 

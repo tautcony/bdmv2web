@@ -69,7 +69,7 @@
 - **参考工具：** `SAPikachu/igstools` 0.9.3，固定 commit `34a133150ca8b52237284da4d47d93911bcd4954`，Python 3.15.0、pypng 0.20220715.0、Pillow 13.0.0。工具解码器源自 libav patches，属于实现对照，不能等同规范。
 - **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
 - **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项报告由脚本写到命令行指定目录，不入库。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
-- **更正：** 初次强制 BT.601 与旧实现完全一致只说明实现使用同一矩阵，不足以证明色彩正确。固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）；现在实现改为 BT.709，Tamako 元素与该显式矩阵下的参考结果一致。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据；因此这些结果验证的是对照矩阵下的实现一致性，不判定原盘实际矩阵。
+- **更正：** 实现采用 BT.709 limited range；该显式矩阵下 Tamako 元素与参考结果一致。2026-11-03 首次对照按 BT.601 执行，当时与旧参考在同矩阵下一致只说明两者用了同一矩阵，不足以证明色彩正确；固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据；因此这些结果验证的是对照矩阵下的实现一致性，不判定原盘实际矩阵。
 - **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/compare-igstools-reference.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。
 
 ## 2026-11-04 — 多 fixture 逐元素独立参考对照
@@ -98,7 +98,7 @@ Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.
 
 ## 2026-11-04 — IGS 字段登记与 BT.709 向量核验
 
-- **字段登记：** ICS、page、BOG、button、PDS、ODS 与 Display Set 的实现字段、版本键、libbluray 1.5.0 固定 revision 和本地样本见 [IGS 字段与版本依据](M2-igs-field-register.md)。解析器现保留此前被跳过的 ICS frame-rate code 和 button numeric-select value；外部真实 ICS 样本断言 frame-rate code 为 1、首按钮 numeric-select value 为 `65535`。
+- **字段登记：** ICS、page、BOG、button、PDS、ODS 与 Display Set 的实现字段、版本键、libbluray 1.5.0 固定 revision 和本地样本见 [IGS 字段与版本依据](M2-igs-field-register.md)。解析器保留 ICS frame-rate code 和 button numeric-select value；外部真实 ICS 样本断言 frame-rate code 为 1、首按钮 numeric-select value 为 `65535`。
 - **独立颜色向量：** `packages/igs/tests/integration/extraction.test.ts` 对 6 个固定 YCbCrA 输入解码 PNG RGBA 全像素并与静态预期比较。输入和结果为：`(Y,Cb,Cr,A)=(16,128,128,0) → (0,0,0,0)`；`(235,128,128,1) → (255,255,255,1)`；`(126,128,128,127) → (128,128,128,127)`；`(81,90,240,128) → (255,24,0,128)`；`(145,54,34,254) → (0,216,0,254)`；`(41,240,110,255) → (0,15,255,255)`。覆盖黑白/中性灰、色彩分量、舍入、裁剪和 alpha 直通。
 - **真实多 palette 映射：** Battle Royale UHD Clip `00005` 的 packet fixture 断言 object 13/version 0 各自生成 palette 0、1、2、3 的资产；object 22、23、24、27、30/version 0 各自生成 palette 1、2、3 的资产。还断言 PDS 0/version 0 entry 0 值和 ODS 27/version 0 的尺寸及 RLE 索引样本。对应全部真实元素的同类工具像素比较在前节报告中为零差异。
 

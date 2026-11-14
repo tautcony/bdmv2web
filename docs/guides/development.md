@@ -25,7 +25,7 @@ corepack pnpm test:coverage
 
 ## Linting
 
-`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/*.mjs`. `corepack pnpm lint:fix` applies the automatic fixes.
+`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/*.mjs`, then runs `lint:java`, which checks the BD-J host Java sources in `packages/runtime-web/bdj-host/src` with Checkstyle. `corepack pnpm lint:fix` applies the automatic ESLint fixes.
 
 Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. Run `corepack pnpm build` before linting; `scripts/ci.sh` runs lint as a parallel lane beside the typecheck and the test suites, after the build.
 
@@ -76,19 +76,21 @@ A field length or value that cannot be confirmed against the reference implement
 
 ## CLI status
 
-`inspect`, `extract`, `build`, `validate`, `list`, `export`, `render`, and `serve` are implemented; `compare` returns `E_NOT_IMPLEMENTED` on stderr with exit code 1. `convert` remains an alias of `build`. Commands, options, and dispatch are handled by `commander`; run `bdmv2web --help` for the current surface and `bdmv2web --version` for the package version.
+`inspect`, `extract`, `build`, `validate`, `compare`, `list`, `export`, `render`, `serve`, and `visualize` are implemented. `convert` remains an alias of `build`. Commands, options, and dispatch are handled by `commander`; run `bdmv2web --help` for the current surface and `bdmv2web --version` for the package version.
 
 | Command | Behavior | Exit codes |
 | --- | --- | --- |
 | `inspect INPUT [--format table\|json] [--out FILE]` | stdout defaults to a structural summary table; `--format json` prints the complete report. `--out` always writes complete JSON and the file must not already exist. | stage `complete`/`partial` → 0, stage `failed` → 1 |
-| `inspect INPUT --allow-partial` | Same output, but a `failed` stage no longer sets a non-zero exit code; the report keeps `stageStatus: "failed"`. | 0 |
+| `inspect INPUT --allow-partial` | Same output; a `failed` stage keeps the exit code at 0 and the report keeps `stageStatus: "failed"`. | 0 |
 | `extract INPUT --out DIR (--type hdmv\|igs\|sup \| --all) [--format table\|json]` | Writes type-specific protocol analysis JSON, source maps and a manifest through an output transaction. It does not write PNG or SUP media files; fatal diagnostics prevent commit. | 0, 1 when failed |
 | `list INPUT [--type all\|igs\|sup] [--m2ts CLIP_ID] [--pid PID] [--format table\|json] [--out FILE]` | stdout prints an asset summary and a tree grouped by M2TS. Each M2TS entry shows the source file size; IGS and SUP entries show raw transport payload size by PID. `--out` writes the complete JSON report. | 0, 1 when failed |
 | `export INPUT --out DIR [--type all\|igs\|sup] [--m2ts CLIP_ID] [--pid PID] [--decode png] [--png-level 0-9] [--format table\|json]` | Exports igstools-compatible IGS `.mnu` files and/or reachable SUP tracks. `--decode png` also exports PNG images for IGS elements and SUP display sets. `assets-manifest.json` records type, format, path, size, subtitle metadata, and display-set start/end time. Transparent display sets are omitted. | 0, 1 when failed |
 | `render INPUT --out DIR [--type all\|igs\|sup] [--m2ts CLIP_ID] [--pid PID] [--language LANG] [--png-level 0-9] [--format table\|json]` | Renders IGS element and SUP display-set PNGs from a BDMV into `assets-manifest.json` without writing `.mnu`/`.sup`. | 0, 1 when failed |
 | `render (--mnu FILE \| --sup FILE) --out DIR [--pid PID] [--language LANG] [--format table\|json]` | Renders a standalone MNU or SUP without a BDMV. A positional `.mnu`/`.sup` path is equivalent. `--language` is written only for SUP entries. | 0, 1 when parsing or output fails |
 | `build INPUT [--out DIR] [--title NAME] [--player-profile FILE] [--limits FILE] [--disc-id HEX] [--overwrite] [--resume [DIR]] [--crf N] [--preset NAME] [--codec hevc\|h264] [--hdr tonemap\|preserve] [--video encode\|copy] [--menu-media auto\|all\|none] [--progress\|--no-progress]` | Produces the menu package. BD-J packages contain the host JAR, application JARs, authored resources and service launch data. Start them with `bdmv2web serve`; use Java 21 or a compatible runtime with `java.desktop`. | delivery `complete`/`partial` → 0, `failed` → 1 |
-| `serve [DIR] [--port PORT] [--java EXECUTABLE] [--player system] [--player-executable PATH]` | Serves the package on loopback HTTP, manages the native Java process for BD-J sessions, and launches feature requests through the system player adapter. The executable override receives the media path. | 0 until stopped; 1 when the server cannot start |
+| `serve [DIR] [--port PORT] [--java EXECUTABLE] [--disc-id HEX] [--player system] [--player-executable PATH]` | Serves the package on loopback HTTP, manages the native Java process for BD-J sessions, and launches feature requests through the system player adapter. The executable override receives the media path. | 0 until stopped; 1 when the server cannot start |
+| `visualize INPUT [--out DIR] [--programs IDS] [--max-blocks N] [--no-closure] [--overwrite] [--format table\|json]` | Exports the navigation graph as an interactive viewer (`index.html`, `graph.json`), a mermaid overview (`overview.md`), and per-program diagrams under `programs/`. `--no-closure` skips IGS extraction and omits playlist reachability. `--programs` filters the per-program diagrams. | 0, 1 when failed |
+| `compare INPUT --actual FILE [--reference FILE] [--reference-tool NAME] [--reference-version VERSION] [--out FILE] [--format json]` | Compares an actual VM trace against an independent reference trace and prints the report JSON; `--out` writes it to a file. `--reference` must be a different file from `--actual`. | `pass` → 0, divergence/input error → 1, `not-verified` → 2 |
 | `validate DIR [--format json]` | Re-runs the package audit and rewrites `dependency-audit.json`, `reports.json`, and `reports/release-summary.json` from one summary. | 0, 1 when failed |
 
 Stage results and delivery results are separate types: `inspect`/`extract`/`render` report `stageStatus` (`complete`/`partial`/`failed`), while only `build`/`validate` report a delivery `status`. A stage that reached its own goal never claims a complete delivery. Failed stage output uses `stageStatus` too, so one field never carries two meanings.
@@ -126,7 +128,7 @@ Test scope is fixed by each package's `vitest.config.ts` (`include`), so the agg
 
 Tests live in `src/` when they cover one module, and in `tests/integration/` or `tests/e2e/` when they combine modules, packages, or the built CLI. `tests/helpers/` holds test-only fixtures. Shared `test-data/` files are addressed from the repository root.
 
-The reference comparisons read committed baselines: `test-data/baselines/libbluray-1.5.0-igs-baseline.json` for IG decoder output, `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` for the index, per-command disassembly, title list, VM events and control-flow graph, and the igstools element-level RGBA dumps. The tests read those files and the checked-in fixtures, so CI needs no local libbluray or igstools.
+The reference comparisons read committed baselines: `test-data/baselines/libbluray-1.5.0-igs-baseline.json` for IG decoder output, `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` for the index, per-command disassembly, title list, VM events and control-flow graph, and `test-data/baselines/igs-reference-element-summary.json` for the element-level comparison against the igstools reference PNGs. The tests read those files and the checked-in fixtures, so CI needs no local libbluray or igstools.
 
 ## Build gate
 
@@ -147,7 +149,7 @@ The script composes stage modules from `scripts/ci/` in dependency order and pri
 | `30-build.sh` | `corepack pnpm -r build` (topological, concurrent across independent packages) | generate |
 | `40-lint.sh`, `40-typecheck.sh`, `40-test.sh` | `corepack pnpm lint` / `-r typecheck` / `test:all` | build |
 
-Lint resolves workspace imports through `dist`, typecheck resolves them through `dist` declarations, and the test suites import workspace packages through `dist`, so the three `40-*` stages run as parallel lanes after the build. A failing lane does not stop the others: every lane runs to completion and all lane results are reported before the gate exits. A failing sequential stage stops the gate at that stage. The gate does not verify the integrity of the large `test-data/` fixtures.
+Lint resolves workspace imports through `dist`, typecheck resolves them through `dist` declarations, and the test suites import workspace packages through `dist`, so the three `40-*` stages run as parallel lanes after the build. A failing lane does not stop the others: every lane runs to completion and all lane results are reported before the gate exits. A failing sequential stage stops the gate at that stage.
 
 `corepack pnpm` runs the pnpm version pinned by `packageManager` in `package.json`, and it ships with Node, so the gate needs no globally installed `pnpm`. Root scripts spell out `corepack pnpm` so the nested calls they make resolve through the same shim and `corepack pnpm build` works from a clean checkout. A global install remains usable: `PNPM=pnpm bash scripts/ci.sh`.
 
@@ -159,16 +161,24 @@ Measured 2026-11-08 on an idle machine (Node 24.18.0 via corepack, pnpm 11.25.0,
 
 `apps/cli`, `media-export`, and `runtime-web` set `testTimeout: 15000`; their cases take 5–6s on a busy machine, over the vitest default of 5s. Per-test budgets override it: `120_000` for the navigation corpus and Tamako headless cases in `runtime-web`, the two `igs` reference comparisons, and `60_000` for the `cli` libbluray navigation baseline. `hdmv` and `igs` set no global timeout.
 
-**CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the same stage modules as job nodes. The `build` job runs install, generate, and build, then uploads every package's `dist/` as the `workspace-dist` artifact. The `lint`, `typecheck`, and per-package `test` jobs (one job per workspace package, 11 in the matrix) download the artifact, install dependencies, and run their stage; `fail-fast: false` keeps every failing package's node red without stopping the others. The test jobs install FFmpeg; the media-export suites invoke a real ffmpeg/ffprobe when a test does not inject a runner. The workflow triggers on pushes to `master`, pull requests, and manual dispatch; check the Actions result for the commit under review.
+**CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the same stage modules as job nodes. The `build` job runs install, generate, and build, then uploads every package's `dist/` as the `workspace-dist` artifact. The `lint`, `typecheck`, and per-package `test` jobs (one job per workspace package, 12 in the matrix) download the artifact, install dependencies, and run their stage; `fail-fast: false` keeps every failing package's node red without stopping the others. The `media-export` test job installs FFmpeg, and its suites invoke a real ffmpeg/ffprobe when a test does not inject a runner; the `hdmv` test job installs JDK 21 for the Java runtime tests. The workflow triggers on pushes to `master`, pull requests, and manual dispatch; check the Actions result for the commit under review.
 
 ## Repository hygiene
 
-Two committed binary fixtures exceed 1 MiB:
+Ten committed binary fixtures exceed 1 MiB:
 
 - `test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV/STREAM/00043.m2ts_ig-packets.bin` — 11.0 MB
 - `test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV/STREAM/00005.m2ts_ig-packets.bin` — 8.5 MB
+- `test-data/fixtures/perf/sup/Baja.Studio_jpn.sup` — 5.2 MB
+- `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/AUXDATA/05010.otf` — 2.8 MB
+- `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/JAR/03001/composite1.png` — 2.7 MB
+- `test-data/fixtures/perf/ig-packets/Battle.Royale_00002_pid-1400.bin` — 2.4 MB
+- `test-data/fixtures/hdmv-navigation/disc-data/battle-royale-uhd/BDMV/STREAM/00002.m2ts_ig-packets.bin` — 2.4 MB
+- `test-data/fixtures/perf/mnu/Battle.Royale_00002_pid-1400.mnu` — 2.3 MB
+- `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/JAR/03001/composite2.png` — 1.9 MB
+- `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/JAR/03001/composite3.png` — 1.5 MB
 
-New fixtures larger than 1 MiB are generated by a script from a manifest, as `scripts/export-igs-packet-fixtures.mjs` and `scripts/package-hdmv-metadata-fixtures.mjs` reproduce these two.
+The `*.m2ts_ig-packets.bin` streams are the inputs `scripts/export-igs-packet-fixtures.mjs` reads to derive reference material; `scripts/package-hdmv-metadata-fixtures.mjs` and `scripts/package-igs-fixture-materials.mjs` package fixture materials from a source root. The Spider-Man OTF and composite PNG files are tracked disc sample content.
 
 
 ## Test and fixture entry points

@@ -2,18 +2,21 @@
 
 HDMV 导航层：把 12 字节命令解码成操作码，维护 GPR/PSR，执行控制流与异步播放动作，产出可复现 trace 和导航图。
 
-行为基准是固定 revision 的 libbluray 1.5.0（`docs/support/hdmv-support.md` 记录逐指令状态）。`docs/review-2026-11-06-hdmv-vm-conformance/` 保存了与参照实现的差异清单与修复记录。
+行为基准是固定 revision 的 libbluray 1.5.0（`docs/support/hdmv-support.md` 记录逐指令状态）。`docs/archive/reviews/review-2026-11-06-hdmv-vm-conformance/` 保存了与参照实现的差异清单与修复记录。
 
 ## 文件
 
 | 文件 | 内容 |
 | --- | --- |
-| `src/decode.ts` | `decodeInstruction`、`disassemble`、`Operand`、`OpcodeName` |
-| `src/registers.ts` | `RegisterFile`、`PSR` 索引常量、`profileWord`、`RegisterFault` |
-| `src/vm.ts` | `HdmvVm`：状态机、事件、动作、等待、trace、检查点 |
-| `src/graph.ts` | `buildNavigationGraph`：对象/命令节点与边 |
-| `src/loops.ts` | `findStaticNavigationLoops`：DFS 回边找静态循环 |
-| `src/fixtures.ts` | M3 合成指令向量（测试用，不是协议 golden） |
+| `src/bytecode/decode.ts` | `decodeInstruction`、`disassemble`、`Operand`、`OpcodeName` |
+| `src/virtual-machine/registers.ts` | `RegisterFile`、`PSR` 索引常量、`profileWord`、`RegisterFault` |
+| `src/virtual-machine/vm.ts` | `HdmvVm`：状态机、事件、动作、等待、trace、检查点 |
+| `src/virtual-machine/vm-semantics.ts` / `vm-types.ts` | 执行语义辅助与 VM/trace 类型 |
+| `src/graph/graph.ts` | `buildNavigationGraph`：对象/命令节点与边、寄存器跳转的常量传播 |
+| `src/graph/loops.ts` | `findStaticNavigationLoops`：DFS 回边找静态循环 |
+| `src/export/program-blocks.ts` / `program-mermaid.ts` | 程序块切分与 mermaid/交互查看器导出 |
+
+M3 合成指令向量（测试用，不是协议 golden）在 `packages/test-fixtures/src/hdmv.ts` 的 `m3Fixtures`。
 
 ## 解码
 
@@ -90,7 +93,7 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 
 ### Opcode implementation audit
 
-状态与逐项回归按 `.reference-cache/libbluray-1.5.0/src/libbluray/hdmv/hdmv_vm.c` 的 `_hdmv_step()`、操作 helper 和 `decode.ts` 的 47 个 opcode 核对。`implemented` 表示本地 VM 覆盖参考执行路径；`reference-limited` 表示参考实现本身不执行完整行为；`reference-ambiguous` 表示参考源码将该行为标记为猜测。
+状态与逐项回归按 `.reference-cache/libbluray-1.5.0/src/libbluray/hdmv/hdmv_vm.c` 的 `_hdmv_step()`、操作 helper 和 `decode.ts` 的 48 个 opcode 核对。`implemented` 表示本地 VM 覆盖参考执行路径；`reference-limited` 表示参考实现本身不执行完整行为；`reference-ambiguous` 表示参考源码将该行为标记为猜测。
 
 | Opcode | 上下文、PC 与状态 | Action、wait 与诊断 | 状态与直接回归 |
 | --- | --- | --- | --- |
@@ -185,7 +188,7 @@ buildNavigationGraph(objects, appendedPrograms?, { maxStates?, entries?, context
 - 边：`sequence`、`conditional`、`jump`、`call`、`resume`、`play`、`unknown`；`resolution` 为 `resolved | unresolved`。可选 `origin` 描述边来源；读取方忽略未识别值。
 - `JUMP_TITLE` 同时生成指向目标 entry object 的 `jump` 边和 `origin: "jump-title"` 的 `sequence` 边；原程序下一条指令不会因此成为可达。
 - `context` 默认是 `object`；`LINK_PI` / `LINK_MK` 在 object context 不终止指令流，在 playlist context 终止。`TERMINATE_PL` 只在 playlist context 终止。
-- 立即数目标可解析就建 resolved 边；寄存器目标、缺失目标、编码非法、预算耗尽保留 `unresolved` 并写 `diagnostics`。不把未解析路径标成不可达。
+- 立即数目标可解析就建 resolved 边；紧邻无条件 `MOVE gpr, IMMEDIATE` 装载同一寄存器的跳转（`JUMP_OBJECT`/`CALL_OBJECT`/`JUMP_TITLE`/`CALL_TITLE`/`PLAY_PL`）也按常量解析，条件是跳转不是 `GOTO` 落点、`MOVE` 不被比较指令跳过；其余寄存器目标、缺失目标、编码非法、预算耗尽保留 `unresolved` 并写 `diagnostics`。不把未解析路径标成不可达。
 - `findStaticNavigationLoops(graph)` 用 DFS 回边，返回 `{ backEdge, cycle, movieObjects, commandLocations }`。`scripts/visualize-hdmv-vm-flow.mjs` 用它生成 Markdown 流程图。
 
 ## 测试
@@ -193,21 +196,25 @@ buildNavigationGraph(objects, appendedPrograms?, { maxStates?, entries?, context
 | 文件 | 覆盖 |
 | --- | --- |
 | `src/index.test.ts` | 寄存器初始化、指令语义、SET_STREAM/SET_BUTTON_PAGE、PSR 更新、trace、checkpoint |
-| `src/control-flow.test.ts` | GOTO/BREAK/RESUME、JUMP_TITLE/CALL_TITLE 事件边界、越界目标 |
-| `src/loops.test.ts` | 静态循环检测 |
-| `src/reference-golden.test.ts` | 从 libbluray 源码推导的检查点 golden（首个差异即失败） |
+| `src/bytecode/opcode-reference.test.ts` | 操作码解码与执行对照 |
+| `src/virtual-machine/control-flow.test.ts` | GOTO/BREAK/RESUME、JUMP_TITLE/CALL_TITLE 事件边界、越界目标 |
+| `src/virtual-machine/vm-bdj.test.ts` | BD-J 目标与标题交接 |
+| `src/virtual-machine/reference-golden.test.ts` | 从 libbluray 源码推导的检查点 golden（首个差异即失败） |
+| `src/graph/graph.test.ts` | 导航图与常量传播回归 |
+| `src/graph/loops.test.ts` | 静态循环检测 |
+| `src/export/program-blocks.test.ts` / `program-mermaid.test.ts` | 程序块与 mermaid 导出 |
 
 跨包一站式覆盖见 `apps/cli/tests/integration/synthetic-all-features.test.ts`：MOVE/RND/PLAY_PL 序列的解码与 VM 执行。
 
-golden 文件：`src/fixtures/libbluray-1.5.0-source-derived-reference-golden.json`。它由源码推导，不是 libbluray 运行 trace。
+golden 文件：`tests/fixtures/libbluray-1.5.0-source-derived-reference-golden.json`。它由源码推导，不是 libbluray 运行 trace。
 
 ## 改动入口
 
 | 需求 | 位置 | 同步 |
 | --- | --- | --- |
-| 新增/修正操作码语义 | `vm.ts` 对应 case + `decode.ts` 的选项表 | `docs/support/hdmv-support.md` 的 opcode 表、`src/index.test.ts` |
-| 改寄存器默认/权限 | `registers.ts` `reset` / `READ_ONLY_PSRS` | `docs/support/hdmv-support.md` 寄存器矩阵 |
-| 改等待条件 | `vm.ts` 的等待声明与 `handleEvent` | `openspec/specs/hdmv-navigation/spec.md` 的异步场景 |
-| 改导航图 | `graph.ts` | `packages/media-export/src/closure.ts`（消费闭包）与图相关测试 |
+| 新增/修正操作码语义 | `virtual-machine/vm.ts` 对应 case + `bytecode/decode.ts` 的选项表 | `docs/support/hdmv-support.md` 的 opcode 表、`src/index.test.ts` |
+| 改寄存器默认/权限 | `virtual-machine/registers.ts` `reset` / `READ_ONLY_PSRS` | `docs/support/hdmv-support.md` 寄存器矩阵 |
+| 改等待条件 | `virtual-machine/vm.ts` 的等待声明与 `handleEvent` | `openspec/specs/hdmv-navigation/spec.md` 的异步场景 |
+| 改导航图 | `graph/graph.ts` | `packages/media-export/src/closure.ts`（消费闭包）与图相关测试 |
 
 改语义前先确认有无独立证据：`unverified` 的行可以按固定实现改，但要在 `docs/support/hdmv-support.md` 保留证据状态，不能写成“已核验”。

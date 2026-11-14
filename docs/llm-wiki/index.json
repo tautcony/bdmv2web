@@ -52,7 +52,7 @@
       "summary": "BDMV 元数据解析、主备回退、版本门、容错规则、引用图与 ParsedDisc。",
       "covers": ["index.bdmv", "MovieObject", "MPLS", "CLPI", "sound.bdmv", "backup fallback", "reference graph"],
       "keywords": ["bdmv-parser", "INDX", "MOBJ", "MPLS", "CLPI", "ParsedDisc", "traverseGraph"],
-      "keyFiles": ["packages/bdmv-parser/src/parser.ts", "packages/bdmv-parser/src/model.ts", "packages/bdmv-parser/src/graph.ts"]
+      "keyFiles": ["packages/bdmv-parser/src/parsing/parser.ts", "packages/bdmv-parser/src/model.ts", "packages/bdmv-parser/src/graph/graph.ts"]
     },
     {
       "path": "packages/hdmv.md",
@@ -60,7 +60,7 @@
       "summary": "指令解码、寄存器、VM 状态机、等待与代次、导航图、静态循环。",
       "covers": ["opcode decoding", "registers", "VM", "navigation graph", "static loops", "trace"],
       "keywords": ["hdmv", "VM", "PSR", "GPR", "trace", "checkpoint", "JUMP_TITLE", "UO"],
-      "keyFiles": ["packages/hdmv/src/decode.ts", "packages/hdmv/src/registers.ts", "packages/hdmv/src/vm.ts", "packages/hdmv/src/graph.ts", "packages/hdmv/src/loops.ts"]
+      "keyFiles": ["packages/hdmv/src/bytecode/decode.ts", "packages/hdmv/src/virtual-machine/registers.ts", "packages/hdmv/src/virtual-machine/vm.ts", "packages/hdmv/src/graph/graph.ts", "packages/hdmv/src/graph/loops.ts"]
     },
     {
       "path": "packages/igs.md",
@@ -68,7 +68,7 @@
       "summary": "M2TS/TS/PES 重组、IGS 段与场景、RLE、PNG、提取入口与边界。",
       "covers": ["transport stream", "PSI", "PES", "IGS segments", "scenes", "PNG"],
       "keywords": ["igs", "M2TS", "ICS", "PDS", "ODS", "RLE", "Display Set", "PNG"],
-      "keyFiles": ["packages/igs/src/transport.ts", "packages/igs/src/igs.ts", "packages/igs/src/png.ts", "packages/igs/src/extract.ts", "packages/igs/src/types.ts"]
+      "keyFiles": ["packages/igs/src/transport/transport.ts", "packages/igs/src/scene/igs.ts", "packages/igs/src/rendering/png.ts", "packages/igs/src/scene/extract.ts", "packages/igs/src/scene/types.ts"]
     },
     {
       "path": "packages/media-export.md",
@@ -76,7 +76,7 @@
       "summary": "媒体闭包、媒体计划、循环导出、线性变体、HDR 色彩管线、PGS、时间线、外部目标、预算。",
       "covers": ["media closure", "media plan", "ffmpeg export", "linear export", "HDR colour pipeline", "PGS", "timeline", "external targets"],
       "keywords": ["media-export", "ffmpeg", "ffprobe", "closure", "HDR", "tonemap", "HEVC", "crf", "PGS", "SUP", "external playback"],
-      "keyFiles": ["packages/media-export/src/closure.ts", "packages/media-export/src/index.ts", "packages/media-export/src/color.ts", "packages/media-export/src/media-plan.ts", "packages/media-export/src/linear.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
+      "keyFiles": ["packages/media-export/src/closure.ts", "packages/media-export/src/index.ts", "packages/media-export/src/color/color.ts", "packages/media-export/src/media-plan.ts", "packages/media-export/src/linear.ts", "packages/media-export/src/pgs/pgs.ts", "packages/media-export/src/external-targets.ts"]
     },
     {
       "path": "packages/runtime-web.md",
@@ -113,7 +113,7 @@
     {
       "path": "packages/cli.md",
       "kind": "package",
-      "summary": "参数契约、七个命令实现要点、错误出口、退出码与扩展位置。",
+      "summary": "参数契约、十个命令实现要点、错误出口、退出码与扩展位置。",
       "covers": ["argument contract", "commands", "exit codes", "error handling"],
       "keywords": ["cli", "commandOptions", "exit code", "CLI_INVALID_PROFILE", "build", "validate"],
       "keyFiles": ["apps/cli/src/cli/program.ts"]
@@ -121,8 +121,8 @@
     {
       "path": "features/cli-commands.md",
       "kind": "feature",
-      "summary": "八个命令的输入、选项、产物、失败码与退出码；含常用命令小抄。",
-      "covers": ["inspect", "extract", "list", "export", "render", "build", "validate", "compare"],
+      "summary": "十个命令的输入、选项、产物、失败码与退出码；含常用命令小抄。",
+      "covers": ["inspect", "extract", "list", "export", "render", "build", "validate", "compare", "serve", "visualize"],
       "keywords": ["命令", "产物", "退出码", "CLI"],
       "keyFiles": ["apps/cli/src/cli/program.ts", "README.md"]
     },
@@ -132,7 +132,7 @@
       "summary": "解码→执行→导航图→媒体闭包四环；事件/代次、上下文、UO、转换期找菜单。",
       "covers": ["VM execution", "event protocol", "UO mask", "navigation graph", "top menu resolution"],
       "keywords": ["导航", "VM", "Top Menu", "媒体闭包", "UO"],
-      "keyFiles": ["packages/hdmv/src/vm.ts", "packages/hdmv/src/graph.ts", "packages/media-export/src/closure.ts", "apps/cli/src/cli/program.ts"]
+      "keyFiles": ["packages/hdmv/src/virtual-machine/vm.ts", "packages/hdmv/src/graph/graph.ts", "packages/media-export/src/closure.ts", "apps/cli/src/cli/program.ts"]
     },
     {
       "path": "features/igs-extraction.md",
@@ -140,7 +140,7 @@
       "summary": "从 STREAM 找到 IGS 载体，经传输层到场景与 PNG；场景完整性与验证方式。",
       "covers": ["IGS carrier detection", "transport", "segments", "scene completeness", "PNG", "verification"],
       "keywords": ["IGS 提取", "PID", "场景", "complete", "BT.709"],
-      "keyFiles": ["packages/igs/src/extract.ts", "packages/igs/src/igs.ts", "packages/igs/src/png.ts"]
+      "keyFiles": ["packages/igs/src/scene/extract.ts", "packages/igs/src/scene/igs.ts", "packages/igs/src/rendering/png.ts"]
     },
     {
       "path": "features/offline-menu.md",
@@ -156,7 +156,7 @@
       "summary": "媒体闭包→计划→循环导出→线性变体→PGS→外部交接；编码参数、HDR 策略、能力边界与排查顺序。",
       "covers": ["closure", "media plan", "loop export", "linear variants", "encoding options", "HDR policy", "PGS", "external handoff", "capabilities"],
       "keywords": ["媒体", "ffmpeg", "循环", "HDR", "HEVC", "crf", "preset", "PGS", "外部播放器"],
-      "keyFiles": ["packages/media-export/src/index.ts", "packages/media-export/src/color.ts", "packages/media-export/src/closure.ts", "packages/media-export/src/pgs.ts", "packages/media-export/src/external-targets.ts"]
+      "keyFiles": ["packages/media-export/src/index.ts", "packages/media-export/src/color/color.ts", "packages/media-export/src/closure.ts", "packages/media-export/src/pgs/pgs.ts", "packages/media-export/src/external-targets.ts"]
     },
     {
       "path": "features/verification.md",
@@ -172,7 +172,7 @@
       "summary": "按前缀分组的诊断码：含义、典型严重性、产生位置、首查方向。",
       "covers": ["contract errors", "CLI", "BDMV", "TS/PES/IGS", "HDMV/VM", "MEDIA/EXTERNAL", "SOUND", "audit checks"],
       "keywords": ["诊断码", "错误", "severity", "检查项"],
-      "keyFiles": ["packages/bdmv-parser/src/parser.ts", "packages/igs/src/transport.ts", "packages/hdmv/src/vm.ts", "packages/test-runner/src/package-audit.ts"]
+      "keyFiles": ["packages/bdmv-parser/src/parsing/parser.ts", "packages/igs/src/transport/transport.ts", "packages/hdmv/src/virtual-machine/vm.ts", "packages/test-runner/src/package-audit.ts"]
     },
     {
       "path": "troubleshooting.md",
@@ -196,7 +196,7 @@
       "summary": "BDMV/IGS/HDMV/产物与判定的术语对照。",
       "covers": ["disc structure", "interactive graphics", "navigation", "artifacts", "abbreviations"],
       "keywords": ["术语", "BDMV", "MPLS", "IGS", "PSR", "UO"],
-      "keyFiles": ["packages/bdmv-parser/src/model.ts", "packages/igs/src/types.ts", "packages/hdmv/src/registers.ts"]
+      "keyFiles": ["packages/bdmv-parser/src/model.ts", "packages/igs/src/scene/types.ts", "packages/hdmv/src/virtual-machine/registers.ts"]
     }
   ]
 }
