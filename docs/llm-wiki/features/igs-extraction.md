@@ -63,7 +63,7 @@ PES 载荷按 3 字节段头（类型 + 16 位长度）切分；不完整的段�
 | 调用方 | 选项 | 产物 |
 | --- | --- | --- |
 | `build` | `renderAssets: true`（默认） | 场景 + PNG，交给 `package-builder` |
-| `extract --type igs` | `renderAssets: false` | 场景 JSON + 诊断 + source-map，不含 PNG |
+| `export --type igs --no-assets` | `renderAssets: false` | 场景 JSON + 诊断 + source-map，不含 PNG |
 | `export` | `captureStreams: true` | 额外保留 igstools 兼容 `.mnu` 字节 |
 
 `IgsExtraction.status`：有 error 且无场景 → `failed`；有 error/warning 或无场景 → `partial`；否则 `complete`。`support.status` 固定 `unverified`。

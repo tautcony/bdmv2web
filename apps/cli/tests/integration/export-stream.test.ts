@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const cliRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const syntheticIgsFixture = resolve(cliRoot, "../../test-data/fixtures/igs-parser/synthetic-single-object.m2ts");
+const bdmvFixture = resolve(cliRoot, "../../test-data/fixtures/synthetic-all-features/BDMV");
 
 interface ExportStdout { stageStatus: string; output: string; assetCount: number }
 
@@ -176,6 +177,64 @@ describe("export from standalone stream files", async () => {
       }
       expect(lines).toContainEqual(expect.stringMatching(/\s+100% {2}\d+\/2 display sets$/));
       expect(JSON.parse(String(loud.stdout))).toMatchObject({ stageStatus: "complete", assetCount: 3 });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+});
+
+describe("export input detection and analysis", async () => {
+  it("rejects a standalone .sup file and points at render", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "export-analysis "));
+    try {
+      const sup = join(parent, "track.sup");
+      await writeFile(sup, Buffer.from("PG\u0000\u0000", "latin1"));
+      const result = await runCommand(["export", sup, "--out", join(parent, "out")]);
+      expect(result.status).toBe(1);
+      expect(String(result.stderr)).toContain("CLI_EXPORT_SELECTION");
+      expect(String(result.stderr)).toContain("Use render");
+      expect(existsSync(join(parent, "out"))).toBe(false);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("writes the metadata artifact set for --type metadata and for --type all", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "export-metadata "));
+    const output = join(parent, "out");
+    try {
+      const result = await runCommand(["export", bdmvFixture, "--out", output, "--type", "metadata"]);
+      expect(result.status, String(result.stderr)).toBe(0);
+      // Metadata-only runs keep the old analysis stdout contract and write no asset manifest.
+      const stdout = JSON.parse(String(result.stdout)) as Record<string, unknown>;
+      expect(stdout).toMatchObject({ stageStatus: "complete" });
+      expect(stdout.assetCount).toBeUndefined();
+      expect(String(stdout.output).endsWith("/out")).toBe(true);
+      expect(existsSync(join(output, "assets-manifest.json"))).toBe(false);
+      const manifest = JSON.parse(await readFile(join(output, "manifest.json"), "utf8")) as { selectedTypes: string[]; files: Array<{ path: string; kind: string }> };
+      expect(manifest.selectedTypes).toEqual(["hdmv", "igs", "sup"]);
+      expect(manifest.files.map((file) => file.kind).sort()).toEqual(["external-media-targets", "hdmv-command-table", "hdmv-source-map", "igs-diagnostics", "igs-scenes", "parsed-disc", "source-map", "sup-track-index"]);
+      expect(existsSync(join(output, "assets"))).toBe(false);
+
+      // `all` is the same metadata set plus the containers it already wrote.
+      const combined = join(parent, "all");
+      const both = await runCommand(["export", bdmvFixture, "--out", combined, "--type", "all"]);
+      expect(both.status, String(both.stderr)).toBe(0);
+      expect(existsSync(join(combined, "manifest.json"))).toBe(true);
+      expect(existsSync(join(combined, "assets-manifest.json"))).toBe(true);
+      expect(existsSync(join(combined, "assets/igs"))).toBe(true);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("exports structural metadata from a stream file without writing containers", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "export-analysis "));
+    const output = join(parent, "out");
+    try {
+      const stream = await writeStream(parent, "clip.rsks", syntheticPgsStream({ displaySets: 2 }));
+      const result = await runCommand(["export", stream, "--out", output, "--type", "sup", "--no-assets"]);
+      expect(result.status, String(result.stderr)).toBe(0);
+      expect(existsSync(join(output, "assets-manifest.json"))).toBe(false);
+      expect(existsSync(join(output, "assets"))).toBe(false);
+      const tracks = JSON.parse(await readFile(join(output, "sup/tracks.json"), "utf8")) as { tracks: Array<Record<string, unknown>> };
+      expect(tracks.tracks).toEqual([{ clipId: "clip", pid: PGS_PID, language: "und", streamNumber: 1, displaySetCount: 2, byteLength: expect.any(Number) }]);
+      const manifest = JSON.parse(await readFile(join(output, "manifest.json"), "utf8")) as { selectedTypes: string[] };
+      expect(manifest.selectedTypes).toEqual(["sup"]);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

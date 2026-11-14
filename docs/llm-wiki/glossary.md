@@ -68,7 +68,7 @@
 | 媒体闭包（closure） | 从入口可达的播放列表/clip/stream 集合 |
 | 媒体计划（media plan） | 预转码的轨道、区间、预算估算 |
 | 菜单包 | `index.html` + `runtime/` + `assets/` + 清单 |
-| `stageStatus` | 命令阶段是否达成（`inspect`/`extract`） |
+| `stageStatus` | 命令阶段是否达成（`inspect`/`export`/`render`） |
 | `status` | 交付是否完整（`build`/`validate`） |
 | `notVerified` | 未收集/未验证的证据；不降低状态 |
 | `gaps` | 发布汇总里 `fail` 与 `not-verified` 的条目 |

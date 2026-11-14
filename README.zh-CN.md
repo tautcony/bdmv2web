@@ -104,22 +104,27 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 
 ### CLI
 
-`<BDMV>` 可指向 BDMV 目录，也可指向包含 `BDMV/` 的父目录。
+`<INPUT>` 可指向 BDMV 目录、包含 `BDMV/` 的父目录，或单个 `.m2ts`/`.rsks` 流文件；`render` 还可直接接收 `.mnu`/`.sup` 文件。路径先按内容、再按扩展名判定，所以改过名字的流文件仍会被识别为流。
 
 | 命令 | 用途 | 常用选项 |
 | --- | --- | --- |
-| `inspect <BDMV>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE` |
-| `extract <BDMV> --out DIR` | 导出 HDMV、IGS、SUP 分析数据 | `--type hdmv\|igs\|sup` 或 `--all` |
-| `list <BDMV>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
-| `export <BDMV> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--render`、`--png-level 0-9` |
-| `render <输入>` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--mnu FILE`、`--sup FILE`、`--language LANG`、`--png-level 0-9` |
+| `inspect <INPUT>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE` |
+| `list <INPUT>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
+| `export <INPUT> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源，可按需附加 PNG 与元数据 | `--type all\|metadata\|hdmv\|igs\|sup`、`--no-assets`、`--render`、`--m2ts CLIP_ID`、`--pid PID`、`--png-level 0-9` |
+| `render <INPUT>` | 从 BDMV、`.m2ts`/`.rsks` 流、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--language LANG`、`--png-level 0-9`、`--m2ts CLIP_ID`、`--pid PID` |
 | `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--menu-media auto\|all\|none`、`--overwrite`、`--resume [DIR]` |
 | `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json` |
 | `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
 `build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。运行中断时已完成的工作保留在 `.<输出名>.staging-*`，`--resume` 从该目录继续；输出目标在构建完成时写入。影片 PGS 字幕通过 `export --type sup` 导出。
 
-`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`export --render` 在导出原始资源时同时输出 PNG。`render` 读取 BDMV、`.m2ts`/`.rsks` 流、`.mnu` 或 `.sup` 输入，并走同一条管线：PNG 字节与清单条目相同，只是不写 `.mnu`/`.sup`。`--png-level 0-9` 设置 `export --render` 与 `render` 写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。
+`--m2ts` 和 `--pid` 的值可通过 `list` 查询。
+
+`--type` 指定命令写出哪些产物，与输入类型无关：`igs`、`sup` 是 `.mnu`/`.sup` 容器（配合 `--render` 还包括其 PNG），`hdmv` 是命令表与来源映射，`metadata` 是整套结构元数据——`manifest.json`、`hdmv/*.json`、`igs/*.json` 与 `sup/tracks.json`；`all` 是该命令能写出的全部产物。省略 `--type` 时，`export` 写容器。
+
+`--no-assets` 不写容器也不写 PNG：单独使用时写出整套元数据，配合 `--type igs` 或 `--type sup` 时只写对应的那一段元数据——这正是原先 `extract` 命令的两种形态，该命令已并入 `export`。`export` 与 `render` 共用一条管线；`render` 把选择固定为 PNG，并且是唯一能解码独立 `.mnu`/`.sup` 文件的命令，输入类型由文件本身判定。
+
+`--png-level 0-9` 设置 `export --render` 与 `render` 写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。没有资产侧的运行不写 `assets-manifest.json`。
 
 `assets-manifest.json` 的 `sup-png` 条目记录 `displaySet`、`startSeconds`、`endSeconds`、`width` 和 `height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条显示集的起点，单位秒（3 位小数），以轨道起点为 0；无法确定时写 `null`。全透明显示集从 PNG 输出和清单中省略。
 

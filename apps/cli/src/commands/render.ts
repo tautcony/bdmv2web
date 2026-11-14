@@ -1,62 +1,54 @@
-import { assetSelection, assetTypeOption, igsElementRecord, pngLevelOption, safeAssetStem } from "../cli/assets.js";
+import { assetSelection, assetTypeOption, igsElementRecord, pngLevelOption, pngOutputs } from "../cli/assets.js";
 import type { AssetRecord } from "../cli/assets.js";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
 import { commandProgress, countOf } from "../progress.js";
 import { exportBdmvAssets, exportStreamAssets } from "../shared/asset-export.js";
-import type { ExportRun } from "../shared/asset-export.js";
+import type { GraphicsRun } from "../shared/asset-export.js";
 import { pgsTrackPngPlan, runDecodeStep, writeDisplaySetPngs } from "../shared/pgs.js";
 import type { DecodeTarget } from "../shared/pgs.js";
 import { FILE_STEPS } from "../shared/steps.js";
-import { classifyStreamInput } from "../shared/stream-input.js";
+import { classifyInput } from "../shared/stream-input.js";
+import type { StreamTarget } from "../shared/stream-input.js";
 import { beginOutputTransaction } from "@bdmv2web/bdmv-io";
 import { ContractError } from "@bdmv2web/core";
 import { parseIgsMnu } from "@bdmv2web/igs";
 import { parsePgsSup, pgsDisplaySetEnd90k } from "@bdmv2web/media-export";
 import { errorText } from "@bdmv2web/utils";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 /**
  * `render` is the PNG-only half of `export`: it runs the same pipeline (same
  * naming, manifest records, concurrency and progress) with containers turned off,
- * and additionally accepts standalone `.mnu`/`.sup` files.
+ * and it is the only command that decodes a standalone `.mnu`/`.sup` file.
  */
-const RENDER_RUN: ExportRun = { command: "render", containers: false, selectionCode: "CLI_RENDER_SELECTION" };
+const RENDER_COMMAND = { command: "render", selectionCode: "CLI_RENDER_SELECTION" } as const;
 
 export async function renderPng(): Promise<void> {
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "render requires --out DIR");
-  const positional = inputPath();
-  const mnuPath = optionValue("--mnu");
-  const supPath = optionValue("--sup");
-  const typeOption = optionValue("--type");
+  const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "render requires a BDMV directory, a .m2ts/.rsks stream file, or a .mnu/.sup file");
   const language = renderLanguage();
-  if ((mnuPath !== undefined || supPath !== undefined) && positional !== undefined) fail("CLI_RENDER_SELECTION", "render accepts either a positional input or --mnu/--sup, not both");
-  if ((mnuPath !== undefined || supPath !== undefined) && typeOption !== undefined) fail("CLI_RENDER_SELECTION", "--type applies to BDMV and stream input; omit it for --mnu/--sup");
-  if ((mnuPath !== undefined || supPath !== undefined) && optionValue("--m2ts") !== undefined) fail("CLI_RENDER_SELECTION", "--m2ts applies to BDMV input");
   const selection = assetSelection();
-  const pngLevel = pngLevelOption();
-  const sources: Array<{ kind: "mnu" | "sup"; path: string }> = [];
-  if (mnuPath !== undefined) sources.push({ kind: "mnu", path: mnuPath });
-  if (supPath !== undefined) sources.push({ kind: "sup", path: supPath });
-  if (positional !== undefined) {
-    const extension = extname(positional).toLocaleLowerCase("en-US");
-    if (extension === ".mnu" || extension === ".sup") sources.push({ kind: extension.slice(1) as "mnu" | "sup", path: positional });
-    else {
-      if (sources.length) fail("CLI_RENDER_SELECTION", "render accepts either a BDMV or stream input or --mnu/--sup, not both");
-      if (language !== undefined) fail("CLI_RENDER_SELECTION", "--language applies to SUP input; BDMV and stream tracks carry their declared language");
-      // Rendering is this command's whole job, so the shared pipeline always decodes.
-      const pngSelection = { ...selection, renderPng: true };
-      const type = assetTypeOption();
-      const target = await classifyStreamInput(positional);
-      if (target.kind === "stream") return exportStreamAssets(target, resolve(out), type, pngSelection, RENDER_RUN);
-      return exportBdmvAssets(positional, resolve(out), type, pngSelection, RENDER_RUN);
-    }
+  // The input decides what can be rendered: a `.mnu`/`.sup` file carries its own
+  // graphics, a disc or stream declares them. Only the mismatched combinations
+  // need an error.
+  const target = await classifyInput(input);
+  if (target.kind === "mnu" || target.kind === "sup") {
+    if (optionValue("--type") !== undefined) fail("CLI_RENDER_SELECTION", "--type applies to a BDMV disc or a stream file; a .mnu/.sup input already selects its own graphics");
+    if (selection.clipId !== undefined) fail("CLI_RENDER_SELECTION", "--m2ts applies to a BDMV disc");
+    if (target.kind === "sup" && selection.pid !== undefined) fail("CLI_RENDER_SELECTION", "--pid applies to an IGS (.mnu) input");
+    if (target.kind === "mnu" && language !== undefined) fail("CLI_RENDER_SELECTION", "--language applies to a PGS (.sup) input");
+    return renderPngFromFile(target, resolve(out), language, selection.pid, pngLevelOption());
   }
-  if (!sources.length) fail("CLI_MISSING_INPUT", "render requires a BDMV input, a .m2ts/.rsks stream file, a .mnu/.sup positional input, or --mnu/--sup");
-  if (language !== undefined && !sources.some((source) => source.kind === "sup")) fail("CLI_RENDER_SELECTION", "--language applies to SUP input");
-  if (selection.pid !== undefined && !sources.some((source) => source.kind === "mnu")) fail("CLI_RENDER_SELECTION", "--pid applies to MNU input");
-  return renderPngFromFiles(sources, resolve(out), language, selection.pid, pngLevel);
+  if (language !== undefined) fail("CLI_RENDER_SELECTION", "--language applies to a standalone SUP; a disc or stream track carries its declared language");
+  // Rendering is this command's whole job, so the shared pipeline always decodes.
+  const type = assetTypeOption();
+  const run: GraphicsRun = { ...RENDER_COMMAND, outputs: pngOutputs(type) };
+  const pngSelection = { ...selection, renderPng: true };
+  return target.kind === "stream"
+    ? exportStreamAssets(target, resolve(out), type, pngSelection, run)
+    : exportBdmvAssets(input, resolve(out), type, pngSelection, run);
 }
 
 export function renderLanguage(): string | undefined {
@@ -66,36 +58,34 @@ export function renderLanguage(): string | undefined {
   return value.toLocaleLowerCase("en-US");
 }
 
-/** Standalone `.mnu`/`.sup` inputs, which carry no disc to discover streams from. */
-export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; path: string }>, out: string, language: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
-  const progress = commandProgress({ command: "render", steps: Object.values(FILE_STEPS), source: sources.map((source) => source.path).join(", "), details: [["output", out]] });
+/** A standalone `.mnu`/`.sup` file, which carries no disc to discover streams from. */
+export async function renderPngFromFile(source: ({ kind: "mnu" } | { kind: "sup" }) & StreamTarget, out: string, language: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
+  const progress = commandProgress({ command: "render", steps: Object.values(FILE_STEPS), source: source.path, details: [["output", out]] });
   const transaction = await beginOutputTransaction(resolve(out));
   try {
     progress.start(FILE_STEPS.read);
     const files: AssetRecord[] = [];
     const targets: DecodeTarget[] = [];
     let partial = false;
-    for (const source of sources) {
-      const input = resolve(source.path);
-      const bytes = await readFile(input);
-      const stem = safeAssetStem(input);
-      if (source.kind === "mnu") {
-        let parsed;
-        try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120, pngLevel }); }
-        catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${errorText(error)}`); }
-        if (parsed.status === "failed" || parsed.scenes.length === 0) {
-          const detail = parsed.diagnostics.find((item) => item.severity === "error")?.message ?? "no complete display set";
-          throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU contains no renderable menu scene: ${detail}`);
-        }
-        if (parsed.status === "partial") partial = true;
-        for (const asset of parsed.assets) {
-          const target = resolve(transaction.stagingPath, asset.relativePath);
-          await mkdir(dirname(target), { recursive: true });
-          await writeFile(target, asset.pngBytes, { flag: "wx" });
-          files.push(igsElementRecord(asset));
-        }
-        continue;
+    const input = resolve(source.path);
+    const bytes = await readFile(input);
+    const stem = source.stem;
+    if (source.kind === "mnu") {
+      let parsed;
+      try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120, pngLevel }); }
+      catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${errorText(error)}`); }
+      if (parsed.status === "failed" || parsed.scenes.length === 0) {
+        const detail = parsed.diagnostics.find((item) => item.severity === "error")?.message ?? "no complete display set";
+        throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU contains no renderable menu scene: ${detail}`);
       }
+      if (parsed.status === "partial") partial = true;
+      for (const asset of parsed.assets) {
+        const target = resolve(transaction.stagingPath, asset.relativePath);
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, asset.pngBytes, { flag: "wx" });
+        files.push(igsElementRecord(asset));
+      }
+    } else {
       let displaySets;
       try { displaySets = parsePgsSup(bytes); }
       catch (error) { throw new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${errorText(error)}`); }

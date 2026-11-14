@@ -6,7 +6,7 @@ import { HdmvVm, PSR, type VmProgram } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { resolveMenuLoopStart45k } from "@bdmv2web/media-export";
 import type { MenuMediaEncoding } from "@bdmv2web/package-builder";
-import { safeDiagnosticMessage } from "./extract.js";
+import { safeDiagnosticMessage } from "../shared/metadata.js";
 
 export function menuMediaEncoding(): MenuMediaEncoding | undefined {
   const crf = optionNumber("--crf");

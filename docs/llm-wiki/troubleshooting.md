@@ -16,7 +16,7 @@ corepack pnpm test
 - 测试超时先确认机器没有过载；`cli`、`media-export`、`runtime-web` 的单例预算 15s，导航语料用例单独 120s。
 - 需要真实样本的测试在数据缺失时会跳过，不用把“跳过”当失败。
 
-## 1. `inspect` / `extract` 失败
+## 1. `inspect` / `export` 失败
 
 | 症状 | 判断 | 处理 |
 | --- | --- | --- |
@@ -24,8 +24,8 @@ corepack pnpm test
 | `BDMV_UNSUPPORTED_VERSION` | 版本不在 `0100/0200/0240/0300` | 主文件版本不会被旧备份掩盖；确认盘片版本 |
 | `BDMV_ROOT_NOT_FOUND` / `BDMV_ROOT_AMBIGUOUS` | 传了错误的层级或存在大小写变体 | 传 `BDMV` 根或其直接父目录 |
 | `stageStatus: partial`，退出 0 | 有 `error` 无 `fatal` | 看 `diagnostics` 里第一条 `error` |
-| `extract` 没有产物 | 有 `fatal`，事务未创建 | 先解决 fatal；该命令不在失败时留 staging |
-| `extract --type igs` 没有 PNG | 该命令不生成 PNG | 用 `render --type igs` |
+| `export --no-assets` 没有产物 | 有 `fatal`，事务未创建 | 先解决 fatal；该命令不在失败时留 staging |
+| `export --no-assets` 没有 PNG | 元数据形态不生成 PNG | 去掉 `--no-assets` 并加 `--render`，或改用 `render` |
 | `sup/tracks.json` 为空 | 没有可达 PGS 轨道 | `list --type sup` 确认 PID/语言 |
 | `render` 没有 PNG | SUP 只有全透明显示集，或 MNU 没有页面引用的图形 | 检查清单 `assetCount`；SUP 是否只有清屏显示集 |
 
@@ -34,7 +34,7 @@ corepack pnpm test
 | 码 | 判断 | 处理 |
 | --- | --- | --- |
 | `MENU_PLAYLIST_NOT_RESOLVED` | 入口不是 HDMV，或 First Play → Top Menu 链在 64 步内没走到引用菜单场景的播放列表 | 用 `inspect --format json` 看 `entries` 与 `movieObjects`；确认 Top Menu 是 HDMV |
-| `MENU_SCENE_NOT_FOUND` | 播放列表的 IGS clip/PID 与提取场景不匹配 | `list --type igs` 对比 clip/PID；`extract --type igs` 看 `scenes[].clipId/pid` |
+| `MENU_SCENE_NOT_FOUND` | 播放列表的 IGS clip/PID 与提取场景不匹配 | `list --type igs` 对比 clip/PID；`export --type igs --no-assets` 看 `scenes[].clipId/pid` |
 | `MENU_SCENE_AMBIGUOUS` | 同一 clip/PID 多个场景 | 看报错里的 `compositionNumber` 与 `segmentFileOffset`，确认哪一个是菜单 |
 | `M4_MENU_OBJECT_CONTEXT_MISSING` | 没有可用的 Top Menu/First Play Object | 入口表是否只有 BD-J；对象表是否为空 |
 | `M5_MENU_LOOP_UNAVAILABLE` | 菜单页面所需的背景 PlayItem 没有导出 | 检查该 PlayItem 的角度、视频流和媒体计划 |
@@ -127,8 +127,8 @@ corepack pnpm test
 | 目标 | 方法 |
 | --- | --- |
 | 看完整结构 | `inspect <BDMV> --format json --out /tmp/disc.json` |
-| 看场景来源 | `extract --type igs` 的 `igs/source-map.json`：场景/页/按钮/对象/调色板 → 文件偏移 |
-| 看命令来源 | `extract --type hdmv` 的 `hdmv/commands.json`（object + instructionIndex + offset） |
+| 看场景来源 | `export --type igs --no-assets` 的 `igs/source-map.json`：场景/页/按钮/对象/调色板 → 文件偏移 |
+| 看命令来源 | `export --type hdmv` 的 `hdmv/commands.json`（object + instructionIndex + offset） |
 | 看媒体决策 | `media-plan.json` / `media-plans/*.json` 的 `playlistId`、区间、轨道、编码参数 |
 | 看交付原因 | `reports.json` 的 `conversion.reasons` 和 `diagnostics`；`reports/release-summary.json` 的 `gaps` |
 | 复现解析差异 | 用 `packages/test-fixtures/src/bdmv.ts` 构造最小样本，不依赖真实碟片 |

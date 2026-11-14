@@ -7,7 +7,7 @@ import { buildMediaClosure } from "../shared/media.js";
 import { collectBdjApplicationFiles } from "../shared/bdj-files.js";
 import { buildBdjHostApiJar } from "../shared/bdj-host.js";
 import { normalizeDiscId, readBdmvDiscId } from "../shared/disc-id.js";
-import { referencedAssetIds, safeDiagnosticMessage } from "./extract.js";
+import { referencedAssetIds, safeDiagnosticMessage } from "../shared/metadata.js";
 import { mediaExportProgress } from "./media-progress.js";
 import { readJsonObject } from "../cli/output.js";
 import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";

@@ -25,9 +25,84 @@ export interface AssetRecord {
   paletteVersion?: number;
 }
 
+/** Asset families a listing or PNG run can produce. */
 export type AssetType = "all" | "igs" | "sup";
+/**
+ * Output families a graphics run can write. `metadata` is the whole structural
+ * set and `hdmv` is its command-table section; both are outputs only, so
+ * `outputTypeOption` accepts them while `--pid`/`--m2ts` selection does not.
+ */
+export type OutputType = "all" | "metadata" | "hdmv" | "igs" | "sup";
+
+/**
+ * What a graphics run writes: structural metadata, `.mnu`/`.sup` containers, and
+ * PNG frames, each per family. `--type` names an output, never the input — `igs`
+ * and `sup` select their container and (with `--render`) their PNGs, while
+ * `--no-assets` turns the asset side off and leaves the metadata side on.
+ */
+export interface OutputSelection {
+  metadata: { hdmv: boolean; igs: boolean; sup: boolean };
+  containers: { igs: boolean; sup: boolean };
+  png: { igs: boolean; sup: boolean };
+}
+
+const NO_METADATA = { hdmv: false, igs: false, sup: false };
+const ALL_METADATA = { hdmv: true, igs: true, sup: true };
+const NO_FAMILIES = { igs: false, sup: false };
+const ALL_FAMILIES = { igs: true, sup: true };
+
 export function assetTypeOption(): AssetType {
   return validateAssetType(optionValue("--type") ?? "all");
+}
+
+/** `undefined` when `--type` was not given, so each command can keep its own default. */
+export function outputTypeOption(): OutputType | undefined {
+  const value = optionValue("--type");
+  if (value === undefined) return undefined;
+  if (value !== "all" && value !== "metadata" && value !== "hdmv" && value !== "igs" && value !== "sup") fail("CLI_INVALID_ASSET_TYPE", "--type must be one of all, metadata, hdmv, igs, or sup");
+  return value;
+}
+
+/** Containers (and their PNGs) a `--type` names; `metadata` and `hdmv` have none. */
+function familiesFor(type: OutputType | undefined) {
+  switch (type) {
+    case "metadata":
+    case "hdmv": return NO_FAMILIES;
+    case "igs": return { ...NO_FAMILIES, igs: true };
+    case "sup": return { ...NO_FAMILIES, sup: true };
+    default: return ALL_FAMILIES;
+  }
+}
+
+/**
+ * Metadata sections a `--type` names. Naming a container family (or no type at
+ * all) means the asset side, so metadata only appears when asked for by name or
+ * when `--no-assets` leaves nothing else to write.
+ */
+function metadataFor(type: OutputType | undefined, assets: boolean) {
+  if (type === "metadata" || type === "all") return ALL_METADATA;
+  if (type === "hdmv") return { ...NO_METADATA, hdmv: true };
+  if (assets) return NO_METADATA;
+  if (type === "igs") return { ...NO_METADATA, igs: true };
+  if (type === "sup") return { ...NO_METADATA, sup: true };
+  return ALL_METADATA;
+}
+
+/**
+ * `export` writes the containers by default and the structural set on request.
+ * `--no-assets` keeps the metadata side, which is how the retired `extract`
+ * command is spelled now: `--no-assets` alone is the whole metadata set,
+ * `--type igs --no-assets` is its IGS section only.
+ */
+export function exportOutputs(type: OutputType | undefined, assets = true): OutputSelection {
+  const families = assets ? familiesFor(type) : NO_FAMILIES;
+  return { metadata: metadataFor(type, assets), containers: families, png: families };
+}
+
+/** `render` writes PNGs only; its `--type` filters which families are decoded. */
+export function pngOutputs(type: "all" | "igs" | "sup"): OutputSelection {
+  const families = { igs: type !== "sup", sup: type !== "igs" };
+  return { metadata: NO_METADATA, containers: NO_FAMILIES, png: families };
 }
 
 /**

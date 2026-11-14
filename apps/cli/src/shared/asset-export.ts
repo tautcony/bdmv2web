@@ -1,14 +1,16 @@
 import {
   igsElementRecord, igsMnuPath, pgsTrackEntrySuffixes, pngLevelOption, selectedClip, selectedPid, supDisplaySetPath, supTrackPath, uniquePgsReferences,
 } from "../cli/assets.js";
-import type { AssetRecord, AssetSelection, AssetType } from "../cli/assets.js";
+import type { AssetRecord, AssetSelection, OutputSelection, OutputType } from "../cli/assets.js";
 import { fail } from "../cli/errors.js";
 import { firstBlockingCode, stageFailure } from "../cli/stages.js";
+import { writeMetadataArtifacts } from "./metadata.js";
+import type { SupTrackRecord } from "./metadata.js";
 import { commandProgress, countOf } from "../progress.js";
 import type { ProgressReporter } from "../progress.js";
 import { extractReachablePgsTracks, pgsTrackPngPlan, reachablePgsReferences, trackProgress, writeDisplaySetPngs } from "./pgs.js";
 import { BDMV_STEPS, STREAM_STEPS } from "./steps.js";
-import { discoverGraphicsStreams } from "./stream-input.js";
+import { classifyInput, discoverGraphicsStreams } from "./stream-input.js";
 import type { StreamTarget } from "./stream-input.js";
 import { assertDisjointRoots, beginOutputTransaction, readFileChunks } from "@bdmv2web/bdmv-io";
 import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
@@ -25,21 +27,49 @@ import { basename, dirname, resolve } from "node:path";
 /**
  * What one run of the graphics pipeline writes.
  *
- * `export` writes containers (.mnu/.sup) next to the PNGs; `render` is the same
- * pipeline with `containers: false`, so both commands produce byte-identical PNGs
- * and manifest records for the same input instead of drifting apart.
+ * `export` and `render` share this pipeline and differ only in `outputs`, so both
+ * produce byte-identical PNGs and manifest records for the same input instead of
+ * drifting apart. `--no-assets` is the metadata-only shape of the same run.
  */
-export interface ExportRun {
+export interface GraphicsRun {
   /** Command name shown in the progress header. */
   command: string;
-  /** Write `.mnu`/`.sup` containers next to the PNGs; `false` renders PNGs only. */
-  containers: boolean;
   /** Contract code for input-selection failures on this command. */
   selectionCode: string;
+  /** Which containers/PNGs and which structural artifacts this run writes. */
+  outputs: OutputSelection;
+}
+
+
+/**
+ * Resolve what the positional input is, then run the matching pipeline.
+ *
+ * Every input reaches the same selection checks, so `export`, `export --no-assets`
+ * and `render` accept the same inputs and reject the same combinations. A
+ * `.mnu`/`.sup` file has no disc or stream to export; decoding it is `render`'s job.
+ */
+export async function runGraphicsInput(run: GraphicsRun, input: string, out: string, type: OutputType | undefined, selection: AssetSelection): Promise<void> {
+  const target = await classifyInput(input);
+  if (target.kind === "mnu" || target.kind === "sup") {
+    fail(run.selectionCode, `${input} is a standalone .${target.kind}; ${run.command} needs a BDMV disc or a .m2ts/.rsks stream file. Use render to decode it to PNG`);
+  }
+  if (type === "hdmv" && target.kind === "stream") fail(run.selectionCode, "--type hdmv needs a BDMV disc; a stream file carries no HDMV command table");
+  // `metadata` and `hdmv` describe the input; there is nothing in them to decode.
+  if ((type === "metadata" || type === "hdmv") && selection.renderPng) fail(run.selectionCode, `--type ${type} writes metadata only; drop --render or select igs/sup`);
+  return target.kind === "stream" ? exportStreamAssets(target, out, type, selection, run) : exportBdmvAssets(input, out, type, selection, run);
 }
 
 /** Export .mnu/.sup from a BDMV disc, rendering PNGs when the selection asks for them. */
-export async function exportBdmvAssets(input: string, out: string, type: AssetType, selection: AssetSelection, run: ExportRun): Promise<void> {
+export async function exportBdmvAssets(input: string, out: string, type: OutputType | undefined, selection: AssetSelection, run: GraphicsRun): Promise<void> {
+  const { outputs } = run;
+  const writesMnu = outputs.containers.igs;
+  const writesSup = outputs.containers.sup;
+  const wantsSupPng = selection.renderPng && outputs.png.sup;
+  const writesMetadata = outputs.metadata.hdmv || outputs.metadata.igs || outputs.metadata.sup;
+  // A SUP index needs the tracks, and PNG frames need them even when no container
+  // is written; the metadata index needs the scenes IGS extraction returns.
+  const needsSupTracks = writesSup || wantsSupPng || outputs.metadata.sup;
+  const needsIgs = writesMnu || (selection.renderPng && outputs.png.igs) || needsSupTracks || outputs.metadata.igs;
   const progress = reporter(run, input, out, type, Object.values(BDMV_STEPS));
   progress.start(BDMV_STEPS.structure);
   const { disc, table } = await parseBdmvWithInputTable(input);
@@ -47,17 +77,20 @@ export async function exportBdmvAssets(input: string, out: string, type: AssetTy
   if (facts.hasFatal) { failStage(progress, BDMV_STEPS.structure, firstBlockingCode(facts.blocking), facts.blocking, out); return; }
   progress.done(BDMV_STEPS.structure, `${countOf(disc.entries.length, "entry", "entries")} · ${countOf(disc.clips.length, "clip", "clips")}`);
   const roots = await assertDisjointRoots(disc.root, out);
-  // IGS extraction always runs: the reachable SUP tracks are discovered through the
-  // scenes it returns, even when only SUP output was requested.
+  // SUP tracks are discovered through the IGS scenes, so `--type hdmv` is the one
+  // selection that skips IGS extraction entirely.
   progress.start(BDMV_STEPS.igs);
-  const igs = await extractIgsScenes(disc, { renderAssets: selection.renderPng && type !== "sup", captureStreams: run.containers && type !== "sup", pngLevel: pngLevelOption(), table });
+  const igs = needsIgs
+    ? await extractIgsScenes(disc, { renderAssets: selection.renderPng && outputs.png.igs, captureStreams: writesMnu, pngLevel: pngLevelOption(), table })
+    : { scenes: [], assets: [], streams: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
   progress.done(BDMV_STEPS.igs, `${countOf(igs.scenes.length, "scene", "scenes")} · ${countOf(igs.streams.length, "stream", "streams")} · ${countOf(igs.assets.length, "image", "images")}`);
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics] });
   if (outcome.status === "failed") { failStage(progress, BDMV_STEPS.igs, firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics, roots.output); return; }
   const transaction = await beginOutputTransaction(roots.output);
   try {
     const files: AssetRecord[] = [];
-    if (run.containers && type !== "sup") for (const stream of igs.streams.filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection))) {
+    const supTracks: SupTrackRecord[] = [];
+    if (writesMnu) for (const stream of igs.streams.filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection))) {
       const path = igsMnuPath(stream.clipId, stream.pid);
       const target = resolve(transaction.stagingPath, path);
       await mkdir(dirname(target), { recursive: true });
@@ -71,13 +104,13 @@ export async function exportBdmvAssets(input: string, out: string, type: AssetTy
       await writeFile(target, asset.pngBytes, { flag: "wx" });
       files.push(igsElementRecord(asset));
     }
-    if (type !== "igs") {
+    if (needsSupTracks) {
       progress.start(BDMV_STEPS.sup);
       const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes)).filter((item) => selectedClip(item.clipId, selection) && selectedPid(item.pid, selection));
       const trackSuffixes = pgsTrackEntrySuffixes(references);
       // Containers land in the package; a PNG-only run extracts them into a scratch
       // directory that never reaches the output target.
-      const trackDirectory = run.containers ? transaction.stagingPath : await mkdtemp(resolve(tmpdir(), "bdmv-render-png-"));
+      const trackDirectory = writesSup ? transaction.stagingPath : await mkdtemp(resolve(tmpdir(), "bdmv-render-png-"));
       try {
         const tracks = await extractReachablePgsTracks(disc, igs.scenes, trackDirectory, (_reference, index) => supTrackPath(references[index]!.clipId, references[index]!.pid, index, trackSuffixes[index]), references);
         const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
@@ -85,16 +118,17 @@ export async function exportBdmvAssets(input: string, out: string, type: AssetTy
         // Each track's PNGs follow its SUP record, so the manifest keeps grouping by
         // track; the decode step still spans all of them as one monotonic ratio.
         const decodeTotal = uniqueTracks.reduce((count, track) => count + track.displaySets.length, 0);
-        const decode = selection.renderPng && decodeTotal > 0;
+        const decode = wantsSupPng && decodeTotal > 0;
         if (decode) progress.start(BDMV_STEPS.decode);
         let decodedSets = 0;
         let pngCount = 0;
         for (const track of uniqueTracks) {
           const trackIndex = tracks.indexOf(track);
           const trackSuffix = trackSuffixes[trackIndex] ?? "";
-          if (run.containers) {
-            const trackStat = await lstat(resolve(transaction.stagingPath, track.path));
-            files.push({ type: "sup", path: track.path, byteLength: trackStat.size, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length });
+          if (writesSup || outputs.metadata.sup) {
+            const trackStat = await lstat(resolve(trackDirectory, track.path));
+            if (writesSup) files.push({ type: "sup", path: track.path, byteLength: trackStat.size, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length });
+            if (outputs.metadata.sup) supTracks.push({ clipId: track.clipId, pid: track.pid, language: track.language, streamNumber: track.streamNumber, displaySetCount: track.displaySets.length, byteLength: trackStat.size });
           }
           if (!decode) continue;
           const trackEnd90k = Number(track.sourceOut90k) - Number(track.sourceIn90k);
@@ -115,18 +149,35 @@ export async function exportBdmvAssets(input: string, out: string, type: AssetTy
         }
         if (decode) progress.done(BDMV_STEPS.decode, countOf(pngCount, "PNG", "PNGs"));
         else progress.skip(BDMV_STEPS.decode, selection.renderPng ? "no display sets" : "not requested");
-      } finally { if (!run.containers) await rm(trackDirectory, { recursive: true, force: true }); }
+      } finally { if (!writesSup) await rm(trackDirectory, { recursive: true, force: true }); }
     } else {
       progress.skip(BDMV_STEPS.sup, "not requested");
       progress.skip(BDMV_STEPS.decode, "not requested");
     }
-    await commitAssetManifest(progress, transaction, files, outcome.status === "partial" ? "partial" : "complete", roots.output, BDMV_STEPS.commit);
+    if (writesMetadata) {
+      await writeMetadataArtifacts({
+        stagingPath: transaction.stagingPath,
+        status: outcome.status === "partial" ? "partial" : "complete",
+        sections: outputs.metadata,
+        disc,
+        igs,
+        supTracks,
+        externalTargets: outputs.metadata.hdmv && outputs.metadata.igs,
+        sourceRoot: roots.input,
+      });
+    }
+    await commitAssetManifest(progress, transaction, writesMnu || writesSup || files.length > 0, writesMetadata, files, outcome.status === "partial" ? "partial" : "complete", roots.output, BDMV_STEPS.commit);
     if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }
 
 /** Export .mnu/.sup from one standalone m2ts byte stream (.m2ts or .rsks file). */
-export async function exportStreamAssets(target: StreamTarget, out: string, type: AssetType, selection: AssetSelection, run: ExportRun): Promise<void> {
+export async function exportStreamAssets(target: StreamTarget, out: string, type: OutputType | undefined, selection: AssetSelection, run: GraphicsRun): Promise<void> {
+  const { outputs } = run;
+  const writesMnu = outputs.containers.igs;
+  const writesSup = outputs.containers.sup;
+  const wantsSupPng = selection.renderPng && outputs.png.sup;
+  const writesMetadata = outputs.metadata.igs || outputs.metadata.sup;
   if (selection.clipId !== undefined) fail(run.selectionCode, "--m2ts applies to BDMV input; a stream file is one clip");
   const progress = reporter(run, target.path, out, type, Object.values(STREAM_STEPS));
   progress.start(STREAM_STEPS.probe);
@@ -147,12 +198,14 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
   // so a failed stage keeps the output target untouched. The probe-declared IGS
   // PIDs become the structural cues: extractIgsFromChunks treats cue-less input
   // with discovered streams as a PID conflict, and cue PIDs must cover the PMT.
-  const extraction = type !== "sup" && igsPids.length > 0
+  // Scenes are needed for the `.mnu` container, for element PNGs, and for the
+  // metadata scene list.
+  const extraction = (writesMnu || (selection.renderPng && outputs.png.igs) || outputs.metadata.igs) && igsPids.length > 0
     ? await extractIgsFromChunks(
         target.stem,
         readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes),
         streams.igsPids.map((pid) => ({ pid, source: { path: basename(target.path), origin: "primary" as const, offset: "0" } })),
-        { captureStreams: run.containers, renderAssets: selection.renderPng, pngLevel: pngLevelOption() },
+        { captureStreams: writesMnu, renderAssets: selection.renderPng && outputs.png.igs, pngLevel: pngLevelOption() },
       )
     : null;
   if (extraction) diagnostics.push(...extraction.diagnostics);
@@ -164,8 +217,9 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
   const transaction = await beginOutputTransaction(out);
   try {
     const files: AssetRecord[] = [];
+    const supTracks: SupTrackRecord[] = [];
     if (extraction) {
-      if (run.containers) for (const stream of extraction.streams.filter((item) => selectedPid(item.pid, selection))) {
+      if (writesMnu) for (const stream of extraction.streams.filter((item) => selectedPid(item.pid, selection))) {
         const path = igsMnuPath(target.stem, stream.pid);
         const mnuTarget = resolve(transaction.stagingPath, path);
         await mkdir(dirname(mnuTarget), { recursive: true });
@@ -180,8 +234,8 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
         files.push(igsElementRecord(asset));
       }
     }
-    if (type !== "igs" && pgsPids.length > 0) {
-      const trackDirectory = run.containers ? transaction.stagingPath : await mkdtemp(resolve(tmpdir(), "stream-render-png-"));
+    if ((writesSup || wantsSupPng || outputs.metadata.sup) && pgsPids.length > 0) {
+      const trackDirectory = writesSup ? transaction.stagingPath : await mkdtemp(resolve(tmpdir(), "stream-render-png-"));
       try {
         const requests = pgsPids.map((pid, index) => ({ pid, outputPath: resolve(trackDirectory, supTrackPath(target.stem, pid, index)) }));
         let tracks;
@@ -189,13 +243,14 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
         catch (error) { throw new ContractError("EXPORT_INVALID_STREAM", target.path, `A PMT-declared PGS PID could not be extracted as SUP: ${errorText(error)}`); }
         progress.done(STREAM_STEPS.extract, countOf(tracks.length, "SUP track", "SUP tracks"));
         const decodeTotal = tracks.reduce((count, track) => count + track.displaySets.length, 0);
-        const decode = selection.renderPng && decodeTotal > 0;
+        const decode = wantsSupPng && decodeTotal > 0;
         if (decode) progress.start(STREAM_STEPS.decode);
         let decodedSets = 0;
         let pngCount = 0;
         for (const [index, track] of tracks.entries()) {
           const path = supTrackPath(target.stem, track.pid, index);
-          if (run.containers) files.push({ type: "sup", path, byteLength: track.byteLength, language: "und", streamNumber: index + 1, displaySetCount: track.displaySets.length });
+          if (writesSup) files.push({ type: "sup", path, byteLength: track.byteLength, language: "und", streamNumber: index + 1, displaySetCount: track.displaySets.length });
+          if (outputs.metadata.sup) supTracks.push({ clipId: target.stem, pid: track.pid, language: "und", streamNumber: index + 1, displaySetCount: track.displaySets.length, byteLength: track.byteLength });
           if (!decode) continue;
           const pngs = await writeDisplaySetPngs(pgsTrackPngPlan({
             stagingPath: transaction.stagingPath,
@@ -216,28 +271,49 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
         }
         if (decode) progress.done(STREAM_STEPS.decode, countOf(pngCount, "PNG", "PNGs"));
         else progress.skip(STREAM_STEPS.decode, selection.renderPng ? "no display sets" : "not requested");
-      } finally { if (!run.containers) await rm(trackDirectory, { recursive: true, force: true }); }
+      } finally { if (!writesSup) await rm(trackDirectory, { recursive: true, force: true }); }
     } else {
       progress.done(STREAM_STEPS.extract, extraction === null ? declared : countOf(extraction.streams.length, "IGS stream", "IGS streams"));
       progress.skip(STREAM_STEPS.decode, "not requested");
     }
-    await commitAssetManifest(progress, transaction, files, outcome.status === "partial" ? "partial" : "complete", out, STREAM_STEPS.commit);
+    if (writesMetadata) {
+      await writeMetadataArtifacts({
+        stagingPath: transaction.stagingPath,
+        status: outcome.status === "partial" ? "partial" : "complete",
+        sections: outputs.metadata,
+        disc: null,
+        igs: extraction ?? { scenes: [], assets: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } },
+        supTracks,
+        externalTargets: false,
+        sourceRoot: null,
+      });
+    }
+    await commitAssetManifest(progress, transaction, writesMnu || writesSup || files.length > 0, writesMetadata, files, outcome.status === "partial" ? "partial" : "complete", out, STREAM_STEPS.commit);
     if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }
 
-/** Last step of both pipelines: manifest, commit, progress headline, stdout contract. */
-async function commitAssetManifest(progress: ProgressReporter, transaction: Awaited<ReturnType<typeof beginOutputTransaction>>, files: AssetRecord[], status: "complete" | "partial", out: string, step: string): Promise<void> {
+/**
+ * Last step of both pipelines: manifests for whichever sides ran, commit, progress
+ * headline, stdout contract. `assets-manifest.json` records decoded assets;
+ * `manifest.json` describes the analysis artifacts. A run that writes neither
+ * (analysis-only with `--type hdmv`, for example) still commits its files.
+ */
+async function commitAssetManifest(progress: ProgressReporter, transaction: Awaited<ReturnType<typeof beginOutputTransaction>>, hasAssets: boolean, metadata: boolean, files: AssetRecord[], status: "complete" | "partial", out: string, step: string): Promise<void> {
   progress.start(step);
-  await writeFile(resolve(transaction.stagingPath, "assets-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", assets: files }, null, 2)}\n`, { flag: "wx" });
+  // An asset-side run records assets even when it produced none; a metadata-only
+  // run leaves the asset manifest out entirely.
+  const writesAssetsManifest = hasAssets || files.length > 0;
+  if (writesAssetsManifest) await writeFile(resolve(transaction.stagingPath, "assets-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", assets: files }, null, 2)}\n`, { flag: "wx" });
   await transaction.commit();
-  progress.done(step, countOf(files.length, "asset", "assets"));
+  progress.done(step, metadata && !writesAssetsManifest ? "metadata artifacts" : countOf(files.length, "asset", "assets"));
   progress.finish(status, [["output", out], ["assets", countOf(files.length, "asset", "assets")]]);
-  process.stdout.write(`${JSON.stringify({ stageStatus: status, output: out, assetCount: files.length })}\n`);
+  const result = writesAssetsManifest ? { stageStatus: status, output: out, assetCount: files.length } : { stageStatus: status, output: out };
+  process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-function reporter(run: ExportRun, source: string, out: string, type: AssetType, steps: string[]): ProgressReporter {
-  return commandProgress({ command: run.command, steps, source, details: [["output", out], ["type", type]] });
+function reporter(run: GraphicsRun, source: string, out: string, type: OutputType | undefined, steps: string[]): ProgressReporter {
+  return commandProgress({ command: run.command, steps, source, details: [["output", out], ["type", type ?? "assets"]] });
 }
 
 /** Close the live line and the step before the shared stage-failure record is printed. */

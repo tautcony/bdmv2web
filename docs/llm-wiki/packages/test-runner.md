@@ -71,7 +71,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 | 有 `error` 无 `fatal` | `partial` | 0 |
 | 都没有 | `complete` | 0 |
 
-`StageStatus` 与 `DeliveryStatus` 是两个品牌类型，`inspect`/`extract` 只输出 `stageStatus`，不输出 `status`。
+`StageStatus` 与 `DeliveryStatus` 是两个品牌类型，`inspect`/`export`/`render` 只输出 `stageStatus`，不输出 `status`。
 
 ## 报告
 

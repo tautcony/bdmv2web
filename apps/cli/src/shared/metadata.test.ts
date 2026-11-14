@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createIgsSourceMap, mapIgsDiagnosticSource, mapIgsSource } from "./extract.js";
+import { createIgsSourceMap, mapIgsDiagnosticSource, mapIgsSource } from "./metadata.js";
 
 describe("IGS source-map provenance", () => {
   it("keeps structural source location fields separate from transport offsets", () => {

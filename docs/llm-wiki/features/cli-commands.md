@@ -1,15 +1,14 @@
 # 功能：CLI 命令
 
-十个命令全部实现：`inspect`、`extract`、`build`、`validate`、`serve`、`visualize`、`compare`、`list`、`export`、`render`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
+九个命令全部实现：`inspect`、`list`、`export`、`render`、`build`、`validate`、`compare`、`serve`、`visualize`。原先的 `extract` 已并入 `export`：`export --no-assets` 就是它的元数据形态。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
 | 命令 | 目的 | 主要产物 | 状态 |
 | --- | --- | --- | --- |
 | `inspect` | 看结构和诊断 | stdout 表格/JSON；可选 `--out` JSON | 已实现 |
-| `extract` | 导出协议分析 JSON | `<out>/hdmv|igs|sup/*` + `manifest.json` | 已实现 |
 | `list` | 列 IGS/SUP 资源 | stdout 表/JSON；可选 `--out` | 已实现 |
-| `export` | 导出 `.mnu`/`.sup` 原始资源 | `assets-manifest.json` + 资产 | 已实现 |
+| `export` | 导出 `.mnu`/`.sup` 原始资源；`--no-assets` 只出元数据 | `assets-manifest.json` + 资产；元数据时 `manifest.json` | 已实现 |
 | `render` | 从 BDMV、流文件、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
 | `build` | 生成菜单包；BD-J 包内含 Java host、应用文件和 session 数据 | `BDMV-menu/` 整目录 | 已实现 |
 | `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；选项 `--port`、`--java`、`--disc-id`、`--player system`、`--player-executable` | 本地 URL | 已实现 |
@@ -19,7 +18,7 @@
 
 命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。`convert` 是 `build` 的别名。
 
-`--format` 的生效范围：`inspect`、`list`、`visualize` 用它选择 `table|json`；`validate`、`compare` 只校验取值必须为 `json`；`extract`、`export`、`render` 接受该选项但不改变输出。
+`--format` 的生效范围：`inspect`、`list`、`visualize` 用它选择 `table|json`；`validate`、`compare` 只校验取值必须为 `json`；`export`、`render` 接受该选项但不改变输出。
 
 ## `inspect`
 
@@ -32,30 +31,6 @@
 输出字段：`ParsedDisc` 全量 + `stageStatus`。表格只显示计数（analysisStage、delivery、entries、movieObjects、playlists、playItems、clips、streams、sounds、diagnostics、support prediction）。
 
 失败先于写文件：`--out` 的父目录与输入不能重叠（`PATH_OVERLAP`）。
-
-## `extract`
-
-| 选项 | 作用 |
-| --- | --- |
-| `--out DIR` | 必填 |
-| `--type hdmv\|igs\|sup` | 与 `--all` 二选一 |
-| `--all` | 三类全导 |
-
-产物：
-
-```text
-<out>/
-  manifest.json                 # stageStatus, selectedTypes, files[], limitations
-  hdmv/parsed-disc.json         # ParsedDisc 全量
-  hdmv/commands.json            # movieObjectId, instructionIndex, words, bytes, source
-  hdmv/external-media-targets.json   # 仅 --all
-  igs/scenes.json               # 场景（含页/BOG/按钮/命令/来源）
-  igs/diagnostics.json
-  igs/source-map.json           # 场景/页/按钮/对象/调色板/资产 → 文件偏移
-  sup/tracks.json               # 轨道索引与显示集数量
-```
-
-不写 PNG 与 `.sup` 文件。`--type sup` 只写索引。
 
 ## `list`
 
@@ -73,12 +48,31 @@
 | 选项 | 作用 |
 | --- | --- |
 | `--out DIR` | 必填 |
-| `--type all\|igs\|sup` | 默认 `all` |
+| `--type all\|metadata\|hdmv\|igs\|sup` | 输出选择，默认写 `igs`+`sup` 容器 |
 | `--m2ts` / `--pid` | 选择范围 |
+| `--no-assets` | 不写容器与 PNG；单独使用时写整套元数据，配合 `--type igs`/`sup` 只写该段元数据 |
 | `--render` | 额外渲染 PNG（IGS 元素与 PGS 显示集） |
 | `--png-level 0-9` | 同上；只影响 `--render` 写出的文件 |
 | `--progress` | stderr 非终端时也逐行输出进度（默认自动） |
 | `--no-progress` | 关闭进度输出 |
+
+`--type` 只选输出，不表示输入：`igs`/`sup` 写对应容器（配合 `--render` 还写其 PNG），`hdmv` 写命令表与来源映射，`metadata` 写整套元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` 写全部。省略 `--type` 时只写容器，即历史默认。`--type metadata` 与 `--type hdmv` 拒绝 `--render`（没有可解码的帧）；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`（流内没有 HDMV 命令表）。
+
+`--no-assets` 关掉资产侧、保留元数据侧，因此它就是原 `extract` 的两种形态：不带 `--type` 时写整套元数据，`--type igs` 或 `--type sup` 时只写那一段。`--no-assets` 与 `--render` 同时给出会以 `CLI_EXPORT_SELECTION` 失败（没有可写的东西）。元数据产物落在同一个输出事务里：
+
+```text
+<out>/
+  manifest.json                      # stageStatus, selectedTypes, files[], limitations
+  hdmv/parsed-disc.json              # ParsedDisc 全量
+  hdmv/commands.json                 # movieObjectId, instructionIndex, words, bytes, source
+  hdmv/external-media-targets.json   # 仅 --type all / metadata
+  igs/scenes.json                    # 场景（含页/BOG/按钮/命令/来源）
+  igs/diagnostics.json
+  igs/source-map.json                # 场景/页/按钮/对象/调色板/资产 → 文件偏移
+  sup/tracks.json                    # 轨道索引与显示集数量
+```
+
+元数据运行不写 `assets-manifest.json`，stdout 也只有 `{ stageStatus, output }`。
 
 进度输出（stderr）与 `build` 同一套渲染。BDMV 输入五步：解析 BDMV 结构、提取 IGS 场景、提取 SUP 轨道、解码显示集、写清单并提交；独立流输入四步：探测流表、提取图形流、解码显示集、写清单并提交。不适用于 `--type` 的步骤标为跳过。只有「解码显示集」能测比例：以全部轨道的显示集总数为分母，跨轨道单调递增，明细为 `<已完成>/<总数> display sets`；其余步骤显示耗时。`--render` 未启用时该步跳过。结尾为 `Done in …` / `Done in … · partial` / `Failed in … · <code>` 与输出目录、资产数。stderr 不是终端时默认静默，`--progress` 强制逐行输出（每步一行 + 每 10% 一行）。stdout 仍只有一行 JSON。`render` 使用同一套步骤名与同一行格式，因此两个命令的进度可以逐行对照。
 
@@ -111,14 +105,14 @@
 | 选项 | 作用 |
 | --- | --- |
 | `--out DIR` | 必填 |
-| `--mnu FILE` / `--sup FILE` | 直接渲染独立资源；也可用位置参数传入 `.mnu`/`.sup` |
-| `--type all\|igs\|sup` | 仅 BDMV 与流文件输入；选择 PNG 来源 |
+| `[input]` | 位置参数；按文件内容判定为 BDMV、流文件或 `.mnu`/`.sup`，无需声明类型 |
+| `--type all\|igs\|sup` | 仅 BDMV 与流文件输入；选择 PNG 来源（`metadata`/`hdmv` 不适用） |
 | `--m2ts` / `--pid` | 仅 BDMV 输入；`--pid` 也用于独立 MNU 的场景标识 |
 | `--language LANG` | 仅独立 SUP；写入清单的三字母语言 |
 | `--png-level 0-9` | 写 PNG 时的 deflate 档位，见下 |
 | `--progress` / `--no-progress` | 与 `export`、`build` 相同的进度开关与渲染格式 |
 
-输入可以是 BDMV 目录、`.m2ts`/`.rsks` 流文件、`.mnu`/`.sup` 文件，或 `--mnu`/`--sup` 指定的独立资源。前两类走 `export --render` 的同一条管线（步骤名、并发解码、PNG 名称与清单记录都相同），后两类是 `render` 独有的入口。
+输入可以是 BDMV 目录、`.m2ts`/`.rsks` 流文件或 `.mnu`/`.sup` 文件，类型由文件本身判定（传输流同步字节、IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签，扩展名仅作兜底）。前两类走 `export --render` 的同一条管线（步骤名、并发解码、PNG 名称与清单记录都相同），后两类是 `render` 独有的入口。`--type`、`--m2ts` 只适用于盘与流输入，`--pid` 也可给独立 MNU 指定场景标识，`--language` 只适用于独立 SUP；错配报 `CLI_RENDER_SELECTION`。
 
 产物：
 
@@ -267,12 +261,11 @@ bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-c
 | `CLI_INVALID_FORMAT` | `--format` 值不支持 |
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 |
 | `INVALID_LIMITS_FILE` / `INVALID_LIMIT` | limits JSON 不可读 / 键或值非法 |
-| `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 |
 | `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 |
-| `CLI_EXPORT_SELECTION` | 流文件输入配合 `--m2ts`，或 `--pid` 不在 PMT 声明的图形 PID 中 |
+| `CLI_EXPORT_SELECTION` | 流文件输入配合 `--m2ts`，`--pid` 不在 PMT 声明的图形 PID 中，`.mnu`/`.sup` 输入（应改用 `render`），`--type metadata`/`hdmv` 或 `--no-assets` 配合 `--render`，对流文件用 `--type hdmv` |
 | `EXPORT_INVALID_STREAM` | 流文件无法作为 m2ts 解析（无 PAT/PMT），或声明的 PGS PID 无完整显示集；`render` 的流输入沿用该码 |
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 |
-| `CLI_RENDER_SELECTION` | `render` 混用输入类型或选项不适用于输入（含流文件配合 `--m2ts`、`--pid` 未在 PMT 声明） |
+| `CLI_RENDER_SELECTION` | `render` 的选项不适用于该输入（流文件配合 `--m2ts`、`.mnu`/`.sup` 配合 `--type`、`--pid`/`--language` 给错输入） |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 |
 | `CLI_INVALID_PNG_LEVEL` | `--png-level` 不是 0–9 |
 | `CLI_INVALID_RESUME` | `build --resume` 没有找到或不是可用的 staging 目录 |
@@ -284,14 +277,14 @@ bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-c
 
 ```sh
 corepack pnpm run cli:dev inspect "/path/BDMV" --format json
-corepack pnpm run cli:dev extract "/path/BDMV" --out /tmp/analysis --all
+corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/analysis --no-assets
 corepack pnpm run cli:dev list "/path/BDMV" --type igs
 corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/assets --type igs
 corepack pnpm run cli:dev export "/path/00005.SumiSora.sc.rsks" --out /tmp/assets --type sup
 corepack pnpm run cli:dev export "/path/00005.SumiSora.sc.rsks" --out /tmp/assets --render --progress
 corepack pnpm run cli:dev render "/path/BDMV" --out /tmp/png --type sup
 corepack pnpm run cli:dev render "/path/00005.SumiSora.sc.rsks" --out /tmp/png --progress
-corepack pnpm run cli:dev render --sup /tmp/subtitle.sup --out /tmp/png
+corepack pnpm run cli:dev render /tmp/subtitle.sup --out /tmp/png
 corepack pnpm run cli:dev build "/path/BDMV" --out /tmp/menu --player-profile profile.json
 corepack pnpm run cli:dev serve /tmp/menu
 corepack pnpm run cli:dev visualize "/path/BDMV" --out /tmp/graph

@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from "commander";
 import { setActiveCommand, type ParsedOptions } from "./context.js";
 
-export type CommandName = "inspect" | "extract" | "build" | "validate" | "compare" | "list" | "export" | "render" | "serve" | "visualize";
+export type CommandName = "inspect" | "build" | "validate" | "compare" | "list" | "export" | "render" | "serve" | "visualize";
 
 /**
  * One command module per name, imported on first use. Loading every command up
@@ -10,7 +10,6 @@ export type CommandName = "inspect" | "extract" | "build" | "validate" | "compar
  */
 const loaders: Record<CommandName, () => Promise<() => Promise<void>>> = {
   inspect: async () => (await import("../commands/inspect.js")).inspect,
-  extract: async () => (await import("../commands/extract.js")).extract,
   build: async () => (await import("../commands/build.js")).build,
   validate: async () => (await import("../commands/validate.js")).validate,
   compare: async () => (await import("../commands/compare.js")).compareReference,
@@ -64,15 +63,6 @@ export function buildProgram(version?: string): Command {
     .option("--format <format>", "table or json", nonEmpty)
     .option("--allow-partial", "exit 0 even when the stage failed");
   inspectCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("inspect", input, options));
-
-  const extractCommand = program.command("extract")
-    .description("Write structural analysis artifacts (hdmv, igs, sup)")
-    .argument("[input]", "BDMV root or its parent directory")
-    .option("--out <dir>", "output directory", nonEmpty)
-    .option("--type <type>", "hdmv, igs, or sup", nonEmpty)
-    .option("--all", "extract every artifact type")
-    .option("--format <format>", "table or json", nonEmpty);
-  extractCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("extract", input, options));
 
   const buildCommand = program.command("build")
     .alias("convert")
@@ -149,12 +139,13 @@ export function buildProgram(version?: string): Command {
   listCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("list", input, options));
 
   const exportCommand = program.command("export")
-    .description("Export IGS .mnu files, SUP tracks and PNG frames from a BDMV disc or a stream file")
-    .argument("[input]", "BDMV root or its parent directory, or a .m2ts/.rsks stream file")
+    .description("Export IGS .mnu files, SUP tracks, PNG frames and structural metadata from a BDMV disc or a stream file")
+    .argument("[input]", "BDMV root, its parent directory, or a .m2ts/.rsks stream file")
     .option("--out <dir>", "output directory", nonEmpty)
-    .option("--type <type>", "all, igs, or sup", nonEmpty)
+    .option("--type <type>", "all, metadata, hdmv, igs, or sup (default: igs and sup containers)", nonEmpty)
     .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
+    .option("--no-assets", "write no containers or PNGs; alone it writes the whole metadata set")
     .option("--render", "also render PNG frames for IGS elements and PGS display sets")
     .option("--format <format>", "table or json", nonEmpty)
     .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
@@ -164,14 +155,12 @@ export function buildProgram(version?: string): Command {
 
   const renderCommand = program.command("render")
     .description("Render PNG frames from a BDMV disc, a stream file, a .mnu file, or a .sup file")
-    .argument("[input]", "BDMV directory, a .m2ts/.rsks stream file, or a .mnu/.sup file")
+    .argument("[input]", "BDMV root, its parent directory, a .m2ts/.rsks stream file, or a .mnu/.sup file")
     .option("--out <dir>", "output directory", nonEmpty)
-    .option("--mnu <file>", "render a standalone IGS .mnu file", nonEmpty)
-    .option("--sup <file>", "render a standalone PGS .sup file", nonEmpty)
-    .option("--language <lang>", "three-letter language code recorded in the manifest", nonEmpty)
-    .option("--type <type>", "all, igs, or sup for BDMV and stream input", nonEmpty)
+    .option("--language <lang>", "three-letter language code recorded for a standalone SUP", nonEmpty)
+    .option("--type <type>", "all, igs, or sup (default: all)", nonEmpty)
     .option("--m2ts <clip>", "restrict to one clip for BDMV input", nonEmpty)
-    .option("--pid <pid>", "restrict to one PID", nonEmpty)
+    .option("--pid <pid>", "restrict to one PID, or set the IGS scene identity of a standalone MNU", nonEmpty)
     .option("--format <format>", "table or json", nonEmpty)
     .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
     .option("--progress", "print step progress on stderr")

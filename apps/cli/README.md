@@ -31,15 +31,14 @@ bdmv2web validate ./BDMV-menu
 
 ### CLI
 
-`<BDMV>` may point to a BDMV directory or to a parent directory that contains `BDMV/`.
+`<INPUT>` may point to a BDMV directory, to a parent directory that contains `BDMV/`, or to a single `.m2ts`/`.rsks` stream file; `render` also takes a `.mnu`/`.sup` file. The input kind is detected from the file itself.
 
 | Command | Purpose |
 | --- | --- |
-| `inspect <BDMV>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`) |
-| `extract <BDMV> --out DIR` | Export HDMV, IGS, and SUP analysis data (`--type hdmv\|igs\|sup`, `--all`) |
-| `list <BDMV>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
-| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets (`--type`, `--m2ts`, `--pid`, `--render`) |
-| `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
+| `inspect <INPUT>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`) |
+| `list <INPUT>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
+| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally PNGs and metadata (`--type`, `--no-assets`, `--m2ts`, `--pid`, `--render`); `--no-assets` writes the metadata set that `extract` used to write |
+| `render <INPUT>` | Render PNG from a BDMV, `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
 | `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`) |
 | `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`) |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session (`--port N`, `--java EXECUTABLE`, `--player system`) |

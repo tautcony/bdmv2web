@@ -16,13 +16,14 @@ src/
     output.ts           printTable、writeJsonFile
     profile.ts          loadPlayerProfile、loadLimits
     stages.ts           stageFailure、firstBlockingCode、deliveryDiagnostics
-    assets.ts           AssetRecord、--type/--m2ts/--pid/--render 解析、资产路径命名
+    assets.ts           AssetRecord、--type/--m2ts/--pid/--render 解析、输出选择（OutputSelection）、资产路径命名
   commands/
-    inspect.ts extract.ts list.ts export.ts render.ts build.ts validate.ts compare.ts
+    inspect.ts list.ts export.ts render.ts build.ts validate.ts compare.ts
     serve.ts visualize.ts menu-planning.ts media-progress.ts
   shared/
-    asset-export.ts     export 与 render 共用的 BDMV/流导出管线（ExportRun.containers 决定是否写容器）
-    stream-input.ts     输入分类（BDMV vs .m2ts/.rsks）与 PMT 图形流发现
+    asset-export.ts     export/render 共用的 BDMV/流管线（GraphicsRun.outputs 决定写容器、PNG 还是元数据）
+    metadata.ts         export --no-assets / --type metadata 写出的结构元数据产物与来源映射
+    stream-input.ts     输入分类（内容优先、扩展名兜底）与 PMT 图形流发现
     steps.ts            进度步骤词表（BDMV / 流 / 独立文件）
     concurrency.ts      mapWithConcurrency
     media.ts            buildMediaClosure、buildExternalTargets
@@ -36,7 +37,7 @@ src/
 | `cli/run.ts` | `main` 调 `buildProgram`，把 `CommanderError` 映射成契约码，最后统一输出错误。 |
 | `cli/program.ts` | 一个命令一个 `program.command(...)`，含位置参数与选项；`dispatch` 把解析结果交给对应实现。 |
 | `cli/context.ts` | `dispatch` 保存解析结果，命令体用 `optionValue("--out")` 等读取；`optionState` 用于 `--progress/--no-progress` 这种三态 flag。 |
-| `commands/*` | 每个命令一个文件，只做“参数语义校验 → 调包 → 事务 → 输出”；`export` 与 `render` 的导出流程在 `shared/asset-export.ts`，两者只差 `ExportRun` 的 `containers` 与 `selectionCode`。 |
+| `commands/*` | 每个命令一个文件，只做“参数语义校验 → 调包 → 事务 → 输出”；`export` 与 `render` 的导出流程在 `shared/asset-export.ts`，两者只差 `GraphicsRun.outputs` 与 `selectionCode`。 |
 | `shared/*` | 跨命令复用的纯逻辑（媒体闭包、可达 PGS 轨道、导出管线、进度步骤词表），不依赖解析上下文。 |
 
 ## 参数解析
@@ -45,15 +46,14 @@ src/
 
 ```ts
 inspect   [input]  --out --format --allow-partial
-extract   [input]  --out --type --all --format
 build     [input]  --out --title --player-profile --limits --disc-id --overwrite --resume --crf --preset --codec --hdr --video --menu-media --progress/--no-progress
 validate  [input]  --format
 serve     [input]  --port --java --disc-id --player --player-executable
 visualize [input]  --out --programs --max-blocks --no-closure --overwrite --format
 compare   [input]  --actual --reference --reference-tool --reference-version --out --format
 list      [input]  --type --m2ts --pid --out --format
-export    [input]  --out --type --m2ts --pid --render --png-level --format --progress/--no-progress
-render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level --format --progress/--no-progress
+export    [input]  --out --type --m2ts --pid --no-assets --render --png-level --format --progress/--no-progress
+render    [input]  --out --language --type --m2ts --pid --png-level --format --progress/--no-progress
 ```
 
 `convert` 是 `build` 的别名。带值选项统一用 `nonEmpty` 解析器，`--out=` 这类空值在解析阶段失败。
@@ -78,11 +78,11 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 4. `--format json` 时把完整 JSON 写 stdout；否则打印摘要表。
 5. `--allow-partial` 强制退出 0，报告里仍是 `stageStatus: "failed"`。
 
-### `extract`
+### `export --no-assets`（原 `extract`）
 
-1. 必须有 `--out`，且 `--all` 与 `--type` 二选一（否则 `CLI_EXTRACT_SELECTION`；非法类型 `CLI_INVALID_EXTRACT_TYPE`）。
+1. `extract` 已并入 `export`：`--no-assets` 走同一套 `runGraphicsInput`（输入分类 + 同一条管线），`GraphicsRun.outputs` 只开元数据、容器与 PNG 恒关。非法 `--type` 报 `CLI_INVALID_ASSET_TYPE`；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`；`--no-assets` 与 `--render` 同时给出也报 `CLI_EXPORT_SELECTION`。
 2. 先解析；有 `fatal` 直接失败，不扫描 STREAM。
-3. `--type igs|sup` 时先 `extractIgsScenes(..., { renderAssets: false })`，再 `decideStageOutcome`；`failed` 不建事务。
+3. `--type` 需要 IGS/SUP 段落时先 `extractIgsScenes(..., { renderAssets: false })`，再 `decideStageOutcome`；`failed` 不建事务。
 4. `beginOutputTransaction` 后按类型写：
    - `hdmv/commands.json`（全部 12 字节命令 + 来源）、`hdmv/parsed-disc.json`；`--all` 另写 `hdmv/external-media-targets.json`。
    - `igs/scenes.json`、`igs/diagnostics.json`、`igs/source-map.json`。
@@ -98,7 +98,8 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 
 ### `export`
 
-- 输入为 BDMV 目录，或单个 `.m2ts`/`.rsks` 流文件（`shared/stream-input.ts` 按 `lstat` 与扩展名分类）。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
+- 输入为 BDMV 目录，或单个 `.m2ts`/`.rsks` 流文件；`shared/stream-input.ts` 的 `classifyInput` 先按内容判定（传输流同步字节、IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签），再退回扩展名。`.mnu`/`.sup` 输入各自有专门的错误并指向 `render`。
+- `--type` 只选输出：`igs`/`sup` 写容器（配合 `--render` 写 PNG）、`hdmv` 写命令表与来源映射、`metadata` 写整套元数据、`all` 写全部；省略时只写容器。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
 - 写 igstools 兼容 `.mnu`（`assets/igs/<clip>-pid-<pid>.mnu`）与 `.sup`（`assets/subtitles/<clip>-pid-<pid>.sup`）。
 - `--render` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
 - 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`igs-png` 记录 `width`/`height`/`objectId`/`objectVersion`/`paletteId`/`paletteVersion`；`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`，秒值以轨道起点为 0，流模式以首个显示集为 0。
@@ -108,8 +109,8 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 
 ### `render`
 
-- 输入为 BDMV、`.m2ts`/`.rsks` 流文件、位置参数 `.mnu`/`.sup`，或 `--mnu`/`--sup`；后两种不需要 BDMV。
-- BDMV 与流输入直接复用 `shared/asset-export.ts` 的管线，只把 `containers` 关掉：`export` 与 `render` 的差别仅在于是否写 `.mnu`/`.sup`。因此同一输入下 PNG 字节、路径、清单记录与进度步骤完全相同，`render` 的清单等于 `export --render` 清单的 `igs-png`/`sup-png` 顺序子集。
+- 输入为 BDMV、`.m2ts`/`.rsks` 流文件或位置参数 `.mnu`/`.sup`，类型由 `classifyInput` 判定，不需要 `--mnu`/`--sup`；后两种不需要 BDMV。
+- BDMV 与流输入直接复用 `shared/asset-export.ts` 的管线：`pngOutputs(--type)` 只开 PNG、容器与元数据恒关，所以 `export --render` 与 `render` 的差别仅在容器与元数据。因此同一输入下 PNG 字节、路径、清单记录与进度步骤完全相同，`render` 的清单等于 `export --render` 清单的 `igs-png`/`sup-png` 顺序子集。
 - 独立 SUP 与 MNU 是 `render` 独有入口：SUP 用 `parsePgsSup` 解析后交给同一个 `writeDisplaySetPngs`（秒数以首个显示集为 0），MNU 用 `parseIgsMnu`；两者都不写 `.mnu`/`.sup`，`--png-level 0-9` 覆盖默认档位。
 
 ### `build`

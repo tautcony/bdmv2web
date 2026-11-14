@@ -104,22 +104,27 @@ Open the loopback URL printed by `serve`. A BD-J page opened with `file://` disp
 
 ### CLI
 
-`<BDMV>` may point to a BDMV directory or to a parent directory that contains `BDMV/`.
+`<INPUT>` may point to a BDMV directory, to a parent directory that contains `BDMV/`, or to a single `.m2ts`/`.rsks` stream file; `render` also takes a `.mnu`/`.sup` file. Paths are classified by content first and extension second, so a renamed stream still reads as a stream.
 
 | Command | Purpose | Common options |
 | --- | --- | --- |
-| `inspect <BDMV>` | Show disc structure and diagnostics | `--format table\|json`, `--out FILE` |
-| `extract <BDMV> --out DIR` | Export HDMV, IGS, and SUP analysis data | `--type hdmv\|igs\|sup` or `--all` |
-| `list <BDMV>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
-| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--render`, `--png-level 0-9` |
-| `render <input>` | Render PNG from a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG`, `--png-level 0-9` |
+| `inspect <INPUT>` | Show disc structure and diagnostics | `--format table\|json`, `--out FILE` |
+| `list <INPUT>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
+| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally with PNGs and metadata | `--type all\|metadata\|hdmv\|igs\|sup`, `--no-assets`, `--render`, `--m2ts CLIP_ID`, `--pid PID`, `--png-level 0-9` |
+| `render <INPUT>` | Render PNG from a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--language LANG`, `--png-level 0-9`, `--m2ts CLIP_ID`, `--pid PID` |
 | `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--resume [DIR]` |
 | `validate <menu dir>` | Audit a menu package and update the audit report | `--format json` |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session | `--port N`, `--java EXECUTABLE`, `--player system`, `--disc-id HEX` |
 
 `build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. An interrupted run keeps completed work in `.<output name>.staging-*`; `--resume` continues from that directory. The output target is written when the build completes. Movie PGS subtitles are exported with `export --type sup`.
 
-Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS scene and reachable SUP track metadata. `export --render` writes PNG files alongside the raw assets. `render` accepts a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` input and runs the same pipeline, so it writes the same PNG bytes and manifest records without the `.mnu`/`.sup` containers. `--png-level 0-9` sets the deflate level for PNGs written by `export --render` and `render`; the default is level 1 for IGS elements and level 6 for PGS canvases.
+Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS scene and reachable SUP track metadata.
+
+`--type` names the outputs a command writes, never the input: `igs` and `sup` are the `.mnu`/`.sup` containers (with `--render`, their PNGs), `hdmv` is the command table and source map, and `metadata` is the whole structural set — `manifest.json`, `hdmv/*.json`, `igs/*.json`, and `sup/tracks.json`. `all` is everything the command can write. Without `--type`, `export` writes the containers.
+
+`--no-assets` writes no containers and no PNGs: on its own it is the whole metadata set, and with `--type igs` or `--type sup` it is that one metadata section — the two shapes the retired `extract` command used to have. `export` and `render` share one pipeline; `render` fixes the selection to PNGs and is the only command that decodes a standalone `.mnu`/`.sup` file, which it detects from the file itself.
+
+`--png-level 0-9` sets the deflate level for PNGs written by `export --render` and `render`; the default is level 1 for IGS elements and level 6 for PGS canvases. A run with no asset side writes no `assets-manifest.json`.
 
 `sup-png` entries in `assets-manifest.json` record `displaySet`, `startSeconds`, `endSeconds`, `width`, and `height`. `startSeconds` is where the display set starts and `endSeconds` is where the next display set starts, in seconds with 3 decimals relative to the start of the track; both are `null` when they cannot be determined. Fully transparent display sets are omitted from PNG output and the manifest.
 

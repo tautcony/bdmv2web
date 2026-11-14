@@ -31,7 +31,7 @@ describe("source CLI commands on the existing synthetic BDMV fixture", () => {
 
   it("runs structural extraction in-process and writes HDMV artifacts", async () => {
     const output = join(outputRoot, "extract-hdmv");
-    await runCommand("extract", fixture, "--type", "hdmv", "--out", output);
+    await runCommand("export", fixture, "--type", "hdmv", "--out", output);
     const manifest = JSON.parse(await readFile(join(output, "manifest.json"), "utf8"));
     const commands = JSON.parse(await readFile(join(output, "hdmv/commands.json"), "utf8"));
     expect(manifest.selectedTypes).toEqual(["hdmv"]);

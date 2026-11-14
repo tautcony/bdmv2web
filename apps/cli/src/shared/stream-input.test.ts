@@ -2,29 +2,54 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { classifyStreamInput, discoverGraphicsStreams } from "./stream-input.js";
+import { classifyInput, discoverGraphicsStreams } from "./stream-input.js";
 import { PGS_PID, syntheticNonStreamBytes, syntheticPgsStream } from "../../tests/helpers/synthetic-streams.js";
 
-describe("classifyStreamInput", () => {
+describe("classifyInput", () => {
   it("classifies .rsks/.m2ts files as stream input with a safe stem", async () => {
     const parent = await mkdtemp(join(tmpdir(), "stream-input "));
     try {
       const rsks = join(parent, "00005.SumiSora.sc.rsks");
       await writeFile(rsks, syntheticPgsStream({ displaySets: 1 }));
-      await expect(classifyStreamInput(rsks)).resolves.toEqual({ kind: "stream", path: rsks, stem: "00005.SumiSora.sc" });
+      await expect(classifyInput(rsks)).resolves.toEqual({ kind: "stream", path: rsks, stem: "00005.SumiSora.sc" });
       const m2ts = join(parent, "CLIP.M2TS");
       await writeFile(m2ts, syntheticPgsStream({ displaySets: 1 }));
-      await expect(classifyStreamInput(m2ts)).resolves.toEqual({ kind: "stream", path: m2ts, stem: "CLIP" });
+      await expect(classifyInput(m2ts)).resolves.toEqual({ kind: "stream", path: m2ts, stem: "CLIP" });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reads a renamed stream file by its transport sync bytes", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "stream-input "));
+    try {
+      const renamed = join(parent, "clip.bin");
+      await writeFile(renamed, syntheticPgsStream({ displaySets: 1 }));
+      await expect(classifyInput(renamed)).resolves.toEqual({ kind: "stream", path: renamed, stem: "clip" });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("reads standalone .mnu and .sup files by their segment tags", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "stream-input "));
+    try {
+      const mnu = join(parent, "menu.mnu");
+      await writeFile(mnu, Buffer.from("ICS\u0000\u0000", "latin1"));
+      await expect(classifyInput(mnu)).resolves.toEqual({ kind: "mnu", path: mnu, stem: "menu" });
+      const sup = join(parent, "track.sup");
+      await writeFile(sup, Buffer.from("PG\u0000\u0000", "latin1"));
+      await expect(classifyInput(sup)).resolves.toEqual({ kind: "sup", path: sup, stem: "track" });
+      // Content wins over the extension: a PGS stream named `.mnu` stays PGS.
+      const misnamed = join(parent, "captions.mnu");
+      await writeFile(misnamed, Buffer.from("PG\u0000\u0000", "latin1"));
+      await expect(classifyInput(misnamed)).resolves.toEqual({ kind: "sup", path: misnamed, stem: "captions" });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 
   it("keeps directories and other files on the BDMV input path", async () => {
     const parent = await mkdtemp(join(tmpdir(), "stream-input "));
     try {
-      await expect(classifyStreamInput(parent)).resolves.toEqual({ kind: "bdmv" });
+      await expect(classifyInput(parent)).resolves.toEqual({ kind: "bdmv" });
       const notes = join(parent, "notes.txt");
       await writeFile(notes, "text");
-      await expect(classifyStreamInput(notes)).resolves.toEqual({ kind: "bdmv" });
+      await expect(classifyInput(notes)).resolves.toEqual({ kind: "bdmv" });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { parseDiscIR } from "@bdmv2web/core";
 import { HdmvVm } from "@bdmv2web/hdmv";
-import { createHdmvSourceMap } from "./extract.js";
+import { createHdmvSourceMap } from "../shared/metadata.js";
 import { createMenuDiscIR, createVmPrograms, MENU_MEDIA_AUTO_MAX_SECONDS, menuLoopMediaInput, menuMediaEntryPoint45k, menuMediaScopedOut, playlistDurationSeconds, resumeMediaDirectory } from "./build.js";
 
 describe("menu DiscIR source references", () => {

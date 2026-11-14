@@ -6,10 +6,10 @@
 
 | 判定 | 函数 | 输出字段 | 使用命令 |
 | --- | --- | --- | --- |
-| 阶段是否达成 | `decideStageOutcome` | `stageStatus` | `inspect`、`extract` |
+| 阶段是否达成 | `decideStageOutcome` | `stageStatus` | `inspect`、`export`、`render` |
 | 交付是否完整 | `decideDelivery` | `status` | `build`、`validate` |
 
-`inspect`/`extract` 永远不会输出 `status`；`build`/`validate` 也不会用 `stageStatus` 表达交付结论。
+`inspect`/`export`/`render` 永远不会输出 `status`；`build`/`validate` 也不会用 `stageStatus` 表达交付结论。
 
 ## 交付状态规则
 
