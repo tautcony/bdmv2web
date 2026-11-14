@@ -17,11 +17,11 @@ function discFixture() {
 describe("createViewerPayload", () => {
   it("assembles programs with blocks, playlists with media bounds, and counts", () => {
     const sources: ViewerProgramSource[] = [
-      { program: { id: 0, instructions: [m3Fixtures.move5, m3Fixtures.playPlaylist1, m3Fixtures.move5] } as never, kind: "movie-object", label: "MOBJ 0" },
-      { program: { id: 1000001, instructions: [m3Fixtures.move1, { ...m3Fixtures.jumpTitleGpr0, source }] } as never, kind: "button-program", label: "Button 1000001", streamClipId: "00025" },
+      { program: { id: 0, instructions: [m3Fixtures.move5, m3Fixtures.playPlaylist1, m3Fixtures.move5] }, kind: "movie-object", label: "MOBJ 0" },
+      { program: { id: 1000001, instructions: [m3Fixtures.move1, { ...m3Fixtures.jumpTitleGpr0, source }] }, kind: "button-program", label: "Button 1000001", streamClipId: "00025" },
     ];
     const graph = buildNavigationGraph(
-      [sources[0]!.program as never, sources[1]!.program as never],
+      [sources[0]!.program, sources[1]!.program],
       [],
       { entries: [{ id: "title:1", kind: "title", source, target: { objectType: "HDMV", playbackType: 0, target: 0, source } }] },
     );
@@ -52,7 +52,7 @@ describe("createViewerPayload", () => {
     const graph = buildNavigationGraph([{ id: 0, instructions: [m3Fixtures.move5] }], [], { entries: [] });
     const payload = createViewerPayload({
       disc: discFixture(), graph,
-      sources: [{ program: { id: 0, instructions: [m3Fixtures.move5] } as never, kind: "movie-object", label: "MOBJ 0" }],
+      sources: [{ program: { id: 0, instructions: [m3Fixtures.move5] }, kind: "movie-object", label: "MOBJ 0" }],
       closure, generatedFrom: "/disc",
     });
     expect(payload.playlists[0]!.routes).toEqual([{ origin: "button-program", entryId: null, buttonProgramId: 3 }]);

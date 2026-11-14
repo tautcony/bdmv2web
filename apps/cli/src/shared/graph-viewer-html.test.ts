@@ -8,11 +8,11 @@ const source = m3Fixtures.break.source;
 
 function payloadFixture(overrides?: { label?: string }): ViewerPayload {
   const sources: ViewerProgramSource[] = [
-    { program: { id: 0, instructions: [m3Fixtures.move5, m3Fixtures.playPlaylist1, { ...m3Fixtures.jumpTitle1, source }] } as never, kind: "movie-object", label: overrides?.label ?? "MOBJ 0" },
-    { program: { id: 1000001, instructions: [m3Fixtures.move1, { ...m3Fixtures.callTitleGpr0, source }] } as never, kind: "button-program", label: "Button 1000001", streamClipId: "00025" },
+    { program: { id: 0, instructions: [m3Fixtures.move5, m3Fixtures.playPlaylist1, { ...m3Fixtures.jumpTitle1, source }] }, kind: "movie-object", label: overrides?.label ?? "MOBJ 0" },
+    { program: { id: 1000001, instructions: [m3Fixtures.move1, { ...m3Fixtures.callTitleGpr0, source }] }, kind: "button-program", label: "Button 1000001", streamClipId: "00025" },
   ];
   const graph = buildNavigationGraph(
-    [sources[0]!.program as never, sources[1]!.program as never],
+    [sources[0]!.program, sources[1]!.program],
     [],
     { entries: [{ id: "title:1", kind: "title", source, target: { objectType: "HDMV", playbackType: 0, target: 0, source } }] },
   );

@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import { runCommand } from "../helpers/run-cli.js";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid, m3Fixtures } from "@bdmv2web/test-fixtures";
-
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function hexCommand(hex: string): Uint8Array {
   return Uint8Array.from(hex.match(/../g)!.map((byte) => Number.parseInt(byte, 16)));

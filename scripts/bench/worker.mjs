@@ -192,7 +192,7 @@ export async function prepareCase(caseDef, root) {
       try {
         return await mediaExport.exportMenuLoopMedia(input, { outputDirectory: join(tmpdir(), "bench-menu-loop-" + process.pid + "-" + Math.random().toString(36).slice(2)), assetDirectory: "assets/media", planPath: "media-plans/plan.json", videoMode: o.videoMode ?? "copy", timeoutMs: 180000, runProcess: runProcess });
       } catch (error) {
-        throw new Error(String(error.message) + " || sourcePath=" + input.sourcePath);
+        throw new Error(String(error.message) + " || sourcePath=" + input.sourcePath, { cause: error });
       }
     };
     const cleanup = async () => { for (const file of outputFiles) await rm(file, { force: true }); };

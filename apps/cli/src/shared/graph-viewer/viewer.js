@@ -132,19 +132,17 @@
       var key = [edge.fromBlock, edge.toBlock || "", edge.toPlaylist || "", edge.toObject || "", edge.kind, edge.condition || ""].join(">");
       if (seen[key]) return;
       seen[key] = true;
-      var target, type;
-      if (edge.toBlock) { target = edge.toBlock; type = "block"; }
+      var target;
+      if (edge.toBlock) target = edge.toBlock;
       else if (edge.toPlaylist) {
         target = edge.toPlaylist;
-        type = "playlist";
         if (!nodes[target]) nodes[target] = { id: target, type: "playlist", label: "PL " + target.slice(9), lines: ["PL " + target.slice(9), "playlist"] };
       } else if (edge.toObject) {
         target = edge.toObject;
-        type = "object";
         var other = programById(Number(target.slice(7)));
         var label = other ? other.label : target;
         if (!nodes[target]) nodes[target] = { id: target, type: "object", label: label, lines: [label, other ? "click to open" : "missing program"], programId: Number(target.slice(7)) };
-      } else { target = "unknown"; type = "unknown"; if (!nodes[target]) nodes[target] = { id: target, type: "unknown", label: "unknown", lines: ["dynamic target", "unknown"] }; }
+      } else { target = "unknown"; if (!nodes[target]) nodes[target] = { id: target, type: "unknown", label: "unknown", lines: ["dynamic target", "unknown"] }; }
       edges.push({ from: edge.fromBlock, to: target, kind: edge.kind, condition: edge.condition, unresolved: !edge.toBlock && !edge.toPlaylist && !edge.toObject, fromPc: edge.fromPc });
     });
     // Buttons that call or jump into this MovieObject enter at its first command;
@@ -283,8 +281,8 @@
     var reachStack = entry ? [entry].concat(extraRoots) : ids.filter(function (id) { return indegree[id] === 0; });
     reachStack.forEach(function (id) { reachable[id] = true; });
     while (reachStack.length) {
-      var id = reachStack.pop();
-      outgoing[id].forEach(function (to) { if (!reachable[to]) { reachable[to] = true; reachStack.push(to); } });
+      var reached = reachStack.pop();
+      outgoing[reached].forEach(function (to) { if (!reachable[to]) { reachable[to] = true; reachStack.push(to); } });
     }
     var maxLevel = 0;
     ids.forEach(function (id) { if (level[id] > maxLevel) maxLevel = level[id]; });
@@ -470,19 +468,19 @@
       g.addEventListener("click", function (event) {
         event.stopPropagation();
         if (suppressClick) return;
-        nodeClick(node, model);
+        nodeClick(node);
       });
     });
     applyTransform();
   }
-  function nodeClick(node, model) {
+  function nodeClick(node) {
     if (node.type === "block") showBlockDetail(node, node.programId);
     else if (node.type === "playlist") showPlaylist(node.id.slice(9));
     else if (node.type === "mobj" || node.type === "object" || node.type === "button") {
       var program = programById(node.programId !== undefined ? node.programId : Number(node.id.slice(7)));
       if (program) showProgram(program.id);
-      else showGenericDetail(node.label, model);
-    } else showGenericDetail(node.label, model);
+      else showGenericDetail(node.label);
+    } else showGenericDetail(node.label);
   }
 
   // ---------- views ----------
@@ -606,7 +604,7 @@
     detail.classList.remove("hidden");
   }
 
-  function showGenericDetail(title, model) {
+  function showGenericDetail(title) {
     document.getElementById("detail-title").textContent = title;
     var body = document.getElementById("detail-body");
     body.innerHTML = "";

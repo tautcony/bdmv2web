@@ -20,7 +20,10 @@ const TYPED_FILES = [
   "packages/*/vitest.config.ts",
 ];
 const TEST_FILES = ["**/*.test.ts", "**/*.test-d.ts"];
-const SCRIPT_FILES = ["scripts/**/*.mjs", "*.mjs"];
+const SCRIPT_FILES = ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs", "packages/*/scripts/**/*.mjs", "*.mjs"];
+// Plain JavaScript under a package or app source tree is a browser script that
+// the build inlines into an HTML shell, not a module the bundler resolves.
+const BROWSER_SCRIPT_FILES = ["apps/*/src/**/*.js", "packages/*/src/**/*.js"];
 
 export default [
   {
@@ -87,6 +90,17 @@ export default [
       "@typescript-eslint/restrict-template-expressions": "off",
       // ANSI escape sequences are asserted verbatim.
       "no-control-regex": "off",
+    },
+  },
+  {
+    // The navigation-graph viewer is inlined into the generated page: the DOM
+    // shell provides the document globals and `d3` is the force-layout bundle
+    // the page injects ahead of it.
+    files: BROWSER_SCRIPT_FILES,
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: { ...globals.browser, d3: "readonly" },
     },
   },
   {

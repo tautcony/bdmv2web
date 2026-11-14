@@ -94,7 +94,7 @@ export class RegisterFile {
       const key = entry.kind + ":" + entry.index;
       if (!first.has(key)) first.set(key, entry);
     }
-    for (const [key, entry] of first) {
+    for (const entry of first.values()) {
       const current = entry.kind === "gpr" ? (this.gpr[entry.index] ?? 0) : (this.psr[entry.index] ?? 0);
       if (current !== entry.before) (entry.kind === "gpr" ? gpr : psr)[entry.index] = current;
     }
