@@ -16,13 +16,17 @@ src/
     output.ts           printTable、writeJsonFile
     profile.ts          loadPlayerProfile、loadLimits
     stages.ts           stageFailure、firstBlockingCode、deliveryDiagnostics
-    assets.ts           AssetRecord、--type/--m2ts/--pid/--decode 解析、资产路径命名
+    assets.ts           AssetRecord、--type/--m2ts/--pid/--render 解析、资产路径命名
   commands/
     inspect.ts extract.ts list.ts export.ts render.ts build.ts validate.ts compare.ts
     serve.ts visualize.ts menu-planning.ts media-progress.ts
   shared/
+    asset-export.ts     export 与 render 共用的 BDMV/流导出管线（ExportRun.containers 决定是否写容器）
+    stream-input.ts     输入分类（BDMV vs .m2ts/.rsks）与 PMT 图形流发现
+    steps.ts            进度步骤词表（BDMV / 流 / 独立文件）
+    concurrency.ts      mapWithConcurrency
     media.ts            buildMediaClosure、buildExternalTargets
-    pgs.ts              reachablePgsReferences、extractReachablePgsTracks
+    pgs.ts              reachablePgsReferences、extractReachablePgsTracks、writeDisplaySetPngs、pgsTrackPngPlan
     bdj-files.ts bdj-host.ts disc-id.ts external-player.ts graph-viewer-html.ts
 ```
 
@@ -32,8 +36,8 @@ src/
 | `cli/run.ts` | `main` 调 `buildProgram`，把 `CommanderError` 映射成契约码，最后统一输出错误。 |
 | `cli/program.ts` | 一个命令一个 `program.command(...)`，含位置参数与选项；`dispatch` 把解析结果交给对应实现。 |
 | `cli/context.ts` | `dispatch` 保存解析结果，命令体用 `optionValue("--out")` 等读取；`optionState` 用于 `--progress/--no-progress` 这种三态 flag。 |
-| `commands/*` | 每个命令一个文件，只做“参数语义校验 → 调包 → 事务 → 输出”。 |
-| `shared/*` | 跨命令复用的纯逻辑（媒体闭包、可达 PGS 轨道），不依赖解析上下文。 |
+| `commands/*` | 每个命令一个文件，只做“参数语义校验 → 调包 → 事务 → 输出”；`export` 与 `render` 的导出流程在 `shared/asset-export.ts`，两者只差 `ExportRun` 的 `containers` 与 `selectionCode`。 |
+| `shared/*` | 跨命令复用的纯逻辑（媒体闭包、可达 PGS 轨道、导出管线、进度步骤词表），不依赖解析上下文。 |
 
 ## 参数解析
 
@@ -48,8 +52,8 @@ serve     [input]  --port --java --disc-id --player --player-executable
 visualize [input]  --out --programs --max-blocks --no-closure --overwrite --format
 compare   [input]  --actual --reference --reference-tool --reference-version --out --format
 list      [input]  --type --m2ts --pid --out --format
-export    [input]  --out --type --m2ts --pid --decode --png-level --format
-render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level --format
+export    [input]  --out --type --m2ts --pid --render --png-level --format --progress/--no-progress
+render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level --format --progress/--no-progress
 ```
 
 `convert` 是 `build` 的别名。带值选项统一用 `nonEmpty` 解析器，`--out=` 这类空值在解析阶段失败。
@@ -94,15 +98,19 @@ render    [input]  --out --mnu --sup --language --type --m2ts --pid --png-level 
 
 ### `export`
 
+- 输入为 BDMV 目录，或单个 `.m2ts`/`.rsks` 流文件（`shared/stream-input.ts` 按 `lstat` 与扩展名分类）。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
 - 写 igstools 兼容 `.mnu`（`assets/igs/<clip>-pid-<pid>.mnu`）与 `.sup`（`assets/subtitles/<clip>-pid-<pid>.sup`）。
-- `--decode png` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
-- 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`；秒值以轨道起点为 0。
+- `--render` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
+- 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`igs-png` 记录 `width`/`height`/`objectId`/`objectVersion`/`paletteId`/`paletteVersion`；`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`，秒值以轨道起点为 0，流模式以首个显示集为 0。
+- 流模式不传 `timestampOffset90k`，`.sup` 保留源 90kHz 时间轴；清单 `sup` 记 `language: "und"` 与发现序号。`--m2ts` 与未在 PMT 声明的 `--pid` 报 `CLI_EXPORT_SELECTION`；无 PAT/PMT 或声明 PID 无显示集报 `EXPORT_INVALID_STREAM`。
+- 显示集 PNG 由 `shared/pgs.ts` 的 `writeDisplaySetPngs` 写出：`mapWithConcurrency` 限 4 路（libuv 默认线程池），每路 `renderPgsDisplaySetAsync` 合成后把 deflate 丢给线程池；目录创建按目录缓存同一个 `mkdir` promise（并发写同一目录不会抢在创建之前），记录按显示集顺序返回，清单因此与串行实现逐字节一致。清单记录形状由 `pgsTrackPngPlan` 统一，`export` 与 `render` 不再各写一份。
+- 进度：`progress.ts` 的 `commandProgress` 统一读 `--progress`/`--no-progress` 并构造 `ProgressReporter`，`build`（7 步）与 `export`（BDMV 5 步 / 流 4 步）都只声明自己的步骤，步骤词表在 `shared/steps.ts`；`countOf` 同在此模块。
 
 ### `render`
 
-- 输入为 BDMV、位置参数 `.mnu`/`.sup`，或 `--mnu`/`--sup`；后两种不需要 BDMV。
-- BDMV 输入复用 `extractIgsScenes` 与可达 PGS 抽取；独立 SUP 直接 `parsePgsSup`；独立 MNU 使用 `parseIgsMnu`。
-- 只写 PNG 与 `assets-manifest.json`，不写 `.mnu`/`.sup`；`--png-level 0-9` 覆盖默认档位。
+- 输入为 BDMV、`.m2ts`/`.rsks` 流文件、位置参数 `.mnu`/`.sup`，或 `--mnu`/`--sup`；后两种不需要 BDMV。
+- BDMV 与流输入直接复用 `shared/asset-export.ts` 的管线，只把 `containers` 关掉：`export` 与 `render` 的差别仅在于是否写 `.mnu`/`.sup`。因此同一输入下 PNG 字节、路径、清单记录与进度步骤完全相同，`render` 的清单等于 `export --render` 清单的 `igs-png`/`sup-png` 顺序子集。
+- 独立 SUP 与 MNU 是 `render` 独有入口：SUP 用 `parsePgsSup` 解析后交给同一个 `writeDisplaySetPngs`（秒数以首个显示集为 0），MNU 用 `parseIgsMnu`；两者都不写 `.mnu`/`.sup`，`--png-level 0-9` 覆盖默认档位。
 
 ### `build`
 

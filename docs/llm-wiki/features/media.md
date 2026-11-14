@@ -127,7 +127,7 @@ media-plans/playlist-<id>-pi<n>-clip-<clipId>.json
 
 - `parsePgsSup` 解析显示集（PCS/WDS/PDS/ODS/END），输出尺寸、调色板、位图、叠加位置。
 - `PgsSubtitleTimeline` 按语言选择；PTS 回绕按 epoch 延续。
-- `export` 写 `.sup`；`--decode png` 写显示集 PNG，`render` 可独立从 BDMV、`.mnu` 或 `.sup` 生成 PNG；`package-builder` 把显示集序列化进 `disc-data.js` 供浏览器叠加。
+- `export` 写 `.sup`；`--render` 写显示集 PNG，`render` 可从 BDMV、流文件、`.mnu` 或 `.sup` 生成同一批 PNG（不写容器）；`package-builder` 把显示集序列化进 `disc-data.js` 供浏览器叠加。
 
 当前 `build` 的主流程不自动附带 PGS 轨道；需要字幕时用 `export` 单独导出。
 

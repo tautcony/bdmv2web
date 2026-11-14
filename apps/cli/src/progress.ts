@@ -6,7 +6,40 @@
  * gets one live line for the running step and a permanent line per finished
  * step; piped stderr stays silent unless plain lines were requested.
  */
+import { optionState } from "./cli/context.js";
 export type ProgressMode = "tty" | "plain" | "none";
+
+/**
+ * `undefined` keeps the default: a live line on a terminal, silence when piped.
+ * Commands that expose `--progress`/`--no-progress` resolve their mode here.
+ */
+export function progressMode(): ProgressMode | undefined {
+  const progress = optionState("--progress");
+  if (progress === false) return "none";
+  if (progress === true) return process.stderr.isTTY ? "tty" : "plain";
+  return undefined;
+}
+
+/** `3 clips` / `1 clip`, for step details that carry a count. */
+export function countOf(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+export interface CommandProgressOptions {
+  command: string;
+  steps: readonly string[];
+  source?: string;
+  details?: ReadonlyArray<readonly [string, string]>;
+}
+
+/**
+ * Reporter for one command run, honouring `--progress`/`--no-progress`. Commands
+ * declare only their own step names and header details.
+ */
+export function commandProgress(options: CommandProgressOptions): ProgressReporter {
+  const mode = progressMode();
+  return new ProgressReporter({ ...options, ...(mode === undefined ? {} : { mode }) });
+}
 
 export interface ProgressReporterOptions {
   command: string;

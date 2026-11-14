@@ -111,15 +111,15 @@ Open the loopback URL printed by `serve`. A BD-J page opened with `file://` disp
 | `inspect <BDMV>` | Show disc structure and diagnostics | `--format table\|json`, `--out FILE` |
 | `extract <BDMV> --out DIR` | Export HDMV, IGS, and SUP analysis data | `--type hdmv\|igs\|sup` or `--all` |
 | `list <BDMV>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
-| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--decode png`, `--png-level 0-9` |
-| `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG`, `--png-level 0-9` |
+| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--render`, `--png-level 0-9` |
+| `render <input>` | Render PNG from a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--mnu FILE`, `--sup FILE`, `--language LANG`, `--png-level 0-9` |
 | `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--resume [DIR]` |
 | `validate <menu dir>` | Audit a menu package and update the audit report | `--format json` |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session | `--port N`, `--java EXECUTABLE`, `--player system`, `--disc-id HEX` |
 
 `build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. An interrupted run keeps completed work in `.<output name>.staging-*`; `--resume` continues from that directory. The output target is written when the build completes. Movie PGS subtitles are exported with `export --type sup`.
 
-Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS scene and reachable SUP track metadata. `export --decode png` writes PNG files alongside the raw assets. `render` accepts a BDMV, `.mnu`, or `.sup` input. `--png-level 0-9` sets the deflate level for PNGs written by `export --decode png` and `render`; the default is level 1 for IGS elements and level 6 for PGS canvases.
+Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS scene and reachable SUP track metadata. `export --render` writes PNG files alongside the raw assets. `render` accepts a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` input and runs the same pipeline, so it writes the same PNG bytes and manifest records without the `.mnu`/`.sup` containers. `--png-level 0-9` sets the deflate level for PNGs written by `export --render` and `render`; the default is level 1 for IGS elements and level 6 for PGS canvases.
 
 `sup-png` entries in `assets-manifest.json` record `displaySet`, `startSeconds`, `endSeconds`, `width`, and `height`. `startSeconds` is where the display set starts and `endSeconds` is where the next display set starts, in seconds with 3 decimals relative to the start of the track; both are `null` when they cannot be determined. Fully transparent display sets are omitted from PNG output and the manifest.
 

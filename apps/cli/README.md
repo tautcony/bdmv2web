@@ -38,7 +38,7 @@ bdmv2web validate ./BDMV-menu
 | `inspect <BDMV>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`) |
 | `extract <BDMV> --out DIR` | Export HDMV, IGS, and SUP analysis data (`--type hdmv\|igs\|sup`, `--all`) |
 | `list <BDMV>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
-| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets (`--type`, `--m2ts`, `--pid`, `--decode png`) |
+| `export <BDMV> --out DIR` | Export raw `.mnu` and `.sup` assets (`--type`, `--m2ts`, `--pid`, `--render`) |
 | `render <input>` | Render PNG from a BDMV, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
 | `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`) |
 | `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`) |

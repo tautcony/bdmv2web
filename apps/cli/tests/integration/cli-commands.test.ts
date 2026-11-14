@@ -580,7 +580,7 @@ describe("asset PNG rendering", () => {
     const fixture = resolve(root, "../../test-data/fixtures/synthetic-all-features/BDMV");
     const output = join(parent, "out");
     try {
-      const result = await runCommand(["export", fixture, "--out", output, "--type", "sup", "--decode", "png"]);
+      const result = await runCommand(["export", fixture, "--out", output, "--type", "sup", "--render"]);
       expect(result.status, result.stderr.toString()).toBe(0);
       const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8"));
       const pngs = manifest.assets.filter((asset: any) => asset.type === "sup-png");

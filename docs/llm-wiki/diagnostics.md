@@ -45,7 +45,6 @@ rg '"CODE_NAME"' packages apps
 | `CLI_INVALID_RESUME` | `--resume` 目录不存在，或输出目录旁没有可续跑的工作目录 | 传入上次运行留下的 `.<输出名>.staging-*` 目录 |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 | `--type` 与 `--all` |
 | `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 | `list`/`export`/`render` |
-| `CLI_INVALID_DECODE` | `export --decode` 值非法 | `png` |
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 | 使用 ISO 639-2 三字母码 |
 | `CLI_RENDER_SELECTION` | `render` 混用输入类型或选项不适用 | 检查 BDMV、`--mnu`、`--sup` 的组合 |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 | 输入文件格式与完整性 |

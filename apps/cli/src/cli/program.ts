@@ -149,29 +149,33 @@ export function buildProgram(version?: string): Command {
   listCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("list", input, options));
 
   const exportCommand = program.command("export")
-    .description("Export IGS .mnu files, SUP tracks and PNG frames")
-    .argument("[input]", "BDMV root or its parent directory")
+    .description("Export IGS .mnu files, SUP tracks and PNG frames from a BDMV disc or a stream file")
+    .argument("[input]", "BDMV root or its parent directory, or a .m2ts/.rsks stream file")
     .option("--out <dir>", "output directory", nonEmpty)
     .option("--type <type>", "all, igs, or sup", nonEmpty)
     .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
-    .option("--decode <format>", "png also writes decoded PNGs", nonEmpty)
+    .option("--render", "also render PNG frames for IGS elements and PGS display sets")
     .option("--format <format>", "table or json", nonEmpty)
     .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
+    .option("--progress", "print step progress on stderr")
+    .option("--no-progress", "keep stderr silent");
   exportCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("export", input, options));
 
   const renderCommand = program.command("render")
-    .description("Render PNG frames from a BDMV disc, a .mnu file, or a .sup file")
-    .argument("[input]", "BDMV directory, or a .mnu/.sup file")
+    .description("Render PNG frames from a BDMV disc, a stream file, a .mnu file, or a .sup file")
+    .argument("[input]", "BDMV directory, a .m2ts/.rsks stream file, or a .mnu/.sup file")
     .option("--out <dir>", "output directory", nonEmpty)
     .option("--mnu <file>", "render a standalone IGS .mnu file", nonEmpty)
     .option("--sup <file>", "render a standalone PGS .sup file", nonEmpty)
     .option("--language <lang>", "three-letter language code recorded in the manifest", nonEmpty)
-    .option("--type <type>", "all, igs, or sup for BDMV input", nonEmpty)
+    .option("--type <type>", "all, igs, or sup for BDMV and stream input", nonEmpty)
     .option("--m2ts <clip>", "restrict to one clip for BDMV input", nonEmpty)
     .option("--pid <pid>", "restrict to one PID", nonEmpty)
     .option("--format <format>", "table or json", nonEmpty)
     .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
+    .option("--progress", "print step progress on stderr")
+    .option("--no-progress", "keep stderr silent");
   renderCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("render", input, options));
 
   return program;

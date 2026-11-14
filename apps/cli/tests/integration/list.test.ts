@@ -48,9 +48,9 @@ describe("list command", async () => {
     ]);
   });
 
-  it.each([["--decode", "png"], ["--png-level", "6"]])("rejects %s on list", async (option, value) => {
-    const result = await runList([option, value]);
+  it.each([["--render"], ["--png-level", "6"]])("rejects %s on list", async (...options: string[]) => {
+    const result = await runList(options);
     expect(result.status).toBe(1);
-    expect(String(result.stderr)).toContain(`CLI_UNKNOWN_OPTION: unknown option '${option}'`);
+    expect(String(result.stderr)).toContain(`CLI_UNKNOWN_OPTION: unknown option '${options[0]}'`);
   });
 });

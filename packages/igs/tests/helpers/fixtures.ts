@@ -26,8 +26,25 @@ export function patPacket(cc = 0): Uint8Array {
 }
 
 export function pmtPacket(streamPid = IG_PID, streamType = 0x91, cc = 0): Uint8Array {
-  const section = withMpegCrc(Uint8Array.of(0x02, 0xb0, 0x12, 0, 1, 0xc1, 0, 0, 0xe0 | (streamPid >> 8), streamPid & 255, 0xf0, 0, streamType, 0xe0 | (streamPid >> 8), streamPid & 255, 0xf0, 0));
-  return m2tsPacket(PMT_PID, concat(Uint8Array.of(0), section), { cc, pusi: true });
+  return pmtPacketWithStreams([{ pid: streamPid, type: streamType }], cc);
+}
+
+export function pmtPacketWithStreams(entries: Array<{ pid: number; type: number }>, cc = 0): Uint8Array {
+  const loop = entries.flatMap((entry) => [entry.type, 0xe0 | (entry.pid >> 8), entry.pid & 255, 0xf0, 0]);
+  const sectionLength = 13 + loop.length;
+  const first = entries[0]!.pid;
+  const section = Uint8Array.of(0x02, 0xb0 | (sectionLength >> 8), sectionLength & 255, 0, 1, 0xc1, 0, 0, 0xe0 | (first >> 8), first & 255, 0xf0, 0, ...loop);
+  return m2tsPacket(PMT_PID, concat(Uint8Array.of(0), withMpegCrc(section)), { cc, pusi: true });
+}
+
+/** A PMT whose section bytes stay readable while the CRC no longer validates. */
+export function pmtPacketWithBadCrc(entries: Array<{ pid: number; type: number }>, cc = 0): Uint8Array {
+  const packet = pmtPacketWithStreams(entries, cc);
+  // Frame byte 8 is the pointer field, so the section starts at 9 and its
+  // trailing 4-byte CRC starts at 8 + section_length.
+  const sectionLength = 13 + entries.length * 5;
+  packet[8 + sectionLength]! ^= 0xff;
+  return packet;
 }
 
 export function syntheticMenuSegments(options: { effects?: boolean; richEffects?: boolean; uiModelWithTimeouts?: boolean; animated?: boolean; buttonCommand?: Uint8Array; twoPages?: boolean; includeEnd?: boolean; missingPalette?: boolean; missingObject?: boolean; malformedObject?: boolean; incompleteObject?: boolean; missingPaletteEntry?: boolean; invalidReferences?: boolean; defaultSelectedButtonId?: number; defaultActivatedButtonId?: number } = {}): Uint8Array {

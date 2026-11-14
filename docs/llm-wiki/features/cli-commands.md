@@ -1,6 +1,6 @@
 # 功能：CLI 命令
 
-十个命令全部实现：`inspect`、`extract`、`build`、`validate`、`serve`、`visualize`、`compare`、`list`、`export`、`render`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`render` 也接受独立的 `.mnu`/`.sup` 文件。
+十个命令全部实现：`inspect`、`extract`、`build`、`validate`、`serve`、`visualize`、`compare`、`list`、`export`、`render`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
@@ -10,7 +10,7 @@
 | `extract` | 导出协议分析 JSON | `<out>/hdmv|igs|sup/*` + `manifest.json` | 已实现 |
 | `list` | 列 IGS/SUP 资源 | stdout 表/JSON；可选 `--out` | 已实现 |
 | `export` | 导出 `.mnu`/`.sup` 原始资源 | `assets-manifest.json` + 资产 | 已实现 |
-| `render` | 从 BDMV、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
+| `render` | 从 BDMV、流文件、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
 | `build` | 生成菜单包；BD-J 包内含 Java host、应用文件和 session 数据 | `BDMV-menu/` 整目录 | 已实现 |
 | `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；选项 `--port`、`--java`、`--disc-id`、`--player system`、`--player-executable` | 本地 URL | 已实现 |
 | `visualize` | 导出导航图交互查看器与 mermaid 总览/分程序流程图 | `BDMV-graph/`（`index.html`、`graph.json`、`overview.md`、`programs/`） | 已实现 |
@@ -75,18 +75,36 @@
 | `--out DIR` | 必填 |
 | `--type all\|igs\|sup` | 默认 `all` |
 | `--m2ts` / `--pid` | 选择范围 |
-| `--decode png` | 额外导出 PNG |
-| `--png-level 0-9` | 同上；只影响 `--decode png` 写出的文件 |
+| `--render` | 额外渲染 PNG（IGS 元素与 PGS 显示集） |
+| `--png-level 0-9` | 同上；只影响 `--render` 写出的文件 |
+| `--progress` | stderr 非终端时也逐行输出进度（默认自动） |
+| `--no-progress` | 关闭进度输出 |
+
+进度输出（stderr）与 `build` 同一套渲染。BDMV 输入五步：解析 BDMV 结构、提取 IGS 场景、提取 SUP 轨道、解码显示集、写清单并提交；独立流输入四步：探测流表、提取图形流、解码显示集、写清单并提交。不适用于 `--type` 的步骤标为跳过。只有「解码显示集」能测比例：以全部轨道的显示集总数为分母，跨轨道单调递增，明细为 `<已完成>/<总数> display sets`；其余步骤显示耗时。`--render` 未启用时该步跳过。结尾为 `Done in …` / `Done in … · partial` / `Failed in … · <code>` 与输出目录、资产数。stderr 不是终端时默认静默，`--progress` 强制逐行输出（每步一行 + 每 10% 一行）。stdout 仍只有一行 JSON。`render` 使用同一套步骤名与同一行格式，因此两个命令的进度可以逐行对照。
+
+显示集 PNG 的 deflate 在线程池上并发执行（4 路，等于 libuv 默认线程池大小），合成仍在主线程；`assets-manifest.json` 的记录顺序保持「每条 SUP 记录后紧跟其显示集 PNG」，与串行实现逐字节一致。
 
 产物：
 
 - `assets/igs/<clipId>-pid-<pid>.mnu`：igstools 兼容 IG 流。
 - `assets/subtitles/<clipId>-pid-<pid>.sup`：可达 PGS 轨道。
-- `assets/igs/*.png`、`assets/subtitles/*.png`：`--decode png` 时按元素/显示集导出。
+- `assets/igs/*.png`、`assets/subtitles/*.png`：`--render` 时按元素/显示集导出。
 - `assets-manifest.json`：`{ type, format?, path, byteLength, language?, streamNumber?, displaySetCount? }`。
+- `igs-png` 条目另含 `width`、`height`、`objectId`、`objectVersion`、`paletteId`、`paletteVersion`。
 - `sup-png` 条目另含 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`。`startSeconds` 是该显示集的起点、`endSeconds` 是下一条的起点，单位秒（3 位小数）。最后一个显示集用轨道结束时间；时间以轨道起点为 0（独立 `.sup` 以首个显示集为 0）。无法确定时写 `null`。
 - 全透明显示集不写 PNG，也不写 `sup-png` 条目。
 - `.sup`/`.mnu` 文件名：多个 PlayItem 入口指向同一流时从第二个入口起带 `-entryN` 后缀。
+
+独立流文件输入（单个 `.m2ts`/`.rsks` 常规文件）：
+
+- 图形流由文件自身的 PAT/PMT 发现：`stream_type` `0x90` 为 PGS、`0x91` 为 IGS；保留 PID（`< 0x20`）上的声明忽略，因此社区封装里的假条目不会被当成流。
+- 流模式的 `--m2ts` 以 `CLI_EXPORT_SELECTION` 拒绝；`--pid` 必须是 PMT 已声明的图形 PID，否则同样以 `CLI_EXPORT_SELECTION` 失败。
+- 产物以文件 stem 代替 `clipId`：`assets/igs/<stem>-pid-<pid>.mnu`、`assets/subtitles/<stem>-pid-<pid>.sup`。清单 `sup` 记录 `language: "und"`（流内没有语言声明），`streamNumber` 为 PMT 中的发现序号。
+- `.sup` 保留源 90kHz 时间轴；`sup-png` 的秒数以轨道首个显示集为 0，与 `render` 的独立 SUP 语义一致。
+- 没有图形流声明时记 warning `EXPORT_NO_GRAPHICS_STREAM`，写出空清单并以 0 退出；文件不含 PAT/PMT，或声明的 PGS PID 没有完整显示集时以 `EXPORT_INVALID_STREAM` 在写产物前失败。
+- 传输/PSI 诊断与 BDMV 模式同一判定：尾部杂讯等 error 级诊断降级为 `partial`（exit 0），不影响已发现的流。
+- 输出目录可以与流文件同处一级：流文件是只读输入，不存在 BDMV 根那样的覆盖风险。
+- 同一个流文件交给 `render` 时复用这条发现路径与同一套解码管线：PNG 字节、路径与清单条目逐字节相同，只是不写 `.mnu`/`.sup`；选择错误改报 `CLI_RENDER_SELECTION`，无效流仍是 `EXPORT_INVALID_STREAM`。
 
 ## `render`
 
@@ -94,10 +112,13 @@
 | --- | --- |
 | `--out DIR` | 必填 |
 | `--mnu FILE` / `--sup FILE` | 直接渲染独立资源；也可用位置参数传入 `.mnu`/`.sup` |
-| `--type all\|igs\|sup` | 仅 BDMV 输入；选择 PNG 来源 |
+| `--type all\|igs\|sup` | 仅 BDMV 与流文件输入；选择 PNG 来源 |
 | `--m2ts` / `--pid` | 仅 BDMV 输入；`--pid` 也用于独立 MNU 的场景标识 |
 | `--language LANG` | 仅独立 SUP；写入清单的三字母语言 |
 | `--png-level 0-9` | 写 PNG 时的 deflate 档位，见下 |
+| `--progress` / `--no-progress` | 与 `export`、`build` 相同的进度开关与渲染格式 |
+
+输入可以是 BDMV 目录、`.m2ts`/`.rsks` 流文件、`.mnu`/`.sup` 文件，或 `--mnu`/`--sup` 指定的独立资源。前两类走 `export --render` 的同一条管线（步骤名、并发解码、PNG 名称与清单记录都相同），后两类是 `render` 独有的入口。
 
 产物：
 
@@ -108,7 +129,7 @@
   assets/subtitles/*.png             # PGS 显示集
 ```
 
-`render` 不写 `.mnu`/`.sup`。独立 SUP 的文件名为 `<源文件名>-display-<00001>.png`；独立 MNU 使用 IGS 元素命名。清单条目与 `export --decode png` 相同。
+`render` 不写 `.mnu`/`.sup`。BDMV 与流文件的 PNG 命名、清单条目与 `export --render` 完全相同（同一输入下，`render` 的清单等于 `export --render` 清单中 `igs-png`/`sup-png` 条目的顺序子集）；独立 SUP 没有 PID 可寻，文件名固定为 `<源文件名>-display-<00001>.png`，独立 MNU 使用 IGS 元素命名。
 
 IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与调色板展开后的 RGBA 完全一致。PGS 显示集仍是 RGBA，画布降到 3 会让单帧体积增大约 70%。`--png-level` 覆盖默认档位：索引图默认 1，画布默认 6；索引图从 1 升到 3 只省约 3% 体积，画布在 3 与 6 之间差一倍以上。
 
@@ -248,9 +269,10 @@ bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-c
 | `INVALID_LIMITS_FILE` / `INVALID_LIMIT` | limits JSON 不可读 / 键或值非法 |
 | `CLI_EXTRACT_SELECTION` / `CLI_INVALID_EXTRACT_TYPE` | `extract` 类型选择错误 |
 | `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 |
-| `CLI_INVALID_DECODE` | `export --decode` 值非法 |
+| `CLI_EXPORT_SELECTION` | 流文件输入配合 `--m2ts`，或 `--pid` 不在 PMT 声明的图形 PID 中 |
+| `EXPORT_INVALID_STREAM` | 流文件无法作为 m2ts 解析（无 PAT/PMT），或声明的 PGS PID 无完整显示集；`render` 的流输入沿用该码 |
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 |
-| `CLI_RENDER_SELECTION` | `render` 混用 BDMV 与 `.mnu`/`.sup`，或选项不适用于输入类型 |
+| `CLI_RENDER_SELECTION` | `render` 混用输入类型或选项不适用于输入（含流文件配合 `--m2ts`、`--pid` 未在 PMT 声明） |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 |
 | `CLI_INVALID_PNG_LEVEL` | `--png-level` 不是 0–9 |
 | `CLI_INVALID_RESUME` | `build --resume` 没有找到或不是可用的 staging 目录 |
@@ -265,7 +287,10 @@ corepack pnpm run cli:dev inspect "/path/BDMV" --format json
 corepack pnpm run cli:dev extract "/path/BDMV" --out /tmp/analysis --all
 corepack pnpm run cli:dev list "/path/BDMV" --type igs
 corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/assets --type igs
+corepack pnpm run cli:dev export "/path/00005.SumiSora.sc.rsks" --out /tmp/assets --type sup
+corepack pnpm run cli:dev export "/path/00005.SumiSora.sc.rsks" --out /tmp/assets --render --progress
 corepack pnpm run cli:dev render "/path/BDMV" --out /tmp/png --type sup
+corepack pnpm run cli:dev render "/path/00005.SumiSora.sc.rsks" --out /tmp/png --progress
 corepack pnpm run cli:dev render --sup /tmp/subtitle.sup --out /tmp/png
 corepack pnpm run cli:dev build "/path/BDMV" --out /tmp/menu --player-profile profile.json
 corepack pnpm run cli:dev serve /tmp/menu
@@ -274,4 +299,4 @@ corepack pnpm run cli:dev compare input.json --actual actual.json --reference re
 corepack pnpm run cli:dev validate /tmp/menu
 ```
 
-`export --decode` 只接受 `png`；`--m2ts`/`--pid` 取值来自 `list` 的表格或 JSON。
+`export --render` 是开关，没有取值；`--m2ts`/`--pid` 取值来自 `list` 的表格或 JSON。同一条流文件用 `export --render` 与 `render` 得到的 PNG 完全相同，前者额外写 `.mnu`/`.sup`。

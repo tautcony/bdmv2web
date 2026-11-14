@@ -1,19 +1,28 @@
-import { errorText } from "@bdmv2web/utils";
-import { pgsTrackEntrySuffixes, pidOption, pngLevelOption, safeAssetStem, selectedPid, supDisplaySetPath, uniquePgsReferences, validateAssetType } from "../cli/assets.js";
+import { assetSelection, assetTypeOption, igsElementRecord, pngLevelOption, safeAssetStem } from "../cli/assets.js";
+import type { AssetRecord } from "../cli/assets.js";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
-import { firstBlockingCode, stageFailure } from "../cli/stages.js";
-import { extractReachablePgsTracks, reachablePgsReferences } from "../shared/pgs.js";
-import { assertDisjointRoots, beginOutputTransaction } from "@bdmv2web/bdmv-io";
-import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
+import { commandProgress, countOf } from "../progress.js";
+import { exportBdmvAssets, exportStreamAssets } from "../shared/asset-export.js";
+import type { ExportRun } from "../shared/asset-export.js";
+import { pgsTrackPngPlan, runDecodeStep, writeDisplaySetPngs } from "../shared/pgs.js";
+import type { DecodeTarget } from "../shared/pgs.js";
+import { FILE_STEPS } from "../shared/steps.js";
+import { classifyStreamInput } from "../shared/stream-input.js";
+import { beginOutputTransaction } from "@bdmv2web/bdmv-io";
 import { ContractError } from "@bdmv2web/core";
-import { extractIgsScenes, parseIgsMnu } from "@bdmv2web/igs";
-import { pgsDisplaySetEnd90k, renderPgsDisplaySet, streamPgsSup } from "@bdmv2web/media-export";
-import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { parseIgsMnu } from "@bdmv2web/igs";
+import { parsePgsSup, pgsDisplaySetEnd90k } from "@bdmv2web/media-export";
+import { errorText } from "@bdmv2web/utils";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
-import type { AssetRecord } from "../cli/assets.js";
+
+/**
+ * `render` is the PNG-only half of `export`: it runs the same pipeline (same
+ * naming, manifest records, concurrency and progress) with containers turned off,
+ * and additionally accepts standalone `.mnu`/`.sup` files.
+ */
+const RENDER_RUN: ExportRun = { command: "render", containers: false, selectionCode: "CLI_RENDER_SELECTION" };
 
 export async function renderPng(): Promise<void> {
   const out = optionValue("--out"); if (!out) fail("CLI_MISSING_OUTPUT", "render requires --out DIR");
@@ -22,11 +31,11 @@ export async function renderPng(): Promise<void> {
   const supPath = optionValue("--sup");
   const typeOption = optionValue("--type");
   const language = renderLanguage();
-  const pid = pidOption();
-  const pngLevel = pngLevelOption();
   if ((mnuPath !== undefined || supPath !== undefined) && positional !== undefined) fail("CLI_RENDER_SELECTION", "render accepts either a positional input or --mnu/--sup, not both");
-  if ((mnuPath !== undefined || supPath !== undefined) && typeOption !== undefined) fail("CLI_RENDER_SELECTION", "--type applies to BDMV input; omit it for --mnu/--sup");
+  if ((mnuPath !== undefined || supPath !== undefined) && typeOption !== undefined) fail("CLI_RENDER_SELECTION", "--type applies to BDMV and stream input; omit it for --mnu/--sup");
   if ((mnuPath !== undefined || supPath !== undefined) && optionValue("--m2ts") !== undefined) fail("CLI_RENDER_SELECTION", "--m2ts applies to BDMV input");
+  const selection = assetSelection();
+  const pngLevel = pngLevelOption();
   const sources: Array<{ kind: "mnu" | "sup"; path: string }> = [];
   if (mnuPath !== undefined) sources.push({ kind: "mnu", path: mnuPath });
   if (supPath !== undefined) sources.push({ kind: "sup", path: supPath });
@@ -34,15 +43,20 @@ export async function renderPng(): Promise<void> {
     const extension = extname(positional).toLocaleLowerCase("en-US");
     if (extension === ".mnu" || extension === ".sup") sources.push({ kind: extension.slice(1) as "mnu" | "sup", path: positional });
     else {
-      if (sources.length) fail("CLI_RENDER_SELECTION", "render accepts either a BDMV input or --mnu/--sup, not both");
-      if (language !== undefined) fail("CLI_RENDER_SELECTION", "--language applies to SUP input; BDMV tracks carry their declared language");
-      return renderPngFromBdmv(positional, out, typeOption, pid, pngLevel);
+      if (sources.length) fail("CLI_RENDER_SELECTION", "render accepts either a BDMV or stream input or --mnu/--sup, not both");
+      if (language !== undefined) fail("CLI_RENDER_SELECTION", "--language applies to SUP input; BDMV and stream tracks carry their declared language");
+      // Rendering is this command's whole job, so the shared pipeline always decodes.
+      const pngSelection = { ...selection, renderPng: true };
+      const type = assetTypeOption();
+      const target = await classifyStreamInput(positional);
+      if (target.kind === "stream") return exportStreamAssets(target, resolve(out), type, pngSelection, RENDER_RUN);
+      return exportBdmvAssets(positional, resolve(out), type, pngSelection, RENDER_RUN);
     }
   }
-  if (!sources.length) fail("CLI_MISSING_INPUT", "render requires a BDMV input, a .mnu/.sup positional input, or --mnu/--sup");
+  if (!sources.length) fail("CLI_MISSING_INPUT", "render requires a BDMV input, a .m2ts/.rsks stream file, a .mnu/.sup positional input, or --mnu/--sup");
   if (language !== undefined && !sources.some((source) => source.kind === "sup")) fail("CLI_RENDER_SELECTION", "--language applies to SUP input");
-  if (pid !== undefined && !sources.some((source) => source.kind === "mnu")) fail("CLI_RENDER_SELECTION", "--pid applies to MNU input");
-  return renderPngFromFiles(sources, out, language, pid, pngLevel);
+  if (selection.pid !== undefined && !sources.some((source) => source.kind === "mnu")) fail("CLI_RENDER_SELECTION", "--pid applies to MNU input");
+  return renderPngFromFiles(sources, resolve(out), language, selection.pid, pngLevel);
 }
 
 export function renderLanguage(): string | undefined {
@@ -52,125 +66,67 @@ export function renderLanguage(): string | undefined {
   return value.toLocaleLowerCase("en-US");
 }
 
+/** Standalone `.mnu`/`.sup` inputs, which carry no disc to discover streams from. */
 export async function renderPngFromFiles(sources: Array<{ kind: "mnu" | "sup"; path: string }>, out: string, language: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
-  const files: AssetRecord[] = [];
-  const pending: Array<{ path: string; bytes: Uint8Array }> = [];
-  let partial = false;
-  for (const source of sources) {
-    const input = resolve(source.path);
-    const bytes = await readFile(input);
-    const stem = safeAssetStem(input);
-    if (source.kind === "mnu") {
-      let parsed;
-      try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120, pngLevel }); }
-      catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${errorText(error)}`); }
-      if (parsed.status === "failed" || parsed.scenes.length === 0) {
-        const detail = parsed.diagnostics.find((item) => item.severity === "error")?.message ?? "no complete display set";
-        throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU contains no renderable menu scene: ${detail}`);
-      }
-      if (parsed.status === "partial") partial = true;
-      for (const asset of parsed.assets) {
-        pending.push({ path: asset.relativePath, bytes: asset.pngBytes });
-        files.push({
-          type: "igs-png", path: asset.relativePath, byteLength: asset.pngBytes.byteLength,
-          width: asset.width, height: asset.height, objectId: asset.objectId, objectVersion: asset.objectVersion,
-          paletteId: asset.paletteId, paletteVersion: asset.paletteVersion,
-        });
-      }
-      continue;
-    }
-    // Display sets are rendered one at a time. A feature-length SUP decodes into
-    // hundreds of megabytes of bitmaps, so only the frame being rendered stays alive.
-    const parseFailure = (error: unknown) => new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${errorText(error)}`);
-    const iterator = streamPgsSup(bytes)[Symbol.iterator]();
-    const step = () => { try { return iterator.next(); } catch (error) { throw parseFailure(error); } };
-    let current = step();
-    if (current.done) throw new ContractError("RENDER_INVALID_SUP", source.path, "SUP contains no complete display set.");
-    // A standalone SUP carries no track interval, so the first display set is
-    // the origin: exported seconds stay usable even when the file starts at an
-    // arbitrary PTS.
-    const origin90k = current.value.pts90k;
-    let next = step();
-    for (let index = 0; !current.done; index++) {
-      const displaySet = current.value;
-      const endTime90k = pgsDisplaySetEnd90k(next.done ? [displaySet] : [displaySet, next.value], 0);
-      const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, origin90k, { level: pngLevel });
-      if (rendered.visible) {
-        const path = `assets/subtitles/${stem}-display-${String(index + 1).padStart(5, "0")}.png`;
-        pending.push({ path, bytes: rendered.pngBytes });
-        files.push({
-          type: "sup-png", path, byteLength: rendered.pngBytes.byteLength,
-          ...(language === undefined ? {} : { language }),
-          displaySet: rendered.displaySetNumber, startSeconds: rendered.startSeconds, endSeconds: rendered.endSeconds,
-          width: rendered.width, height: rendered.height,
-        });
-      }
-      current = next; next = step();
-    }
-  }
-  await commitRenderedAssets(out, files, pending, partial);
-}
-
-export async function renderPngFromBdmv(input: string, out: string, rawType: string | undefined, pid: number | undefined, pngLevel: number | undefined = undefined): Promise<void> {
-  const type = rawType === undefined ? "all" : validateAssetType(rawType);
-  const selection = { ...(pid === undefined ? {} : { pid }) };
-  const { disc, table } = await parseBdmvWithInputTable(input);
-  const facts = classifyDiagnostics(disc.diagnostics);
-  if (facts.hasFatal) { stageFailure(firstBlockingCode(facts.blocking), facts.blocking); return; }
-  const roots = await assertDisjointRoots(disc.root, resolve(out));
-  const igs = await extractIgsScenes(disc, { renderAssets: type !== "sup", captureStreams: false, pngLevel, table });
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics] });
-  if (outcome.status === "failed") { stageFailure(firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics); return; }
-  const files: AssetRecord[] = [];
-  const pending: Array<{ path: string; bytes: Uint8Array }> = [];
-  if (type !== "sup") for (const asset of igs.assets.filter((item) => selectedPid(item.source.pid, selection))) {
-    pending.push({ path: asset.relativePath, bytes: asset.pngBytes });
-    files.push({
-      type: "igs-png", path: asset.relativePath, byteLength: asset.pngBytes.byteLength,
-      width: asset.width, height: asset.height, objectId: asset.objectId, objectVersion: asset.objectVersion,
-      paletteId: asset.paletteId, paletteVersion: asset.paletteVersion,
-    });
-  }
-  if (type !== "igs") {
-    const references = uniquePgsReferences(reachablePgsReferences(disc, igs.scenes)).filter((item) => selectedPid(item.pid, selection));
-    const trackSuffixes = pgsTrackEntrySuffixes(references);
-    const temp = await mkdtemp(resolve(tmpdir(), "bdmv-render-png-"));
-    try {
-      const tracks = await extractReachablePgsTracks(disc, igs.scenes, temp, (_reference, index) => `tracks/${index}.sup`, references);
-      const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
-      for (const track of uniqueTracks) {
-        const trackIndex = tracks.indexOf(track);
-        const trackSuffix = trackSuffixes[trackIndex] ?? "";
-        const trackEnd90k = Number(track.sourceOut90k) - Number(track.sourceIn90k);
-        for (const [index, displaySet] of track.displaySets.entries()) {
-          const endTime90k = pgsDisplaySetEnd90k(track.displaySets, index, trackEnd90k);
-          const rendered = renderPgsDisplaySet(displaySet, index + 1, endTime90k, 0, { level: pngLevel });
-          if (!rendered.visible) continue;
-          const path = supDisplaySetPath(track.clipId, track.pid, track.language, index, trackSuffix);
-          pending.push({ path, bytes: rendered.pngBytes });
-          files.push({
-            type: "sup-png", path, byteLength: rendered.pngBytes.byteLength, language: track.language, streamNumber: track.streamNumber,
-            displaySet: rendered.displaySetNumber, startSeconds: rendered.startSeconds, endSeconds: rendered.endSeconds,
-            width: rendered.width, height: rendered.height,
-          });
-        }
-      }
-    } finally { await rm(temp, { recursive: true, force: true }); }
-  }
-  await commitRenderedAssets(roots.output, files, pending, outcome.status === "partial");
-}
-
-export async function commitRenderedAssets(out: string, files: AssetRecord[], pending: Array<{ path: string; bytes: Uint8Array }>, partial: boolean): Promise<void> {
+  const progress = commandProgress({ command: "render", steps: Object.values(FILE_STEPS), source: sources.map((source) => source.path).join(", "), details: [["output", out]] });
   const transaction = await beginOutputTransaction(resolve(out));
   try {
-    for (const file of pending) {
-      const target = resolve(transaction.stagingPath, file.path);
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, file.bytes, { flag: "wx" });
+    progress.start(FILE_STEPS.read);
+    const files: AssetRecord[] = [];
+    const targets: DecodeTarget[] = [];
+    let partial = false;
+    for (const source of sources) {
+      const input = resolve(source.path);
+      const bytes = await readFile(input);
+      const stem = safeAssetStem(input);
+      if (source.kind === "mnu") {
+        let parsed;
+        try { parsed = parseIgsMnu(bytes, { clipId: stem, pid: pid ?? 0x120, pngLevel }); }
+        catch (error) { throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU could not be parsed: ${errorText(error)}`); }
+        if (parsed.status === "failed" || parsed.scenes.length === 0) {
+          const detail = parsed.diagnostics.find((item) => item.severity === "error")?.message ?? "no complete display set";
+          throw new ContractError("RENDER_INVALID_MNU", source.path, `MNU contains no renderable menu scene: ${detail}`);
+        }
+        if (parsed.status === "partial") partial = true;
+        for (const asset of parsed.assets) {
+          const target = resolve(transaction.stagingPath, asset.relativePath);
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, asset.pngBytes, { flag: "wx" });
+          files.push(igsElementRecord(asset));
+        }
+        continue;
+      }
+      let displaySets;
+      try { displaySets = parsePgsSup(bytes); }
+      catch (error) { throw new ContractError("RENDER_INVALID_SUP", source.path, `SUP could not be parsed: ${errorText(error)}`); }
+      if (displaySets.length === 0) throw new ContractError("RENDER_INVALID_SUP", source.path, "SUP contains no complete display set.");
+      // A standalone SUP carries no track interval, so the first display set is
+      // the origin: exported seconds stay usable even when the file starts at an
+      // arbitrary PTS. Display sets are rendered a few at a time, so a
+      // feature-length SUP never holds more than a handful of canvases.
+      const origin90k = displaySets[0]!.pts90k;
+      targets.push({
+        displaySets: displaySets.length,
+        write: (onProgress) => writeDisplaySetPngs(pgsTrackPngPlan({
+          stagingPath: transaction.stagingPath,
+          displaySets,
+          origin90k,
+          end90k: (index) => pgsDisplaySetEnd90k(displaySets, index),
+          pathFor: (index) => `assets/subtitles/${stem}-display-${String(index + 1).padStart(5, "0")}.png`,
+          ...(language === undefined ? {} : { language }),
+          level: pngLevel,
+          onProgress,
+        })),
+      });
     }
+    progress.done(FILE_STEPS.read, countOf(files.length, "image", "images"));
+    files.push(...await runDecodeStep(progress, FILE_STEPS.decode, targets, "no SUP input"));
+    progress.start(FILE_STEPS.commit);
     await writeFile(resolve(transaction.stagingPath, "assets-manifest.json"), `${JSON.stringify({ schemaVersion: "1.0", assets: files }, null, 2)}\n`, { flag: "wx" });
     await transaction.commit();
+    progress.done(FILE_STEPS.commit, countOf(files.length, "asset", "assets"));
     const status = partial ? "partial" : "complete";
+    progress.finish(status, [["output", resolve(out)], ["assets", countOf(files.length, "asset", "assets")]]);
     process.stdout.write(`${JSON.stringify({ stageStatus: status, output: resolve(out), assetCount: files.length })}\n`);
   } catch (error) { await transaction.abort(); throw error; }
 }

@@ -165,7 +165,11 @@ export class PsiAssembler {
     const sections: PsiSection[] = [];
     let cursor = 0;
     while (bytes.length - cursor >= 3) {
-      if (bytes[cursor] === 0xff) break;
+      // 0xff starts stuffing, which ends the section stream for this packet: drop
+      // everything from here instead of carrying it over. Retaining it made every
+      // following packet concatenate the previous packet's stuffing, so the buffer
+      // grew by one payload per packet and push became quadratic on long streams.
+      if (bytes[cursor] === 0xff) { cursor = bytes.length; break; }
       const len = ((bytes[cursor + 1]! & 15) << 8) | bytes[cursor + 2]!;
       const total = 3 + len;
       if (len < 4 || total > this.limitsMax()) { this.buffers.delete(packet.pid); this.diagnostics.push({ severity: "error", code: "PSI_INVALID_LENGTH", message: `PSI section length ${len} is invalid`, source: source(this.clipId, packet.pid, packet.packetOffset), affectedSceneIds: [] }); return sections; }

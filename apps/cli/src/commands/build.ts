@@ -2,7 +2,7 @@ import { flagEnabled, inputPath, optionState, optionValue } from "../cli/context
 import { fail } from "../cli/errors.js";
 import { loadLimits, loadPlayerProfile } from "../cli/profile.js";
 import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/stages.js";
-import { ProgressReporter } from "../progress.js";
+import { commandProgress, countOf } from "../progress.js";
 import { buildMediaClosure } from "../shared/media.js";
 import { collectBdjApplicationFiles } from "../shared/bdj-files.js";
 import { buildBdjHostApiJar } from "../shared/bdj-host.js";
@@ -21,7 +21,6 @@ import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
 import { errorText } from "@bdmv2web/utils";
 import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
-import type { ProgressMode } from "../progress.js";
 import { createVmPrograms, createMenuDiscIR, findTopMenuPlaylist, findMenuScene, isMenuSurfaceScene, menuIgsSceneStreamCount, menuIgsSceneTargets, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, menuMediaEncoding, menuPlaylistMarks as collectMenuPlaylistMarks, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS } from "./menu-planning.js";
 
 export {
@@ -51,18 +50,6 @@ async function writeConversionReport(outputDirectory: string, report: Record<str
     conversion,
   };
   await writeFile(resolve(outputDirectory, "reports.json"), `${JSON.stringify(reports, null, 2)}\n`);
-}
-
-/** `undefined` keeps the default: a live line on a terminal, silence when piped. */
-export function progressMode(): ProgressMode | undefined {
-  const progress = optionState("--progress");
-  if (progress === false) return "none";
-  if (progress === true) return process.stderr.isTTY ? "tty" : "plain";
-  return undefined;
-}
-
-export function countOf(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 export function formatBytes(bytes: number): string {
@@ -151,8 +138,7 @@ export async function build(): Promise<void> {
   const plannedResume = resumeOption !== undefined
     ? await resumeMediaDirectory(undefined, resumeOption)
     : resumeWithoutDirectory && plannedOut !== undefined ? await resumeMediaDirectory(plannedOut, true) : undefined;
-  const mode = progressMode();
-  const progress = new ProgressReporter({
+  const progress = commandProgress({
     command: "convert",
     steps: Object.values(CONVERT_STEPS),
     source: input,
@@ -162,7 +148,6 @@ export async function build(): Promise<void> {
       ...(plannedResume === undefined ? [] : [["resume", plannedResume] as const]),
       ["profile", `region ${profile.region} · ${profile.outputProfile}`] as const,
     ],
-    ...(mode === undefined ? {} : { mode }),
   });
 
   progress.start(CONVERT_STEPS.structure);

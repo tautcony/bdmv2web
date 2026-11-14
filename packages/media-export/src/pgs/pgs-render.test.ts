@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PgsDisplaySet } from "./pgs.js";
-import { pgsDisplaySetEnd90k, pgsSeconds90k, renderPgsDisplaySet } from "./pgs-render.js";
+import { pgsDisplaySetEnd90k, pgsSeconds90k, renderPgsCanvas, renderPgsDisplaySet, renderPgsDisplaySetAsync } from "./pgs-render.js";
 
 describe("PGS display-set rendering", () => {
   it("uses the next display-set PTS as the end time and falls back to the track end", () => {
@@ -35,6 +35,27 @@ describe("PGS display-set rendering", () => {
     const painted = renderPgsDisplaySet(display(90_000, { x: 1, y: 1, alpha: 255 }), 2, 180_000);
     expect(painted.visible).toBe(true);
     expect(painted).toMatchObject({ displaySetNumber: 2, width: 3, height: 2 });
+  });
+
+  it("matches the synchronous encoder when the deflate step runs off-thread", async () => {
+    const painted = display(90_000, { x: 1, y: 1, alpha: 255 });
+    const sync = renderPgsDisplaySet(painted, 1, 180_000, 0, { level: 6 });
+    const offThread = await renderPgsDisplaySetAsync(painted, 1, 180_000, 0, { level: 6 });
+    expect(offThread).toMatchObject({ startSeconds: sync.startSeconds, endSeconds: sync.endSeconds, visible: true });
+    expect([...offThread.pngBytes]).toEqual([...sync.pngBytes]);
+
+    // An invisible canvas carries no PNG either way, so a clear set costs nothing.
+    const clear = await renderPgsDisplaySetAsync(display(90_000), 1, 180_000);
+    expect(clear).toMatchObject({ visible: false });
+    expect(clear.pngBytes).toHaveLength(0);
+  });
+
+  it("composites a canvas without encoding it", () => {
+    const canvas = renderPgsCanvas(display(90_000, { x: 1, y: 1, alpha: 255 }), 3, 180_000, 0);
+    expect(canvas).toMatchObject({ displaySetNumber: 3, width: 3, height: 2, visible: true });
+    expect(canvas.rgba).toHaveLength(3 * 2 * 4);
+    // The single opaque pixel lands at (1, 1) in the 3x2 canvas.
+    expect([...canvas.rgba.subarray((1 * 3 + 1) * 4, (1 * 3 + 1) * 4 + 4)]).toEqual([255, 255, 255, 255]);
   });
 });
 

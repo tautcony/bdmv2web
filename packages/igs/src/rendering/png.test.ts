@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { IgsPalette } from "../scene/types.js";
-import { assertPngLevel, DEFAULT_ASSET_PNG_LEVEL, DEFAULT_CANVAS_PNG_LEVEL, encodeIndexedPng, encodeRgbaPng, paletteRgbaTable } from "./png.js";
+import { assertPngLevel, DEFAULT_ASSET_PNG_LEVEL, DEFAULT_CANVAS_PNG_LEVEL, encodeIndexedPng, encodeRgbaPng, encodeRgbaPngAsync, paletteRgbaTable } from "./png.js";
 import { decodePng } from "../../tests/helpers/decode-png.js";
 
 const palette: IgsPalette = {
@@ -49,5 +49,16 @@ describe("PNG encoders", () => {
   it("refuses an indexed palette that is not a full 256-entry table", () => {
     expect(() => encodeIndexedPng(1, 1, Uint8Array.of(0), new Uint8Array(4))).toThrow(RangeError);
     expect(() => encodeIndexedPng(2, 2, Uint8Array.of(0), new Uint8Array(256 * 4))).toThrow(RangeError);
+  });
+
+  it("produces the same bytes off the threadpool as on the calling thread", async () => {
+    const rgba = new Uint8Array(48 * 32 * 4);
+    for (let index = 0; index < rgba.length; index += 4) { rgba[index] = index & 255; rgba[index + 3] = 255; }
+    for (const level of [undefined, 1, 6]) {
+      const sync = encodeRgbaPng(48, 32, rgba, { level });
+      const async = await encodeRgbaPngAsync(48, 32, rgba, { level });
+      expect([...async]).toEqual([...sync]);
+    }
+    await expect(encodeRgbaPngAsync(8, 8, new Uint8Array(4))).rejects.toThrow(RangeError);
   });
 });

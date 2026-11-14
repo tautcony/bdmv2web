@@ -1,4 +1,4 @@
-import { encodeRgbaPng } from "@bdmv2web/igs";
+import { encodeRgbaPng, encodeRgbaPngAsync } from "@bdmv2web/igs";
 import type { PngEncodeOptions } from "@bdmv2web/igs";
 import type { PgsDisplaySet } from "./pgs.js";
 
@@ -29,10 +29,30 @@ export interface RenderedPgsDisplaySet {
 }
 
 /**
- * A PTS above this threshold is the unsigned wrap of a negative delta
+ * A PCS canvas that has been composited but not encoded. Encoding a full-HD canvas
+ * costs an order of magnitude more than compositing it, so callers that write many
+ * display sets keep the two steps apart.
+ */
+export interface RenderedPgsCanvas {
+  /** 1-based position in the SUP stream. */
+  displaySetNumber: number;
+  startTime90k: number;
+  endTime90k: number | null;
+  startSeconds: number | null;
+  endSeconds: number | null;
+  width: number;
+  height: number;
+  /** False when every output pixel has zero alpha. */
+  visible: boolean;
+  /** Composited RGBA pixels, `width * height * 4` bytes. All zeros when invisible. */
+  rgba: Uint8Array;
+}
+
+/** A PTS above this threshold is the unsigned wrap of a negative delta
  * (`pts < origin`), not a real timestamp hours into the stream.
  */
 const PTS_WRAP_THRESHOLD = 0x8000_0000;
+const EMPTY_PNG = new Uint8Array();
 
 /** End of one display set is the next set's PTS, falling back to the track end. */
 export function pgsDisplaySetEnd90k(displaySets: readonly PgsDisplaySet[], index: number, trackEnd90k?: number): number | null {
@@ -50,8 +70,12 @@ export function pgsSeconds90k(time90k: number, origin90k = 0): number | null {
   return Math.round((delta / 90000) * 1000) / 1000;
 }
 
-/** Render a complete PCS canvas and report whether it contains any visible pixel. */
-export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0, options: PngEncodeOptions = {}): RenderedPgsDisplaySet {
+/**
+ * Composite the PCS canvas without encoding it. Encoding a full-HD canvas costs an
+ * order of magnitude more than compositing it, so callers that write many display
+ * sets keep the two steps apart. Nothing is allocated for an invisible set.
+ */
+export function renderPgsCanvas(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0): RenderedPgsCanvas {
   const rgba = new Uint8Array(display.width * display.height * 4);
   // Only sourceAlpha > 0 writes, and such a write always leaves a non-zero output
   // alpha, so the painted flag replaces a full-canvas visibility scan.
@@ -99,6 +123,32 @@ export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: nu
     width: display.width,
     height: display.height,
     visible,
-    pngBytes: visible ? encodeRgbaPng(display.width, display.height, rgba, options) : new Uint8Array(),
+    rgba,
+  };
+}
+
+/** Render a complete PCS canvas and report whether it contains any visible pixel. */
+export function renderPgsDisplaySet(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0, options: PngEncodeOptions = {}): RenderedPgsDisplaySet {
+  const canvas = renderPgsCanvas(display, displaySetNumber, endTime90k, origin90k);
+  return withPngBytes(canvas, canvas.visible ? encodeRgbaPng(canvas.width, canvas.height, canvas.rgba, options) : EMPTY_PNG);
+}
+
+/** `renderPgsDisplaySet` with the deflate step moved off the calling thread. */
+export async function renderPgsDisplaySetAsync(display: PgsDisplaySet, displaySetNumber: number, endTime90k: number | null, origin90k = 0, options: PngEncodeOptions = {}): Promise<RenderedPgsDisplaySet> {
+  const canvas = renderPgsCanvas(display, displaySetNumber, endTime90k, origin90k);
+  return withPngBytes(canvas, canvas.visible ? await encodeRgbaPngAsync(canvas.width, canvas.height, canvas.rgba, options) : EMPTY_PNG);
+}
+
+function withPngBytes(canvas: RenderedPgsCanvas, pngBytes: Uint8Array): RenderedPgsDisplaySet {
+  return {
+    displaySetNumber: canvas.displaySetNumber,
+    startTime90k: canvas.startTime90k,
+    endTime90k: canvas.endTime90k,
+    startSeconds: canvas.startSeconds,
+    endSeconds: canvas.endSeconds,
+    width: canvas.width,
+    height: canvas.height,
+    visible: canvas.visible,
+    pngBytes,
   };
 }

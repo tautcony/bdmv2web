@@ -1,4 +1,4 @@
-import { crc32, deflateSync } from "node:zlib";
+import { crc32, deflate, deflateSync } from "node:zlib";
 import type { IgsAsset, IgsDiagnostic, IgsObject, IgsPalette, IgsScene } from "../scene/types.js";
 
 const SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
@@ -130,11 +130,37 @@ export function validateIgsSceneAssets(scenes: readonly IgsScene[]): IgsDiagnost
 }
 
 export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array, options: PngEncodeOptions = {}): Uint8Array {
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new RangeError("RGBA dimensions do not match pixel data");
   const level = options.level === undefined ? DEFAULT_CANVAS_PNG_LEVEL : assertPngLevel(options.level);
+  return rgbaPng(width, height, deflateSync(rgbaScanlines(width, height, rgba), { level }));
+}
+
+/**
+ * Same bytes as `encodeRgbaPng`, compressed on the libuv threadpool instead of the
+ * calling thread. A full-HD canvas is ~8 MiB of scanlines, so deflate dominates the
+ * cost of rendering a subtitle display set; async encoding lets the caller keep
+ * rendering while the threadpool compresses, and running several in flight uses
+ * every threadpool thread.
+ */
+export async function encodeRgbaPngAsync(width: number, height: number, rgba: Uint8Array, options: PngEncodeOptions = {}): Promise<Uint8Array> {
+  const level = options.level === undefined ? DEFAULT_CANVAS_PNG_LEVEL : assertPngLevel(options.level);
+  const scanlines = rgbaScanlines(width, height, rgba);
+  return await new Promise<Uint8Array>((resolve, reject) => {
+    deflate(scanlines, { level }, (error, compressed) => {
+      if (error) reject(error);
+      else resolve(rgbaPng(width, height, compressed));
+    });
+  });
+}
+
+/** PNG scanlines: one filter-type byte (0 = None) followed by the row's RGBA bytes. */
+function rgbaScanlines(width: number, height: number, rgba: Uint8Array): Uint8Array {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new RangeError("RGBA dimensions do not match pixel data");
   const scanlines = new Uint8Array((width * 4 + 1) * height);
   for (let y = 0; y < height; y++) scanlines.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
-  const compressed = deflateSync(scanlines, { level });
+  return scanlines;
+}
+
+function rgbaPng(width: number, height: number, compressed: Uint8Array): Uint8Array {
   const ihdr = new Uint8Array(13); putU32(ihdr, 0, width); putU32(ihdr, 4, height); ihdr.set([8, 6, 0, 0, 0], 8);
   const png = new Uint8Array(8 + 12 + 13 + 12 + compressed.length + 12);
   png.set(SIGNATURE, 0);

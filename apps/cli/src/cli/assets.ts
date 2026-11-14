@@ -1,5 +1,5 @@
 import { reachablePgsReferences, trackIdentityBySourceIn } from "../shared/pgs.js";
-import { optionValue } from "./context.js";
+import { flagEnabled, optionValue } from "./context.js";
 import { fail } from "./errors.js";
 import { basename, extname } from "node:path";
 import { equalsIgnoreCase } from "@bdmv2web/utils";
@@ -50,16 +50,17 @@ export function pidOption(): number | undefined {
   return pid;
 }
 
-export function assetSelection(): { clipId?: string; pid?: number; decodePng: boolean } {
+export function assetSelection(): AssetSelection {
   const rawClip = optionValue("--m2ts");
   const clipValue = rawClip?.replace(/\.m2ts$/i, "");
   if (clipValue !== undefined && !/^\d{1,5}$/.test(clipValue)) fail("CLI_INVALID_M2TS", "--m2ts must be a clip ID such as 00001");
   const clipId = clipValue?.padStart(5, "0");
   const pid = pidOption();
-  const decode = optionValue("--decode");
-  if (decode !== undefined && decode !== "png") fail("CLI_INVALID_DECODE", "--decode supports only 'png'");
-  return { ...(clipId ? { clipId } : {}), ...(pid === undefined ? {} : { pid }), decodePng: decode === "png" };
+  return { ...(clipId ? { clipId } : {}), ...(pid === undefined ? {} : { pid }), renderPng: flagEnabled("--render") };
 }
+
+/** Clip/PID restriction plus whether the run also renders PNG frames. */
+export interface AssetSelection { clipId?: string; pid?: number; renderPng: boolean }
 
 export function selectedClip(clipId: string, selection: { clipId?: string }): boolean { return selection.clipId === undefined || equalsIgnoreCase(selection.clipId, clipId); }
 export function selectedPid(pid: number, selection: { pid?: number }): boolean { return selection.pid === undefined || selection.pid === pid; }
@@ -94,4 +95,26 @@ export function igsMnuPath(clipId: string, pid: number): string { return `assets
 export function supTrackPath(clipId: string, pid: number, _index: number, entrySuffix = ""): string { return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}${entrySuffix}.sup`; }
 export function supDisplaySetPath(clipId: string, pid: number, language: string, index: number, entrySuffix = ""): string {
   return `assets/subtitles/${clipId}-pid-${pid.toString(16).padStart(4, "0")}${entrySuffix}-${safeAssetLanguage(language)}-display-${String(index + 1).padStart(5, "0")}.png`;
+}
+
+/** One rendered IGS element, as both `export` and `render` receive it. */
+export interface IgsElementAsset {
+  relativePath: string;
+  pngBytes: Uint8Array;
+  width: number;
+  height: number;
+  objectId: number;
+  objectVersion: number;
+  paletteId: number;
+  paletteVersion: number;
+}
+
+/** Manifest record for an IGS element PNG; one shape for every command that writes them. */
+export function igsElementRecord(asset: IgsElementAsset): AssetRecord {
+  return {
+    type: "igs-png", path: asset.relativePath, byteLength: asset.pngBytes.byteLength,
+    width: asset.width, height: asset.height,
+    objectId: asset.objectId, objectVersion: asset.objectVersion,
+    paletteId: asset.paletteId, paletteVersion: asset.paletteVersion,
+  };
 }
