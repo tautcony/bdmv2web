@@ -43,7 +43,7 @@ npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
 | `dist/bench-build-mode.json` | Build-mode marker written by the bundle script |
 | `package.json`, `README.md` | Package metadata |
 
-`pnpm pack` rewrites the `workspace:*` entries of `devDependencies` to fixed versions. `dist/index.js` inlines every workspace package, and the published dependency graph lists no workspace entries.
+`pnpm pack` converts each `workspace:*` entry of `devDependencies` into the `version` of the corresponding workspace package. Those packages supply build-time source: `dist/index.js` bundles their code and the published CLI runs from that bundle. Their version numbers come from `packages/*/package.json` and stay independent of the `bdmv2web` release version, so a release changes only `apps/cli/package.json`. The published `devDependencies` field records the repository's build inputs. `dependencies.d3-force` supplies the UMD files that `visualize` inlines into the navigation viewer.
 
 ## Publish workflow
 

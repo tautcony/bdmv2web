@@ -35,15 +35,17 @@ bdmv2web validate ./BDMV-menu
 
 | Command | Purpose |
 | --- | --- |
-| `inspect <INPUT>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`) |
-| `list <INPUT>` | List exportable IGS and SUP assets (`--type`, `--m2ts CLIP_ID`, `--pid PID`) |
-| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally PNGs and metadata (`--type`, `--metadata-only`, `--m2ts`, `--pid`, `--render`) |
-| `render <INPUT>` | Render PNG from a BDMV, `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` (`--out DIR`, `--type`, `--language LANG`) |
-| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--no-reuse`, `--resume`, `--resume-dir DIR`) |
+| `inspect <INPUT>` | Show disc structure and diagnostics (`--format table\|json`, `--out FILE`, `--allow-partial`) |
+| `list <INPUT>` | List exportable IGS and SUP assets (`--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--out FILE`, `--format table\|json`) |
+| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally PNGs and metadata (`--type all\|metadata\|hdmv\|igs\|sup`, `--metadata-only`, `--m2ts CLIP_ID`, `--pid PID`, `--render`, `--png-level 0-9`, `--format table\|json`) |
+| `render <INPUT> --out DIR` | Render PNG from a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` (`--type all\|igs\|sup`, `--language LANG`, `--png-level 0-9`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json`) |
+| `build <BDMV>` | Build a menu package (`--out DIR`, `--title NAME`, `--player-profile FILE`, `--limits FILE`, `--disc-id HEX`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--no-reuse`, `--resume`, `--resume-dir DIR`) |
 | `validate <menu dir>` | Audit a menu package and update the audit report (`--format json`) |
-| `serve <package dir>` | Serve a generated package and run its BD-J Java session (`--port N`, `--java EXECUTABLE`, `--player system`) |
-| `visualize <BDMV>` | Export the navigation graph as an interactive viewer and mermaid diagrams (`--out DIR`, `--programs IDS`, `--max-blocks N`, `--no-closure`, `--overwrite`) |
-| `compare <INPUT>` | Compare a VM trace against an independent reference trace (`--actual FILE`, `--reference FILE`, `--out FILE`) |
+| `serve <package dir>` | Serve a generated package and run its BD-J Java session (`--port N`, `--java EXECUTABLE`, `--player system`, `--player-executable PATH`, `--disc-id HEX`) |
+| `visualize <BDMV>` | Export the navigation graph as an interactive viewer and mermaid diagrams (`--out DIR`, `--programs IDS`, `--max-blocks N`, `--no-closure`, `--overwrite`, `--format table\|json`) |
+| `compare <INPUT>` | Compare a VM trace against an independent reference trace (`--actual FILE` (required), `--reference FILE`, `--reference-tool NAME`, `--reference-version VERSION`, `--out FILE`, `--format json`) |
+
+`export` and `render` require `--out DIR`. `build --overwrite` reuses matching media assets; `build --no-reuse` generates all menu media for that build. `--resume` reuses media from the newest `.<output name>.staging-*` directory beside the output target, and `--resume-dir DIR` names that directory. `--codec` defaults to `hevc` with CRF 24; a `--video copy` clip that needs encoding falls back to `h264` with CRF 18.
 
 `export`, `render`, and `build` report progress on stderr; `--progress` forces step lines when stderr is piped, `--no-progress` keeps it silent.
 
