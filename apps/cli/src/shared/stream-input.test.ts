@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { classifyInput, discoverGraphicsStreams } from "./stream-input.js";
+import { classifyInput, discoverGraphicsStreams, discoverGraphicsStreamsFromPrefix } from "./stream-input.js";
 import { PGS_PID, syntheticNonStreamBytes, syntheticPgsStream } from "../../tests/helpers/synthetic-streams.js";
 
 describe("classifyInput", () => {
@@ -72,6 +72,30 @@ describe("discoverGraphicsStreams", () => {
       const garbage = join(parent, "garbage.rsks");
       await writeFile(garbage, syntheticNonStreamBytes());
       await expect(discoverGraphicsStreams(garbage)).rejects.toMatchObject({ code: "EXPORT_INVALID_STREAM", path: garbage });
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+});
+
+describe("discoverGraphicsStreamsFromPrefix", () => {
+  it("reads the head for PIDs and leaves whole-clip diagnostics to the scan", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "stream-prefix "));
+    try {
+      const stream = join(parent, "clip.rsks");
+      await writeFile(stream, syntheticPgsStream({ pmtEntries: [{ pid: PGS_PID, type: 0x90 }, { pid: 0, type: 0x81 }, { pid: 0x110, type: 0x91 }] }));
+      const discovery = await discoverGraphicsStreamsFromPrefix(stream);
+      expect(discovery.pgsPids).toEqual([PGS_PID]);
+      expect(discovery.igsPids).toEqual([0x110]);
+      expect(discovery.prefixOnly).toBe(true);
+      expect(discovery.diagnostics).toEqual([]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("falls back to a whole-file probe when the head carries no PMT", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "stream-prefix "));
+    try {
+      const garbage = join(parent, "garbage.rsks");
+      await writeFile(garbage, syntheticNonStreamBytes());
+      await expect(discoverGraphicsStreamsFromPrefix(garbage)).rejects.toMatchObject({ code: "EXPORT_INVALID_STREAM", path: garbage });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 });

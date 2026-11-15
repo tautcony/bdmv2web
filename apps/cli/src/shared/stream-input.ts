@@ -1,6 +1,6 @@
 import { ContractError, DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
 import { readFileChunks } from "@bdmv2web/bdmv-io";
-import { probeTransportStreams } from "@bdmv2web/igs";
+import { probeTransportStreamPrefix, probeTransportStreams } from "@bdmv2web/igs";
 import type { IgsDiagnostic } from "@bdmv2web/igs";
 import { safeAssetStem } from "../cli/assets.js";
 import { open, lstat } from "node:fs/promises";
@@ -77,13 +77,17 @@ export interface GraphicsStreams {
   readonly diagnostics: IgsDiagnostic[];
 }
 
-/** Probe one stream file for its declared PGS/IGS PIDs, ignoring reserved PIDs. */
-export async function discoverGraphicsStreams(path: string, limits: Limits = DEFAULT_LIMITS): Promise<GraphicsStreams> {
-  const stem = safeAssetStem(path);
-  const probe = await probeTransportStreams(stem, readFileChunks(path, limits, limits.maxReadWindowBytes), { limits });
-  if (!probe.hasProgramTables) {
-    throw new ContractError("EXPORT_INVALID_STREAM", path, "Input carries no PAT/PMT program tables and cannot be read as an m2ts transport stream.");
-  }
+/** Bytes a prefix discovery reads from the head of a stream. */
+const DISCOVERY_PREFIX_BYTES = 256 * 1024;
+const DISCOVERY_CHUNK_BYTES = 64 * 1024;
+
+export interface GraphicsStreamDiscovery extends GraphicsStreams {
+  /** True when only the first PMT was read; the caller's whole-clip scan then
+   * owns the transport and PSI diagnostics for this run. */
+  readonly prefixOnly: boolean;
+}
+
+function graphicsStreams(probe: { streamsByPid: Map<number, number>; diagnostics: IgsDiagnostic[] }): GraphicsStreams {
   const pgsPids: number[] = [];
   const igsPids: number[] = [];
   for (const [pid, streamType] of probe.streamsByPid) {
@@ -92,4 +96,44 @@ export async function discoverGraphicsStreams(path: string, limits: Limits = DEF
     else if (streamType === 0x91) igsPids.push(pid);
   }
   return { pgsPids, igsPids, diagnostics: probe.diagnostics };
+}
+
+/** Probe one stream file for its declared PGS/IGS PIDs, ignoring reserved PIDs. */
+export async function discoverGraphicsStreams(path: string, limits: Limits = DEFAULT_LIMITS): Promise<GraphicsStreams> {
+  const probe = await probeTransportStreams(safeAssetStem(path), readFileChunks(path, limits, limits.maxReadWindowBytes), { limits });
+  if (!probe.hasProgramTables) {
+    throw new ContractError("EXPORT_INVALID_STREAM", path, "Input carries no PAT/PMT program tables and cannot be read as an m2ts transport stream.");
+  }
+  return graphicsStreams(probe);
+}
+
+/**
+ * Read the head of the stream to obtain its PMT declarations. The caller's
+ * whole-clip scan supplies the transport and PSI diagnostics for the run, so
+ * the prefix reports none. A PMT outside the prefix is resolved by a whole-file
+ * probe, whose declarations and diagnostics come back with `prefixOnly: false`.
+ */
+export async function discoverGraphicsStreamsFromPrefix(path: string, limits: Limits = DEFAULT_LIMITS): Promise<GraphicsStreamDiscovery> {
+  const stem = safeAssetStem(path);
+  async function* prefix(): AsyncGenerator<Uint8Array> {
+    let read = 0;
+    for await (const chunk of readFileChunks(path, limits, DISCOVERY_CHUNK_BYTES)) {
+      yield chunk;
+      read += chunk.byteLength;
+      if (read >= DISCOVERY_PREFIX_BYTES) return;
+    }
+  }
+  const declared = await probeTransportStreamPrefix(stem, prefix(), { limits });
+  if (declared.hasProgramTables) return { ...graphicsStreams(declared), diagnostics: [], prefixOnly: true };
+  const probe = await probeTransportStreams(stem, readFileChunks(path, limits, limits.maxReadWindowBytes), { limits });
+  if (!probe.hasProgramTables) {
+    throw new ContractError("EXPORT_INVALID_STREAM", path, "Input carries no PAT/PMT program tables and cannot be read as an m2ts transport stream.");
+  }
+  return { ...graphicsStreams(probe), prefixOnly: false };
+}
+
+/** Whole-clip transport and PSI diagnostics for a run that has no scan of its own. */
+export async function streamProbeDiagnostics(path: string, limits: Limits = DEFAULT_LIMITS): Promise<IgsDiagnostic[]> {
+  const probe = await probeTransportStreams(safeAssetStem(path), readFileChunks(path, limits, limits.maxReadWindowBytes), { limits });
+  return probe.diagnostics;
 }

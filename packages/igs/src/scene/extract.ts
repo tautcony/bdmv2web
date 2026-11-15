@@ -86,8 +86,27 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
 }
 
 export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable<Uint8Array>, expectedPidCues: Array<{ pid: number; source: SourceLocation }> = [], options: IgsOptions = {}): Promise<IgsExtraction> {
+  const reader = new M2tsPacketReader(clipId, options.limits ?? DEFAULT_LIMITS);
+  async function* packetBatches(): AsyncGenerator<readonly TsPacket[]> {
+    let completed = false;
+    try {
+      for await (const chunk of chunks) yield reader.feed(chunk);
+      completed = true;
+    } finally {
+      // A clip abandoned on a PID conflict has no EOF to report.
+      if (completed) reader.end();
+    }
+  }
+  return extractIgsFromPacketBatches(clipId, packetBatches(), expectedPidCues, options, reader.diagnostics);
+}
+
+/**
+ * Extract IGS scenes from transport packets an outer scan already parsed. The
+ * reader's diagnostics belong to that scan and arrive here once, so several
+ * consumers of one scan never report the same damaged packet twice.
+ */
+export async function extractIgsFromPacketBatches(clipId: string, batches: AsyncIterable<readonly TsPacket[]>, expectedPidCues: Array<{ pid: number; source: SourceLocation }> = [], options: IgsOptions = {}, transportDiagnostics: readonly IgsDiagnostic[] = []): Promise<IgsExtraction> {
   const limits = options.limits ?? DEFAULT_LIMITS;
-  const reader = new M2tsPacketReader(clipId, limits);
   const psiDiagnostics: IgsDiagnostic[] = [];
   const psi = new PsiAssembler(psiDiagnostics, clipId);
   const pes = new PesAssembler(clipId, limits);
@@ -105,6 +124,9 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const measurePayloadBytes = options.measurePayloadBytes === true;
   const payloadBytes = new Map<number, number>();
   let stoppedOnPidConflict = false;
+  // The PMT/cue verdict only changes when the assembler's declarations change.
+  let checkedRevision = -1;
+  let conflictFree = false;
   const processPes = (unit: PesPacket): void => {
     const mnuHeader = new Uint8Array(10);
     mnuHeader.set([0x49, 0x47]);
@@ -142,18 +164,22 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     // the caller reports on has a size, not only the IGS PIDs this scan assembles.
     if (measurePayloadBytes && packet.payload.length) payloadBytes.set(packet.pid, (payloadBytes.get(packet.pid) ?? 0) + packet.payload.length);
     if (expectedPidCues.length && psi.hasCompleteProgramTables()) {
-      // Allocation-free form of "PMT IG PIDs must equal the structural cues":
-      // this runs on every packet, so it walks the map in place and allocates
-      // nothing per 192-byte packet of the clip.
-      let pmtIgPidCount = 0;
-      let conflicts = false;
-      for (const [pid, type] of psi.streamsByPid) {
-        if (type !== 0x91) continue;
-        pmtIgPidCount += 1;
-        if (!expectedPids.includes(pid)) { conflicts = true; break; }
+      // The verdict is a pure function of the declarations, so it is recomputed
+      // on a revision change and reused for every packet in between. The check
+      // itself walks the maps in place and allocates nothing.
+      if (checkedRevision !== psi.revision) {
+        checkedRevision = psi.revision;
+        let pmtIgPidCount = 0;
+        let conflicts = false;
+        for (const [pid, type] of psi.streamsByPid) {
+          if (type !== 0x91) continue;
+          pmtIgPidCount += 1;
+          if (!expectedPids.includes(pid)) { conflicts = true; break; }
+        }
+        if (!conflicts) for (const pid of expectedPids) if (psi.streamsByPid.get(pid) !== 0x91) { conflicts = true; break; }
+        conflictFree = pmtIgPidCount > 0 && !conflicts;
       }
-      if (!conflicts) for (const pid of expectedPids) if (psi.streamsByPid.get(pid) !== 0x91) { conflicts = true; break; }
-      if (!pmtIgPidCount || conflicts) {
+      if (!conflictFree) {
         stoppedOnPidConflict = true;
         return;
       }
@@ -174,15 +200,14 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     if (!candidatePids.has(packet.pid)) return;
     for (const unit of pes.push(packet)) processPes(unit);
   };
-  for await (const chunk of chunks) {
-    for (const packet of reader.feed(chunk)) {
+  for await (const batch of batches) {
+    for (const packet of batch) {
       processPacket(packet);
       if (stoppedOnPidConflict) break;
     }
     if (stoppedOnPidConflict) break;
   }
   if (!stoppedOnPidConflict) {
-    reader.end();
     // An unbounded PES (declared length 0) still pending at EOF is committed by
     // the assembler; its payload must reach the segment parser and the byte
     // accounting like any completed PES.
@@ -211,8 +236,12 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     state.scenes.length = 0;
   }
   if (!expectedPidCues.length && !streamPids.length) diagnostics.push({ severity: "warning", code: "IGS_PID_UNRESOLVED", message: "No IG PID could be established from MPLS/CLPI/PMT", source: null, affectedSceneIds: [], stage: "transport" });
-  diagnostics.push(...reader.diagnostics, ...pes.diagnostics, ...psiDiagnostics);
-  diagnostics.push(...state.diagnostics);
+  // A damaged clip reports tens of thousands of events: loops keep the merge
+  // independent of the argument-count ceiling of a spread call.
+  for (const diagnostic of transportDiagnostics) diagnostics.push(diagnostic);
+  for (const diagnostic of pes.diagnostics) diagnostics.push(diagnostic);
+  for (const diagnostic of psiDiagnostics) diagnostics.push(diagnostic);
+  for (const diagnostic of state.diagnostics) diagnostics.push(diagnostic);
   const scenes = state.scenes;
   const assets = [] as IgsExtraction["assets"];
   if (options.renderAssets !== false) {

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractPgsTrack, extractPgsTracks, extractPgsTracksFromChunks } from "./pgs-extract.js";
+import { M2tsPacketReader } from "@bdmv2web/igs";
+import type { TsPacket } from "@bdmv2web/igs";
+import { extractPgsTrack, extractPgsTracks, extractPgsTracksFromChunks, extractPgsTracksFromPacketBatches } from "./pgs-extract.js";
 
 const roots: string[] = [];
 async function temp(): Promise<string> {
@@ -67,6 +69,26 @@ describe("PGS transport extraction", () => {
 
     expect(fromChunks[0]).toMatchObject({ pid: 0x1200, byteLength: fromFile.byteLength, displaySets: [{ pts90k: 2_000 }] });
     expect(await readFile(fromChunksPath)).toEqual(await readFile(fromFilePath));
+  });
+
+  it("extracts the same SUP from packets an outer scan already parsed", async () => {
+    const root = await temp();
+    const sourcePath = join(root, "source.m2ts");
+    const fromBatchesPath = join(root, "batched.sup");
+    const fromFilePath = join(root, "file.sup");
+    const bytes = concat(m2tsPacket(0x1200, pesPacket(pgsDisplaySet(), 90_000n, 88_000n)));
+    await writeFile(sourcePath, bytes);
+
+    const reader = new M2tsPacketReader("pgs-extraction");
+    async function* batches(): AsyncGenerator<readonly TsPacket[]> {
+      for (let offset = 0; offset < bytes.byteLength; offset += 100) yield reader.feed(bytes.subarray(offset, offset + 100));
+      reader.end();
+    }
+    const fromBatches = await extractPgsTracksFromPacketBatches(sourcePath, batches(), [{ pid: 0x1200, outputPath: fromBatchesPath }], {}, reader.diagnostics);
+    const fromFile = await extractPgsTrack(sourcePath, 0x1200, fromFilePath);
+
+    expect(fromBatches[0]).toMatchObject({ pid: 0x1200, byteLength: fromFile.byteLength, displaySets: [{ pts90k: 2_000 }] });
+    expect(await readFile(fromBatchesPath)).toEqual(await readFile(fromFilePath));
   });
 
   it("extracts one PID to SUP with anchored timestamps and parsed display sets", async () => {

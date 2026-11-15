@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { M2tsPacketReader, PesAssembler } from "@bdmv2web/igs";
-import type { PesPacket } from "@bdmv2web/igs";
+import type { IgsDiagnostic, PesPacket, TsPacket } from "@bdmv2web/igs";
 import { parsePgsSup } from "./pgs.js";
 
 export interface ExtractedPgsTrack { pid: number; sourcePath: string; path: string; byteLength: number; displaySets: ReturnType<typeof parsePgsSup>; }
@@ -48,6 +48,26 @@ async function* fileChunks(path: string): AsyncGenerator<Uint8Array> {
  * the chunks out to both consumers.
  */
 export async function extractPgsTracksFromChunks(sourcePath: string, chunks: AsyncIterable<Uint8Array>, requests: readonly PgsTrackRequest[], options: ExtractPgsTracksOptions = {}): Promise<ExtractedPgsTrack[]> {
+  const reader = new M2tsPacketReader("pgs-extraction");
+  async function* packetBatches(): AsyncGenerator<readonly TsPacket[]> {
+    let completed = false;
+    try {
+      for await (const chunk of chunks) yield reader.feed(chunk);
+      completed = true;
+    } finally {
+      // A consumer that stops early has no EOF to report.
+      if (completed) reader.end();
+    }
+  }
+  return extractPgsTracksFromPacketBatches(sourcePath, packetBatches(), requests, options, reader.diagnostics);
+}
+
+/**
+ * Extract SUP tracks from packets an outer scan already parsed. The transport
+ * diagnostics of that reader are checked here so a shared scan keeps the same
+ * per-PID failure contract as a dedicated one.
+ */
+export async function extractPgsTracksFromPacketBatches(sourcePath: string, batches: AsyncIterable<readonly TsPacket[]>, requests: readonly PgsTrackRequest[], options: ExtractPgsTracksOptions = {}, transportDiagnostics: readonly IgsDiagnostic[] = []): Promise<ExtractedPgsTrack[]> {
   const maxBytes = options.maxBytes;
   if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)) throw new RangeError("maxBytes must be a positive safe integer.");
   const source = resolve(sourcePath);
@@ -71,7 +91,6 @@ export async function extractPgsTracksFromChunks(sourcePath: string, chunks: Asy
     statesByPid.set(state.pid, group);
   }
   const pids = new Set(statesByPid.keys());
-  const reader = new M2tsPacketReader("pgs-extraction");
   const assembler = new PesAssembler("pgs-extraction");
   const accept = async (pesPackets: PesPacket[]) => {
     for (const pes of pesPackets) {
@@ -85,12 +104,11 @@ export async function extractPgsTracksFromChunks(sourcePath: string, chunks: Asy
       state.file = await open(state.temporaryOutput, "wx");
       state.temporaryCreated = true;
     }
-    for await (const chunk of chunks) {
-      for (const packet of reader.feed(chunk)) if (pids.has(packet.pid)) await accept(assembler.push(packet));
+    for await (const batch of batches) {
+      for (const packet of batch) if (pids.has(packet.pid)) await accept(assembler.push(packet));
     }
-    reader.end();
     await accept(assembler.end());
-    const transportError = reader.diagnostics.find((item) => item.source !== null && "pid" in item.source && item.source.pid !== null && pids.has(item.source.pid) && item.severity === "error");
+    const transportError = transportDiagnostics.find((item) => item.source !== null && "pid" in item.source && item.source.pid !== null && pids.has(item.source.pid) && item.severity === "error");
     const pesError = assembler.diagnostics.find((item) => item.source !== null && "pid" in item.source && item.source.pid !== null && pids.has(item.source.pid) && item.severity === "error");
     if (transportError) throw new TypeError(`PGS PID ${transportError.source?.pid ?? "unknown"} transport stream is invalid: ${transportError.message}`);
     if (pesError) throw new TypeError(`PGS PID ${pesError.source?.pid ?? "unknown"} PES stream is invalid: ${pesError.message}`);

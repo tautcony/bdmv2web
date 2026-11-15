@@ -10,14 +10,14 @@ import { commandProgress, countOf } from "../progress.js";
 import type { ProgressReporter } from "../progress.js";
 import { extractReachablePgsTracks, pgsTrackPngPlan, reachablePgsReferences, trackProgress, writeDisplaySetPngs } from "./pgs.js";
 import { BDMV_STEPS, STREAM_STEPS } from "./steps.js";
-import { fanOutChunks } from "./chunk-fanout.js";
-import { classifyInput, discoverGraphicsStreams } from "./stream-input.js";
+import { fanOutPackets } from "./packet-fanout.js";
+import { classifyInput, discoverGraphicsStreamsFromPrefix, streamProbeDiagnostics } from "./stream-input.js";
 import type { StreamTarget } from "./stream-input.js";
 import { assertDisjointRoots, beginOutputTransaction, readFileChunks } from "@bdmv2web/bdmv-io";
 import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
-import { extractIgsFromChunks, extractIgsScenes, uniqueDiagnostics } from "@bdmv2web/igs";
+import { extractIgsFromPacketBatches, extractIgsScenes, uniqueDiagnostics } from "@bdmv2web/igs";
 import type { IgsDiagnostic } from "@bdmv2web/igs";
-import { extractPgsTracks, extractPgsTracksFromChunks, pgsDisplaySetEnd90k } from "@bdmv2web/media-export";
+import { extractPgsTracks, extractPgsTracksFromPacketBatches, pgsDisplaySetEnd90k } from "@bdmv2web/media-export";
 import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
 import { ContractError, DEFAULT_LIMITS } from "@bdmv2web/core";
 import { errorText } from "@bdmv2web/utils";
@@ -82,7 +82,10 @@ export async function exportBdmvAssets(input: string, out: string, type: OutputT
   // selection that skips IGS extraction entirely.
   progress.start(BDMV_STEPS.igs);
   const igs = needsIgs
-    ? await extractIgsScenes(disc, { renderAssets: selection.renderPng && outputs.png.igs, captureStreams: writesMnu, pngLevel: pngLevelOption(), table })
+    ? await extractIgsScenes(disc, {
+      renderAssets: selection.renderPng && outputs.png.igs, captureStreams: writesMnu, pngLevel: pngLevelOption(), table,
+      ...(selection.clipId === undefined ? {} : { clipFilter: (clipId: string) => selectedClip(clipId, selection) }),
+    })
     : { scenes: [], assets: [], streams: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
   progress.done(BDMV_STEPS.igs, `${countOf(igs.scenes.length, "scene", "scenes")} · ${countOf(igs.streams.length, "stream", "streams")} · ${countOf(igs.assets.length, "image", "images")}`);
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: [...disc.diagnostics, ...igs.diagnostics] });
@@ -182,7 +185,7 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
   if (selection.clipId !== undefined) fail(run.selectionCode, "--m2ts applies to BDMV input; a stream file is one clip");
   const progress = reporter(run, target.path, out, type, Object.values(STREAM_STEPS));
   progress.start(STREAM_STEPS.probe);
-  const streams = await discoverGraphicsStreams(target.path);
+  const streams = await discoverGraphicsStreamsFromPrefix(target.path);
   const pgsPids = streams.pgsPids.filter((pid) => selectedPid(pid, selection));
   const igsPids = streams.igsPids.filter((pid) => selectedPid(pid, selection));
   if (selection.pid !== undefined && pgsPids.length === 0 && igsPids.length === 0) {
@@ -190,58 +193,69 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
   }
   const declared = describeStreams(pgsPids, igsPids);
   progress.done(STREAM_STEPS.probe, declared);
-  const diagnostics: IgsDiagnostic[] = [...streams.diagnostics];
+  const diagnostics: IgsDiagnostic[] = [];
+  for (const diagnostic of streams.diagnostics) diagnostics.push(diagnostic);
   if (pgsPids.length === 0 && igsPids.length === 0) {
     diagnostics.push({ severity: "warning", code: "EXPORT_NO_GRAPHICS_STREAM", message: `${target.stem} declares no PGS (0x90) or IGS (0x91) stream in its program tables`, source: null, affectedSceneIds: [] });
   }
   progress.start(STREAM_STEPS.extract);
   // IGS scenes and stream bytes are computed before the output transaction opens,
-  // so a failed stage keeps the output target untouched. The probe-declared IGS
-  // PIDs become the structural cues: extractIgsFromChunks treats cue-less input
-  // with discovered streams as a PID conflict, and cue PIDs must cover the PMT.
-  // Scenes are needed for the `.mnu` container, for element PNGs, and for the
-  // metadata scene list.
+  // so a failed stage keeps the output target untouched. The PMT-declared IGS
+  // PIDs are the structural cues: cue PIDs must cover the PMT, and a cue-less
+  // scan with discovered streams is a PID conflict. Scenes feed the `.mnu`
+  // container, element PNGs and the metadata scene list.
   const needsIgs = (writesMnu || (selection.renderPng && outputs.png.igs) || outputs.metadata.igs) && igsPids.length > 0;
   const needsSup = (writesSup || wantsSupPng || outputs.metadata.sup) && pgsPids.length > 0;
-  // IGS and PGS need the same clip bytes and neither depends on the other's
-  // output, so when both run they share one read: the fan-out feeds two
-  // independent readers, each with its own PSI/PES state and diagnostics.
-  const sharedPass = needsIgs && needsSup;
-  const supStagingDirectory = sharedPass ? await mkdtemp(resolve(tmpdir(), "stream-sup-")) : null;
+  const needsScan = needsIgs || needsSup;
+  // SUP is written outside the output target until the stage verdict, so a
+  // failed extraction leaves an existing target untouched.
+  const supStagingDirectory = needsSup ? await mkdtemp(resolve(tmpdir(), "stream-sup-")) : null;
   let preparedSup: Awaited<ReturnType<typeof extractPgsTracks>> | null = null;
   let preparedSupError: unknown = null;
   let preparedSupFailed = false;
-  let extraction: Awaited<ReturnType<typeof extractIgsFromChunks>> | null = null;
-  if (needsIgs) {
-    const igsOptions = { captureStreams: writesMnu, renderAssets: selection.renderPng && outputs.png.igs, pngLevel: pngLevelOption() };
+  let extraction: Awaited<ReturnType<typeof extractIgsFromPacketBatches>> | null = null;
+  if (needsScan) {
+    // One reader parses the clip once. IGS and PGS keep their own PES and
+    // display-set state, and the scan keeps reading to EOF when one consumer
+    // stops on a PID conflict, so the tail still produces diagnostics.
+    const scan = fanOutPackets(readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes), target.stem, (needsIgs ? 1 : 0) + (needsSup ? 1 : 0), DEFAULT_LIMITS);
+    const igsBatches = needsIgs ? scan.batches[0] : null;
+    const supBatches = needsSup ? scan.batches[needsIgs ? 1 : 0] : null;
+    const supRequests = needsSup && supStagingDirectory
+      ? pgsPids.map((pid, index) => ({ pid, outputPath: resolve(supStagingDirectory, supTrackPath(target.stem, pid, index)) }))
+      : [];
     const cues = streams.igsPids.map((pid) => ({ pid, source: { path: basename(target.path), origin: "primary" as const, offset: "0" } }));
-    if (sharedPass && supStagingDirectory) {
-      const supRequests = pgsPids.map((pid, index) => ({ pid, outputPath: resolve(supStagingDirectory, supTrackPath(target.stem, pid, index)) }));
-      const [igsChunks, supChunks] = fanOutChunks(readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes), 2);
-      const [igsResult, supResult] = await Promise.allSettled([
-        extractIgsFromChunks(target.stem, igsChunks!, cues, igsOptions),
-        extractPgsTracksFromChunks(target.path, supChunks!, supRequests),
-      ]);
-      // A PGS failure is raised after the transaction opens, like the dedicated
-      // pass below, so an existing output target still fails first.
-      if (supResult.status === "rejected") { preparedSupFailed = true; preparedSupError = supResult.reason; }
-      else preparedSup = supResult.value;
-      if (igsResult.status === "rejected") {
-        await rm(supStagingDirectory, { recursive: true, force: true });
-        throw igsResult.reason;
-      }
-      extraction = igsResult.value;
-    } else {
-      extraction = await extractIgsFromChunks(target.stem, readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes), cues, igsOptions);
+    const igsOptions = { captureStreams: writesMnu, renderAssets: selection.renderPng && outputs.png.igs, pngLevel: pngLevelOption() };
+    const [igsResult, supResult] = await Promise.allSettled([
+      needsIgs ? extractIgsFromPacketBatches(target.stem, igsBatches!, cues, igsOptions) : Promise.resolve(null),
+      needsSup ? extractPgsTracksFromPacketBatches(target.path, supBatches!, supRequests, {}, scan.transportDiagnostics) : Promise.resolve(null),
+    ]);
+    // The producer owns the transport diagnostics. Both consumers can finish
+    // before it reaches EOF, so wait for the scan before reading its reports.
+    await scan.done;
+    // A PGS failure is raised after the transaction opens, so an existing
+    // output target still fails first.
+    if (supResult.status === "rejected") { preparedSupFailed = true; preparedSupError = supResult.reason; }
+    else preparedSup = supResult.value;
+    if (igsResult.status === "rejected") {
+      if (supStagingDirectory) await rm(supStagingDirectory, { recursive: true, force: true });
+      throw igsResult.reason;
     }
+    extraction = igsResult.value;
+    for (const diagnostic of scan.psiDiagnostics) diagnostics.push(diagnostic);
+    for (const diagnostic of scan.transportDiagnostics) diagnostics.push(diagnostic);
+  } else if (streams.prefixOnly) {
+    // With no graphics stream there is no scan to report transport damage, so
+    // the whole-file probe covers the trailing bytes in this one case.
+    for (const diagnostic of await streamProbeDiagnostics(target.path)) diagnostics.push(diagnostic);
   }
-  if (extraction) diagnostics.push(...extraction.diagnostics);
-  // The probe and the IGS extraction each read every packet of this stream, so
-  // the same transport damage arrives twice. One sighting per event, in
-  // first-reported order: the verdict reads severities, and `blockingDiagnostics`
-  // feeds a failure record where every packet appears once. Both reads stay in
-  // the merge — an extraction that stops on a PID conflict leaves the rest of the
-  // clip to the probe.
+  // A damaged clip reports tens of thousands of events; a loop keeps the merge
+  // independent of the argument-count ceiling of a spread call.
+  if (extraction) for (const diagnostic of extraction.diagnostics) diagnostics.push(diagnostic);
+  // The scan's PSI assembler and the IGS assembler can both attribute one
+  // damaged section to a PID. One sighting per event, in first-reported order:
+  // the verdict reads severities, and `blockingDiagnostics` feeds a failure
+  // record where every packet appears once.
   const outcome = decideStageOutcome({ stage: "extract", diagnostics: uniqueDiagnostics(diagnostics) });
   if (outcome.status === "failed") {
     if (supStagingDirectory) await rm(supStagingDirectory, { recursive: true, force: true });

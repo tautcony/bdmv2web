@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fanOutChunks } from "./chunk-fanout.js";
+import { fanOutChunks, fanOutWithDone } from "./chunk-fanout.js";
 
 async function* chunksOf(...sizes: number[]): AsyncGenerator<Uint8Array> {
   for (const size of sizes) yield new Uint8Array(size).fill(size);
@@ -38,7 +38,7 @@ describe("fanOutChunks", () => {
     expect(order.filter((entry) => entry.startsWith("b"))).toEqual(["b1", "b2", "b3"]);
   });
 
-  it("keeps the file read within one chunk of the slowest consumer", async () => {
+  it("keeps the file read within a bounded queue of the slowest consumer", async () => {
     let produced = 0;
     let consumed = 0;
     const source = (async function* () {
@@ -83,5 +83,29 @@ describe("fanOutChunks", () => {
 
   it("rejects a consumer count below one", () => {
     expect(() => fanOutChunks(chunksOf(1), 0)).toThrow(RangeError);
+  });
+});
+
+describe("fanOutWithDone", () => {
+  it("drains the source after every consumer leaves when readToEnd is set", async () => {
+    let produced = 0;
+    const source = (async function* () {
+      for (let index = 0; index < 4; index++) { produced++; yield new Uint8Array(1); }
+    })();
+    const { streams, done } = fanOutWithDone(source, 1, { readToEnd: true });
+    for await (const chunk of streams[0]!) { expect(chunk).toHaveLength(1); break; }
+    await done;
+    expect(produced).toBe(4);
+  });
+
+  it("stops the source when every consumer leaves by default", async () => {
+    let produced = 0;
+    const source = (async function* () {
+      for (let index = 0; index < 4; index++) { produced++; yield new Uint8Array(1); }
+    })();
+    const { streams, done } = fanOutWithDone(source, 1);
+    for await (const chunk of streams[0]!) { expect(chunk).toHaveLength(1); break; }
+    await done;
+    expect(produced).toBeLessThan(4);
   });
 });

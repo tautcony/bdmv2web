@@ -37,6 +37,28 @@ export async function probeTransportStreams(clipId: string, chunks: AsyncIterabl
   return { streamsByPid: declared ?? new Map<number, number>(), hasProgramTables: declared !== null, diagnostics: [...diagnostics, ...reader.diagnostics] };
 }
 
+/**
+ * Read until the first PMT section and report its declarations. A caller that
+ * scans the whole clip afterwards takes transport and PSI diagnostics from that
+ * scan, so this prefix returns an empty diagnostic list and never reports a
+ * truncated packet for a read it deliberately stopped.
+ */
+export async function probeTransportStreamPrefix(clipId: string, chunks: AsyncIterable<Uint8Array>, options: { limits?: Limits } = {}): Promise<TransportStreamProbe> {
+  const reader = new M2tsPacketReader(clipId, options.limits ?? DEFAULT_LIMITS);
+  const psi = new PsiAssembler([], clipId);
+  let declared: Map<number, number> | null = null;
+  for await (const chunk of chunks) {
+    for (const packet of reader.feed(chunk)) {
+      for (const section of psi.push(packet)) {
+        if (declared === null && section.tableId === 0x02) declared = declaredPmtStreams(section.bytes);
+      }
+      if (declared !== null) break;
+    }
+    if (declared !== null) break;
+  }
+  return { streamsByPid: declared ?? new Map<number, number>(), hasProgramTables: declared !== null, diagnostics: [] };
+}
+
 /** Stream entries of one PMT section, bounded by its declared length and CRC field. */
 function declaredPmtStreams(section: Uint8Array): Map<number, number> {
   const streams = new Map<number, number>();
