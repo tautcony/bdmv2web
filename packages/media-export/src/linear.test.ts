@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SourceLocation } from "@bdmv2web/bdmv-parser";
-import type { MediaPlan, MediaPlanRequirement } from "./media-plan.js";
+import type { SourceMediaPlan, MediaPlanRequirement } from "./media-plan.js";
 import { exportLinearMedia, type LinearProcessRunner } from "./linear.js";
 
 const playlistSource: SourceLocation = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "20" };
@@ -35,7 +35,7 @@ function requirement(playlistId: string, items: MediaPlanRequirement["playItems"
   return { playlistId, playlistSource, routes: [route(playlistId)], playItems: items, subPaths };
 }
 
-function mediaPlan(requirements: MediaPlanRequirement[], complete = true): MediaPlan {
+function mediaPlan(requirements: MediaPlanRequirement[], complete = true): SourceMediaPlan {
   return {
     schemaVersion: "1.0", status: "partial", reachability: { complete, explored: 4, unknown: [] },
     strategy: { grouping: "per-play-item", container: "mp4", video: "h264", audio: "aac", transcodingStarted: false },

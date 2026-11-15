@@ -94,8 +94,6 @@ export function serializeTime90k(value: bigint): Time90k {
 export function from45k(value: string): Time90k {
   return serializeTime90k(parseTime90k(value) * 2n);
 }
-export function serializeOffset(value: bigint): string { return serializeTime90k(value); }
-export function parseOffset(value: string): bigint { return parseTime90k(value); }
 
 export function assertWithinLimit(value: number | bigint, key: keyof Limits, limits: Limits = DEFAULT_LIMITS): void {
   const cap = limits[key];

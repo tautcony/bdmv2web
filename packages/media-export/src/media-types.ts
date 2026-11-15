@@ -48,7 +48,7 @@ export interface MediaAssetSource {
    * from `copy` to `encode`.
    */
   videoMode?: VideoExportMode;
-  /** The clip was taken from a previous package instead of being exported again. */
+  /** The clip reuses encoded media from an existing package. */
   reused?: boolean;
 }
 /** One encoded asset's progress, named by package path and by its source stream. */
@@ -84,7 +84,7 @@ export interface MenuLoopMediaOptions {
    * and the plan records the reason. Defaults to `encode`.
    */
   videoMode?: VideoExportMode;
-  /** Maximum bytes for one encoded media asset. Null disables the per-asset cap. */
+  /** Maximum bytes for one encoded media asset. `null` applies an unlimited budget. */
   maxAssetBytes?: number | null;
   estimatedVideoBitsPerSecond?: number;
   estimatedAudioBitsPerSecond?: number;

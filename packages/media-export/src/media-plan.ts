@@ -76,7 +76,7 @@ export interface MediaCapabilityReport {
   impacts: MediaCapabilityImpact[];
 }
 
-export interface MediaPlan {
+export interface SourceMediaPlan {
   schemaVersion: "1.0";
   status: "partial";
   reachability: { complete: boolean; explored: number; unknown: MediaClosure["unknown"] };
@@ -103,7 +103,7 @@ const AUDIO_CODING_TYPES = new Set([0x03, 0x04, 0x80, 0x81, 0x82, 0x83, 0x84, 0x
 const SUBTITLE_CODING_TYPES = new Set([0x90]);
 
 /** Build a source-traceable pre-transcode plan from M1 declarations and M5 closure. */
-export function createMediaPlan(disc: ParsedDisc, closure: MediaClosure, options: MediaPlanOptions = {}): MediaPlan {
+export function createMediaPlan(disc: ParsedDisc, closure: MediaClosure, options: MediaPlanOptions = {}): SourceMediaPlan {
   const videoRate = options.estimatedVideoBitsPerSecond ?? 8_000_000;
   const audioRate = options.estimatedAudioBitsPerSecond ?? 192_000;
   const overheadPercent = options.containerOverheadPercent ?? 5;
@@ -113,7 +113,7 @@ export function createMediaPlan(disc: ParsedDisc, closure: MediaClosure, options
   if (!Number.isSafeInteger(overheadPercent) || overheadPercent < 0 || overheadPercent > 100) throw new RangeError("containerOverheadPercent must be an integer from 0 through 100");
 
   const graphNodes = new Map(disc.graph.nodes.map((node) => [node.id, node]));
-  const diagnostics: MediaPlan["diagnostics"] = closure.unknown.map((item) => ({ ...item }));
+  const diagnostics: SourceMediaPlan["diagnostics"] = closure.unknown.map((item) => ({ ...item }));
   let durationTotal90k = 0n;
   let knownSubtotalBytes = 0n;
   let unknownEstimateCount = 0;
@@ -177,7 +177,7 @@ export function createMediaPlan(disc: ParsedDisc, closure: MediaClosure, options
     diagnostics,
   };
 
-  function planPlayItem(item: PlayItem, playlistId: string, sourceClosure: MediaClosure, videoBitsPerSecond: number, audioBitsPerSecond: number, overhead: number, outputDiagnostics: MediaPlan["diagnostics"]): MediaPlanRequirement["playItems"][number] {
+  function planPlayItem(item: PlayItem, playlistId: string, sourceClosure: MediaClosure, videoBitsPerSecond: number, audioBitsPerSecond: number, overhead: number, outputDiagnostics: SourceMediaPlan["diagnostics"]): MediaPlanRequirement["playItems"][number] {
     const clipNode = graphNodes.get(`clip:${item.clipId}`);
     const clipInfoNode = graphNodes.get(`clipInfo:${item.clipId}`);
     const streamFilePath = `BDMV/STREAM/${item.clipId}.m2ts`;

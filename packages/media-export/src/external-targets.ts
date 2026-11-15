@@ -35,6 +35,11 @@ export type ExternalPlayTarget =
   | { status: "available"; playlistId: string; item: ExternalPlayItem; clipTime90k: string; seekTime90k: string | null; remainingItems: ExternalPlayItem[] }
   | { status: "unavailable"; code: string; message: string; source?: SourceLocation };
 
+/** Diagnostic codes that mark an external target as unknown. */
+export const EXTERNAL_UNKNOWN_CODES = ["EXTERNAL_PLAYLIST_UNKNOWN", "EXTERNAL_MARK_UNKNOWN", "EXTERNAL_PLAYITEM_UNKNOWN"] as const;
+
+const [EXTERNAL_PLAYLIST_UNKNOWN, EXTERNAL_MARK_UNKNOWN, EXTERNAL_PLAYITEM_UNKNOWN] = EXTERNAL_UNKNOWN_CODES;
+
 export function isDeclaredExternalStreamPath(clipId: unknown, streamPath: unknown): boolean {
   return typeof clipId === "string" && /^[0-9]{5}$/.test(clipId)
     && typeof streamPath === "string" && streamPath === `STREAM/${clipId}.m2ts`;
@@ -78,12 +83,12 @@ export function resolveExternalPlayTarget(targets: ExternalMediaTargets, request
   if (!Number.isInteger(request.playlist) || request.playlist < 0 || request.playlist > 99999) return unavailable("EXTERNAL_PLAYLIST_INVALID", "Playlist number is invalid.");
   const playlistId = String(request.playlist).padStart(5, "0");
   const playlist = targets.playlists.find((item) => item.id === playlistId);
-  if (!playlist) return unavailable("EXTERNAL_PLAYLIST_UNKNOWN", `Playlist ${playlistId} is not mapped.`);
+  if (!playlist) return unavailable(EXTERNAL_PLAYLIST_UNKNOWN, `Playlist ${playlistId} is not mapped.`);
   const mark = request.type === "PLAY_PLAYLIST_MARK" ? playlist.marks.find((item) => item.index === request.playMark) : undefined;
-  if (request.type === "PLAY_PLAYLIST_MARK" && !mark) return unavailable("EXTERNAL_MARK_UNKNOWN", `Playlist ${playlistId} does not contain mark ${request.playMark}.`);
+  if (request.type === "PLAY_PLAYLIST_MARK" && !mark) return unavailable(EXTERNAL_MARK_UNKNOWN, `Playlist ${playlistId} does not contain mark ${request.playMark}.`);
   const itemIndex = request.type === "PLAY_PLAYLIST_ITEM" ? request.playItem : mark?.playItemIndex ?? 0;
   const position = playlist.items.findIndex((item) => item.index === itemIndex);
-  if (position < 0) return unavailable("EXTERNAL_PLAYITEM_UNKNOWN", `Playlist ${playlistId} does not contain PlayItem ${itemIndex}.`);
+  if (position < 0) return unavailable(EXTERNAL_PLAYITEM_UNKNOWN, `Playlist ${playlistId} does not contain PlayItem ${itemIndex}.`);
   const item = playlist.items[position]!;
   if (!isDeclaredExternalStreamPath(item.clipId, item.streamPath)) return unavailable("EXTERNAL_TARGET_UNDECLARED", `External target for Clip '${item.clipId}' must use STREAM/${item.clipId}.m2ts; received '${item.streamPath}'.`, item.source);
   const start = BigInt(mark?.sourceTime90k ?? item.sourceIn90k); const end = BigInt(item.sourceOut90k);

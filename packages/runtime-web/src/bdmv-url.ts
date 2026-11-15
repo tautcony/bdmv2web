@@ -1,5 +1,5 @@
 import { errorText } from "@bdmv2web/utils";
-import type { ExternalPlayTarget } from "@bdmv2web/media-export/external-targets";
+import { EXTERNAL_UNKNOWN_CODES, type ExternalPlayTarget } from "@bdmv2web/media-export/external-targets";
 
 /** Resolve one declared STREAM path against the BDMV path in the current package configuration. */
 export function fileUrlFromBdmvPath(bdmvPath: string, streamPath: string, pageUrl: string): string {
@@ -41,7 +41,7 @@ export function requestExternalPlayback(input: {
   navigate: (url: string) => void;
 }): ExternalPlaybackHandoffResult {
   if (input.target.status === "unavailable") {
-    const unknownCodes = new Set(["EXTERNAL_PLAYLIST_UNKNOWN", "EXTERNAL_MARK_UNKNOWN", "EXTERNAL_PLAYITEM_UNKNOWN"]);
+    const unknownCodes = new Set<string>(EXTERNAL_UNKNOWN_CODES);
     return {
       status: unknownCodes.has(input.target.code) ? "unknown" : "unavailable",
       code: input.target.code, message: input.target.message,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocateBoundedBytes, assertWithinLimit, BinaryCursor, checkedObjectPixels, ContractError, DEFAULT_LIMITS, DEFAULT_PLAYER_PROFILE, from45k, parseDiscIR, parseOffset, parseTime90k, serializeOffset, serializeTime90k, validateLimits } from "./index.js";
+import { allocateBoundedBytes, assertWithinLimit, BinaryCursor, checkedObjectPixels, ContractError, DEFAULT_LIMITS, DEFAULT_PLAYER_PROFILE, from45k, parseDiscIR, parseTime90k, serializeTime90k, validateLimits } from "./index.js";
 
 const source = { path: "index.bdmv", origin: "primary", byteOffset: "0" } as const;
 const structuralSourcePlaceholder = ["source", "structural"].join("/");
@@ -50,7 +50,6 @@ describe("exact time and byte offsets", () => {
     for (let i = 0; i < 5; i += 1) value = JSON.parse(JSON.stringify({ time90k: serializeTime90k(parseTime90k(value)) })).time90k;
     expect(value).toBe("9007199254740993");
     expect(from45k("4503599627370497")).toBe("9007199254740994");
-    expect(parseOffset(serializeOffset(9007199254740993n))).toBe(9007199254740993n);
   });
   it.each(["-1", "1.0", "1e3", "01", "", " 1"]) ("rejects invalid absolute time %s", (value) => {
     expect(() => parseTime90k(value)).toThrow();

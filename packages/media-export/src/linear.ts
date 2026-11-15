@@ -7,7 +7,7 @@ import { directoryBytesExcludingPaths, fileBytes } from "@bdmv2web/utils/node-fs
 import { hasEncoder, hasFilter } from "./tools/ffmpeg-capabilities.js";
 import { parseProbe, probeArgs, type ProbeResult as Probe, type ProbeStream } from "./tools/probe.js";
 import { runControlledProcess, runMonitoredProcess } from "./process/process-control.js";
-import type { MediaPlan as SourceMediaPlan, MediaPlanRequirement, PlannedTrack } from "./media-plan.js";
+import type { SourceMediaPlan, MediaPlanRequirement, PlannedTrack } from "./media-plan.js";
 import { assertEncodedColor, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type HdrMode, type OutputColor, type SourceColor, type VideoCodec, type VideoColorPlan } from "./color/color.js";
 
 export interface LinearProcessResult { stdout: string; stderr: string; }

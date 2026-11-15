@@ -7,6 +7,7 @@ import { parseProbe, probeArgs, type ProbeResult, type ProbeStream } from "./too
 import { runControlledProcess, runMonitoredProcess } from "./process/process-control.js";
 import { assertActualWithinLimit, assertEstimateWithinLimit, estimateMenuLoopBudget, validateBudgetRates, validateOptionalByteLimit, type MenuLoopBudgetEstimate, type MenuLoopBudgetRates } from "./budget.js";
 import { assertEncodedColor, normalizeColorTag, pixelFormatBitDepth, planVideoColor, readSourceColor, videoEncoderArgs, videoEncoderName, type HdrMode, type VideoCodec, type VideoColorPlan } from "./color/color.js";
+import { resolveEncodingDefaults } from "./encoding-defaults.js";
 
 export * from "./closure.js";
 export * from "./external-targets.js";
@@ -60,15 +61,11 @@ async function probeToolFacts(invoke: MediaProcessRunner, ffmpeg: string, ffprob
 export async function exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): Promise<MenuLoopMediaResult> {
   validateInput(input);
   if (!options.outputDirectory) throw new TypeError("outputDirectory is required");
-  const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000;
+  const { timeoutMs, codec, hdrMode, crf, preset } = resolveEncodingDefaults(options);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive safe integer");
-  const codec = options.codec ?? (options.videoMode === "copy" ? "h264" : "hevc");
   if (codec !== "h264" && codec !== "hevc") throw new RangeError(`codec must be 'h264' or 'hevc', received '${String(codec)}'`);
-  const hdrMode = options.hdrMode ?? "tonemap";
   if (hdrMode !== "tonemap" && hdrMode !== "preserve") throw new RangeError(`hdrMode must be 'tonemap' or 'preserve', received '${String(hdrMode)}'`);
-  const crf = options.crf ?? (codec === "hevc" ? 24 : 18);
   if (!Number.isInteger(crf) || crf < 0 || crf > 51) throw new RangeError("crf must be from 0 through 51");
-  const preset = options.preset ?? "veryfast";
   const ffmpeg = options.ffmpegPath ?? "ffmpeg";
   const ffprobe = options.ffprobePath ?? "ffprobe";
   const run = options.runProcess ?? runProcess;
