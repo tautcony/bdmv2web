@@ -12,6 +12,7 @@ const legacy = [
   ["pgs.synthetic-32-128x72.parse", "synthetic", "pgs", "PGS parse and bitmap decode", "synthetic-32-128x72", { source: "synthetic", displaySetCount: 32, width: 128, height: 72, canvasWidth: 1920, canvasHeight: 1080, displaySet: "largest", operation: "parse" }],
   ["pgs.synthetic-32-128x72.compose", "synthetic", "pgs", "PGS compose and PNG encode", "synthetic-32-128x72", { source: "synthetic", displaySetCount: 32, width: 128, height: 72, canvasWidth: 1920, canvasHeight: 1080, displaySet: "largest", operation: "compose" }],
   ["hdmv.vm-tamako.exec", "real", "vm", "HDMV VM execution over MovieObjects and menu buttons", "tamako-love-story-vm", { kind: "vmExec", bdmvDir: "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV", operation: "exec" }],
+  ["hdmv.vm-checkpoint.cycle", "synthetic", "vm", "HDMV VM checkpoint save and restore over a 60k-entry trace", "vm-checkpoint-trace", { kind: "vmCheckpoint", traceEntries: 60_000 }],
   ["hdmv.nav-graph-tamako.build", "real", "nav-graph", "HDMV navigation graph + media closure build", "tamako-love-story-nav", { kind: "navGraph", bdmvDir: "test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV", operation: "build", expected: { graphNodes: 6612, graphEdges: 7561, playlists: 26, routes: 474, unknown: 2124 } }],
 ].map(([caseId, suite, category, name, sample, options]) => ({
   caseId, suite, category, name, sample,

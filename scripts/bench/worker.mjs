@@ -11,6 +11,8 @@ import { toPortablePath } from "./fixture-input.mjs";
 import { normalizeMaxRssBytes, observeGc } from "./memory.mjs";
 
 const moduleCache = new Map();
+/** A 12-byte HDMV NOP: the cheapest well-formed instruction, used to grow a trace. */
+const NO_OP_COMMAND = "000000000000000000000000";
 async function dist(root, key, path) {
   const file = join(root, path);
   const cacheKey = `${file}::${key}`;
@@ -117,6 +119,32 @@ export async function prepareCase(caseDef, root) {
     return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), sourceBytes: bytes.length, fullLength }, fixture: caseDef.fixture };
   }
   if (caseDef.category === "vm") {
+    if (o.kind === "vmCheckpoint") {
+      const hdmv = await dist(root, "hdmv", "packages/hdmv/dist/index.js");
+      // The measured operation is the checkpoint, so the program runs once while
+      // the case is prepared and every sample snapshots the resulting history.
+      const instructions = Array.from({ length: o.traceEntries }, () => NO_OP_COMMAND);
+      const vm = new hdmv.HdmvVm([{ id: 0, instructions }], { maxInstructionsPerTurn: o.traceEntries });
+      vm.runTurn();
+      const recorded = vm.trace.length;
+      if (recorded < o.traceEntries) throw new Error(`VM recorded ${recorded} trace entries; expected at least ${o.traceEntries}`);
+      const run = () => {
+        const checkpoint = vm.saveCheckpoint();
+        vm.restoreCheckpoint(checkpoint);
+        return { trace: vm.trace.length, checkpointTrace: checkpoint.trace.length };
+      };
+      const describeValue = (result) => describe(result, { traceEntries: result.trace, checkpointTrace: result.checkpointTrace }, { value: result.trace, unit: "trace entries" });
+      return {
+        run,
+        validate: (result) => {
+          const description = describeValue(result);
+          if (result.trace !== recorded || result.checkpointTrace !== recorded) throw new Error(`${caseDef.caseId}: checkpoint restored ${result.trace} trace entries from ${result.checkpointTrace}; expected ${recorded}`);
+          usefulOutput(description, caseDef.caseId);
+        },
+        describe: describeValue, scope: caseDef.scope,
+        input: { traceEntries: recorded, prepared: true }, fixture: caseDef.fixture,
+      };
+    }
     const [parser, hdmv, igsExtract] = await Promise.all([
       dist(root, "parser", "packages/bdmv-parser/dist/index.js"),
       dist(root, "hdmv", "packages/hdmv/dist/index.js"),
