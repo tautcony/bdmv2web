@@ -21,6 +21,13 @@ describe("diagnostic identity", () => {
   it("keeps the same wording at a different packet offset a distinct event", () => {
     expect(diagnosticKey(transportDiagnostic({ packetOffset: "4096" }))).not.toBe(diagnosticKey(transportDiagnostic({ packetOffset: "6144" })));
   });
+
+  it("keeps fields containing separators and prefix-like text unambiguous", () => {
+    const withPrefixText = transportDiagnostic({ message: '1:a2:bc|"\\null' });
+    const withSplitFields = transportDiagnostic({ message: "a" });
+    expect(diagnosticKey(withPrefixText)).not.toBe(diagnosticKey(withSplitFields));
+    expect(uniqueDiagnostics([withPrefixText, withSplitFields])).toHaveLength(2);
+  });
 });
 
 describe("uniqueDiagnostics", () => {
@@ -43,6 +50,14 @@ describe("uniqueDiagnostics", () => {
     expect(merged[0]!.affectedSceneIds).toEqual(["scene-a", "scene-b"]);
     expect(seen.affectedSceneIds).toEqual(["scene-a"]);
     expect(other.affectedSceneIds).toEqual(["scene-b"]);
+  });
+
+  it("keeps the first object when a duplicate carries no scene reference", () => {
+    const first = transportDiagnostic({ sceneIds: ["scene-a"] });
+    const merged = uniqueDiagnostics([first, transportDiagnostic()]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toBe(first);
+    expect(merged[0]!.affectedSceneIds).toEqual(["scene-a"]);
   });
 
   it("returns the input diagnostics unchanged when nothing repeats", () => {

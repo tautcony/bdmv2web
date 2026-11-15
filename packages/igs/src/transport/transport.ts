@@ -143,6 +143,10 @@ export class PsiAssembler {
   readonly streamsByPid = new Map<number, number>();
   readonly streamSourcesByPid = new Map<number, ReturnType<typeof source>>();
   private readonly parsedProgramMapPids = new Set<number>();
+  private revisionValue = 0;
+  /** Increments whenever program or stream declarations change. Consumers that
+   * validate the declarations once per packet can cache the result. */
+  get revision(): number { return this.revisionValue; }
   constructor(readonly diagnostics: IgsDiagnostic[], private readonly clipId: string) {}
 
   push(packet: TsPacket): PsiSection[] {
@@ -153,6 +157,7 @@ export class PsiAssembler {
         this.streamsByPid.clear();
         this.streamSourcesByPid.clear();
         this.parsedProgramMapPids.clear();
+        this.revisionValue++;
         const reason = packet.discontinuity ? "discontinuity" : packet.transportError ? "transport error" : "continuity error";
         this.diagnostics.push({ severity: "error", code: "PSI_INVALIDATED", message: `PID ${packet.pid} ${reason} discarded the pending PSI section`, source: source(this.clipId, packet.pid, packet.packetOffset), affectedSceneIds: [] });
       }
@@ -225,6 +230,7 @@ export class PsiAssembler {
       }
       this.parsedProgramMapPids.add(pid);
     }
+    this.revisionValue++;
   }
 }
 
