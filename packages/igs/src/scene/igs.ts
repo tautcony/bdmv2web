@@ -326,7 +326,7 @@ function validateButtonReferences(scene: IgsScene, diagnostics: IgsDiagnostic[])
     });
   };
   for (const page of scene.pages) {
-    const buttonIds = new Set(page.buttons.map((button) => button.id));
+    const buttonIds = new Set<number>(); for (const button of page.buttons) buttonIds.add(button.id);
     // default_selected_button_id_ref has only one sentinel: 0xffff means dynamic
     // selection. For default_activated_button_id_ref, 0xfffe means activate the
     // currently selected button at timeout and 0xffff means no auto-activation.
@@ -342,9 +342,11 @@ function validateButtonReferences(scene: IgsScene, diagnostics: IgsDiagnostic[])
       if (bog.defaultButtonId !== 0xffff && (!members.has(bog.defaultButtonId) || !buttonIds.has(bog.defaultButtonId))) report(page.id, bog.defaultButtonId, `bog-${bogIndex}-default`);
     }
     for (const button of page.buttons) {
-      for (const [direction, neighborId] of Object.entries(button.neighbors)) {
-        if (neighborId !== 0xffff && !buttonIds.has(neighborId)) report(page.id, neighborId, `neighbor-${direction}`, button.id);
-      }
+      const { up, down, left, right } = button.neighbors;
+      if (up !== 0xffff && !buttonIds.has(up)) report(page.id, up, "neighbor-up", button.id);
+      if (down !== 0xffff && !buttonIds.has(down)) report(page.id, down, "neighbor-down", button.id);
+      if (left !== 0xffff && !buttonIds.has(left)) report(page.id, left, "neighbor-left", button.id);
+      if (right !== 0xffff && !buttonIds.has(right)) report(page.id, right, "neighbor-right", button.id);
     }
   }
   return invalid;

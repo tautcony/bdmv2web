@@ -2,6 +2,8 @@ import type { PlayerProfile as CorePlayerProfile } from "@bdmv2web/core";
 
 export const GPR_COUNT = 4096;
 export const PSR_COUNT = 128;
+/** Shared by every trace entry whose instruction wrote no register. */
+const NO_REGISTER_DELTA: { gpr: Record<number, number>; psr: Record<number, number> } = { gpr: {}, psr: {} };
 const READ_ONLY_PSRS = new Set([
   13, // parental level
   ...Array.from({ length: 7 }, (_, i) => 15 + i), // player settings/capabilities
@@ -84,21 +86,22 @@ export class RegisterFile {
   /**
    * Registers changed since the mark: the same per-instruction delta the
    * before/after snapshot comparison produces, computed from the writes the
-   * register file recorded instead of two full state copies.
+   * register file recorded instead of two full state copies. Most instructions
+   * write no register; that case returns one shared empty delta.
    */
   deltaSinceMark(mark: number): { gpr: Record<number, number>; psr: Record<number, number> } {
-    const gpr: Record<number, number> = {}, psr: Record<number, number> = {};
-    const first = new Map<string, { kind: "gpr" | "psr"; index: number; before: number }>();
+    if (mark >= this.dirty.length) return NO_REGISTER_DELTA;
+    const firstGpr = new Map<number, number>(), firstPsr = new Map<number, number>();
     for (let i = mark; i < this.dirty.length; i++) {
       const entry = this.dirty[i]!;
-      const key = entry.kind + ":" + entry.index;
-      if (!first.has(key)) first.set(key, entry);
+      const first = entry.kind === "gpr" ? firstGpr : firstPsr;
+      if (!first.has(entry.index)) first.set(entry.index, entry.before);
     }
-    for (const entry of first.values()) {
-      const current = entry.kind === "gpr" ? (this.gpr[entry.index] ?? 0) : (this.psr[entry.index] ?? 0);
-      if (current !== entry.before) (entry.kind === "gpr" ? gpr : psr)[entry.index] = current;
-    }
-    return { gpr, psr };
+    const gpr: Record<number, number> = {}, psr: Record<number, number> = {};
+    let changed = 0;
+    for (const [index, before] of firstGpr) { const current = this.gpr[index] ?? 0; if (current !== before) { gpr[index] = current; changed++; } }
+    for (const [index, before] of firstPsr) { const current = this.psr[index] ?? 0; if (current !== before) { psr[index] = current; changed++; } }
+    return changed === 0 ? NO_REGISTER_DELTA : { gpr, psr };
   }
   private writeSlot(slot: Uint32Array, index: number, value: number): void {
     this.validateIndex(slot, index);

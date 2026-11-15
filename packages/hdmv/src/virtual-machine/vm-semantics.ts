@@ -12,7 +12,19 @@ const PSR_TIME_TICKS_PER_SECOND = 45_000;
 export const RANDOM_MULTIPLIER = 6_364_136_223_846_793_005n;
 export const RANDOM_MASK = 0xffff_ffff_ffff_ffffn;
 
-export function textInstruction(d: DecodedInstruction): string { return `${d.opcode ?? "UNKNOWN"} ${d.operands.filter((x) => x !== null).map((x) => x.kind === "immediate" ? `#${x.value}` : `${x.kind}[${x.value}]`).join(",")}`.trim(); }
+export function textInstruction(d: DecodedInstruction): string {
+  // Building the text with one append per operand avoids the filtered and
+  // mapped arrays the trace path used to allocate for every instruction.
+  let text = d.opcode ?? "UNKNOWN";
+  let first = true;
+  for (const operand of d.operands) {
+    if (!operand) continue;
+    text += first ? " " : ",";
+    text += operand.kind === "immediate" ? `#${operand.value}` : `${operand.kind}[${operand.value}]`;
+    first = false;
+  }
+  return text;
+}
 
 export function playbackTicks(event: VmEvent): number | null {
   const presentationTime = event.payload?.presentationTime;

@@ -110,10 +110,17 @@ test("report CLI reads run directories and writes portable HTML and Markdown out
     const mdResult = spawnSync(process.execPath, [script, join(root, "runs"), "--format", "markdown", "--out", markdownPath], { encoding: "utf8" });
     assert.equal(htmlResult.status, 0, htmlResult.stderr);
     assert.equal(mdResult.status, 0, mdResult.stderr);
+    assert.match(htmlResult.stdout, /Wrote html report: .*trend\.html/);
+    assert.match(htmlResult.stdout, /Source records: 1 benchmark runs, 0 profile records, 0 recorded failures, 1 recorded skips\./);
+    assert.match(htmlResult.stdout, /Recorded failures and skips belong to those source runs/);
+    assert.match(mdResult.stdout, /Wrote markdown report: .*trend\.md/);
     const htmlOutput = await readFile(htmlPath, "utf8"), markdownOutput = await readFile(markdownPath, "utf8");
     assert.match(htmlOutput, /viewBox="0 0/);
     assert.match(htmlOutput, /1234567/);
+    assert.match(htmlOutput, /Recorded run failures and skips/);
+    assert.match(htmlOutput, /do not describe this report's rendering/);
     assert.match(markdownOutput, /synthetic\.parse/);
+    assert.match(markdownOutput, /## Recorded run failures and skips/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -18,9 +18,13 @@ export function concatByteChunks(chunks: readonly Uint8Array[], length = chunks.
   return result;
 }
 
+const HEX_PAIRS = Array.from({ length: 256 }, (_, value) => value.toString(16).padStart(2, "0"));
+
 export function bytesToHex(bytes: Uint8Array): string {
+  // A fixed table supplies both hex characters per byte, so each byte costs one
+  // string append.
   let result = "";
-  for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
+  for (let index = 0; index < bytes.length; index++) result += HEX_PAIRS[bytes[index]!]!;
   return result;
 }
 

@@ -138,13 +138,19 @@ function unstableMark(run) {
   if (!run.unstable) return "";
   return run.gcEvents > 0 ? " ! gc" : " !";
 }
+function statusCounts(statuses) {
+  let failed = 0, skipped = 0;
+  for (const item of statuses) { if (item.status === "failed") failed++; else skipped++; }
+  return { failed, skipped };
+}
 function markdown(trend, baseDir = process.cwd()) {
   const lines = ["# Benchmark trends", "", `Runs: ${trend.runCount}; environment series: ${trend.environmentSeriesCount}.`, "", "| Case | Fixture | Environment series | Run | Fork count | Calls/sample | Median of fork medians (ms) | p95 (ms) | p99 (ms) | Ops/s | Worst fork CV % | Outliers % | Drift % | Profiles |", "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |"];
   for (const series of trend.series) for (const run of series.runs) {
     lines.push(`| ${series.caseId} | ${series.fixture?.id ?? "—"} | ${series.environmentSeries} | ${run.runId} | ${run.forkCount} | ${run.callsPerSample} | ${formatCell(run.forkMedianMs, 5)} | ${formatCell(run.p95Ms, 5)} | ${formatCell(run.p99Ms, 5)} | ${formatCell(run.opsPerSecond, 4)} | ${formatCell(run.worstCvPercent, 3)} | ${formatCell(run.outlierPercent, 3)} | ${formatDrift(run.driftPercent)}${unstableMark(run)} | ${profileLinks(run.profiles, baseDir)} |`);
   }
   if (trend.statuses.length) {
-    lines.push("", "## Skipped and failed cases", "", "| Run | Case | Status | Reason |", "| --- | --- | --- | --- |");
+    const counts = statusCounts(trend.statuses);
+    lines.push("", "## Recorded run failures and skips", "", `${counts.failed} failed and ${counts.skipped} skipped case records come from the source runs; they do not describe this report's rendering.`, "", "| Run | Case | Status | Reason |", "| --- | --- | --- | --- |");
     for (const item of trend.statuses) lines.push(`| ${item.runId} | ${item.caseId} | ${item.status} | ${String(item.reason).replaceAll("|", "\\|").replaceAll("\n", " ")} |`);
   }
   lines.push("", "Each plotted value is the median of independent process fork medians. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values. Drift is the change between the first and last fifth of a fork's samples as a share of its median; a row marked `!` drifted by 25% or more, and `! gc` adds that the fork recorded GC events during measurement.");
@@ -187,10 +193,20 @@ function html(trend, baseDir = process.cwd()) {
   const height = Math.max(180, trend.series.length * 136 + 20);
   const runRows = trend.series.flatMap((series) => series.runs.map((run) => runRow(series, run, baseDir))).join("");
   const captureRows = trend.profileRuns.map((capture) => captureRow(capture, baseDir)).join("");
-  const statusRows = trend.statuses.map((item) => `<li>${escapeXml(item.runId)} · ${escapeXml(item.caseId)}: ${escapeXml(item.status)} ${escapeXml(String(item.reason).slice(0, 220))}${String(item.reason).length > 220 ? "…" : ""}</li>`).join("");
+  const statusCount = statusCounts(trend.statuses);
+  const statusRows = trend.statuses.map((item) => {
+    const href = item.file ? relative(baseDir, item.file).split(sep).join("/") : null;
+    const run = href ? `<a href="${escapeXml(href)}">${escapeXml(item.runId)}</a>` : escapeXml(item.runId);
+    const reasonText = String(item.reason).replaceAll("\n", " ");
+    const reason = escapeXml(reasonText.slice(0, 220)) + (reasonText.length > 220 ? "…" : "");
+    return `<tr><td>${run}</td><td>${escapeXml(item.caseId)}</td><td>${escapeXml(item.status)}</td><td>${reason}</td></tr>`;
+  }).join("");
+  const statusSection = trend.statuses.length
+    ? `<h2>Recorded run failures and skips</h2><p>${statusCount.failed} failed and ${statusCount.skipped} skipped case records come from the source runs; they do not describe this report's rendering.</p><table><thead><tr><th>Run</th><th>Case</th><th>Status</th><th>Reason</th></tr></thead><tbody>${statusRows}</tbody></table>`
+    : `<h2>Recorded run failures and skips</h2><p>None of the source records report a failed or skipped case.</p>`;
   const style = "body{font:14px system-ui;margin:2rem;color:#17202a}svg{width:100%;height:auto;border:1px solid #ccd1d1}text{font:12px system-ui}table{border-collapse:collapse;width:100%;table-layout:fixed}td,th{border-bottom:1px solid #ddd;padding:.4rem;text-align:left;vertical-align:top;overflow-wrap:anywhere}small{color:#667}details{margin:1rem 0}";
   const summary = `${trend.runCount} benchmark runs · ${trend.profileRunCount} profile records · ${trend.environmentSeriesCount} environment series. Each row is one case and environment; points show median fork time and min–max fork medians in milliseconds. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values. Drift compares the first and last fifth of a fork's samples against its median; rows marked ! drifted by 25% or more; ! gc adds that GC events occurred during measurement.`;
-  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Benchmark trends</title><style>${style}</style><h1>Benchmark trends</h1><p>${summary}</p><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Benchmark fork median trends">${plotRows}</svg><h2>Run records</h2><table><thead><tr><th>Case</th><th>Fixture</th><th>Source</th><th>Scope</th><th>Output status</th><th>Environment</th><th>Node/V8</th><th>Node options</th><th>Build mode</th><th>Run</th><th>Forks</th><th>Calls/sample</th><th>Median of fork medians (ms)</th><th>Fork median range (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Ops/s</th><th>Worst fork CV %</th><th>Outliers %</th><th>Drift %</th><th>CPU profiles</th></tr></thead><tbody>${runRows}</tbody></table><h2>Profile and browser captures</h2><p>Capture artifacts are listed with their recorded environment and build mode.</p><table><thead><tr><th>Case</th><th>Mode</th><th>Fixture</th><th>Build mode</th><th>Environment</th><th>Run</th><th>Artifact</th></tr></thead><tbody>${captureRows}</tbody></table><h2>Run status</h2><ul>${statusRows}</ul><script type="application/json" id="trend-data">${data}</script>`;
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Benchmark trends</title><style>${style}</style><h1>Benchmark trends</h1><p>${summary}</p><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Benchmark fork median trends">${plotRows}</svg><h2>Run records</h2><table><thead><tr><th>Case</th><th>Fixture</th><th>Source</th><th>Scope</th><th>Output status</th><th>Environment</th><th>Node/V8</th><th>Node options</th><th>Build mode</th><th>Run</th><th>Forks</th><th>Calls/sample</th><th>Median of fork medians (ms)</th><th>Fork median range (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Ops/s</th><th>Worst fork CV %</th><th>Outliers %</th><th>Drift %</th><th>CPU profiles</th></tr></thead><tbody>${runRows}</tbody></table><h2>Profile and browser captures</h2><p>Capture artifacts are listed with their recorded environment and build mode.</p><table><thead><tr><th>Case</th><th>Mode</th><th>Fixture</th><th>Build mode</th><th>Environment</th><th>Run</th><th>Artifact</th></tr></thead><tbody>${captureRows}</tbody></table>${statusSection}<script type="application/json" id="trend-data">${data}</script>`;
 }
 
 export { buildTrend, findRuns, html, loadRuns, markdown, parseArgs };
@@ -205,8 +221,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const output = options.format === "json" ? `${JSON.stringify(trend, null, 2)}\n` : options.format === "html" ? `${html(trend, baseDir)}\n` : markdown(trend, baseDir);
     // Rendered reports are derived from the records, so regenerating one in place
     // is the normal flow; the records themselves are never rewritten.
-    if (outputPath) { await mkdir(dirname(outputPath), { recursive: true }); await writeFile(outputPath, output); }
-    else process.stdout.write(output);
+    if (outputPath) {
+      await mkdir(dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, output);
+      const counts = statusCounts(trend.statuses);
+      const lines = [`Wrote ${options.format} report: ${outputPath}`, `Source records: ${trend.runCount} benchmark runs, ${trend.profileRunCount} profile records, ${counts.failed} recorded failures, ${counts.skipped} recorded skips.`];
+      if (trend.statuses.length) lines.push("Recorded failures and skips belong to those source runs; they do not describe this export.");
+      process.stdout.write(`${lines.join("\n")}\n`);
+    } else process.stdout.write(output);
   } catch (error) {
     exitWithError(error, 2);
   }

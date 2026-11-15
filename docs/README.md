@@ -45,4 +45,5 @@
 - [2026-11-06 HDMV VM 一致性审计](archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md)：对照 libbluray/libhdmv 的逐指令核对、运行模型差异与修复顺序。
 - [2026-11-07 过度防御与辩解式内容审计](archive/reviews/review-2026-11-07-over-defensive-audit/index.md)：源码死防御、吞错与文档辩解残留的逐条清单。
 - [2026-11-11 全仓代码注释审计](archive/reviews/review-2026-11-11-comment-audit/index.md)：476 条可删判定，已落地 2 条死内容与 29 项结构改动。
+- [2026-11-15 GC 压力审查](archive/reviews/review-2026-11-15-gc-pressure/index.md)：全量基准的 GC 事件、堆采样归因与 5 项确认改善。
 - [归档清单](archive/README.md)：以上记录的范围与状态一览。

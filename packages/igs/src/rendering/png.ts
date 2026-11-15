@@ -1,5 +1,5 @@
 import { crc32, deflate, deflateSync } from "node:zlib";
-import type { IgsAsset, IgsDiagnostic, IgsObject, IgsPalette, IgsScene } from "../scene/types.js";
+import type { IgsAsset, IgsDiagnostic, IgsObject, IgsPage, IgsPalette, IgsScene } from "../scene/types.js";
 
 const SIGNATURE = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10);
 const TYPE_IHDR = Uint8Array.of(73, 72, 68, 82);
@@ -41,6 +41,26 @@ export function paletteRgbaTable(palette: IgsPalette): Uint8Array {
   return bytes;
 }
 
+/**
+ * Every object/palette pair a page can render, keyed by `objectId * 65536 +
+ * paletteId` with the object id as the value. The renderer and the validator
+ * both iterate this set; a numeric key holds one map entry per pair.
+ */
+function collectPageObjectPalettes(page: IgsPage, scene: IgsScene): Map<number, number> {
+  const pairs = new Map<number, number>();
+  const add = (objectId: number, paletteId: number): void => { if (objectId !== 0xffff) pairs.set(objectId * 0x1_0000 + paletteId, objectId); };
+  const addState = (state: { startObjectId: number; endObjectId: number }): void => {
+    if (state.startObjectId !== 0xffff && state.endObjectId !== 0xffff && state.endObjectId >= state.startObjectId) {
+      for (const object of scene.objects) if (object.id >= state.startObjectId && object.id <= state.endObjectId) add(object.id, page.paletteId);
+      add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId);
+    } else { add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId); }
+  };
+  for (const button of page.buttons) { addState(button.visuals.normal); addState(button.visuals.selected); addState(button.visuals.activated); }
+  for (const effect of page.effects.enter.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
+  for (const effect of page.effects.exit.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
+  return pairs;
+}
+
 export function renderSceneAssets(scene: IgsScene, options: PngEncodeOptions = {}): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] } {
   const assets: IgsAsset[] = []; const diagnostics: IgsDiagnostic[] = [];
   const palettesByLastDefinition = new Map<number, IgsPalette>(); for (const item of scene.palettes) palettesByLastDefinition.set(item.id, item);
@@ -48,18 +68,8 @@ export function renderSceneAssets(scene: IgsScene, options: PngEncodeOptions = {
   const paletteTables = new Map<IgsPalette, Uint8Array>();
   const level = options.level === undefined ? DEFAULT_ASSET_PNG_LEVEL : assertPngLevel(options.level);
   for (const page of scene.pages) {
-    const objectPalettes = new Map<string, { objectId: number; paletteId: number }>();
-    const add = (objectId: number, paletteId: number) => { if (objectId !== 0xffff) objectPalettes.set(`${objectId}:${paletteId}`, { objectId, paletteId }); };
-    for (const button of page.buttons) {
-      for (const state of [button.visuals.normal, button.visuals.selected, button.visuals.activated]) {
-        if (state.startObjectId !== 0xffff && state.endObjectId !== 0xffff && state.endObjectId >= state.startObjectId) {
-          for (const object of scene.objects) if (object.id >= state.startObjectId && object.id <= state.endObjectId) add(object.id, page.paletteId);
-          add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId);
-        } else { add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId); }
-      }
-    }
-    for (const sequence of [page.effects.enter, page.effects.exit]) for (const effect of sequence.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
-    for (const { objectId, paletteId } of objectPalettes.values()) {
+    for (const [pair, objectId] of collectPageObjectPalettes(page, scene)) {
+      const paletteId = pair & 0xffff;
       const palette = palettesByLastDefinition.get(paletteId);
       if (!palette) {
         scene.complete = false;
@@ -104,16 +114,8 @@ export function validateIgsSceneAssets(scenes: readonly IgsScene[]): IgsDiagnost
     const paletteIds = new Set<number>(); for (const item of scene.palettes) paletteIds.add(item.id);
     const objectIds = new Set<number>(); for (const item of scene.objects) objectIds.add(item.id);
     for (const page of scene.pages) {
-      const objectPalettes = new Map<string, { objectId: number; paletteId: number }>();
-      const add = (objectId: number, paletteId: number) => { if (objectId !== 0xffff) objectPalettes.set(`${objectId}:${paletteId}`, { objectId, paletteId }); };
-      for (const button of page.buttons) for (const state of [button.visuals.normal, button.visuals.selected, button.visuals.activated]) {
-        if (state.startObjectId !== 0xffff && state.endObjectId !== 0xffff && state.endObjectId >= state.startObjectId) {
-          for (const object of scene.objects) if (object.id >= state.startObjectId && object.id <= state.endObjectId) add(object.id, page.paletteId);
-          add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId);
-        } else { add(state.startObjectId, page.paletteId); add(state.endObjectId, page.paletteId); }
-      }
-      for (const sequence of [page.effects.enter, page.effects.exit]) for (const effect of sequence.effects) for (const item of effect.objects) add(item.objectId, effect.paletteId);
-      for (const { objectId, paletteId } of objectPalettes.values()) {
+      for (const [pair, objectId] of collectPageObjectPalettes(page, scene)) {
+        const paletteId = pair & 0xffff;
         if (!paletteIds.has(paletteId)) {
           scene.complete = false;
           diagnostics.push({ severity: "error", code: "UNRESOLVED_PALETTE", message: `Page ${page.id} references palette ${paletteId} with no available definition`, source: scene.source, affectedSceneIds: [scene.id] });

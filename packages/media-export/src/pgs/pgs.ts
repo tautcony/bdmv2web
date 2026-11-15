@@ -76,7 +76,6 @@ function parseLimits(options: PgsParseOptions): { maxDimension: number; maxObjec
 
 function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxObjectBytes: number }, retainBitmaps: boolean): Generator<PgsDisplaySet> {
   const { maxDimension, maxObjectBytes } = limits;
-  const segments = readSegments(data);
   const palettes = new Map<number, Map<number, PgsRgba>>();
   const paletteBytes = new Map<number, Uint8Array>();
   const objects = new Map<number, ObjectData>();
@@ -91,7 +90,7 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
   let scratch: Uint8Array = new Uint8Array(0);
   let composition: Composition | undefined;
 
-  for (const segment of segments) {
+  for (const segment of readSegments(data)) {
     const p = segment.payload;
     switch (segment.type) {
       case SEGMENT.PDS: {
@@ -194,23 +193,24 @@ export class PgsSubtitleTimeline {
   }
 }
 
-function readSegments(data: Uint8Array): Segment[] {
-  const segments: Segment[] = [];
+/** Yields segments in stream order, so a parse never retains the full segment list. */
+function* readSegments(data: Uint8Array): Generator<Segment> {
   let offset = 0;
   let previousRawPts: number | undefined;
-  let epoch = 0n;
+  // A 32-bit PTS wrap adds one 2^32 epoch; a number avoids one BigInt allocation
+  // per segment, and the accumulated value stays far below 2^53.
+  let epoch = 0;
   while (offset < data.length) {
     if (offset + 13 > data.length || data[offset] !== 0x50 || data[offset + 1] !== 0x47) throw new TypeError(`Invalid or truncated PGS SUP segment at byte ${offset}.`);
     const rawPts = u32(data, offset + 2);
-    if (previousRawPts !== undefined && previousRawPts - rawPts > 0x80000000) epoch += 0x1_0000_0000n;
+    if (previousRawPts !== undefined && previousRawPts - rawPts > 0x80000000) epoch += 0x1_0000_0000;
     previousRawPts = rawPts;
-    const pts = Number(epoch + BigInt(rawPts)); const type = data[offset + 10]!; const length = u16(data, offset + 11);
+    const pts = epoch + rawPts; const type = data[offset + 10]!; const length = u16(data, offset + 11);
     const start = offset + 13; const end = start + length;
     if (end > data.length) throw new TypeError(`Truncated PGS segment payload at byte ${offset}.`);
-    segments.push({ pts, type, payload: data.subarray(start, end) });
+    yield { pts, type, payload: data.subarray(start, end) };
     offset = end;
   }
-  return segments;
 }
 
 function parseComposition(segment: Segment, maxDimension: number): Composition {

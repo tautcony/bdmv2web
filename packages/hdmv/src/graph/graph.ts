@@ -10,11 +10,14 @@ const UNKNOWN_SOURCE: SourceLocation = { path: "<unknown-command>", origin: "pri
 
 const COMPARE_OPCODES: ReadonlySet<OpcodeName> = new Set(["BC", "EQ", "NE", "GE", "GT", "LE", "LT"]);
 const JUMP_OPCODES: ReadonlySet<OpcodeName> = new Set(["JUMP_OBJECT", "CALL_OBJECT", "JUMP_TITLE", "CALL_TITLE", "PLAY_PL"]);
+const PLAY_OPCODES: ReadonlySet<OpcodeName> = new Set(["PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"]);
+const LINK_OPCODES: ReadonlySet<OpcodeName> = new Set(["LINK_PI", "LINK_MK", "TERMINATE_PL"]);
+const TERMINATING_FLOW_OPCODES: ReadonlySet<OpcodeName> = new Set(["GOTO", "BREAK", "JUMP_OBJECT", "CALL_OBJECT", "CALL_TITLE", "RESUME", "PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"]);
 
 function terminatesFlow(opcode: OpcodeName | null | undefined, context: "object" | "playlist"): boolean {
   if (opcode === "JUMP_TITLE") return true;
-  if (["LINK_PI", "LINK_MK", "TERMINATE_PL"].includes(opcode ?? "")) return context === "playlist";
-  return ["GOTO", "BREAK", "JUMP_OBJECT", "CALL_OBJECT", "CALL_TITLE", "RESUME", "PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"].includes(opcode ?? "");
+  if (opcode && LINK_OPCODES.has(opcode)) return context === "playlist";
+  return opcode !== null && opcode !== undefined && TERMINATING_FLOW_OPCODES.has(opcode);
 }
 
 /**
@@ -86,7 +89,7 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
         const known = target !== null && byId.has(target);
         edges.push({ from: id, to: known ? `object:${target}` : null, kind: d.opcode === "CALL_OBJECT" ? "call" : "jump", condition: null, source, resolution: known ? "resolved" : "unresolved" });
         if (!known) diagnostics.push(`dynamic-or-missing-target:${p.id}:${index}`);
-      } else if (["PLAY_PL", "PLAY_PL_PI", "PLAY_PL_PM"].includes(d?.opcode ?? "")) {
+      } else if (d?.opcode && PLAY_OPCODES.has(d.opcode)) {
         const operand = d?.operands[0];
         const immediate = operand?.kind === "immediate" && operand.value <= 99999 ? operand.value : null;
         const propagated = d?.opcode === "PLAY_PL" && operand?.kind === "gpr" ? constantAt(d.opcode, index) : null;
@@ -104,11 +107,11 @@ export function buildNavigationGraph(objects: Array<MovieObject | VmProgram>, ap
         edges.push({ from: id, to: target === null ? null : `object:${target}`, kind: d.opcode === "CALL_TITLE" ? "call" : "jump", condition: null, source, resolution: target === null ? "unresolved" : "resolved" });
         if (d.opcode === "JUMP_TITLE" && target !== null) edges.push({ from: id, to: `object:${target}`, kind: "sequence", condition: null, source, resolution: "resolved", origin: "jump-title" });
         if (d.opcode === "CALL_TITLE" && index + 1 < program.instructions.length) edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "sequence", condition: "after title resumes", source, resolution: "resolved" });
-      } else if (["LINK_PI", "LINK_MK"].includes(d?.opcode ?? "")) {
+      } else if (d?.opcode && LINK_OPCODES.has(d.opcode) && d.opcode !== "TERMINATE_PL") {
         edges.push({ from: id, to: null, kind: "play", condition: null, source, resolution: "unresolved" });
       } else if (d?.opcode === "RESUME") {
         edges.push({ from: id, to: null, kind: "resume", condition: "depends on dynamic call/resume context", source, resolution: "unresolved" });
-      } else if (["EQ", "NE", "GE", "GT", "LE", "LT", "BC"].includes(d?.opcode ?? "")) {
+      } else if (d?.opcode && COMPARE_OPCODES.has(d.opcode)) {
         edges.push({ from: id, to: `command:${p.id}:${index + 1}`, kind: "conditional", condition: `${d?.opcode} predicate true; next command`, source, resolution: "unresolved" });
         edges.push({ from: id, to: `command:${p.id}:${index + 2}`, kind: "conditional", condition: `${d?.opcode} predicate false; skip next command`, source, resolution: "unresolved" });
       }

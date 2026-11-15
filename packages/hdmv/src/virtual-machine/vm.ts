@@ -40,6 +40,14 @@ export class HdmvVm {
   private randomSeed: number; private randomState: bigint;
   private readonly entries: VmOptions["entries"];
   private readonly onTrace: VmOptions["onTrace"];
+  // Programs and button command arrays are immutable values, so each instruction
+  // decodes once per VM. Identical string commands share one entry; object
+  // commands are keyed by identity and stay collectable with the program.
+  // Decoded text is keyed by the decoded instruction, so repeated commands share
+  // one string in the trace.
+  private readonly decodedStrings = new Map<string, DecodedInstruction>();
+  private readonly decodedObjects = new WeakMap<object, DecodedInstruction>();
+  private readonly decodedText = new WeakMap<DecodedInstruction, string>();
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
   // Consecutive trace entries usually see the same playback context and call
   // stack. The snapshots are immutable, so one snapshot serves every entry that
@@ -179,7 +187,7 @@ export class HdmvVm {
     const savedPlaylistContinuation = this.hasPlaylistContinuation() ? this.continuation : null;
     const before = this.registers.mark(); const from = { programId: this.programId, pc: this.pc };
     let d: DecodedInstruction;
-    try { d = decodeInstruction(command, source); }
+    try { d = this.decodeCommand(command, source); }
     catch (error) {
       this.failButtonProgram("HDMV_INVALID_INSTRUCTION", errorText(error), source ?? null);
       return { ...this.snapshot(), buttonCommandTerminated: false };
@@ -203,7 +211,7 @@ export class HdmvVm {
       // GOTO and compare operate on a button command sequence, not on the
       // MovieObject PC. executeButtonProgram() owns that sequence-local PC.
       this.noteIgnoredInstruction("HDMV_BUTTON_COMMAND_REQUIRES_PROGRAM", `${d.opcode} requires a button command sequence; use executeButtonProgram()`, d.source);
-      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
+      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: this.instructionText(d), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
       this.instructionDiagnostic = null;
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
@@ -212,7 +220,7 @@ export class HdmvVm {
       // BREAK ends the current button command object; it must not change the
       // MovieObject PC or make the shared VM terminal.
       buttonCommandTerminated = true;
-      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), registerDelta: EMPTY_DELTA, status: this.status });
+      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: this.instructionText(d), registerDelta: EMPTY_DELTA, status: this.status });
       return { ...this.snapshot(), buttonCommandTerminated };
     }
     if (this.status === "idle") this.status = "running";
@@ -221,7 +229,7 @@ export class HdmvVm {
       this.failButtonProgram(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", errorText(error), d.source, d, before, from);
       return { ...this.snapshot(), buttonCommandTerminated: false };
     }
-    this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
+    this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: this.instructionText(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
     this.lastAction = undefined; this.instructionDiagnostic = null;
     if (this.resumeAfterPlaylistStop && this.status === "running") {
       this.resumeAfterPlaylistStop = false;
@@ -256,7 +264,7 @@ export class HdmvVm {
         break;
       }
       let d: DecodedInstruction;
-      try { d = decodeInstruction(commands[pc]!); }
+      try { d = this.decodeCommand(commands[pc]!); }
       catch (error) {
         this.failButtonProgram("HDMV_INVALID_INSTRUCTION", errorText(error), null, undefined, undefined, { programId: ownerProgramId, pc });
         break;
@@ -286,7 +294,7 @@ export class HdmvVm {
         this.failButtonProgram(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", errorText(error), d.source, d, before, { programId: ownerProgramId, pc: instructionPc });
         break;
       }
-      this.record({ programId: ownerProgramId, pc: instructionPc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
+      this.record({ programId: ownerProgramId, pc: instructionPc, source: d.source, raw: d.bytes, decoded: this.instructionText(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) });
       this.lastAction = undefined; this.instructionDiagnostic = null;
       if (terminated || this.status !== "running" || this.programId !== ownerProgramId || this.pc !== ownerPc) break;
     }
@@ -316,10 +324,10 @@ export class HdmvVm {
           this.record({ source: null, raw: null, decoded: "PROGRAM_END", registerDelta: EMPTY_DELTA, status: this.status });
           break;
         }
-        this.fail("HDMV_INVALID_PC", `PC ${this.pc} is outside object ${this.programId}`, program.instructions.at(-1) ? decodeInstruction(program.instructions.at(-1)!).source : null); break;
+        this.fail("HDMV_INVALID_PC", `PC ${this.pc} is outside object ${this.programId}`, program.instructions.at(-1) ? this.decodeCommand(program.instructions.at(-1)!).source : null); break;
       }
       let d: DecodedInstruction;
-      try { d = decodeInstruction(row); } catch (error) { this.fail("HDMV_INVALID_INSTRUCTION", String(error), null); break; }
+      try { d = this.decodeCommand(row); } catch (error) { this.fail("HDMV_INVALID_INSTRUCTION", String(error), null); break; }
       this.instructionsThisTurn++;
       const before = this.registers.mark(); const from = { programId: this.programId, pc: this.pc }; this.pc++;
       this.instructionDiagnostic = null;
@@ -329,7 +337,7 @@ export class HdmvVm {
       } catch (error) {
         this.fail(error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", errorText(error), d.source, d, before, from); break;
       }
-      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: textInstruction(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) }); this.lastAction = undefined; this.instructionDiagnostic = null;
+      this.record({ programId: from.programId, pc: from.pc, source: d.source, raw: d.bytes, decoded: this.instructionText(d), ...(this.lastAction ? { action: this.lastAction } : {}), registerDelta: this.registers.deltaSinceMark(before), status: this.status, ...(this.instructionDiagnostic ? { diagnostic: this.instructionDiagnostic } : {}) }); this.lastAction = undefined; this.instructionDiagnostic = null;
     }
     return this.snapshot();
   }
@@ -985,19 +993,41 @@ export class HdmvVm {
     this.logs.actions.push(action); this.actionQueue.push(action); this.lastAction = action; return action;
   }
   private removeAction(id: string): void { const index = this.actionQueue.findIndex((action) => action.id === id); if (index >= 0) this.actionQueue.splice(index, 1); }
-  private currentSource(): SourceLocation | null { const row = this.programs.get(this.programId)?.instructions[this.pc]; if (!row) return null; try { return decodeInstruction(row).source; } catch { return null; } }
+  /** Decode a program or button command once per VM; an explicit source override bypasses the cache. */
+  private decodeCommand(input: ButtonCommand, source?: SourceLocation): DecodedInstruction {
+    if (source !== undefined) return decodeInstruction(input, source);
+    if (typeof input === "string") {
+      const cached = this.decodedStrings.get(input);
+      if (cached) return cached;
+      const decoded = decodeInstruction(input);
+      this.decodedStrings.set(input, decoded);
+      return decoded;
+    }
+    if (input instanceof Uint8Array) return decodeInstruction(input);
+    const cached = this.decodedObjects.get(input);
+    if (cached) return cached;
+    const decoded = decodeInstruction(input);
+    this.decodedObjects.set(input, decoded);
+    return decoded;
+  }
+  private instructionText(d: DecodedInstruction): string {
+    let text = this.decodedText.get(d);
+    if (text === undefined) { text = textInstruction(d); this.decodedText.set(d, text); }
+    return text;
+  }
+  private currentSource(): SourceLocation | null { const row = this.programs.get(this.programId)?.instructions[this.pc]; if (!row) return null; try { return this.decodeCommand(row).source; } catch { return null; } }
   private fail(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: number, location?: { programId: number; pc: number }): void {
     if (this.continuation) this.removeAction(this.continuation.action.id);
     this.continuation = null; this.pendingTitleCall = null; this.titleTransition = false; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.playback.pendingActionId = null;
     const issue = { code, message, source }; this.diagnostic = issue; this.logs.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
-    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
+    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? this.instructionText(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   /** Record a fault raised while executing a button (interactive composition) program. libbluray _vm_run() clears only the faulting object (p->object = NULL); the MovieObject waiting for playlist end (playing_object) and any suspended call object stay untouched, so the pending playlist end can still resume the MovieObject. */
   private failButtonProgram(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: number, location?: { programId: number; pc: number }): void {
     const issue = { code, message, source };
     this.diagnostic = issue; this.logs.diagnostics.push(issue);
     this.status = this.continuation ? "suspended" : "faulted";
-    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
+    this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? this.instructionText(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits" | "registers"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
     const playback = samePlayback(this.playback, this.lastTracePlayback) ? this.lastTracePlayback! : { ...this.playback };

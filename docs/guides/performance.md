@@ -55,6 +55,23 @@ corepack pnpm bench --mode browser --case browser.synthetic-menu.file-navigation
 
 CPU captures use Node source maps. Memory records hold heap, external memory, observed RSS, process-lifetime maximum RSS, GC events, and their observation scope. The browser mode records one navigation per run: elapsed time, the interaction sequence, canvas size, page and console errors, browser version, and the CDP CPU profile and trace. Timing budgets and fork counts apply to benchmark mode.
 
+### Read GC pressure
+
+Each fork records every garbage-collection event observed during its warmup and measured interval. The event count stays on the fork as `gc.eventCount`; the four columns (`kind`, `flags`, `durationMs`, `startTimeMs`) are interleaved in `gc.f64` and referenced by `gc.series`. A fork with events is the usual cause of a slow tail, and reports mark it `! gc`.
+
+A fixed measurement window is not a fixed amount of work. Once an operation gets faster, the same 500 ms window performs more calls and allocates more, so the window's GC total can grow while GC per call falls. Compare GC per call (`gc duration / iterations`, with `callsPerSample` accounted for) or use `--mode memory`, which records the same events for a fixed duration but keeps the iteration count.
+
+Attribute allocations with a heap sampling profile, or with Node's own GC trace when the work runs in a spawned process:
+
+```sh
+corepack pnpm bench --mode heap --case hdmv.vm-trace.growth --duration-ms 3000 --out test-data/bench/profiles
+node --trace-gc apps/cli/dist/index.js export <disc> --out <new-directory>
+```
+
+The heap sampling interval is 32 KiB. A `--mode cpu` or `--mode heap` capture of a CLI case covers only the parent process; run the CLI entry point directly when the attribution must reach inside the child. `node --trace-gc` prints each collection with its pause, which shows whether the measured window is dominated by young-generation scavenges or by a mark-compact pause.
+
+On 2026-11-15 the largest JavaScript-heap allocators were HDMV command hex decoding and per-entry trace text, media-closure route projection, and IGS page object/palette enumeration. The measurements and the changes are recorded in [the GC pressure review](../archive/reviews/review-2026-11-15-gc-pressure/index.md).
+
 Every record holds the Node version, V8 version, platform, OS release, architecture, CPU model and count, runtime flags, source revision, and working-tree state.
 
 ## Compare runs
@@ -82,6 +99,8 @@ corepack pnpm bench:report test-data/bench/runs --format html --out test-data/be
 ```
 
 Trend series separate by case, fixture parameters, scope, runtime environment, and benchmark configuration. Each HTML plot shows milliseconds, revision labels, and the minimum and maximum fork medians. Tables list run IDs, environment details, output statuses, per-fork medians, calls per sample, p95 and p99, calls per second, coefficient of variation, outlier share, window drift, and relative links to CPU profiles, heap profiles, memory records, and browser artifacts. Percentiles interpolate linearly over the sample; outliers are samples outside the 1.5 IQR fence; calls per second derive from the median fork median. Run directories and report directories stay together for downloadable artifacts.
+
+When `--out` is set, the command prints the written path and the count of recorded failures and skips. Those entries describe outcomes stored in the source runs, not the report render; the report lists them under "Recorded run failures and skips" with a link to each run record. A failed case in a source record does not fail the export, and removing a failed scratch record is a decision about the input directory, not about the report command.
 
 ## CI runs
 

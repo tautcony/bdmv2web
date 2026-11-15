@@ -2,8 +2,7 @@
 
 ## 环境与样本
 
-- 机器：Apple M4 Pro，arm64，48 GiB 内存
-- 操作系统：macOS 27.2，Darwin 27.2.0
+- 环境：arm64，macOS
 - Node.js：v24.18.0
 - pnpm：11.25.0
 - 基准入口：`corepack pnpm exec node scripts/bench/index.mjs`

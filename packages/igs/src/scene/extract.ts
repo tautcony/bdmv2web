@@ -128,13 +128,16 @@ export async function extractIgsFromPacketBatches(clipId: string, batches: Async
   let checkedRevision = -1;
   let conflictFree = false;
   const processPes = (unit: PesPacket): void => {
-    const mnuHeader = new Uint8Array(10);
-    mnuHeader.set([0x49, 0x47]);
-    const mnuHeaderView = new DataView(mnuHeader.buffer);
-    mnuHeaderView.setUint32(2, Number((unit.pts?.raw ?? 0n) & 0xffff_ffffn), false);
-    mnuHeaderView.setUint32(6, Number((unit.dtsRaw ?? 0n) & 0xffff_ffffn), false);
-    streamByteLengths.set(unit.pid, (streamByteLengths.get(unit.pid) ?? 0) + mnuHeader.byteLength + unit.payload.byteLength);
+    const MNU_HEADER_BYTES = 10;
+    streamByteLengths.set(unit.pid, (streamByteLengths.get(unit.pid) ?? 0) + MNU_HEADER_BYTES + unit.payload.byteLength);
     if (options.captureStreams) {
+      // The capture stream carries a synthetic 10-byte MNU header per PES; a
+      // parse that does not capture streams only needs its length.
+      const mnuHeader = new Uint8Array(MNU_HEADER_BYTES);
+      mnuHeader.set([0x49, 0x47]);
+      const mnuHeaderView = new DataView(mnuHeader.buffer);
+      mnuHeaderView.setUint32(2, Number((unit.pts?.raw ?? 0n) & 0xffff_ffffn), false);
+      mnuHeaderView.setUint32(6, Number((unit.dtsRaw ?? 0n) & 0xffff_ffffn), false);
       const chunksForPid = streamChunks.get(unit.pid) ?? [];
       chunksForPid.push(mnuHeader);
       chunksForPid.push(unit.payload.slice());

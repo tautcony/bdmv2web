@@ -30,6 +30,8 @@ export interface MediaClosure {
 }
 
 const MEDIA_NODE_TYPES = new Set(["playlist", "playItem", "subPath", "clip", "clipInfo"]);
+const EMPTY_EDGES: never[] = [];
+type RouteEdge = MediaClosureRoute["navigationEdges"][number];
 
 /**
  * Merge M1 structural roots with M3 object/control-flow graphs. Conditional
@@ -51,7 +53,10 @@ export function computeMediaClosure(
 
   const structuralNodes = new Map(disc.graph.nodes.map((node) => [node.id, node]));
   const structuralEdges = new Map<string, typeof disc.graph.edges>();
-  for (const edge of disc.graph.edges) structuralEdges.set(edge.from, [...(structuralEdges.get(edge.from) ?? []), edge]);
+  for (const edge of disc.graph.edges) {
+    const list = structuralEdges.get(edge.from);
+    if (list) list.push(edge); else structuralEdges.set(edge.from, [edge]);
+  }
   const allPlaylists = disc.graph.nodes.filter((node) => node.type === "playlist").map((node) => node.id);
   const selectedPlaylists = new Set<string>();
   const requiredNodes = new Set<string>();
@@ -66,15 +71,18 @@ export function computeMediaClosure(
     if (!unknownKeys.has(key)) { unknownKeys.add(key); unknown.push({ code, message, source }); }
   };
   const routeSignatures = new Set<string>();
-  const unknownEdgeMarks = new Set<string>();
-  const recordRoute = (route: MediaClosureRoute, observed?: Map<string, NavigationGraphEdge>): void => {
-    // The observed-edge map keys already carry every compared field, and Map
-    // preserves insertion order: one join over the keys replaces the per-edge
-    // template rebuilds and the full rescan of every recorded route.
-    const signature = `${route.playlistId}\0${route.origin}\0${route.entryId ?? ""}\0${route.buttonProgramId ?? ""}\0${observed ? Array.from(observed.keys()).join("|") : ""}`;
+  // Per graph label, the observed-edge keys already reported. A label covers one
+  // button root, so this keeps the same dedup as the former `label + key` string
+  // without building that string once per edge per root.
+  const unknownEdgeMarks = new Map<string, Set<string>>();
+  const recordRoute = (route: Omit<MediaClosureRoute, "navigationEdges">, observed?: readonly RouteEdge[], rootId = ""): void => {
+    // Within one root walk the observed edges form an append-only prefix log, so
+    // the root plus the prefix length identifies the set. Routes share the
+    // projected edge objects and keep their own prefix array.
+    const signature = `${route.playlistId}\0${route.origin}\0${route.entryId ?? ""}\0${route.buttonProgramId ?? ""}\0${rootId}\0${observed?.length ?? 0}`;
     if (routeSignatures.has(signature)) return;
     routeSignatures.add(signature);
-    routes.push(route);
+    routes.push({ ...route, navigationEdges: observed ? observed.slice() : [] });
   };
   const widenToAllPlaylists = () => {
     for (const id of allPlaylists) selectedPlaylists.add(id);
@@ -113,7 +121,7 @@ export function computeMediaClosure(
         continue;
       }
       if (node.type === "playlist" || MEDIA_NODE_TYPES.has(node.type)) requiredNodes.add(id);
-      for (const edge of structuralEdges.get(id) ?? []) {
+      for (const edge of structuralEdges.get(id) ?? EMPTY_EDGES) {
         if (edge.resolution !== "resolved") markUnknown("MEDIA_STRUCTURE_UNRESOLVED", `Structural edge '${edge.kind}' from '${edge.from}' to '${edge.to}' is ${edge.resolution}.`, edge.source);
         if (!structuralNodes.has(edge.to) || structuralNodes.get(edge.to)?.state !== "present") {
           markUnknown("MEDIA_STRUCTURE_MISSING", `Required structural target '${edge.to}' is missing.`, edge.source);
@@ -137,12 +145,16 @@ export function computeMediaClosure(
     const cached = graphIndexes.get(graph);
     if (cached) return cached;
     const edges = new Map<string, NavigationGraphEdge[]>();
-    for (const edge of graph.edges) edges.set(edge.from, [...(edges.get(edge.from) ?? []), edge]);
+    for (const edge of graph.edges) { const list = edges.get(edge.from); if (list) list.push(edge); else edges.set(edge.from, [edge]); }
     const index = { nodes: new Map(graph.nodes.map((node) => [node.id, node])), edges, visited: new Set<string>() };
     graphIndexes.set(graph, index);
     return index;
   };
   const reportedIncomplete = new Set<NavigationGraph>();
+  // One generation-marked map serves every root walk of this closure and reuses
+  // its buckets.
+  const seenGenerations = new Map<string, number>();
+  let walkGeneration = 0;
 
   const runNavigation = (graph: NavigationGraph, roots: Array<{ id: string; entryId: string | null; entrySource: SourceLocation | null; buttonProgramId: number | null; origin: "entry" | "button-program" }>, label: string): void => {
     const { nodes, edges: edgesBySource, visited } = indexGraph(graph);
@@ -152,19 +164,21 @@ export function computeMediaClosure(
       widenToAllPlaylists();
     }
     for (const root of roots) {
+    walkGeneration += 1;
+    const walk = walkGeneration;
     const pending = [root.id];
-    const seen = new Set<string>();
-    const observedEdges = new Map<string, NavigationGraphEdge>();
+    const observedKeys = new Set<string>();
+    const projectedEdges: RouteEdge[] = [];
     while (pending.length) {
       const id = pending.pop()!;
-      if (seen.has(id)) continue;
+      if (seenGenerations.get(id) === walk) continue;
       const node = nodes.get(id);
       if (!node) {
         markUnknown("MEDIA_NAVIGATION_TARGET_MISSING", `${label} navigation target '${id}' is absent.`);
         widenToAllPlaylists();
         continue;
       }
-      seen.add(id);
+      seenGenerations.set(id, walk);
       if (node.status === "unknown") {
         markUnknown("MEDIA_NAVIGATION_NODE_UNKNOWN", `${label} navigation node '${id}' has unknown status.`, node.source);
         widenToAllPlaylists();
@@ -179,22 +193,26 @@ export function computeMediaClosure(
         return;
       }
       if (!visited.has(id)) { visited.add(id); explored++; }
-      for (const edge of edgesBySource.get(id) ?? []) {
+      for (const edge of edgesBySource.get(id) ?? EMPTY_EDGES) {
         const observedKey = `${edge.from}\0${edge.to ?? ""}\0${edge.kind}\0${edge.condition ?? ""}\0${edge.source.path}\0${edge.source.offset}`;
-        observedEdges.set(observedKey, edge);
-        followNavigationEdge(edge, nodes, pending, label, root, observedEdges, observedKey);
+        if (!observedKeys.has(observedKey)) {
+          observedKeys.add(observedKey);
+          projectedEdges.push({ from: edge.from, to: edge.to, kind: edge.kind, condition: edge.condition, source: edge.source });
+        }
+        followNavigationEdge(edge, nodes, pending, label, root, projectedEdges, observedKey);
       }
     }
     }
 
-    function followNavigationEdge(edge: NavigationGraphEdge, navNodes: Map<string, NavigationGraphNode>, queue: string[], graphLabel: string, root: (typeof roots)[number], observed: Map<string, NavigationGraphEdge>, observedKey: string): void {
+    function followNavigationEdge(edge: NavigationGraphEdge, navNodes: Map<string, NavigationGraphNode>, queue: string[], graphLabel: string, root: (typeof roots)[number], observed: readonly RouteEdge[], observedKey: string): void {
       // Every root walk re-visits the same shared edges; skip re-marking an
       // already-marked unknown (the message is deterministic per edge and
       // label, so the dedup outcome is identical). The mark key reuses the
       // observed-edge key the caller already built.
-      const markKey = `${graphLabel}\0${observedKey}`;
-      const alreadyMarked = unknownEdgeMarks.has(markKey);
-      if (!alreadyMarked) unknownEdgeMarks.add(markKey);
+      let markedKeys = unknownEdgeMarks.get(graphLabel);
+      if (!markedKeys) { markedKeys = new Set(); unknownEdgeMarks.set(graphLabel, markedKeys); }
+      const alreadyMarked = markedKeys.has(observedKey);
+      if (!alreadyMarked) markedKeys.add(observedKey);
       if (edge.kind === "conditional") {
         // Both known destinations are candidates even while the predicate is unresolved.
         if (edge.to !== null && navNodes.has(edge.to)) { queue.push(edge.to); return; }
@@ -204,7 +222,7 @@ export function computeMediaClosure(
       if (edge.kind === "play") {
         if (edge.to !== null && structuralNodes.get(edge.to)?.type === "playlist" && edge.resolution === "resolved") {
           includePlaylist(edge.to);
-          recordRoute({ playlistId: edge.to, origin: root.origin, entryId: root.entryId, entrySource: root.entrySource, buttonProgramId: root.buttonProgramId, navigationEdges: Array.from(observed.values(), ({ from, to, kind, condition, source }) => ({ from, to, kind, condition, source })) });
+          recordRoute({ playlistId: edge.to, origin: root.origin, entryId: root.entryId, entrySource: root.entrySource, buttonProgramId: root.buttonProgramId }, observed, root.id);
           return;
         }
         if (!alreadyMarked) { markUnknown("MEDIA_PLAY_TARGET_UNKNOWN", `${graphLabel} play/title navigation edge from '${edge.from}' has no proven playlist target.`, edge.source); widenToAllPlaylists(); }
@@ -245,7 +263,7 @@ export function computeMediaClosure(
   }
 
   if (budgetExhausted || unknown.length > 0) widenToAllPlaylists();
-  for (const playlistId of selectedPlaylists) if (!routes.some((route) => route.playlistId === playlistId)) recordRoute({ playlistId, origin: "conservative-fallback", entryId: null, entrySource: null, buttonProgramId: null, navigationEdges: [] });
+  for (const playlistId of selectedPlaylists) if (!routes.some((route) => route.playlistId === playlistId)) recordRoute({ playlistId, origin: "conservative-fallback", entryId: null, entrySource: null, buttonProgramId: null });
   for (const playlistId of selectedPlaylists) includePlaylist(playlistId);
   const clipIds = new Set([...requiredNodes].filter((id) => id.startsWith("clip:")).map((id) => id.slice("clip:".length)));
   const streamIds = new Set<string>();
