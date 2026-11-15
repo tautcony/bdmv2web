@@ -3,6 +3,7 @@ import type { MovieObject, SourceLocation } from "@bdmv2web/bdmv-parser";
 import { DEFAULT_LIMITS, validateLimits, type Limits } from "@bdmv2web/core/limits";
 import { decodeInstruction, type DecodedInstruction, type Operand } from "../bytecode/decode.js";
 import { RegisterFile, RegisterFault, type PlayerProfile } from "./registers.js";
+import { TrailLog } from "./trail.js";
 import {
   COMPARE_OPCODES, EMPTY_DELTA, RANDOM_MASK, RANDOM_MULTIPLIER, WAIT_BY_ACTION,
   comparisonSkips, eventMatches, normalizeProfile, normalizeRandomSeed,
@@ -23,9 +24,12 @@ export type {
 export class HdmvVm {
   readonly limits: Readonly<Limits>;
   readonly registers: RegisterFile;
-  readonly trace: TraceEntry[] = [];
-  readonly actions: NavigationAction[] = [];
-  readonly diagnostics: VmDiagnostic[] = [];
+  // Histories are append-only and their entries are immutable values, so a
+  // checkpoint borrows them and the log detaches on the next write.
+  private readonly logs = { trace: new TrailLog<TraceEntry>(), actions: new TrailLog<NavigationAction>(), diagnostics: new TrailLog<VmDiagnostic>() };
+  get trace(): TraceEntry[] { return this.logs.trace.entries; }
+  get actions(): NavigationAction[] { return this.logs.actions.entries; }
+  get diagnostics(): VmDiagnostic[] { return this.logs.diagnostics.entries; }
   status: VmStatus = "idle";
   private traceRegisters = false;
   programId = 0; pc = 0; generation = 0; instructionsThisTurn = 0; diagnostic: VmDiagnostic | null = null;
@@ -53,7 +57,7 @@ export class HdmvVm {
     this.entries = options.entries; this.onTrace = options.onTrace; this.profile = normalizeProfile(options.profile); this.registers = new RegisterFile(this.profile);
     if (options.limits && [options.maxInstructionsPerTurn, options.maxCallDepth, options.maxQueueDepth].some((value) => value !== undefined)) {
       const diagnostic = { code: "VM_LIMITS_OVERRIDDEN", message: "The limits object takes precedence over scalar VM limit options.", source: null };
-      this.diagnostics.push(diagnostic);
+      this.logs.diagnostics.push(diagnostic);
       this.record({ source: null, raw: null, decoded: "LIMITS", registerDelta: EMPTY_DELTA, status: "idle", diagnostic });
     }
     this.randomSeed = normalizeRandomSeed(options.randomSeed); this.randomState = BigInt(this.randomSeed);
@@ -70,14 +74,14 @@ export class HdmvVm {
     this.randomSeed = seed;
     this.randomState = BigInt(seed);
     this.profile = normalizeProfile(profile); this.registers.reset(this.profile); this.programId = programId; this.pc = 0; this.status = "idle"; this.generation++;
-    this.callStack.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.pendingTitleCall = null; this.titleTransition = false; this.menuCheckpoint = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.actions.length = 0; this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
+    this.callStack.length = 0; this.continuation = null; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.pendingTitleCall = null; this.titleTransition = false; this.menuCheckpoint = null; this.eventQueue.length = 0; this.actionQueue.length = 0; this.logs.actions.clear(); this.consumedResponses.clear(); this.instructionsThisTurn = 0; this.diagnostic = null; this.lastAction = undefined; this.resumeAfterPlaylistStop = false;
     this.playback = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
     this.record({ source: null, raw: null, decoded: `RESET profile=${stableProfile(this.profile)} seed=${seed}`, registerDelta: EMPTY_DELTA, status: "idle" });
   }
   snapshot(): VmSnapshot { return { status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(), callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, generation: this.generation, waiting: this.continuation?.action ?? null, instructionsThisTurn: this.instructionsThisTurn, diagnostic: this.diagnostic }; }
   /** Save all mutable execution state so a navigation branch can resume from this point. */
   saveCheckpoint(): HdmvVmCheckpoint {
-    return structuredClone({
+    const state = structuredClone({
       status: this.status, programId: this.programId, pc: this.pc, registers: this.registers.snapshot(),
       callStack: this.callStack, continuation: this.continuation, suspendedPlaylistContinuation: this.suspendedPlaylistContinuation,
       suspendedPlaylistPlayback: this.suspendedPlaylistPlayback, pendingTitleCall: this.pendingTitleCall, titleTransition: this.titleTransition,
@@ -86,28 +90,31 @@ export class HdmvVm {
       profile: this.profile, lastAction: this.lastAction, resumeAfterPlaylistStop: this.resumeAfterPlaylistStop,
       randomSeed: this.randomSeed, randomState: this.randomState,
       consumedResponses: [...this.consumedResponses], eventQueue: this.eventQueue, actionQueue: this.actionQueue,
-      trace: this.trace, actions: this.actions, diagnostics: this.diagnostics,
     });
+    return { ...state, trace: this.logs.trace.snapshot(), actions: this.logs.actions.snapshot(), diagnostics: this.logs.diagnostics.snapshot() };
   }
   /** Restore a checkpoint created by this VM's matching program set and options. */
   restoreCheckpoint(checkpoint: HdmvVmCheckpoint): void {
     if (checkpoint.registers.gpr.length !== this.registers.gpr.length || checkpoint.registers.psr.length !== this.registers.psr.length) throw new TypeError("VM checkpoint has incompatible register state");
     normalizeRandomSeed(checkpoint.randomSeed);
-    const state = structuredClone(checkpoint);
+    // Copy the bounded state but borrow the three histories: they are the only
+    // part that grows with session length, and `TrailLog` copies them again as
+    // soon as this VM records something, leaving the checkpoint untouched.
+    const state = structuredClone({ ...checkpoint, trace: [], actions: [], diagnostics: [] });
     this.status = state.status; this.programId = state.programId; this.pc = state.pc;
     this.registers.gpr.set(state.registers.gpr); this.registers.psr.set(state.registers.psr);
-    this.callStack.splice(0, this.callStack.length, ...state.callStack);
+    replaceAll(this.callStack, state.callStack);
     this.continuation = state.continuation; this.suspendedPlaylistContinuation = state.suspendedPlaylistContinuation;
     this.suspendedPlaylistPlayback = state.suspendedPlaylistPlayback; this.pendingTitleCall = state.pendingTitleCall; this.titleTransition = state.titleTransition;
     this.menuCheckpoint = state.menuCheckpoint; this.playback = state.playback; this.generation = state.generation;
     this.instructionsThisTurn = state.instructionsThisTurn; this.diagnostic = state.diagnostic; this.sequence = state.sequence;
     this.profile = state.profile; this.lastAction = state.lastAction; this.resumeAfterPlaylistStop = state.resumeAfterPlaylistStop; this.randomSeed = state.randomSeed; this.randomState = state.randomState;
     this.consumedResponses.clear(); for (const response of state.consumedResponses) this.consumedResponses.add(response);
-    this.eventQueue.splice(0, this.eventQueue.length, ...state.eventQueue);
-    this.actionQueue.splice(0, this.actionQueue.length, ...state.actionQueue);
-    this.trace.splice(0, this.trace.length, ...state.trace);
-    this.actions.splice(0, this.actions.length, ...state.actions);
-    this.diagnostics.splice(0, this.diagnostics.length, ...state.diagnostics);
+    replaceAll(this.eventQueue, state.eventQueue);
+    replaceAll(this.actionQueue, state.actionQueue);
+    this.logs.trace.restore(checkpoint.trace);
+    this.logs.actions.restore(checkpoint.actions);
+    this.logs.diagnostics.restore(checkpoint.diagnostics);
   }
   /** Synchronize the active interactive-graphics page and focus into PSR11/PSR10. */
   applyMenuContext(pageId: number, selectedButtonId: number | null): void {
@@ -142,15 +149,15 @@ export class HdmvVm {
     if (!saved || (action && !this.actions.slice(saved.firstAction).some((candidate) => candidate.id === action.id))) return false;
     this.registers.gpr.set(saved.registers.gpr); this.registers.psr.set(saved.registers.psr);
     this.programId = saved.programId; this.pc = saved.pc; this.status = saved.status;
-    this.callStack.splice(0, this.callStack.length, ...saved.callStack.map((frame) => ({ ...frame })));
+    replaceAll(this.callStack, saved.callStack.map((frame) => ({ ...frame })));
     this.continuation = saved.continuation; this.suspendedPlaylistContinuation = saved.suspendedPlaylistContinuation;
     this.suspendedPlaylistPlayback = saved.suspendedPlaylistPlayback ? { ...saved.suspendedPlaylistPlayback } : null; this.pendingTitleCall = saved.pendingTitleCall;
     this.playback = { ...saved.playback }; this.diagnostic = saved.diagnostic; this.resumeAfterPlaylistStop = false; this.lastAction = undefined;
     this.titleTransition = saved.titleTransition; this.randomState = saved.randomState;
-    if (this.diagnostics.length > saved.firstDiagnostic) this.diagnostics.splice(saved.firstDiagnostic);
+    if (this.logs.diagnostics.length > saved.firstDiagnostic) this.logs.diagnostics.truncate(saved.firstDiagnostic);
     if (saved.continuation) this.consumedResponses.delete(`${saved.continuation.action.generation}:${saved.continuation.action.id}`);
     const retained = this.actionQueue.filter((queued) => saved.queuedActionIds.has(queued.id));
-    this.actionQueue.splice(0, this.actionQueue.length, ...retained);
+    replaceAll(this.actionQueue, retained);
     this.menuCheckpoint = null;
     this.record({ source: null, raw: null, decoded: "MENU_ACTION_RECOVERED", registerDelta: EMPTY_DELTA, status: this.status });
     return true;
@@ -358,7 +365,7 @@ export class HdmvVm {
       // selecting an object. Leave the VM available for menu input.
       const issue = { code: error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", message: errorText(error), source: null };
       this.pendingTitleCall = null; this.titleTransition = false;
-      this.diagnostic = issue; this.diagnostics.push(issue);
+      this.diagnostic = issue; this.logs.diagnostics.push(issue);
       if (this.status === "suspended" && !this.continuation) this.status = "idle";
       this.record({ source: null, raw: null, decoded: "TITLE_SELECTION_REJECTED", registerDelta: EMPTY_DELTA, status: this.status, diagnostic: issue });
       return this.snapshot();
@@ -387,7 +394,7 @@ export class HdmvVm {
       const issue = { code: error instanceof RegisterFault ? error.code : "HDMV_EXECUTION_FAULT", message: errorText(error), source: null };
       this.pendingTitleCall = null; this.titleTransition = false;
       if (this.status === "suspended" && !this.continuation) this.status = "idle";
-      this.diagnostic = issue; this.diagnostics.push(issue);
+      this.diagnostic = issue; this.logs.diagnostics.push(issue);
       this.record({ source: null, raw: null, decoded: "BDJ_TITLE_SELECTION_REJECTED", registerDelta: EMPTY_DELTA, status: this.status, diagnostic: issue });
       return this.snapshot();
     }
@@ -434,7 +441,7 @@ export class HdmvVm {
       // and returns the VM to `idle` with a media diagnostic.
       this.titleTransition = false; this.status = "idle";
       const issue = { code: event.type === "MEDIA_ERROR" ? "HDMV_MEDIA_ERROR" : "HDMV_MEDIA_UNAVAILABLE", message: `Title transition failed: ${event.type}`, source: null };
-      this.diagnostic = issue; this.diagnostics.push(issue);
+      this.diagnostic = issue; this.logs.diagnostics.push(issue);
       this.record({ source: null, raw: null, decoded: "TITLE_TRANSITION_RELEASED", input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: issue });
       return this.snapshot();
     }
@@ -468,7 +475,7 @@ export class HdmvVm {
     if (event.type === "MEDIA_ERROR" || event.type === "MEDIA_UNAVAILABLE") {
       this.consumedResponses.add(eventKey); this.removeAction(pending.action.id);
       this.playback.status = event.type === "MEDIA_ERROR" ? "error" : "unavailable"; this.playback.pendingActionId = null;
-      this.continuation = null; this.status = "stopped"; this.diagnostic = { code: event.type === "MEDIA_ERROR" ? "HDMV_MEDIA_ERROR" : "HDMV_MEDIA_UNAVAILABLE", message: `Action ${pending.action.id} failed: ${event.type}`, source: pending.action.source }; this.diagnostics.push(this.diagnostic);
+      this.continuation = null; this.status = "stopped"; this.diagnostic = { code: event.type === "MEDIA_ERROR" ? "HDMV_MEDIA_ERROR" : "HDMV_MEDIA_UNAVAILABLE", message: `Action ${pending.action.id} failed: ${event.type}`, source: pending.action.source }; this.logs.diagnostics.push(this.diagnostic);
       this.record({ source: pending.action.source, raw: null, decoded: pending.action.type, input: event, event, registerDelta: EMPTY_DELTA, status: this.status, diagnostic: this.diagnostic });
       this.recoverMenuAction(pending.action); return this.snapshot();
     }
@@ -860,13 +867,13 @@ export class HdmvVm {
   private noteInstructionDiagnostic(opcode: string, context: ButtonCommandContext, source: SourceLocation, detail?: string, code = "HDMV_OPCODE_CONTEXT_SKIPPED"): void {
     const message = detail ? `${opcode} is not implemented for ${context} context: ${detail}` : `${opcode} is not valid in ${context} context`;
     this.instructionDiagnostic = { code, message, source };
-    this.diagnostics.push(this.instructionDiagnostic);
+    this.logs.diagnostics.push(this.instructionDiagnostic);
   }
   /** Record a non-fatal instruction outcome; the VM continues with the next command. */
   private noteIgnoredInstruction(code: string, message: string, source: SourceLocation | null): void {
     const issue = { code, message, source };
     this.instructionDiagnostic = issue;
-    this.diagnostics.push(issue);
+    this.logs.diagnostics.push(issue);
   }
   /** Unsupported player capability: report, stop the current run, keep the VM reusable. */
   private unsupportedOperation(code: string, message: string, source: SourceLocation | null): void {
@@ -875,7 +882,7 @@ export class HdmvVm {
     // step loop advances); status and pending transitions stay untouched.
     const issue = { code, message, source };
     this.instructionDiagnostic = issue;
-    this.diagnostics.push(issue);
+    this.logs.diagnostics.push(issue);
     this.diagnostic = issue;
   }
   private tryValidateTitle(title: number, source: SourceLocation): boolean {
@@ -917,7 +924,7 @@ export class HdmvVm {
   private nextRandom(range: number, source: SourceLocation): number {
     this.randomState = (this.randomState * RANDOM_MULTIPLIER + 1n) & RANDOM_MASK;
     if (range === 0) {
-      this.diagnostics.push({ code: "HDMV_RND_ZERO_RANGE", message: "RND range is zero; reference behavior returns 1", source });
+      this.logs.diagnostics.push({ code: "HDMV_RND_ZERO_RANGE", message: "RND range is zero; reference behavior returns 1", source });
       return 1;
     }
     return Number((this.randomState >> 32n) & 0xffff_ffffn) % range + 1;
@@ -970,26 +977,32 @@ export class HdmvVm {
   private emit(type: ActionType, payload: Record<string, number | string | boolean | null>, source: SourceLocation): NavigationAction {
     if (this.actionQueue.length >= this.opts.maxQueueDepth) throw new RegisterFault("VM_QUEUE_LIMIT", `Pending action queue exceeds ${this.opts.maxQueueDepth}`);
     const generation = ++this.generation; const action: NavigationAction = { id: `hdmv-${generation}-${this.sequence + 1}`, type, generation, payload, source, ...(WAIT_BY_ACTION[type] ? { waitFor: WAIT_BY_ACTION[type] } : {}) };
-    this.actions.push(action); this.actionQueue.push(action); this.lastAction = action; return action;
+    this.logs.actions.push(action); this.actionQueue.push(action); this.lastAction = action; return action;
   }
   private removeAction(id: string): void { const index = this.actionQueue.findIndex((action) => action.id === id); if (index >= 0) this.actionQueue.splice(index, 1); }
   private currentSource(): SourceLocation | null { const row = this.programs.get(this.programId)?.instructions[this.pc]; if (!row) return null; try { return decodeInstruction(row).source; } catch { return null; } }
   private fail(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: number, location?: { programId: number; pc: number }): void {
     if (this.continuation) this.removeAction(this.continuation.action.id);
     this.continuation = null; this.pendingTitleCall = null; this.titleTransition = false; this.suspendedPlaylistContinuation = null; this.suspendedPlaylistPlayback = null; this.playback.pendingActionId = null;
-    const issue = { code, message, source }; this.diagnostic = issue; this.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
+    const issue = { code, message, source }; this.diagnostic = issue; this.logs.diagnostics.push(issue); this.status = code === "HDMV_UNVERIFIED_OPCODE" ? "idle" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   /** Record a fault raised while executing a button (interactive composition) program. libbluray _vm_run() clears only the faulting object (p->object = NULL); the MovieObject waiting for playlist end (playing_object) and any suspended call object stay untouched, so the pending playlist end can still resume the MovieObject. */
   private failButtonProgram(code: string, message: string, source: SourceLocation | null, d?: DecodedInstruction, before?: number, location?: { programId: number; pc: number }): void {
     const issue = { code, message, source };
-    this.diagnostic = issue; this.diagnostics.push(issue);
+    this.diagnostic = issue; this.logs.diagnostics.push(issue);
     this.status = this.continuation ? "suspended" : "faulted";
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits" | "registers"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
     const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, ...(this.traceRegisters ? { registers: this.registers.snapshot() } : {}), callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
-    this.trace.push(trace);
+    this.logs.trace.push(trace);
     try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }
+}
+
+/** Replace a queue's contents in place without spreading them as call arguments. */
+function replaceAll<T>(target: T[], source: readonly T[]): void {
+  target.length = 0;
+  for (const item of source) target.push(item);
 }

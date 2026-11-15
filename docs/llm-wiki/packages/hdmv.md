@@ -11,6 +11,7 @@ HDMV 导航层：把 12 字节命令解码成操作码，维护 GPR/PSR，执行
 | `src/bytecode/decode.ts` | `decodeInstruction`、`disassemble`、`Operand`、`OpcodeName` |
 | `src/virtual-machine/registers.ts` | `RegisterFile`、`PSR` 索引常量、`profileWord`、`RegisterFault` |
 | `src/virtual-machine/vm.ts` | `HdmvVm`：状态机、事件、动作、等待、trace、检查点 |
+| `src/virtual-machine/trail.ts` | `TrailLog`：追加日志与写时复制快照（检查点共享历史用） |
 | `src/virtual-machine/vm-semantics.ts` / `vm-types.ts` | 执行语义辅助与 VM/trace 类型 |
 | `src/graph/graph.ts` | `buildNavigationGraph`：对象/命令节点与边、寄存器跳转的常量传播 |
 | `src/graph/loops.ts` | `findStaticNavigationLoops`：DFS 回边找静态循环 |
@@ -74,7 +75,7 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 | `executeButtonProgram(commands, context?)` | 整段按钮命令；返回动作、终止标记、fault |
 | `applyMenuContext(pageId, selectedButtonId)` | 同步 PSR10/11 |
 | `beginMenuAction()` / `recoverMenuAction(action?)` | 按钮命令期间的菜单上下文保护/恢复 |
-| `saveCheckpoint()` / `restoreCheckpoint()` | 完整状态快照（含寄存器、调用栈、播放、等待、队列） |
+| `saveCheckpoint()` / `restoreCheckpoint()` | 完整状态快照（含寄存器、调用栈、播放、等待、队列）；`trace`/`actions`/`diagnostics` 按写时复制共享 |
 | `snapshot()` | 只读快照 |
 | `drainActions()` / `enqueueEvent()` / `processNextEvent()` | 队列操作 |
 
@@ -90,6 +91,16 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 - `SET_BUTTON_PAGE`：MovieObject 上下文按标志更新 PSR10/11；IG 上下文发打包请求并终止该按钮序列。
 - 算术：ADD/MUL 饱和到 `0xffffffff`；SUB 到 0 饱和；DIV/MOD 除零返回 `0xffffffff`；移位/位操作计数必须 0–31，否则 fault。
 - `RND`：固定种子的 64 位 LCG，取高字模 N + 1；`RND(0)` 返回 1 并报 `HDMV_RND_ZERO_RANGE`。
+
+### 检查点与历史
+
+`trace`、`actions`、`diagnostics` 只增不减（`reset()` 清 `actions`，`recoverMenuAction()` 截断 `diagnostics`），且条目创建后保持不变。检查点因此按写时复制共享它们：
+
+- `saveCheckpoint()` 用 `structuredClone` 复制有界状态（寄存器、调用栈、队列、播放上下文、菜单检查点等），三个历史数组按 `TrailLog.snapshot()` 借出。
+- `restoreCheckpoint()` 同样只克隆有界状态，并用 `TrailLog.restore()` 接管检查点的历史数组。
+- 两者都是 O(1)：VM 在借出后第一次写入时才复制**指针数组**（8 B/条），检查点本身保持不变；共享的条目对象视为不可变值。
+
+恢复不受 JS 展开参数上限约束（`splice(0, len, ...history)` 约 11 万条即 `RangeError`），20 万条历史也能恢复。检查点与 VM 共享条目对象：VM 自身从不改写条目，直接改写检查点里的条目会波及 VM。
 
 ### Opcode implementation audit
 
