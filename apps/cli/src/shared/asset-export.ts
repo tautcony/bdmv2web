@@ -29,7 +29,7 @@ import { basename, dirname, resolve } from "node:path";
  *
  * `export` and `render` share this pipeline and differ only in `outputs`, so both
  * produce byte-identical PNGs and manifest records for the same input.
- * `--no-assets` is the metadata-only shape of the same run.
+ * `--metadata-only` is the metadata-only shape of the same run.
  */
 export interface GraphicsRun {
   /** Command name shown in the progress header. */
@@ -44,7 +44,7 @@ export interface GraphicsRun {
 /**
  * Resolve what the positional input is, then run the matching pipeline.
  *
- * Every input reaches the same selection checks, so `export`, `export --no-assets`
+ * Every input reaches the same selection checks, so `export`, `export --metadata-only`
  * and `render` accept the same inputs and reject the same combinations. A
  * `.mnu`/`.sup` file has no disc or stream to export; decoding it is `render`'s job.
  */

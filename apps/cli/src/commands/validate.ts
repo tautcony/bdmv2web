@@ -28,7 +28,7 @@ export async function validate(): Promise<void> {
     : undefined;
   const limitations = Array.isArray(manifest.limitations) ? manifest.limitations.filter((item): item is string => typeof item === "string") : [];
   // A package records the diagnostics that decided its own conversion. Re-reading
-  // them keeps convert and validate on the same evidence instead of two verdicts.
+  // them lets `validate` report the same evidence as `build`.
   const manifestDiagnostics: DeliveryDiagnostic[] = (Array.isArray(manifest.diagnostics) ? manifest.diagnostics : [])
     .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null && !Array.isArray(item))
     .map((item) => ({
@@ -38,8 +38,7 @@ export async function validate(): Promise<void> {
     }));
   const declaredEntryCount = Number.isSafeInteger(manifest.declaredEntryCount) && (manifest.declaredEntryCount as number) >= 0 ? manifest.declaredEntryCount as number : undefined;
   const hdmvEntryCount = Number.isSafeInteger(manifest.hdmvEntryCount) && (manifest.hdmvEntryCount as number) >= 0 ? manifest.hdmvEntryCount as number : undefined;
-  // `validate` measures no per-category coverage, so it records none rather than
-  // writing an N/A placeholder for counts it never collected.
+  // `validate` reports `coverage: null`; its report covers package-level diagnostics.
   const coverage = null;
   const releaseSummaryInput = {
     audit,
@@ -83,9 +82,8 @@ export async function validate(): Promise<void> {
   let dependencyAudit = releaseSummary.dependencyAudit;
   if (writable) {
     try {
-      // Every on-disk report must come from the same summary, so the dependency
-      // audit is written after the summary exists instead of from a pre-summary
-      // intermediate value (D-12).
+      // Every on-disk report comes from the same summary: the dependency audit
+      // is written once `releaseSummary` exists (D-12).
       await writeGeneratedReport(audit.packageRoot, "dependency-audit.json", `${JSON.stringify(releaseSummary.dependencyAudit, null, 2)}\n`);
       await writeGeneratedReport(audit.packageRoot, "reports.json", `${JSON.stringify({
         schemaVersion: "1.0",

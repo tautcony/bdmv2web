@@ -26,7 +26,7 @@ export async function dispatch(name: CommandName, input: string | undefined, opt
   return (await loaders[name]())();
 }
 
-/** Reject `--out=` instead of turning an empty string into a path. */
+/** Reject an empty option value with `CLI_INVALID_ARGUMENT` at parse time. */
 function nonEmpty(value: string): string {
   if (value === "") throw new InvalidArgumentError("value must not be empty");
   return value;
@@ -73,11 +73,13 @@ export function buildProgram(version?: string): Command {
     .option("--player-profile <file>", "player profile JSON", nonEmpty)
     .option("--limits <file>", "VM limits JSON", nonEmpty)
     .option("--disc-id <32hex>", "BD-J disc identifier from CERTIFICATE/id.bdmv", nonEmpty)
-    .option("--overwrite", "replace an existing output directory")
-    .option("--resume [dir]", "reuse media from a previous run (default: newest staging directory of the output target)")
+    .option("--overwrite", "replace an existing output directory and reuse matching media assets")
+    .option("--resume", "reuse media from the newest staging directory of the output target")
+    .option("--resume-dir <dir>", "reuse media from this directory", nonEmpty)
+    .option("--no-reuse", "generate all menu media for this build")
     .option("--crf <value>", "encoder quality 0-51 (HEVC default 24, H.264 default 18)", crfValue)
-    .option("--preset <preset>", "encoder preset: ultrafast, veryfast, fast, medium", oneOf("preset", ["ultrafast", "veryfast", "fast", "medium"]))
-    .option("--codec <codec>", "menu video codec: hevc (default) or h264", oneOf("codec", ["h264", "hevc"]))
+    .option("--preset <preset>", "encoder preset: ultrafast, veryfast (default), fast, medium", oneOf("preset", ["ultrafast", "veryfast", "fast", "medium"]))
+    .option("--codec <codec>", "menu video codec: hevc (default) or h264; --video copy falls back to h264 when a clip cannot be remuxed", oneOf("codec", ["h264", "hevc"]))
     .option("--hdr <mode>", "HDR handling: tonemap (default) or preserve", oneOf("hdr", ["tonemap", "preserve"]))
     .option("--video <mode>", "menu video pipeline: encode (default) or copy (remux the source H.264 or HEVC stream)", oneOf("video", ["encode", "copy"]))
     .option("--menu-media <mode>", "menu media to export: auto (default, menus only), all, or none", oneOf("menu-media", ["auto", "all", "none"]))
@@ -131,7 +133,7 @@ export function buildProgram(version?: string): Command {
   const listCommand = program.command("list")
     .description("List IGS and SUP assets of a disc")
     .argument("[input]", "BDMV root or its parent directory")
-    .option("--type <type>", "all, igs, or sup", nonEmpty)
+    .option("--type <type>", "assets to list: all, igs, or sup", oneOf("type", ["all", "igs", "sup"]))
     .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
     .option("--out <file>", "write the JSON report to a file", nonEmpty)
@@ -142,10 +144,10 @@ export function buildProgram(version?: string): Command {
     .description("Export IGS .mnu files, SUP tracks, PNG frames and structural metadata from a BDMV disc or a stream file")
     .argument("[input]", "BDMV root, its parent directory, or a .m2ts/.rsks stream file")
     .option("--out <dir>", "output directory", nonEmpty)
-    .option("--type <type>", "all, metadata, hdmv, igs, or sup (default: igs and sup containers)", nonEmpty)
+    .option("--type <type>", "outputs: all, metadata, hdmv, igs, or sup (default: igs and sup containers)", oneOf("type", ["all", "metadata", "hdmv", "igs", "sup"]))
     .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
-    .option("--no-assets", "write no containers or PNGs; alone it writes the whole metadata set")
+    .option("--metadata-only", "write structural metadata only; with --type igs/sup, write only that section")
     .option("--render", "also render PNG frames for IGS elements and PGS display sets")
     .option("--format <format>", "table or json", nonEmpty)
     .option("--png-level <level>", "deflate level 0-9 for written PNGs (default: tuned per encoder)", nonEmpty)
@@ -158,7 +160,7 @@ export function buildProgram(version?: string): Command {
     .argument("[input]", "BDMV root, its parent directory, a .m2ts/.rsks stream file, or a .mnu/.sup file")
     .option("--out <dir>", "output directory", nonEmpty)
     .option("--language <lang>", "three-letter language code recorded for a standalone SUP", nonEmpty)
-    .option("--type <type>", "all, igs, or sup (default: all)", nonEmpty)
+    .option("--type <type>", "PNG families to decode: all, igs, or sup (default: all)", oneOf("type", ["all", "igs", "sup"]))
     .option("--m2ts <clip>", "restrict to one clip for BDMV input", nonEmpty)
     .option("--pid <pid>", "restrict to one PID, or set the IGS scene identity of a standalone MNU", nonEmpty)
     .option("--format <format>", "table or json", nonEmpty)

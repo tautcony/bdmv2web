@@ -79,7 +79,7 @@
 #### Scenario: UHD 元数据损坏
 
 - **WHEN** INDX 扩展区长度、entry 上界或 3.1 payload 损坏
-- **THEN** `entries` 仍完整保留，`discInfo.uhd` 为 null，产生 `warning` 级诊断，`inspect` / `export` / `convert` 不因此退出 1
+- **THEN** `entries` 仍完整保留，`discInfo.uhd` 为 null，产生 `warning` 级诊断，`inspect` / `export` / `build` 不因此退出 1
 
 #### Scenario: 声明长度不自洽
 

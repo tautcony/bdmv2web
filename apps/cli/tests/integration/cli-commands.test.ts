@@ -121,7 +121,7 @@ describe("M4 build output", () => {
       expect(result.status, result.stderr.toString()).toBe(0);
       const stderr = result.stderr.toString();
       // Piped stderr gets plain lines: each finished step names its position in the fixed plan.
-      expect(stderr).toContain("bdmv2web convert · 7 steps");
+      expect(stderr).toContain("bdmv2web build · 7 steps");
       // Option parsing is not a step: the plan starts at the first piece of disc work.
       expect(stderr).not.toContain("Read options");
       expect(stderr).toContain("profile  region A · portable");
@@ -452,7 +452,7 @@ describe("IGS metadata CLI", () => {
     const target = join(parent, "out");
     try {
       const before = await sourceSnapshot(rootPath);
-      const result = await runCommand(["export", rootPath, "--type", "igs", "--no-assets", "--out", target]);
+      const result = await runCommand(["export", rootPath, "--type", "igs", "--metadata-only", "--out", target]);
       expect(result.status).toBe(0);
       const scenesDoc = JSON.parse(await readFile(join(target, "igs/scenes.json"), "utf8"));
       expect(scenesDoc.scenes).toHaveLength(1);
@@ -477,7 +477,7 @@ describe("IGS metadata CLI", () => {
     const target = join(parent, "out");
     try {
       const before = await sourceSnapshot(rootPath);
-      const result = await runCommand(["export", rootPath, "--type", "igs", "--no-assets", "--out", target]);
+      const result = await runCommand(["export", rootPath, "--type", "igs", "--metadata-only", "--out", target]);
       expect(result.status).toBe(0);
       const scenesDoc = JSON.parse(await readFile(join(target, "igs/scenes.json"), "utf8"));
       expect(scenesDoc.scenes).toHaveLength(1);
@@ -505,7 +505,7 @@ describe("IGS metadata CLI", () => {
     const rootPath = await makeIgsDisc(parent, clip, { structuralPid: 0x121 });
     const target = join(parent, "out");
     try {
-      const result = await runCommand(["export", rootPath, "--type", "igs", "--no-assets", "--out", target]);
+      const result = await runCommand(["export", rootPath, "--type", "igs", "--metadata-only", "--out", target]);
       expect(result.status).toBe(0);
       const diagnostics = JSON.parse(await readFile(join(target, "igs/diagnostics.json"), "utf8"));
       const sourceMap = JSON.parse(await readFile(join(target, "igs/source-map.json"), "utf8"));

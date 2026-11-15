@@ -2,26 +2,26 @@
 
 ## Purpose
 
-Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept a BDMV disc, a standalone `.m2ts`/`.rsks` transport stream, or (for `render`) a standalone `.mnu`/`.sup` container, and decide the input kind from the input itself rather than from a user-declared type. `--type` selects outputs only: `.mnu`/`.sup` containers, PNG frames, the structural metadata set, or a combination. `export` and `render` run one pipeline, so the same input yields the same PNG bytes and the same manifest records.
+Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept a BDMV disc, a standalone `.m2ts`/`.rsks` transport stream, or (for `render`) a standalone `.mnu`/`.sup` container, and decide the input kind from the input itself. `--type` selects outputs only: `.mnu`/`.sup` containers, PNG frames, the structural metadata set, or a combination. `export` and `render` run one pipeline, so the same input yields the same PNG bytes and the same manifest records.
 
 ## Requirements
 
 ### Requirement: 输出选择
 
-`export` SHALL 用 `--type all|metadata|hdmv|igs|sup` 选择输出，`--type` SHALL NOT 表示输入类型。`igs`/`sup` SHALL 写对应 `.mnu`/`.sup` 容器（配合 `--render` 还写其 PNG），`hdmv` SHALL 写命令表与来源映射，`metadata` SHALL 写整套结构元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` SHALL 写该命令能写出的全部产物。省略 `--type` 时 `export` SHALL 只写容器。非法值 SHALL 以 `CLI_INVALID_ASSET_TYPE` 失败。
+`export` SHALL 用 `--type all|metadata|hdmv|igs|sup` 选择输出产物。`igs`/`sup` SHALL 写对应 `.mnu`/`.sup` 容器（配合 `--render` 还写其 PNG），`hdmv` SHALL 写命令表与来源映射，`metadata` SHALL 写整套结构元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` SHALL 写该命令能写出的全部产物。省略 `--type` 时 `export` SHALL 只写容器。
 
-`--no-assets` SHALL 关闭资产侧（不写容器、不写 PNG），保留元数据侧：与省略 `--type` 或 `--type all` 连用时 SHALL 写整套元数据，与 `--type igs|sup` 连用时 SHALL 只写该段元数据，与 `--type hdmv` 连用时 SHALL 只写 HDMV 元数据。`--no-assets` 与 `--render` 连用 SHALL 以 `CLI_EXPORT_SELECTION` 失败。
+`--metadata-only` SHALL 让 `export` 只写结构元数据：与省略 `--type` 或 `--type all` 连用时 SHALL 写整套元数据，与 `--type igs|sup` 连用时 SHALL 只写该段元数据，与 `--type hdmv` 连用时 SHALL 只写 HDMV 元数据。`--metadata-only` 与 `--render` 连用 SHALL 以 `CLI_EXPORT_SELECTION` 失败。
 
-#### Scenario: 导出元数据而不写资产
+#### Scenario: 只导出元数据
 - **WHEN** `export <BDMV> --out DIR --type metadata`
 - **THEN** 输出目录含 `manifest.json`、`hdmv/`、`igs/`、`sup/tracks.json`，不含 `assets/` 与 `assets-manifest.json`，stdout 无 `assetCount`
 
-#### Scenario: --no-assets 写出整套元数据
-- **WHEN** `export <BDMV> --out DIR --no-assets`
+#### Scenario: --metadata-only 写出整套元数据
+- **WHEN** `export <BDMV> --out DIR --metadata-only`
 - **THEN** 输出目录含 `manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`，不含 `assets-manifest.json`
 
-#### Scenario: --no-assets 收窄元数据段
-- **WHEN** `export <BDMV> --out DIR --type igs --no-assets`
+#### Scenario: --metadata-only 收窄元数据段
+- **WHEN** `export <BDMV> --out DIR --type igs --metadata-only`
 - **THEN** 输出目录只含 `igs/*.json` 与 `manifest.json`，不含 `hdmv/`、`sup/`、`assets/`
 
 #### Scenario: all 同时写容器与元数据
@@ -32,13 +32,32 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 - **WHEN** `export <BDMV> --out DIR`（不给 `--type`）
 - **THEN** 只写 `.mnu`/`.sup` 容器与 `assets-manifest.json`，不写元数据
 
-#### Scenario: 元数据形态不接受解码
-- **WHEN** `export <BDMV> --out DIR --type metadata --render`，或 `export <BDMV> --out DIR --no-assets --render`
+#### Scenario: 元数据形态与 --render 冲突
+- **WHEN** `export <BDMV> --out DIR --type metadata --render`，或 `export <BDMV> --out DIR --metadata-only --render`
 - **THEN** 以 `CLI_EXPORT_SELECTION` 失败，不写任何产物
+
+### Requirement: --type 取值校验
+
+`list` 与 `render` SHALL 各接受 `--type all|igs|sup`：`list` 用它筛选清单条目，`render` 用它筛选解码的 PNG 家族。`--type` 的注册范围是 `export`、`list` 与 `render`。三个命令的 `--type` SHALL 在参数解析阶段用同一套 Commander 枚举校验，非法值 SHALL 以 `CLI_INVALID_ARGUMENT` 失败，错误信息 SHALL 列出该命令允许的取值。
+
+#### Scenario: export 的非法取值
+
+- **WHEN** `export <BDMV> --out DIR --type bogus`
+- **THEN** 以 `CLI_INVALID_ARGUMENT` 失败，错误信息列出 `all, metadata, hdmv, igs, sup`，且不创建输出目录
+
+#### Scenario: render 不接受 export 的取值
+
+- **WHEN** `render <BDMV> --out DIR --type metadata`
+- **THEN** 以 `CLI_INVALID_ARGUMENT` 失败，错误信息列出 `all, igs, sup`
+
+#### Scenario: list 的取值与写入无关
+
+- **WHEN** `list <BDMV> --type igs`
+- **THEN** 清单只含 IGS 资产，命令不写任何产物文件
 
 ### Requirement: 输入类型判定
 
-`export` 与 `render` SHALL 按输入自身判定类型，SHALL NOT 要求用户声明输入类型。判定 SHALL 先看内容（IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签、偏移 0 或 4 处的传输流同步字节且下一个包边界再次命中），无法判定时退回扩展名（`.m2ts`/`.rsks`、`.mnu`、`.sup`），仍无法判定时 SHALL 保持 BDMV 输入路径与既有错误。
+`export` 与 `render` SHALL 按输入自身判定类型。判定 SHALL 先看内容（IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签、偏移 0 或 4 处的传输流同步字节且下一个包边界再次命中），无法判定时退回扩展名（`.m2ts`/`.rsks`、`.mnu`、`.sup`），仍无法判定时 SHALL 保持 BDMV 输入路径与既有错误。
 
 #### Scenario: 改名流文件仍按流处理
 - **WHEN** 内容是 m2ts 流的文件以 `.bin` 结尾
@@ -140,14 +159,14 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 
 ### Requirement: PNG 输出开关
 
-`export` SHALL 用布尔选项 `--render` 表示「同时写出 PNG」，SHALL NOT 再接受 `--decode`；传入 `--decode` 时的行为 SHALL 与其它未知选项一致（`CLI_UNKNOWN_OPTION`），且不存在因取值非法而产生的失败码。
+`export` SHALL 用布尔选项 `--render` 表示「同时写出 PNG」。未注册的选项 SHALL 在参数解析阶段以 `CLI_UNKNOWN_OPTION` 失败，且不写任何产物。
 
 #### Scenario: `--render` 写出 PNG
 - **WHEN** `export` 以 `--render` 运行
 - **THEN** 除 `.mnu`/`.sup` 外还写出 IGS 元素与 PGS 显示集 PNG，并在清单记录它们；`--png-level` 只影响这些文件
 
-#### Scenario: 旧写法被拒绝
-- **WHEN** 任意命令传入 `--decode png`
+#### Scenario: 未注册选项被拒绝
+- **WHEN** 任意命令传入未注册的选项
 - **THEN** 以 `CLI_UNKNOWN_OPTION` 失败，不写任何产物
 
 #### Scenario: 未启用时不写 PNG
@@ -242,16 +261,16 @@ Defines what `bdmv2web export` and `bdmv2web render` write. Both commands accept
 - **WHEN** 同一个 BDMV 分别用 `export --render` 与 `render` 导出
 - **THEN** 两边同名 `igs-png` 记录的字段集合与取值相同（记录整体逐字段相等）
 
-### Requirement: extract 命令移除
+### Requirement: 元数据导出形态
 
-`bdmv2web` SHALL NOT 注册 `extract` 命令。`export --no-assets` SHALL 写整套元数据，`export --type igs|sup --no-assets` SHALL 写该段元数据。`CLI_EXTRACT_SELECTION` 与 `CLI_INVALID_EXTRACT_TYPE` SHALL 不出现；`extract` 作为未知命令 SHALL 以 `CLI_USAGE` 失败。
+`export --metadata-only` SHALL 写整套元数据，`export --type igs|sup --metadata-only` SHALL 写该段元数据。命令集合由 `bdmv2web --help` 列出；未知命令 SHALL 以 `CLI_USAGE` 失败。
 
 #### Scenario: 未知命令被拒绝
-- **WHEN** `bdmv2web extract <BDMV> --out DIR`
+- **WHEN** `bdmv2web` 收到未注册的命令名
 - **THEN** 以 `CLI_USAGE` 失败，提示未知命令，不写任何产物
 
 #### Scenario: 两种元数据形态
-- **WHEN** 同一 BDMV 分别运行 `export --out DIR --no-assets` 与 `export --out DIR --type igs --no-assets`
+- **WHEN** 同一 BDMV 分别运行 `export --out DIR --metadata-only` 与 `export --out DIR --type igs --metadata-only`
 - **THEN** 前者写 `manifest.json`、`hdmv/*.json`、`igs/*.json` 与 `sup/tracks.json`；后者只写 `igs/scenes.json`、`igs/diagnostics.json`、`igs/source-map.json` 与 `manifest.json`，不写 `hdmv/`、`sup/` 与 `assets-manifest.json`
 
 ### Requirement: render 按输入校验选项

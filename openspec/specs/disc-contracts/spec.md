@@ -17,7 +17,7 @@
 
 #### Scenario: 调用未接入命令
 
-- **WHEN** 调用尚未交付的 convert 功能
+- **WHEN** 调用尚未交付的 build 功能
 - **THEN** 返回明确未实现诊断及非零退出码，不生成空壳成功包
 
 ### Requirement: 版本化数据与精确时间

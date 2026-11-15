@@ -102,17 +102,41 @@
 
 ### Requirement: 覆盖已有菜单包
 
-系统 SHALL 默认保留已存在的输出目录；仅在 `convert --overwrite` 时事务性替换整个菜单包。覆盖时，若旧媒体计划与新输入的 Playlist、Clip、时间边界、流声明及编码参数匹配，系统 SHALL 复用已有菜单媒体资源而不重新转码；不匹配或资源缺失时重新生成。该匹配不对源 M2TS 内容作哈希或指纹验证。
+系统 SHALL 默认保留已存在的输出目录；仅在 `build --overwrite` 时事务性替换整个菜单包。覆盖时，若旧媒体计划与新输入的 Playlist、Clip、时间边界、流声明及编码参数匹配，系统 SHALL 复用已有菜单媒体资源而不重新转码；不匹配或资源缺失时重新生成。该匹配不对源 M2TS 内容作哈希或指纹验证。
 
 #### Scenario: 覆盖并复用媒体
 
-- **WHEN** 用户对已存在的输出目录运行 `convert --overwrite`，且旧媒体计划及所需文件与当前输入匹配
+- **WHEN** 用户对已存在的输出目录运行 `build --overwrite`，且旧媒体计划及所需文件与当前输入匹配
 - **THEN** 新菜单包替换旧包，菜单/诊断/清单文件更新，背景视频和音轨从旧包复制，媒体计划记录本次复用，不运行媒体转码
 
 #### Scenario: 覆盖但媒体计划不匹配
 
-- **WHEN** 用户运行 `convert --overwrite`，但旧媒体计划不匹配或旧媒体文件缺失
+- **WHEN** 用户运行 `build --overwrite`，但旧媒体计划不匹配或旧媒体文件缺失
 - **THEN** 重新生成媒体后替换旧包；若生成失败，旧包仍保留
+
+### Requirement: 媒体复用来源
+
+`--resume` SHALL 是无值布尔开关，从输出目标旁最新的 `.<输出名>.staging-*` 目录复用媒体；`--resume-dir <dir>` SHALL 从指定目录复用媒体。两者 SHALL 独立于 `--overwrite` 生效。`--no-reuse` SHALL 重新生成菜单媒体；同时给出 `--resume` 或 `--resume-dir` 时 SHALL 按该选项指定的目录复用媒体。`--resume-dir` 的空值 SHALL 以 `CLI_INVALID_ARGUMENT` 失败。
+
+#### Scenario: 干净重建
+
+- **WHEN** 用户对已存在的输出目录运行 `build <BDMV> --overwrite --no-reuse`
+- **THEN** 菜单媒体重新生成，不从已有输出目录复制资产
+
+#### Scenario: 从 staging 续跑
+
+- **WHEN** 运行 `build <BDMV> --resume`，且输出目标旁存在 `.<输出名>.staging-*`
+- **THEN** 从最新的 staging 目录复用媒体
+
+#### Scenario: 指定复用目录
+
+- **WHEN** 运行 `build <BDMV> --resume-dir DIR`
+- **THEN** 从 DIR 复用媒体，无需 `--overwrite`
+
+#### Scenario: 输入位置不被复用选项占用
+
+- **WHEN** 运行 `build --resume /path/to/BDMV`
+- **THEN** `/path/to/BDMV` 解析为输入位置参数，媒体从输出目标旁最新的 staging 目录复用
 
 ### Requirement: 保守映射影片文件
 
@@ -164,7 +188,7 @@
 
 ### Requirement: 单一菜单产物
 
-系统 SHALL 提供统一的 convert 产物，不使用产物模式字段；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。影片 PGS 字幕由外部播放器处理，不嵌入菜单运行时。
+系统 SHALL 提供统一的菜单包产物，不使用产物模式字段；菜单资源自包含，影片显式依赖源 M2TS 和默认关联程序。影片 PGS 字幕由外部播放器处理，不嵌入菜单运行时。
 
 #### Scenario: 移动菜单包
 

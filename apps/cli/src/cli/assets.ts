@@ -29,8 +29,9 @@ export interface AssetRecord {
 export type AssetType = "all" | "igs" | "sup";
 /**
  * Output families a graphics run can write. `metadata` is the whole structural
- * set and `hdmv` is its command-table section; both are outputs only, so
- * `outputTypeOption` accepts them while `--pid`/`--m2ts` selection does not.
+ * set and `hdmv` is its command-table section; both name outputs, while
+ * `--pid`/`--m2ts` select input streams. Commander validates the values against
+ * each command's set before a command body reads them.
  */
 export type OutputType = "all" | "metadata" | "hdmv" | "igs" | "sup";
 
@@ -38,7 +39,7 @@ export type OutputType = "all" | "metadata" | "hdmv" | "igs" | "sup";
  * What a graphics run writes: structural metadata, `.mnu`/`.sup` containers, and
  * PNG frames, each per family. `--type` names an output, never the input — `igs`
  * and `sup` select their container and (with `--render`) their PNGs, while
- * `--no-assets` turns the asset side off and leaves the metadata side on.
+ * `--metadata-only` writes the metadata side and leaves containers and PNGs off.
  */
 export interface OutputSelection {
   metadata: { hdmv: boolean; igs: boolean; sup: boolean };
@@ -52,15 +53,12 @@ const NO_FAMILIES = { igs: false, sup: false };
 const ALL_FAMILIES = { igs: true, sup: true };
 
 export function assetTypeOption(): AssetType {
-  return validateAssetType(optionValue("--type") ?? "all");
+  return (optionValue("--type") ?? "all") as AssetType;
 }
 
 /** `undefined` when `--type` was not given, so each command can keep its own default. */
 export function outputTypeOption(): OutputType | undefined {
-  const value = optionValue("--type");
-  if (value === undefined) return undefined;
-  if (value !== "all" && value !== "metadata" && value !== "hdmv" && value !== "igs" && value !== "sup") fail("CLI_INVALID_ASSET_TYPE", "--type must be one of all, metadata, hdmv, igs, or sup");
-  return value;
+  return optionValue("--type") as OutputType | undefined;
 }
 
 /** Containers (and their PNGs) a `--type` names; `metadata` and `hdmv` have none. */
@@ -77,7 +75,7 @@ function familiesFor(type: OutputType | undefined) {
 /**
  * Metadata sections a `--type` names. Naming a container family (or no type at
  * all) means the asset side, so metadata only appears when asked for by name or
- * when `--no-assets` leaves nothing else to write.
+ * when `--metadata-only` selects the metadata-only shape.
  */
 function metadataFor(type: OutputType | undefined, assets: boolean) {
   if (type === "metadata" || type === "all") return ALL_METADATA;
@@ -90,8 +88,8 @@ function metadataFor(type: OutputType | undefined, assets: boolean) {
 
 /**
  * `export` writes the containers by default and the structural set on request.
- * `--no-assets` keeps the metadata side: alone it is the whole metadata set,
- * `--type igs --no-assets` is the IGS section only.
+ * `--metadata-only` writes the whole metadata set on its own; with `--type igs`
+ * or `--type sup` it writes that one section.
  */
 export function exportOutputs(type: OutputType | undefined, assets = true): OutputSelection {
   const families = assets ? familiesFor(type) : NO_FAMILIES;
@@ -138,11 +136,6 @@ export interface AssetSelection { clipId?: string; pid?: number; renderPng: bool
 
 export function selectedClip(clipId: string, selection: { clipId?: string }): boolean { return selection.clipId === undefined || equalsIgnoreCase(selection.clipId, clipId); }
 export function selectedPid(pid: number, selection: { pid?: number }): boolean { return selection.pid === undefined || selection.pid === pid; }
-
-export function validateAssetType(value: string): AssetType {
-  if (value !== "all" && value !== "igs" && value !== "sup") fail("CLI_INVALID_ASSET_TYPE", "--type must be one of all, igs, or sup");
-  return value;
-}
 
 export function safeAssetStem(path: string): string {
   const stem = basename(path, extname(path)).replace(/[^A-Za-z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "");

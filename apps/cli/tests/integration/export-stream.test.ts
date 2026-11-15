@@ -227,7 +227,7 @@ describe("export input detection and analysis", async () => {
     const output = join(parent, "out");
     try {
       const stream = await writeStream(parent, "clip.rsks", syntheticPgsStream({ displaySets: 2 }));
-      const result = await runCommand(["export", stream, "--out", output, "--type", "sup", "--no-assets"]);
+      const result = await runCommand(["export", stream, "--out", output, "--type", "sup", "--metadata-only"]);
       expect(result.status, String(result.stderr)).toBe(0);
       expect(existsSync(join(output, "assets-manifest.json"))).toBe(false);
       expect(existsSync(join(output, "assets"))).toBe(false);

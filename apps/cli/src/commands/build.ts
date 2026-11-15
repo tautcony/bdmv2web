@@ -30,7 +30,7 @@ export {
 } from "./menu-planning.js";
 export type { MenuMediaScope, MenuPlaylistTarget } from "./menu-planning.js";
 
-const CONVERT_STEPS = {
+const BUILD_STEPS = {
   structure: "Parse BDMV structure",
   scenes: "Extract IGS scenes",
   playlist: "Resolve Top Menu playlist",
@@ -133,14 +133,14 @@ export async function build(): Promise<void> {
     ? await plannedOutputPath(outOption)
     : plannedRoot === undefined ? undefined : await plannedOutputPath(resolve(dirname(plannedRoot), "BDMV-menu"));
   const plannedTitle = titleOption ?? (plannedRoot === undefined ? undefined : basename(dirname(plannedRoot)));
-  const resumeOption = optionValue("--resume");
-  const resumeWithoutDirectory = optionState("--resume") === true;
-  const plannedResume = resumeOption !== undefined
-    ? await resumeMediaDirectory(undefined, resumeOption)
+  const resumeDir = optionValue("--resume-dir");
+  const resumeWithoutDirectory = flagEnabled("--resume");
+  const plannedResume = resumeDir !== undefined
+    ? await resumeMediaDirectory(undefined, resumeDir)
     : resumeWithoutDirectory && plannedOut !== undefined ? await resumeMediaDirectory(plannedOut, true) : undefined;
   const progress = commandProgress({
-    command: "convert",
-    steps: Object.values(CONVERT_STEPS),
+    command: "build",
+    steps: Object.values(BUILD_STEPS),
     source: input,
     details: [
       ...(plannedOut === undefined ? [] : [["output", plannedOut] as const]),
@@ -150,7 +150,7 @@ export async function build(): Promise<void> {
     ],
   });
 
-  progress.start(CONVERT_STEPS.structure);
+  progress.start(BUILD_STEPS.structure);
   const { disc, table } = await parseBdmvWithInputTable(input);
   const bdjFiles = await collectBdjApplicationFiles(disc);
   const hasBdjEntries = disc.entries.some((entry) => entry.target.objectType === "BDJ");
@@ -190,11 +190,11 @@ export async function build(): Promise<void> {
   }
   const fatalDiagnostics = classifyDiagnostics(disc.diagnostics);
   if (fatalDiagnostics.hasFatal) {
-    progress.fail(CONVERT_STEPS.structure, firstBlockingCode(fatalDiagnostics.blocking));
+    progress.fail(BUILD_STEPS.structure, firstBlockingCode(fatalDiagnostics.blocking));
     stageFailure(firstBlockingCode(fatalDiagnostics.blocking), fatalDiagnostics.blocking);
     return;
   }
-  progress.done(CONVERT_STEPS.structure, `${countOf(disc.entries.length, "entry", "entries")} · ${countOf(disc.playlists.length, "playlist", "playlists")} · ${countOf(disc.clips.length, "clip", "clips")}`);
+  progress.done(BUILD_STEPS.structure, `${countOf(disc.entries.length, "entry", "entries")} · ${countOf(disc.playlists.length, "playlist", "playlists")} · ${countOf(disc.clips.length, "clip", "clips")}`);
   const bdjHostApiJar = bdjFiles.files.length ? await buildBdjHostApiJar() : undefined;
   const out = plannedOut ?? resolve(dirname(disc.root), "BDMV-menu");
   const title = plannedTitle ?? basename(dirname(disc.root));
@@ -204,29 +204,29 @@ export async function build(): Promise<void> {
     vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath,
   });
   const resumeDirectory = plannedResume ?? (resumeWithoutDirectory ? await resumeMediaDirectory(roots.output, true) : undefined);
-  const reuseDirectory = resumeDirectory ?? (overwrite ? roots.output : undefined);
+  const reuseDirectory = optionState("--reuse") === false ? resumeDirectory : (resumeDirectory ?? (overwrite ? roots.output : undefined));
   // The header names the target for inputs that follow the documented BDMV layout.
   if (plannedOut === undefined) progress.info("output", roots.output);
   if (plannedTitle === undefined) progress.info("title", title);
   if (plannedResume === undefined && resumeDirectory !== undefined) progress.info("resume", resumeDirectory);
 
-  progress.start(CONVERT_STEPS.scenes);
+  progress.start(BUILD_STEPS.scenes);
   const extraction = await extractIgsScenes(disc, { table });
-  progress.done(CONVERT_STEPS.scenes, `${countOf(extraction.scenes.length, "scene", "scenes")} · ${countOf(extraction.assets.length, "image", "images")} · ${countOf(extraction.streams.length, "stream", "streams")}`);
+  progress.done(BUILD_STEPS.scenes, `${countOf(extraction.scenes.length, "scene", "scenes")} · ${countOf(extraction.assets.length, "image", "images")} · ${countOf(extraction.streams.length, "stream", "streams")}`);
 
-  progress.start(CONVERT_STEPS.playlist);
+  progress.start(BUILD_STEPS.playlist);
   const menuTarget = findTopMenuPlaylist(disc, profile, limits, extraction.scenes);
   const menuPlaylist = menuTarget?.playlist;
   const menuMedia = mediaScope === "none" ? null : await menuLoopMediaInput(disc, menuPlaylist, { ...(menuTarget ? { playItemIndex: menuTarget.playItem } : {}) });
-  progress.done(CONVERT_STEPS.playlist, menuTarget === undefined
+  progress.done(BUILD_STEPS.playlist, menuTarget === undefined
     ? "no HDMV Top Menu entry"
     : `playlist ${menuTarget.playlist.id} · PlayItem ${menuTarget.playItem}`);
 
-  progress.start(CONVERT_STEPS.scene);
+  progress.start(BUILD_STEPS.scene);
   const transaction = await beginOutputTransaction(roots.output, { overwrite });
   try {
     const failMenuConversion = async (code: string, message: string): Promise<void> => {
-      progress.fail(CONVERT_STEPS.scene, code);
+      progress.fail(BUILD_STEPS.scene, code);
       await writeFile(resolve(transaction.stagingPath, "README.md"), `# Menu package\n\n${message}\n\nStatus: **failed**.\n`);
       const diagnostics = deliveryDiagnostics([
         { code, message, severity: "error" },
@@ -296,7 +296,7 @@ export async function build(): Promise<void> {
         hasMissingRequiredAsset: false,
         limitations: ["BD-J menu background and playlist media depend on the browser playback bridge."],
       });
-      progress.done(CONVERT_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
+      progress.done(BUILD_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
       const mediaEncoding = menuMediaEncoding();
       const mediaProgress = mediaExportProgress(bdjMenuMediaAssets, (ratio, detail) => progress.progress(ratio, detail));
       const packaged = await buildMenuPackage({
@@ -315,10 +315,10 @@ export async function build(): Promise<void> {
         diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
         onMediaProgress: mediaProgress.onMediaProgress,
         onPhase: (phase) => {
-          if (phase === "media") { if (bdjMenuMediaAssets.length) progress.start(CONVERT_STEPS.media, countOf(mediaProgress.clips, "clip", "clips")); return; }
-          if (phase === "assets") { if (bdjMenuMediaAssets.length) progress.done(CONVERT_STEPS.media, countOf(bdjMenuMediaAssets.length, "BD-J PlayItem", "BD-J PlayItems")); else progress.skip(CONVERT_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no playlist media inside the menu scope"); progress.start(CONVERT_STEPS.package); return; }
+          if (phase === "media") { if (bdjMenuMediaAssets.length) progress.start(BUILD_STEPS.media, countOf(mediaProgress.clips, "clip", "clips")); return; }
+          if (phase === "assets") { if (bdjMenuMediaAssets.length) progress.done(BUILD_STEPS.media, countOf(bdjMenuMediaAssets.length, "BD-J PlayItem", "BD-J PlayItems")); else progress.skip(BUILD_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no playlist media inside the menu scope"); progress.start(BUILD_STEPS.package); return; }
           if (phase === "bundle") { progress.note("bundling BD-J and HDMV runtime"); return; }
-          if (phase === "manifest") { progress.done(CONVERT_STEPS.package, "manifest written"); progress.start(CONVERT_STEPS.report); }
+          if (phase === "manifest") { progress.done(BUILD_STEPS.package, "manifest written"); progress.start(BUILD_STEPS.report); }
         },
       });
       for (const { code, message, severity } of packaged.diagnostics) {
@@ -328,7 +328,7 @@ export async function build(): Promise<void> {
       const report = { schemaVersion: "1.0", status: decision.status, reasons: decision.reasons, diagnostics: decisionFacts };
       await writeConversionReport(transaction.stagingPath, report);
       await transaction.commit();
-      progress.done(CONVERT_STEPS.report, `status ${decision.status}`);
+      progress.done(BUILD_STEPS.report, `status ${decision.status}`);
       const packageText = await packageSummary(roots.output);
       progress.finish(decision.status, [["output", roots.output], ...(packageText === undefined ? [] : [["package", packageText] as const]), ["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"], ["report", `reports.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`]]);
       process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" })}\n`);
@@ -473,7 +473,7 @@ export async function build(): Promise<void> {
       menuMedia === null ? null : "background",
       additionalMenuMedia.length ? countOf(additionalMenuMedia.length, "extra playlist", "extra playlists") : null,
     ].filter((item): item is string => item !== null);
-    progress.done(CONVERT_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
+    progress.done(BUILD_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
     const mediaEncoding = menuMediaEncoding();
     const mediaProgress = mediaExportProgress([...(menuMedia === null ? [] : [menuMedia]), ...additionalMenuMedia], (ratio, detail) => progress.progress(ratio, detail));
     const packaged = await buildMenuPackage({
@@ -496,18 +496,18 @@ export async function build(): Promise<void> {
       onMediaProgress: mediaProgress.onMediaProgress,
       onPhase: (phase) => {
         if (phase === "media") {
-          if (plannedMedia.length) progress.start(CONVERT_STEPS.media, countOf(mediaProgress.clips, "clip", "clips"));
+          if (plannedMedia.length) progress.start(BUILD_STEPS.media, countOf(mediaProgress.clips, "clip", "clips"));
           return;
         }
         if (phase === "assets") {
-          if (plannedMedia.length) progress.done(CONVERT_STEPS.media, plannedMedia.join(" + "));
-          else progress.skip(CONVERT_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no menu media");
-          progress.start(CONVERT_STEPS.package);
+          if (plannedMedia.length) progress.done(BUILD_STEPS.media, plannedMedia.join(" + "));
+          else progress.skip(BUILD_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no menu media");
+          progress.start(BUILD_STEPS.package);
           return;
         }
         if (phase === "bundle") { progress.note("bundling runtime"); return; }
-        progress.done(CONVERT_STEPS.package, "manifest written");
-        progress.start(CONVERT_STEPS.report);
+        progress.done(BUILD_STEPS.package, "manifest written");
+        progress.start(BUILD_STEPS.report);
       },
       diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
@@ -519,7 +519,7 @@ export async function build(): Promise<void> {
     const report = { schemaVersion: "1.0", status: decision.status, reasons: decision.reasons, diagnostics: decisionFacts };
     await writeConversionReport(transaction.stagingPath, report);
     await transaction.commit();
-    progress.done(CONVERT_STEPS.report, `status ${decision.status}`);
+    progress.done(BUILD_STEPS.report, `status ${decision.status}`);
     const packageText = await packageSummary(roots.output);
     progress.finish(decision.status, [
       ["output", roots.output],

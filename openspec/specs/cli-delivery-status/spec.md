@@ -12,13 +12,13 @@
 
 #### Scenario: 结构成功但无菜单
 
-- **WHEN** `export --no-assets` 完成结构阶段且未生成播放器
+- **WHEN** `export --metadata-only` 完成结构阶段且未生成播放器
 - **THEN** 报告 `stageStatus: "complete"`，交付状态仍为未完成，不出现 `status: "complete"`
 
 #### Scenario: 报告字段可区分
 
 - **WHEN** 读取 `inspect` / `export` 的机器输出
-- **THEN** 阶段结论位于 `stageStatus`，交付结论只出现在 `validate` / `convert` 的 `status`
+- **THEN** 阶段结论位于 `stageStatus`，交付结论只出现在 `validate` / `build` 的 `status`
 
 ### Requirement: fatal 诊断不得成功退出
 
@@ -27,7 +27,7 @@
 #### Scenario: 缺少必需入口
 
 - **WHEN** 输入的 BDMV 缺少 `index.bdmv`，解析记录 `fatal BDMV_REQUIRED_FILE_MISSING`
-- **THEN** `export --no-assets` 不提交 staging、不生成正式输出目录，stdout 报 `stageStatus: "failed"` 与错误码，进程退出码为 1
+- **THEN** `export --metadata-only` 不提交 staging、不生成正式输出目录，stdout 报 `stageStatus: "failed"` 与错误码，进程退出码为 1
 
 #### Scenario: 失败对象与成功对象同字段
 
@@ -36,7 +36,7 @@
 
 #### Scenario: 转换期 fatal
 
-- **WHEN** `convert` 的解析或打包阶段出现 `fatal` 诊断
+- **WHEN** `build` 的解析或打包阶段出现 `fatal` 诊断
 - **THEN** 不产生可被误认为完成的新包，退出码为 1
 
 ### Requirement: 状态只由失败证据决定
@@ -55,16 +55,16 @@
 
 ### Requirement: 单一产物形态
 
-系统 SHALL 通过 `convert` 产出唯一的菜单包，且不提供模式参数；stdout、manifest、report、兼容性报告和发布汇总不记录产物模式。产物形态不得作为"交付不完整"的判定依据。
+系统 SHALL 通过 `build` 产出唯一的菜单包，且不提供模式参数；stdout、manifest、report、兼容性报告和发布汇总不记录产物模式。产物形态不得作为"交付不完整"的判定依据。
 
 #### Scenario: 裸跑转换
 
-- **WHEN** 执行 `convert INPUT`
+- **WHEN** 执行 `build INPUT`
 - **THEN** 生成统一菜单包，并按实际缺口判定状态；无缺口时退出 0
 
-#### Scenario: 传入已移除的模式参数
+#### Scenario: 传入未注册的 --mode 参数
 
-- **WHEN** `convert` 收到 `--mode`
+- **WHEN** `build` 收到 `--mode`
 - **THEN** 在任何输出目录或事务创建前返回 `CLI_UNKNOWN_OPTION`，退出码 1，磁盘无新目录
 
 #### Scenario: 状态判定不含模式
@@ -88,12 +88,12 @@
 
 #### Scenario: 生成菜单即完成
 
-- **WHEN** `convert` 成功产出菜单包，且诊断中没有 `error` 或 `fatal`
+- **WHEN** `build` 成功产出菜单包，且诊断中没有 `error` 或 `fatal`
 - **THEN** `reports.json.compatibility.status`、`reports.json.conversion.status`、`manifest.json.status` 与 stdout 同为 `complete`
 
 #### Scenario: 转换与验证报告分开更新
 
-- **WHEN** 同一个包分别由 `convert` 与 `validate` 判定
+- **WHEN** 同一个包分别由 `build` 与 `validate` 判定
 - **THEN** 两者使用同一套判定规则并给出相同状态；`build` 写入 `conversion`，`validate` 更新 `compatibility`
 
 #### Scenario: manifest 结论不被回写
@@ -117,7 +117,7 @@
 
 #### Scenario: limits 已接线
 
-- **WHEN** `convert` 收到 `--limits FILE`
+- **WHEN** `build` 收到 `--limits FILE`
 - **THEN** 合法文件中的 Limits 对象传入转换阶段与打包后的 HDMV VM，可通过 trace 的 limit 字段观察生效值
 
 #### Scenario: limits 非法

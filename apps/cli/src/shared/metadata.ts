@@ -5,7 +5,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 /**
- * The metadata artifacts a metadata-only `export` writes (`--no-assets`, or
+ * The metadata artifacts a metadata-only `export` writes (`--metadata-only`, or
  * `--type metadata`) and the structural set it can add to an asset run.
  *
  * They describe what was read (structure, provenance, track index) and never carry
