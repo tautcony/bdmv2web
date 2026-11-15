@@ -100,9 +100,10 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 ### `export`
 
 - 输入为 BDMV 目录，或单个 `.m2ts`/`.rsks` 流文件；`shared/stream-input.ts` 的 `classifyInput` 先按内容判定（传输流同步字节、IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签），再退回扩展名。`.mnu`/`.sup` 输入各自有专门的错误并指向 `render`。
-- `export` 的 `--type` 只选输出：`igs`/`sup` 写容器（配合 `--render` 写 PNG）、`hdmv` 写命令表与来源映射、`metadata` 写整套元数据、`all` 写全部；省略时只写容器。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
+- `export` 的 `--type` 只选输出：`igs`/`sup` 写容器（配合 `--render` 写 PNG）、`hdmv` 写命令表与来源映射、`metadata` 写整套元数据、`all` 写全部；省略时只写容器。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`：`shared/stream-input.ts` 的 `discoverGraphicsStreamsFromPrefix` 读文件头 256 KiB 的首个 PMT 声明，PMT 落在该范围之外时由整段 `probeTransportStreams` 提供声明与诊断。保留 PID（`< 0x20`）上的声明忽略，产物用文件 stem 代替 clipId。
 - 写 igstools 兼容 `.mnu`（`assets/igs/<clip>-pid-<pid>.mnu`）与 `.sup`（`assets/subtitles/<clip>-pid-<pid>.sup`）。
-- 流模式对一个文件读两趟：先 `probeTransportStreams` 发现 PID，再提取 IGS/PGS。同时要 IGS 与 PGS 时第二趟是**一次读取**：`shared/chunk-fanout.ts` 把 `readFileChunks` 的分块广播给两个独立读取器（各自的 PSI/PES 状态与诊断），PGS 先写到临时目录、过了阶段判定再搬进 staging。两个 pass 各自报告自己看到的传输损伤；合并时用 `@bdmv2web/igs` 的 `uniqueDiagnostics` 按“严重性 + 码 + 文案 + 完整 source（含包偏移）”折叠成每种事件一行，场景引用取并集。
+- 流模式对文件做一次完整读取、一份包解析：`shared/packet-fanout.ts` 的 `fanOutPackets` 让单个 `M2tsPacketReader` 与 `PsiAssembler` 拥有整段扫描，把 packet 批次广播给 IGS/PGS 消费者，两者各自的 PES/显示集状态独立。`shared/chunk-fanout.ts` 提供每消费者 2 批的有界背压，并在消费者提前停止时仍把 producer 读到 EOF，因此尾部损伤由扫描报告；`scan.done` 让阶段判定等诊断收集完成。传输/PSI 诊断只产一份，合并时用 `@bdmv2web/igs` 的 `uniqueDiagnostics` 按“严重性 + 码 + 文案 + 完整 source（含包偏移）”折叠组装器的重复归因，每种事件一行，场景引用取并集。PGS 先写到临时目录、过了阶段判定再搬进 staging。
+- BDMV 输入的 `--m2ts` 通过 `clipFilter` 下推到 `extractIgsScenes`，无关 clip 在打开文件前跳过；`--type`、`--pid` 仍是输出过滤。BDMV 的 IGS 与 PGS 各读一遍 clip，SUP 可达性来自 IGS 场景算出的 playlist closure。
 - `--render` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
 - 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`igs-png` 记录 `width`/`height`/`objectId`/`objectVersion`/`paletteId`/`paletteVersion`；`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`，秒值以轨道起点为 0，流模式以首个显示集为 0。
 - 流模式不传 `timestampOffset90k`，`.sup` 保留源 90kHz 时间轴；清单 `sup` 记 `language: "und"` 与发现序号。`--m2ts` 与未在 PMT 声明的 `--pid` 报 `CLI_EXPORT_SELECTION`；无 PAT/PMT 或声明 PID 无显示集报 `EXPORT_INVALID_STREAM`。

@@ -6,12 +6,13 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `src/transport/transport.ts` | `M2tsPacketReader`（192 字节源包）、`PsiAssembler`（PAT/PMT）、`PesAssembler`、`decodeTimestamp`、`source()` |
+| `src/transport/transport.ts` | `M2tsPacketReader`（192 字节源包）、`PsiAssembler`（PAT/PMT）、`PesAssembler`、`decodeTimestamp`、`source()`；`PsiAssembler.revision` 随声明变化递增 |
+| `src/transport/probe.ts` | `probeTransportStreams`（整段读，报全部传输/PSI 诊断）、`probeTransportStreamPrefix`（读到首个 PMT 即止，只返回声明） |
 | `src/scene/igs.ts` | `parseSegments`、`consumeSegment`、`decodeRle`、`createIgsState`、`IgsError` |
 | `src/rendering/png.ts` | `renderSceneAssets`、`renderIgsAssets`、`validateIgsSceneAssets`、`encodeIndexedPng`、`encodeRgbaPng`、`paletteRgbaTable` |
 | `src/rendering/mnu.ts` | `parseIgsMnu`（igstools 兼容 `.mnu`） |
-| `src/scene/extract.ts` | `extractIgsScenes`（基于 `ParsedDisc`）、`extractIgsFromChunks`（任意分块输入） |
-| `src/diagnostics.ts` | `diagnosticKey`、`uniqueDiagnostics`：把多趟读同一 clip 时重复报告的同一事件折成一条 |
+| `src/scene/extract.ts` | `extractIgsScenes`（基于 `ParsedDisc`）、`extractIgsFromChunks`（任意分块输入）、`extractIgsFromPacketBatches`（外层扫描已解析的 packet 批次） |
+| `src/diagnostics.ts` | `diagnosticKey`、`uniqueDiagnostics`：把同一损伤事件的多份报告折成一条；键是完整字段的 JSON 数组，重复项没有场景引用时直接保留首见对象 |
 | `src/scene/types.ts` | `IgsScene`、`IgsPage`、`IgsButton`、`IgsAsset`、`IgsExtraction`、`IgsOptions`、`IgsDiagnostic` |
 
 ## 公开接口
@@ -19,6 +20,9 @@
 ```ts
 extractIgsScenes(disc: ParsedDisc, options?: IgsOptions & { table?: InputFileTable }): Promise<IgsExtraction>
 extractIgsFromChunks(clipId, chunks: AsyncIterable<Uint8Array>, expectedPidCues?, options?): Promise<IgsExtraction>
+extractIgsFromPacketBatches(clipId, batches: AsyncIterable<readonly TsPacket[]>, expectedPidCues?, options?, transportDiagnostics?): Promise<IgsExtraction>
+probeTransportStreams(clipId, chunks, options?): Promise<TransportStreamProbe>
+probeTransportStreamPrefix(clipId, chunks, options?): Promise<TransportStreamProbe>
 parseSegments(input, baseOffset?, residual?, clipId?, pid?, pts?): SegmentParseResult
 consumeSegment(state, segment, clipId, pid, pts, packetOffset, pesOffset, segmentFileOffset, limits?)
 decodeRle(data, width, height, limits?): Uint8Array
@@ -39,7 +43,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | `renderAssets` | `true` | 关闭后只解析场景，不生成 PNG（元数据形态的 `export --metadata-only` 用） |
 | `pngLevel` | 调优默认 | 写 PNG 的 deflate 档位 0–9；元素图默认 1（`DEFAULT_ASSET_PNG_LEVEL`） |
 | `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export` 用） |
-| `measurePayloadBytes` | `false` | 同一次扫描里按 PID 累计 TS 载荷字节，填入 `IgsExtraction.payloadBytesByClip`（`list` 用，避免为算大小再读一遍 clip） |
+| `measurePayloadBytes` | `false` | 同一次扫描里按 PID 累计 TS 载荷字节，填入 `IgsExtraction.payloadBytesByClip`，供 `list` 的树形视图使用 |
 | `clipFilter` | 不过滤 | 谓词拒绝的 clip 在打开文件前跳过，供只报告部分 clip 的调用方省掉无关读取 |
 | `table` | 自动发现 | 复用已验证的输入文件表 |
 
@@ -70,7 +74,9 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 10. 汇总 `status`：有 `error` 且无场景 → `failed`；有 `error` 或有 `warning` 或无场景 → `partial`；否则 `complete`。
 11. `measurePayloadBytes` 时，同一次扫描里按 PID 累计 TS 载荷字节（含脚本/视频/字幕 PID），返回 `payloadBytesByClip`（clip → PID → 字节）。`list` 的树形视图读这份统计，一次读取同时得到容器与载荷大小。
 
-多个 pass 看同一段字节时（`export`/`render` 先 probe 再提取），每个 pass 各自报告自己看到的传输损伤；合并两组诊断用 `uniqueDiagnostics`，键包含严重性、码、文案与完整 `source`（含包偏移），因此文案相同但偏移不同的事件各占一行，`affectedSceneIds` 取并集。
+单流 `export`/`render` 把一个 `M2tsPacketReader` 解析出的 packet 批次广播给 IGS 与 PGS 消费者：`extractIgsFromPacketBatches` 接收批次和该扫描的传输诊断，两个消费者的 PES/显示集状态各自独立；扫描在消费者提前停止时仍读到 EOF，尾部损伤由扫描报告。`probeTransportStreamPrefix` 只提供 PMT 声明，PMT 落在前缀之外时由整段 `probeTransportStreams` 提供声明与诊断。BDMV 路径的 `extractIgsScenes` 按 clip 各自读取，`clipFilter` 在打开文件前跳过无关 clip。PMT/cue 冲突判定按 `PsiAssembler.revision` 缓存，声明不变时判定结果复用。
+
+一个损伤事件可能由共享扫描、PSI 组装器、PES 组装器与 IGS 状态分别归因；合并用 `uniqueDiagnostics`，键包含严重性、码、文案与完整 `source`（含包偏移），因此文案相同但偏移不同的事件各占一行，`affectedSceneIds` 取并集。
 
 ## 场景模型
 
@@ -114,7 +120,8 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | --- | --- |
 | `packages/igs/src/transport/transport.test.ts` | 192B 包、PSI/PES、PTS 回绕、连续性错误 |
 | `packages/igs/tests/integration/extraction.test.ts` | 段拼装、版本缓存、RLE、场景完整性 |
-| `packages/igs/tests/integration/diagnostics.test.ts` | 诊断身份：多趟读同一 clip 的同一事件折叠、同文案不同偏移保留、场景引用并集 |
+| `packages/igs/tests/integration/diagnostics.test.ts` | 诊断身份：同一事件的多份报告折叠、同文案不同偏移保留、字段含分隔符仍无歧义、场景引用并集 |
+| `packages/igs/tests/integration/packet-batches.test.ts` | 从外层已解析的 packet 批次提取场景，与分块输入产物一致 |
 | `packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
 | `packages/igs/tests/integration/igs-reference-element-summary.test.ts` | 重算 9 个 clip、892 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `test-data/baselines/igs-reference-element-summary.json` |
 | `packages/igs/tests/integration/libbluray-igs-baseline.test.ts` | 对 9 个 clip 的 display set、ICS 页面/BOG/按钮/进入退出效果、256 项调色板与 873 个对象 RLE 与 libbluray 1.5.0 `graphics_processor_decode_ts()` 输出逐项比对；golden 在 `test-data/baselines/libbluray-1.5.0-igs-baseline.json` |

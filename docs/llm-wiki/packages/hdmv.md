@@ -100,7 +100,7 @@ new HdmvVm(programs: Array<VmProgram | MovieObject>, options?: VmOptions)
 - `restoreCheckpoint()` 同样只克隆有界状态，并用 `TrailLog.restore()` 接管检查点的历史数组。
 - 两者都是 O(1)：VM 在借出后第一次写入时才复制**指针数组**（8 B/条），检查点本身保持不变；共享的条目对象视为不可变值。
 
-恢复不受 JS 展开参数上限约束（`splice(0, len, ...history)` 约 11 万条即 `RangeError`），20 万条历史也能恢复。检查点与 VM 共享条目对象：VM 自身从不改写条目，直接改写检查点里的条目会波及 VM。
+`record()` 对 `playback` 与 `callStack` 快照按值比较：连续条目看到同一上下文时共享同一份不可变快照，长会话的每条 trace 只新增它自己独有的字段。`replaceAll()` 用循环替换队列内容，20 万条历史也能恢复。检查点与 VM 共享条目对象：VM 自身从不改写条目，直接改写检查点里的条目会波及 VM。
 
 ### Opcode implementation audit
 
