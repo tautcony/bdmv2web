@@ -75,6 +75,20 @@ Keep disc content out of the cache and out of release output.
 - During structural refactors, preserve public signatures and observable behavior. Move implementation with its focused tests, and keep tests beside a module or in the established integration and end-to-end directories.
 - Use domain-specific module names and avoid general-purpose catch-all files such as `helpers.ts`, `misc.ts`, and `common.ts`.
 
+## Architecture boundaries
+
+Keep the workspace dependency direction one-way and each rule owned in one place. The detailed design is in `docs/llm-wiki/architecture.md`; the shared contracts are in `docs/llm-wiki/contracts.md`.
+
+- `packages/core` owns the shared contracts: DiscIR, playback targets, serialized runtime data, Time90k, Limits and PlayerProfile. It imports no producer package; consumers read these contracts from `@bdmv2web/core` or its subpath exports.
+- `packages/runtime-web` consumes the core contracts and browser-safe packages. The browser runtime reads `core/playback-targets` and `core/runtime-data`; `media-export` appears there as a devDependency for integration tests.
+- `packages/media-export` owns menu media encoding (`exportMenuMedia()`), media path naming (`menu-media-layout.ts`) and reuse. `packages/package-builder` owns static package assembly (`assembleMenuPackage()`) and consumes `PreparedMenuMedia`. Both packages remain independent of `apps/cli`.
+- `apps/cli` owns arguments, progress, the output transaction, reports, stdout and the exit code. `application/build-plan.ts` owns domain planning; `application/build-use-case.ts` runs `planBuild → exportMenuMedia → assembleMenuPackage`. `commands/build.ts` publishes every result through `publishBuildOutcome()`.
+- `decideDelivery()` is the only delivery decision. Its failure facts are failed checks, fatal diagnostics and missing required assets; evidence gaps stay in `notVerified`.
+- For a `local-jvm` package, `serve` owns the HDMV VM through `HdmvSession`. One `hdmv-update` event carries the authoritative snapshot and actions. The page uses `RemoteNavigationHost`; the server performs VM creation and PSR/GPR writes.
+- For a `file://` package, `runtime-web` uses `LocalNavigationHost` and its page VM, so the menu remains offline.
+- `asset-manifest.json` is a `local-jvm` runtime index: it is present, listed in `manifest.files` as `runtime-index`, and JSON-parseable. HDMV packages may leave it unlisted.
+- `RuntimeDataV1`, the playback-target types and `MenuMediaEncoding` have one definition each; producers and consumers import that definition.
+
 <!-- CODEGRAPH_START -->
 ## CodeGraph
 

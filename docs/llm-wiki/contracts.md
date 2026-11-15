@@ -1,6 +1,6 @@
 # 共享契约
 
-权威文件：`packages/core/schema/disc-ir.schema.json`（DiscIR）、`packages/core/src/index.ts`（校验与时间）、`packages/core/src/limits.ts`（限流）、`packages/core/src/defaults.ts`（播放器档案）。
+权威文件：`packages/core/schema/disc-ir.schema.json`（DiscIR）、`packages/core/src/index.ts`（校验与时间）、`packages/core/src/limits.ts`（限流）、`packages/core/src/defaults.ts`（播放器档案）、`packages/core/src/runtime-data.ts`（运行时数据）、`packages/core/src/playback-targets.ts`（播放目标）。
 
 ## DiscIR
 
@@ -44,6 +44,16 @@ type NavigationDescriptor =
 | `entityId` / `packetOffset` / `pid` / `instructionIndex` | 可选 | 可定位到对象、TS 包、PID、指令记录 |
 
 偏移语义：CLPI/MPLS 的 45 kHz 时间不写入 `byteOffset`；`byteOffset` 只表示文件位置，时间字段一律保留原始单位并单独归一化。
+
+## 运行时数据与播放目标
+
+`RuntimeDataV1` 的权威类型是 `packages/core/src/runtime-data.ts`；`SerializedScene`、`SerializedMenuPage`、`SerializedMenuButton`、`SerializedMenuState` 与运行时入口的 `menuScenes` 索引同在这里定义。
+
+- 生产者：`package-builder` 的 `createDataScript()` 把 `RuntimeDataV1` 写入 `runtime/disc-data.js`；消费者：`runtime-web` 的浏览器启动读取同一类型。
+- `ir: DiscIR` 与 `scene: SerializedScene | null` 始终存在；纯 BD-J 包使用 `scene: null` 与 `bdjRuntime: true`。
+- 其余字段按包内数据出现；`vmPrograms`、`vmEntries`、`externalTargets`、`media`/`menuMedia`、`pgsTracks` 通过类型参数绑定具体包，`core` 定义数据形状本身。
+- 播放目标协议在 `packages/core/src/playback-targets.ts`：`ExternalPlayItem`、`ExternalPlaylist`、`ExternalMediaTargets`、`ExternalPlayRequest`、`ExternalPlayTarget`、`EXTERNAL_UNKNOWN_CODES`、`isDeclaredExternalStreamPath()`、`resolveExternalPlayTarget()`。
+- `media-export` 的 `createExternalMediaTargets()` 从 `ParsedDisc` 与媒体闭包生成目标；`runtime-web` 与 CLI `serve` 从 `@bdmv2web/core/playback-targets` 读取同一份类型和解析函数。
 
 ## 时间：Time90k
 

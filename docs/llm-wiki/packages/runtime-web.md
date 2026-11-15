@@ -23,6 +23,15 @@ workspace build 期 `scripts/build-runtime-browser.mjs` 把 `src/browser.ts` 用
 | `src/bdj-runtime.ts` / `bdj-menu-media.ts` / `bdj-client-entry.ts` | BD-J 会话客户端、菜单媒体观察上报与 BD-J 启动入口 |
 | `src/runtime-diagnostics.ts` / `runtime-status.ts` | 运行时诊断收集与状态提示 |
 
+## 导航宿主与状态来源
+
+| 启动方式 | 宿主 | VM 与状态 |
+| --- | --- | --- |
+| `file://` 静态 HDMV 包 | `LocalNavigationHost` | 页面内 `HdmvVm`；同步 `RuntimeVmPort`，`snapshot()`/`drainActions()` 由页面持有 |
+| `local-jvm`（`data.bdjRuntime`） | `RemoteNavigationHost` | `serve` 的 `HdmvSession`；每次 `hdmv-update` 携带 `snapshot` 与 `actions` |
+
+`RemoteNavigationHost` 把 `context`/`event`/`button` 转成现有 `/api/bdj/hdmv` 请求，保存最新 `HdmvUpdate.snapshot`，并把 `actions` 交给 `browser.ts` 的场景路由。VM 创建、PSR/GPR 写入与动作执行都在服务端。`MenuButtonExecution` 的 `{kind:"pending"}` 让 `MenuController` 保留激活按钮的视觉状态，等待 `hdmv-update` 到达后更新菜单。
+
 ## 场景数据
 
 `SerializedScene`（写入 `runtime/disc-data.js` 的 `scene`/`popupScenes`/`scenes`）：

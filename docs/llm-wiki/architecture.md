@@ -14,20 +14,35 @@
 
 | 包 | 依赖（workspace） | 角色 |
 | --- | --- | --- |
-| `@bdmv2web/core` | —（运行时仅 `ajv`） | DiscIR schema/类型、Time90k、Limits、PlayerProfile、诊断与事件信封 |
+| `@bdmv2web/core` | —（运行时仅 `ajv`） | DiscIR schema/类型、播放目标、运行时数据形状、Time90k、Limits、PlayerProfile、诊断与事件信封 |
 | `@bdmv2web/utils` | — | 共享 Node 工具（`node-fs` 文件系统工具等），被除 `core`/`test-fixtures` 外的全部包依赖 |
 | `@bdmv2web/bdmv-io` | core, utils | 输入发现、按表读文件、限流读流、输出事务、路径隔离 |
 | `@bdmv2web/bdmv-parser` | bdmv-io, core, utils | BDMV 元数据解析、主备回退、结构引用图 |
 | `@bdmv2web/hdmv` | bdmv-parser, core, utils | 指令解码、寄存器、VM、导航图、静态循环 |
 | `@bdmv2web/igs` | bdmv-io, bdmv-parser, core, utils | M2TS/TS/PES 重组、IGS 段与场景、PNG |
-| `@bdmv2web/media-export` | bdmv-parser, hdmv, igs, utils | 媒体闭包、媒体计划、ffmpeg 导出、PGS、外部目标 |
-| `@bdmv2web/package-builder` | media-export, runtime-web, hdmv, core, utils | 菜单包文件、脚本嵌入、音效、manifest |
-| `@bdmv2web/runtime-web` | media-export, igs, hdmv, bdmv-parser, core, utils | 浏览器菜单运行时；被 package-builder 打成 IIFE |
+| `@bdmv2web/media-export` | bdmv-parser, hdmv, igs, core, utils | 媒体闭包、媒体计划、ffmpeg 导出、PGS、外部目标、菜单媒体编码与路径命名 |
+| `@bdmv2web/package-builder` | media-export, runtime-web, hdmv, core, utils | 静态包组装、脚本嵌入、音效、manifest；消费 `PreparedMenuMedia` |
+| `@bdmv2web/runtime-web` | bdmv-parser, core, hdmv, igs, utils（devDependency: media-export） | 浏览器菜单运行时、本地/远端导航宿主；被 package-builder 打成 IIFE |
 | `@bdmv2web/test-runner` | utils | 包审计、状态判定、覆盖率、报告 |
 | `@bdmv2web/test-fixtures` | core | 合成 BDMV 字节构造器与运行时夹具 |
-| `bdmv2web` | 以上全部（经打包内联） | 命令编排与退出码 |
+| `bdmv2web` | 以上全部（经打包内联） | 参数、进度、输出事务、报告、stdout 与退出码；领域编排在 `application/` |
 
-依赖方向单向：`{core, utils} ← bdmv-io ← bdmv-parser ← {hdmv, igs} ← media-export ← {package-builder, runtime-web} ← cli`；`utils` 不依赖其他 workspace 包。`test-runner` 不依赖业务包，只消费 JSON/文件事实。
+依赖方向单向：`{core, utils} ← bdmv-io ← bdmv-parser ← {hdmv, igs} ← media-export ← package-builder ← cli`；`runtime-web` 依赖 `core`/`bdmv-parser`/`hdmv`/`igs`/`utils`，`package-builder` 读取它的浏览器 bundle。`utils` 不依赖其他 workspace 包。`test-runner` 不依赖业务包，只消费 JSON/文件事实。
+
+## 职责边界与单源规则
+
+| 关注点 | 唯一实现 | 生产/消费 |
+| --- | --- | --- |
+| 交付结论 | `test-runner` 的 `decideDelivery()` | CLI `build`/`validate` 传入失败检查、诊断与能力事实 |
+| 运行时数据 | `core/src/runtime-data.ts` 的 `RuntimeDataV1` 与 `Serialized*` | `package-builder` 写 `runtime/disc-data.js`；`runtime-web` 读取 |
+| 播放目标 | `core/src/playback-targets.ts` | `media-export` 生成 `ExternalMediaTargets`；`runtime-web`/CLI 解析 |
+| 菜单媒体编码 | `media-export` 的 `exportMenuMedia()` | `apps/cli` 应用层调用；`package-builder` 消费 `PreparedMenuMedia` |
+| 媒体路径命名 | `media-export/src/menu-media-layout.ts` | 编码、复用与清单共用 |
+| 静态包组装 | `package-builder` 的 `assembleMenuPackage()` | `buildUseCase()` 传入状态与 `PreparedMenuMedia` |
+| 构建编排 | `apps/cli/application/build-plan.ts` 与 `build-use-case.ts` | `commands/build.ts` 调用 |
+| 构建结果发布 | `apps/cli/commands/build-outcome.ts` 的 `publishBuildOutcome()` | HDMV、BD-J/mixed 与失败路径 |
+| local-jvm HDMV 状态与动作 | `serve` 的 `HdmvSession` → `hdmv-update` | 浏览器 `RemoteNavigationHost` 保存快照并应用 actions |
+| `asset-manifest.json` | local-jvm 运行时索引 | 构建以 `runtime-index` 列入清单；审计要求存在、列入、可解析 |
 
 ## 数据形态
 
@@ -37,6 +52,9 @@
 | `IgsExtraction` | `igs` | CLI、`media-export`、`runtime-web` | `scenes`、`assets`、`diagnostics`、`status`、`streams` |
 | `DiscIR` | CLI（`createMenuDiscIR`） | `package-builder`、浏览器 | `schemaVersion`、`entries`、`programs`、`menus`、`playlists`、`mediaAssets`、`diagnostics` |
 | `MenuScene` / `SerializedScene` | 类型在 `core`（`runtime-data.ts`）；`runtime-web`（`adaptIgsScene`）产出 | `package-builder` → `runtime/disc-data.js` | 顶层 `pages`；`buttons`/`objects`/`effects` 嵌在 page 内 |
+| `RuntimeDataV1` | 类型在 `core`（`runtime-data.ts`）；`package-builder`（`createDataScript`）写入 | 浏览器 `runtime-web` 启动读取 | `ir`、`scene`、`popupScenes`、`scenes`、`menuScenes`、`vmPrograms`、`vmEntries`、`profile`、`limits`、`externalTargets`、`media`、`menuMedia`、`sounds`、`inputConfig`、BD-J 字段 |
+| `ExternalMediaTargets` | `media-export`（`createExternalMediaTargets`） | `runtime-web`、CLI `serve` | `playlists[].items/marks`、`unknown`、`complete` |
+| `PreparedMenuMedia` | `media-export`（`exportMenuMedia`） | `package-builder`（`assembleMenuPackage`） | `primary`/`additional` 的 input、result、`planPath` |
 | `MediaClosure` / `MediaPlan` | `media-export` | CLI、`package-builder` | 可达 `playlistIds`/`clipIds`、未知项、预算估算 |
 | 菜单包 | `package-builder` | 浏览器、`test-runner` | `index.html`、`runtime/*`、`assets/*`、`manifest.json` |
 | 交付报告 | `test-runner` + CLI | 人、CI | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` |
@@ -81,7 +99,9 @@
 | 结构解析结论 | `ParsedDisc.diagnostics` + `decideStageOutcome` | `stageStatus`，不是交付 `status` |
 | 交付结论 | `decideDelivery` | 只由失败证据降低；缺证据记为 `notVerified` |
 | 包内声明状态 | `manifest.status` | 由调用方传入；`validate` 不回写 |
-| VM 状态 | `HdmvVm.snapshot()` | `idle/running/suspended/stopped/faulted` + `generation` |
+| VM 状态（`file://`） | `LocalNavigationHost` 包装的 `HdmvVm.snapshot()` | `idle/running/suspended/stopped/faulted` + `generation` |
+| VM 状态（local-jvm） | `serve` 的 `HdmvSession` | 每个 `hdmv-update` 携带 `snapshot` 与 `actions`；浏览器 `RemoteNavigationHost` 保存 |
+| 菜单媒体编码结果 | `media-export` 的 `exportMenuMedia()` | `PreparedMenuMedia` 交给 `assembleMenuPackage()` |
 | 浏览器菜单状态 | `MenuController` | 页、选中/激活按钮、禁用集、BOG 选择、动画/效果进度；可 `saveCheckpoint` |
 
 跨层规则：下层不猜测上层结论。`package-builder` 默认 `partial`，真实状态由 CLI 传入；`runtime-web` 不为缺失资产伪造画面，只报诊断。

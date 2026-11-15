@@ -17,26 +17,26 @@
     {
       "path": "README.md",
       "kind": "index",
-      "summary": "工程定位、五分钟心智模型、任务路由表、目录与维护约定。",
-      "covers": ["overview", "navigation", "task routing", "maintenance"],
-      "keywords": ["bdmv2web", "索引", "任务路由", "维护"],
+      "summary": "工程定位、五分钟心智模型、职责边界与任务路由表、目录与维护约定。",
+      "covers": ["overview", "navigation", "boundaries", "task routing", "maintenance"],
+      "keywords": ["bdmv2web", "索引", "任务路由", "职责边界", "维护"],
       "keyFiles": ["README.md", "package.json", "docs/guides/development.md"]
     },
     {
       "path": "architecture.md",
       "kind": "overview",
-      "summary": "转换/交付/校验三段边界、包依赖、数据形态、一次 build 的完整时序、状态归属。",
-      "covers": ["pipeline", "package graph", "data flow", "artifacts", "ownership"],
-      "keywords": ["架构", "流水线", "依赖", "build 时序", "产物"],
-      "keyFiles": ["apps/cli/src/cli/program.ts", "packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts"]
+      "summary": "转换/交付/校验三段边界、包依赖、职责边界与单源规则、数据形态、一次 build 的完整时序、状态归属。",
+      "covers": ["pipeline", "package graph", "boundaries", "single source", "data flow", "artifacts", "ownership"],
+      "keywords": ["架构", "流水线", "依赖", "职责边界", "单源", "build 时序", "产物"],
+      "keyFiles": ["apps/cli/src/cli/program.ts", "apps/cli/src/application/build-use-case.ts", "apps/cli/src/commands/build-outcome.ts", "packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts"]
     },
     {
       "path": "contracts.md",
       "kind": "reference",
-      "summary": "DiscIR、SourceRef、Time90k、PlayerProfile、Limits、诊断对象、事件信封与改契约流程。",
-      "covers": ["DiscIR", "time90k", "player profile", "limits", "diagnostics", "events", "schema changes"],
-      "keywords": ["契约", "schema", "PSR", "限流", "generation"],
-      "keyFiles": ["packages/core/schema/disc-ir.schema.json", "packages/core/src/index.ts", "packages/core/src/limits.ts", "packages/core/src/defaults.ts"]
+      "summary": "DiscIR、SourceRef、运行时数据、播放目标、Time90k、PlayerProfile、Limits、诊断对象、事件信封与改契约流程。",
+      "covers": ["DiscIR", "runtime data", "playback targets", "time90k", "player profile", "limits", "diagnostics", "events", "schema changes"],
+      "keywords": ["契约", "schema", "RuntimeDataV1", "playback-targets", "PSR", "限流", "generation"],
+      "keyFiles": ["packages/core/schema/disc-ir.schema.json", "packages/core/src/index.ts", "packages/core/src/runtime-data.ts", "packages/core/src/playback-targets.ts", "packages/core/src/limits.ts", "packages/core/src/defaults.ts"]
     },
     {
       "path": "packages/foundation.md",
@@ -81,10 +81,10 @@
     {
       "path": "packages/runtime-web.md",
       "kind": "package",
-      "summary": "MenuController、播放桥、媒体时钟、场景序列化、浏览器启动与输入绑定。",
-      "covers": ["menu controller", "input", "rendering", "playback bridge", "media clock", "boot"],
-      "keywords": ["runtime-web", "MenuController", "CanvasViewport", "popup", "boot", "autoplay"],
-      "keyFiles": ["packages/runtime-web/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/igs-adapter.ts", "packages/runtime-web/src/linear-playback.ts"]
+      "summary": "MenuController、播放桥、媒体时钟、场景序列化、导航宿主、浏览器启动与输入绑定。",
+      "covers": ["menu controller", "input", "rendering", "playback bridge", "media clock", "navigation host", "hdmv update", "boot"],
+      "keywords": ["runtime-web", "MenuController", "CanvasViewport", "RemoteNavigationHost", "LocalNavigationHost", "popup", "boot"],
+      "keyFiles": ["packages/runtime-web/src/index.ts", "packages/runtime-web/src/browser.ts", "packages/runtime-web/src/navigation/remote-host.ts", "packages/runtime-web/src/navigation/local-host.ts", "packages/runtime-web/src/igs-adapter.ts"]
     },
     {
       "path": "packages/package-builder.md",
@@ -113,10 +113,10 @@
     {
       "path": "packages/cli.md",
       "kind": "package",
-      "summary": "参数契约、九个命令 + convert 别名实现要点、错误出口、退出码与扩展位置。",
-      "covers": ["argument contract", "commands", "exit codes", "error handling"],
-      "keywords": ["cli", "commandOptions", "exit code", "CLI_INVALID_PROFILE", "build", "validate"],
-      "keyFiles": ["apps/cli/src/cli/program.ts"]
+      "summary": "参数契约、九个命令 + convert 别名实现要点、构建编排边界、错误出口、退出码与扩展位置。",
+      "covers": ["argument contract", "commands", "build orchestration", "exit codes", "error handling"],
+      "keywords": ["cli", "commandOptions", "build orchestrator", "publishBuildOutcome", "exit code", "build", "validate"],
+      "keyFiles": ["apps/cli/src/cli/program.ts", "apps/cli/src/application/build-plan.ts", "apps/cli/src/application/build-use-case.ts", "apps/cli/src/commands/build-outcome.ts"]
     },
     {
       "path": "features/cli-commands.md",

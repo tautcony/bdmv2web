@@ -19,9 +19,11 @@ src/
     assets.ts           AssetRecord、--type/--m2ts/--pid/--render 解析、输出选择（OutputSelection）、资产路径命名
   application/
     build-plan.ts      planBuild、BuildPlan（从 ParsedDisc + 提取结果到打包输入）
-    build-use-case.ts  buildUseCase（组装 MenuPackageInput 并调用 assembleMenuPackage）
+    build-use-case.ts  buildUseCase（planBuild → exportMenuMedia → assembleMenuPackage）
+    export-menu-media.ts 调用 media-export 的 exportMenuMedia 并映射进度
   commands/
     build.ts           参数、进度、输出事务、报告、stdout 与退出码
+    build-outcome.ts   publishBuildOutcome：stdout JSON 与退出码的唯一出口
     inspect.ts list.ts export.ts render.ts validate.ts compare.ts
     serve.ts visualize.ts menu-planning.ts media-progress.ts
   shared/
@@ -132,6 +134,19 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 4. 可写时写入 `dependency-audit.json`、更新 `reports.json.compatibility` 并写 `reports/release-summary.json`；验证结果保留 `reports.json.conversion`。任一写失败即产生 `RELEASE_REPORT_WRITE_FAILED` 检查项。
 5. 退出码取 `releaseSummary.release.exitCode`。
 6. 文本输出只列 `gaps`（非 `pass` 检查，已合并去重）；`audit.checks` 不打印，`Limitation:` 只写进报告。覆盖率不采集，`coverage` 记为空对象。
+
+## 构建编排边界
+
+| 层 | 负责 |
+| --- | --- |
+| `commands/build.ts` | 参数读取、进度步骤、staging 输出事务、`reports.json`、`publishBuildOutcome()` |
+| `application/build-plan.ts` | `planBuild()`：从 `ParsedDisc` 与 IGS 提取结果生成 `BuildPlan`（场景、媒体闭包、外部目标、VM 程序、媒体输入、诊断） |
+| `application/build-use-case.ts` | `buildUseCase()`：固定顺序 `planBuild → exportMenuMedia → assembleMenuPackage` |
+| `application/export-menu-media.ts` | 转发 `media-export` 的 `exportMenuMedia()` 与进度回调 |
+| `packages/package-builder` | `assembleMenuPackage()` 消费 `PreparedMenuMedia` 并写出静态包 |
+| `packages/media-export` | `exportMenuMedia()` 编码媒体、复用等价单元并返回 `PreparedMenuMedia` |
+
+`publishBuildOutcome()` 是构建 stdout JSON 与进程退出码的唯一出口；HDMV、BD-J/mixed 与失败路径都经过它。
 
 ## 错误出口
 

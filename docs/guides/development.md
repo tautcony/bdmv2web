@@ -23,6 +23,23 @@ corepack pnpm test:coverage
 
 `corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. `@bdmv2web/bdmv-io` handles disc input and output transactions. Node filesystem utilities are available from `@bdmv2web/utils/node-fs`.
 
+## Architecture boundaries
+
+Keep the workspace dependency direction one-way: `core`/`utils` → `bdmv-io` → `bdmv-parser` → `hdmv`/`igs` → `media-export` → `package-builder` → `bdmv2web`. `runtime-web` consumes `core`, `bdmv-parser`, `hdmv`, `igs` and `utils`; its `media-export` entry is a devDependency for integration tests.
+
+| Concern | Owner |
+| --- | --- |
+| Shared contracts: DiscIR, playback targets, runtime data shapes | `packages/core` |
+| Menu media encoding, media path naming, reuse | `packages/media-export` (`exportMenuMedia()`, `menu-media-layout.ts`) |
+| Static package assembly | `packages/package-builder` (`assembleMenuPackage()`) |
+| Build orchestration | `apps/cli/src/application` (`planBuild()`, `buildUseCase()`) |
+| Build result publication (stdout JSON and exit code) | `apps/cli/src/commands/build-outcome.ts` (`publishBuildOutcome()`) |
+| Delivery status | `packages/test-runner/src/decisions.ts` (`decideDelivery()`) |
+| local-jvm HDMV state and actions | `apps/cli/src/commands/serve.ts` (`HdmvSession`) → `hdmv-update` |
+| `asset-manifest.json` in local-jvm packages | `runtime-index`: listed in `manifest.files` and JSON-parseable |
+
+A `file://` menu uses `LocalNavigationHost` and a page VM. A `local-jvm` menu uses `RemoteNavigationHost`: the service owns the VM, `hdmv-update` carries the snapshot and actions, the page stores that snapshot, and the service performs all PSR/GPR writes. Package assembly consumes `PreparedMenuMedia` produced by `exportMenuMedia()`, and `assembleMenuPackage()` writes the static package. The detailed current-state design is in `docs/llm-wiki/architecture.md`; the shared contracts are in `docs/llm-wiki/contracts.md`.
+
 ## Linting
 
 `corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/*.mjs`, then runs `lint:java`, which checks the BD-J host Java sources in `packages/runtime-web/bdj-host/src` with Checkstyle and compiles them to a Java 8 target with `javac --release 8` (JDK 21 or newer required). `corepack pnpm lint:fix` applies the automatic ESLint fixes.

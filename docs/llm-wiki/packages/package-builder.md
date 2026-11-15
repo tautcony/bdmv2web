@@ -67,7 +67,7 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>  // 兼容
 
 ## 产物片段生成器
 
-`buildMenuPackage` 内部用这些函数拼出单个产物，也可单独调用做局部改动：
+`assembleMenuPackage` 内部用这些函数拼出单个产物，也可单独调用做局部改动：
 
 | 函数 | 产出 / 作用 |
 | --- | --- |
@@ -112,16 +112,16 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>  // 兼容
 
 ## 运行时打包
 
-`buildMenuPackage` 末尾用 esbuild 直接读 `packages/runtime-web/src/browser.ts`：
+`scripts/build-runtime-browser.mjs` 用 esbuild 从 `packages/runtime-web/src/browser.ts` 生成 `packages/runtime-web/dist/browser.bundle.js`（IIFE，ES2020）。构建期的 alias 指向源码入口：
 
 ```ts
 alias: {
   "@bdmv2web/hdmv": ".../packages/hdmv/src/index.ts",
-  "@bdmv2web/media-export/external-targets": ".../packages/media-export/src/external-targets.ts",
+  "@bdmv2web/core/playback-targets": ".../packages/core/src/playback-targets.ts",
 }
 ```
 
-这是当前唯一的源码路径耦合：改 `runtime-web` 的入口文件名或这两个导入路径会同时影响 `package-builder` 的构建。
+`assembleMenuPackage()` 读取构建产物 `browser.bundle.js`，写为包内 `runtime/app.bundle.js`；BD-J 客户端 `bdj-client.bundle.js` 以同一方式写为 `runtime/bdj-client.js`。改入口文件名时同步更新 `package-builder` 的 bundle 路径。
 
 ## 测试
 

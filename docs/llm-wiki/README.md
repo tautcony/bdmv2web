@@ -19,7 +19,7 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
   └─ igs          M2TS → 192B TS → PSI/PES → IGS Display Set → 场景/页/BOG/按钮/PNG
         │
         ├─ media-export   导航闭包 → 媒体计划 → ffmpeg 导出 mp4/m4a、PGS、外部播放目标
-        └─ runtime-web    IgsScene → 可序列化 MenuScene；MenuController + HdmvVm 处理输入
+        └─ runtime-web    IgsScene → 可序列化 MenuScene；MenuController + 本地/远端导航宿主
                 │
                 └─ package-builder   自包含目录 index.html + runtime/*.js + assets/
                           │
@@ -47,24 +47,25 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 | 修交付判定/审计报告 | [features/verification.md](features/verification.md)、[packages/test-runner.md](packages/test-runner.md) | `packages/test-runner/src/{decisions,package-audit,release-summary}.ts` |
 | 查一个诊断码含义 | [diagnostics.md](diagnostics.md) | `rg "CODE_NAME" packages apps` |
 | 按症状排查 | [troubleshooting.md](troubleshooting.md) | 症状 → 检查项 → 文件锚点 |
-| 改数据契约 | [contracts.md](contracts.md) | `packages/core/schema/disc-ir.schema.json` |
+| 改数据契约 | [contracts.md](contracts.md) | `packages/core/schema/disc-ir.schema.json`、`packages/core/src/runtime-data.ts`、`packages/core/src/playback-targets.ts` |
+| 改模块职责或依赖方向 | [architecture.md](architecture.md)（职责边界与单源规则）、[contracts.md](contracts.md) | `packages/*/src/index.ts`、`apps/cli/src/application/` |
 
 ## 目录
 
 | 文件 | 内容 |
 | --- | --- |
-| [architecture.md](architecture.md) | 流水线、包依赖、数据与产物边界、一次 `build` 的完整时序 |
-| [contracts.md](contracts.md) | DiscIR、Time90k、SourceRef、PlayerProfile、Limits、诊断与事件信封、契约改动流程 |
+| [architecture.md](architecture.md) | 流水线、包依赖、职责边界与单源规则、数据与产物边界、一次 `build` 的完整时序 |
+| [contracts.md](contracts.md) | DiscIR、运行时数据、播放目标、Time90k、SourceRef、PlayerProfile、Limits、诊断与事件信封、契约改动流程 |
 | [packages/foundation.md](packages/foundation.md) | `core` + `bdmv-io`：契约、限流、输入发现、事务输出 |
 | [packages/bdmv-parser.md](packages/bdmv-parser.md) | `bdmv-parser`：文件解析、主备回退、引用图、ParsedDisc |
 | [packages/hdmv.md](packages/hdmv.md) | `hdmv`：解码、寄存器、VM、导航图、静态循环 |
 | [packages/igs.md](packages/igs.md) | `igs`：传输流重组、IGS 段、场景、PNG |
 | [packages/media-export.md](packages/media-export.md) | `media-export`：媒体闭包、计划、循环导出、PGS、外部目标 |
-| [packages/runtime-web.md](packages/runtime-web.md) | `runtime-web`：MenuController、播放桥、时钟、序列化、boot |
+| [packages/runtime-web.md](packages/runtime-web.md) | `runtime-web`：MenuController、播放桥、导航宿主、时钟、序列化、boot |
 | [packages/package-builder.md](packages/package-builder.md) | `package-builder`：包内文件、脚本嵌入、音效、manifest |
 | [packages/test-runner.md](packages/test-runner.md) | `test-runner`：包审计、状态判定、证据、报告 |
 | [packages/test-fixtures.md](packages/test-fixtures.md) | `test-fixtures`：字节构造器与合成夹具 |
-| [packages/cli.md](packages/cli.md) | `apps/cli`：参数契约、命令实现、错误处理 |
+| [packages/cli.md](packages/cli.md) | `apps/cli`：参数契约、命令实现、构建编排边界、错误处理 |
 | [features/cli-commands.md](features/cli-commands.md) | 九个命令 + convert 别名的输入、产物、退出码、失败码 |
 | [features/navigation.md](features/navigation.md) | HDMV 执行模型、事件/generation、UO、导航图与媒体闭包 |
 | [features/igs-extraction.md](features/igs-extraction.md) | 从 M2TS 到场景与 PNG 的完整链路 |
@@ -92,8 +93,8 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 | 新增/重命名诊断码 | [diagnostics.md](diagnostics.md)、[index.json](index.json) 关键词 |
 | 新增 CLI 命令或选项 | [features/cli-commands.md](features/cli-commands.md)、[packages/cli.md](packages/cli.md) |
 | 修改包内产物结构 | [packages/package-builder.md](packages/package-builder.md)、[features/offline-menu.md](features/offline-menu.md) |
-| 修改 DiscIR/时间/限流契约 | [contracts.md](contracts.md) |
-| 新增包或重划职责 | [architecture.md](architecture.md)、`packages/` 新增文档、[index.json](index.json) |
+| 修改 DiscIR/时间/限流/运行时数据/播放目标契约 | [contracts.md](contracts.md) |
+| 新增包或重划职责 | [architecture.md](architecture.md)（职责边界与单源规则）、`packages/` 新增文档、[index.json](index.json)、`docs/guides/development.md` 的 Architecture boundaries |
 | 新增测试或调整基线 | [testing.md](testing.md)（逐包计数必须与 `docs/guides/development.md` 一致） |
 | 再生成 libbluray 导航基线（`scripts/generate-libbluray-baselines.py`） | [testing.md](testing.md) 与 `docs/references/stages/M3-hdmv-navigation.md` 中的盘数、MovieObject、命令与 CFG 边计数 |
 
