@@ -1,7 +1,7 @@
 import { runCommand } from "../helpers/run-cli.js";
-import { PGS_PID, syntheticNonStreamBytes, syntheticPgsStream } from "../helpers/synthetic-streams.js";
+import { PGS_PID, patPacket, pmtPacket, syntheticNonStreamBytes, syntheticPgsStream } from "../helpers/synthetic-streams.js";
 import { parsePgsSup } from "@bdmv2web/media-export";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -11,8 +11,31 @@ import { describe, expect, it } from "vitest";
 const cliRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const syntheticIgsFixture = resolve(cliRoot, "../../test-data/fixtures/igs-parser/synthetic-single-object.m2ts");
 const bdmvFixture = resolve(cliRoot, "../../test-data/fixtures/synthetic-all-features/BDMV");
+const IG_PID = 0x120;
 
 interface ExportStdout { stageStatus: string; output: string; assetCount: number }
+
+function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0));
+  let at = 0;
+  for (const part of parts) { out.set(part, at); at += part.byteLength; }
+  return out;
+}
+
+/**
+ * One stream that declares both graphics types: the IGS object packets from the
+ * parser fixture plus a two-display-set PGS track, under a single PMT. This is
+ * the only shape where `export` has to read the clip for two consumers.
+ */
+function mixedGraphicsStream(): Uint8Array {
+  const igs = readFileSync(syntheticIgsFixture);
+  const igPackets: Uint8Array[] = [];
+  for (let offset = 0; offset + 192 <= igs.byteLength; offset += 192) {
+    if (((igs[offset + 5]! & 0x1f) << 8 | igs[offset + 6]!) === IG_PID) igPackets.push(igs.subarray(offset, offset + 192));
+  }
+  const pgs = syntheticPgsStream({ displaySets: 2, pgsPid: PGS_PID, pmtEntries: [{ pid: IG_PID, type: 0x91 }, { pid: PGS_PID, type: 0x90 }] });
+  return concatBytes(patPacket(), pmtPacket([{ pid: IG_PID, type: 0x91 }, { pid: PGS_PID, type: 0x90 }]), ...igPackets, pgs.subarray(2 * 192));
+}
 
 async function writeStream(parent: string, name: string, bytes: Uint8Array): Promise<string> {
   const path = join(parent, name);
@@ -101,6 +124,26 @@ describe("export from standalone stream files", async () => {
       expect(stdout.assetCount).toBe(0);
       const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8")) as { assets: unknown[] };
       expect(manifest.assets).toEqual([]);
+    } finally { await rm(parent, { recursive: true, force: true }); }
+  });
+
+  it("exports MNU and SUP from one stream that carries both graphics types", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "export-stream "));
+    const output = join(parent, "out");
+    try {
+      const stream = await writeStream(parent, "mixed.m2ts", mixedGraphicsStream());
+      const result = await runCommand(["export", stream, "--out", output, "--type", "all", "--render"]);
+      expect(result.status, String(result.stderr)).toBe(0);
+      const stdout = JSON.parse(String(result.stdout)) as ExportStdout;
+      expect(stdout.stageStatus).toBe("complete");
+      expect(stdout.assetCount).toBe(5);
+
+      const manifest = JSON.parse(await readFile(join(output, "assets-manifest.json"), "utf8")) as { assets: Array<{ type: string; path: string }> };
+      expect(manifest.assets.map((asset) => asset.type)).toEqual(["igs", "igs-png", "sup", "sup-png", "sup-png"]);
+      expect(existsSync(join(output, "assets/igs/mixed-pid-0120.mnu"))).toBe(true);
+      const sup = await readFile(join(output, "assets/subtitles", `mixed-pid-${PGS_PID.toString(16)}.sup`));
+      expect(parsePgsSup(sup)).toHaveLength(2);
+      expect(manifest.assets.find((asset) => asset.type === "sup")?.path).toBe(`assets/subtitles/mixed-pid-${PGS_PID.toString(16)}.sup`);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

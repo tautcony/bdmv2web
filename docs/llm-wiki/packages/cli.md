@@ -94,6 +94,7 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 
 - `--type all|igs|sup`、`--m2ts CLIP_ID`、`--pid PID` 选择资源范围。
 - 按 M2TS 分组输出树形资源信息。每个 M2TS 节点显示源文件大小；IGS/SUP 节点显示 PID 原始传输载荷大小，IGS 节点展开场景与图像对象，SUP 节点列出语言和 playlist/playItem 引用。大小使用 1024 进位。`--out` 写完整 JSON。
+- 每个 clip 只读一遍：载荷大小由 IGS 提取的同一遍扫描统计（`measurePayloadBytes`）。`--format json` 不显示大小，因此不统计。`--m2ts` 会通过 `clipFilter` 跳过其它 clip 的读取；`--type`、`--pid` 仍是提取后的输出过滤。
 - 非法值：`--type` 取值非法报 `CLI_INVALID_ARGUMENT`（Commander 校验）；`CLI_INVALID_M2TS`、`CLI_INVALID_PID` 分别是 Clip/PID 参数非法。
 
 ### `export`
@@ -101,6 +102,7 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 - 输入为 BDMV 目录，或单个 `.m2ts`/`.rsks` 流文件；`shared/stream-input.ts` 的 `classifyInput` 先按内容判定（传输流同步字节、IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签），再退回扩展名。`.mnu`/`.sup` 输入各自有专门的错误并指向 `render`。
 - `export` 的 `--type` 只选输出：`igs`/`sup` 写容器（配合 `--render` 写 PNG）、`hdmv` 写命令表与来源映射、`metadata` 写整套元数据、`all` 写全部；省略时只写容器。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
 - 写 igstools 兼容 `.mnu`（`assets/igs/<clip>-pid-<pid>.mnu`）与 `.sup`（`assets/subtitles/<clip>-pid-<pid>.sup`）。
+- 流模式对一个文件读两趟：先 `probeTransportStreams` 发现 PID，再提取 IGS/PGS。同时要 IGS 与 PGS 时第二趟是**一次读取**：`shared/chunk-fanout.ts` 把 `readFileChunks` 的分块广播给两个独立读取器（各自的 PSI/PES 状态与诊断），PGS 先写到临时目录、过了阶段判定再搬进 staging。两个 pass 各自报告自己看到的传输损伤；合并时用 `@bdmv2web/igs` 的 `uniqueDiagnostics` 按“严重性 + 码 + 文案 + 完整 source（含包偏移）”折叠成每种事件一行，场景引用取并集。
 - `--render` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
 - 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`igs-png` 记录 `width`/`height`/`objectId`/`objectVersion`/`paletteId`/`paletteVersion`；`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`，秒值以轨道起点为 0，流模式以首个显示集为 0。
 - 流模式不传 `timestampOffset90k`，`.sup` 保留源 90kHz 时间轴；清单 `sup` 记 `language: "und"` 与发现序号。`--m2ts` 与未在 PMT 声明的 `--pid` 报 `CLI_EXPORT_SELECTION`；无 PAT/PMT 或声明 PID 无显示集报 `EXPORT_INVALID_STREAM`。

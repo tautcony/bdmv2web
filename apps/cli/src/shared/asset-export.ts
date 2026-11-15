@@ -10,17 +10,18 @@ import { commandProgress, countOf } from "../progress.js";
 import type { ProgressReporter } from "../progress.js";
 import { extractReachablePgsTracks, pgsTrackPngPlan, reachablePgsReferences, trackProgress, writeDisplaySetPngs } from "./pgs.js";
 import { BDMV_STEPS, STREAM_STEPS } from "./steps.js";
+import { fanOutChunks } from "./chunk-fanout.js";
 import { classifyInput, discoverGraphicsStreams } from "./stream-input.js";
 import type { StreamTarget } from "./stream-input.js";
 import { assertDisjointRoots, beginOutputTransaction, readFileChunks } from "@bdmv2web/bdmv-io";
 import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
-import { extractIgsFromChunks, extractIgsScenes } from "@bdmv2web/igs";
+import { extractIgsFromChunks, extractIgsScenes, uniqueDiagnostics } from "@bdmv2web/igs";
 import type { IgsDiagnostic } from "@bdmv2web/igs";
-import { extractPgsTracks, pgsDisplaySetEnd90k } from "@bdmv2web/media-export";
+import { extractPgsTracks, extractPgsTracksFromChunks, pgsDisplaySetEnd90k } from "@bdmv2web/media-export";
 import { classifyDiagnostics, decideStageOutcome } from "@bdmv2web/test-runner";
 import { ContractError, DEFAULT_LIMITS } from "@bdmv2web/core";
 import { errorText } from "@bdmv2web/utils";
-import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 
@@ -200,21 +201,62 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
   // with discovered streams as a PID conflict, and cue PIDs must cover the PMT.
   // Scenes are needed for the `.mnu` container, for element PNGs, and for the
   // metadata scene list.
-  const extraction = (writesMnu || (selection.renderPng && outputs.png.igs) || outputs.metadata.igs) && igsPids.length > 0
-    ? await extractIgsFromChunks(
-        target.stem,
-        readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes),
-        streams.igsPids.map((pid) => ({ pid, source: { path: basename(target.path), origin: "primary" as const, offset: "0" } })),
-        { captureStreams: writesMnu, renderAssets: selection.renderPng && outputs.png.igs, pngLevel: pngLevelOption() },
-      )
-    : null;
+  const needsIgs = (writesMnu || (selection.renderPng && outputs.png.igs) || outputs.metadata.igs) && igsPids.length > 0;
+  const needsSup = (writesSup || wantsSupPng || outputs.metadata.sup) && pgsPids.length > 0;
+  // IGS and PGS need the same clip bytes and neither depends on the other's
+  // output, so when both run they share one read: the fan-out feeds two
+  // independent readers, each with its own PSI/PES state and diagnostics.
+  const sharedPass = needsIgs && needsSup;
+  const supStagingDirectory = sharedPass ? await mkdtemp(resolve(tmpdir(), "stream-sup-")) : null;
+  let preparedSup: Awaited<ReturnType<typeof extractPgsTracks>> | null = null;
+  let preparedSupError: unknown = null;
+  let preparedSupFailed = false;
+  let extraction: Awaited<ReturnType<typeof extractIgsFromChunks>> | null = null;
+  if (needsIgs) {
+    const igsOptions = { captureStreams: writesMnu, renderAssets: selection.renderPng && outputs.png.igs, pngLevel: pngLevelOption() };
+    const cues = streams.igsPids.map((pid) => ({ pid, source: { path: basename(target.path), origin: "primary" as const, offset: "0" } }));
+    if (sharedPass && supStagingDirectory) {
+      const supRequests = pgsPids.map((pid, index) => ({ pid, outputPath: resolve(supStagingDirectory, supTrackPath(target.stem, pid, index)) }));
+      const [igsChunks, supChunks] = fanOutChunks(readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes), 2);
+      const [igsResult, supResult] = await Promise.allSettled([
+        extractIgsFromChunks(target.stem, igsChunks!, cues, igsOptions),
+        extractPgsTracksFromChunks(target.path, supChunks!, supRequests),
+      ]);
+      // A PGS failure is raised after the transaction opens, like the dedicated
+      // pass below, so an existing output target still fails first.
+      if (supResult.status === "rejected") { preparedSupFailed = true; preparedSupError = supResult.reason; }
+      else preparedSup = supResult.value;
+      if (igsResult.status === "rejected") {
+        await rm(supStagingDirectory, { recursive: true, force: true });
+        throw igsResult.reason;
+      }
+      extraction = igsResult.value;
+    } else {
+      extraction = await extractIgsFromChunks(target.stem, readFileChunks(target.path, DEFAULT_LIMITS, DEFAULT_LIMITS.maxReadWindowBytes), cues, igsOptions);
+    }
+  }
   if (extraction) diagnostics.push(...extraction.diagnostics);
-  const outcome = decideStageOutcome({ stage: "extract", diagnostics });
-  if (outcome.status === "failed") { failStage(progress, STREAM_STEPS.extract, firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics, out); return; }
+  // The probe and the IGS extraction each read every packet of this stream, so
+  // the same transport damage arrives twice. One sighting per event, in
+  // first-reported order: the verdict reads severities, and `blockingDiagnostics`
+  // feeds a failure record where every packet appears once. Both reads stay in
+  // the merge — an extraction that stops on a PID conflict leaves the rest of the
+  // clip to the probe.
+  const outcome = decideStageOutcome({ stage: "extract", diagnostics: uniqueDiagnostics(diagnostics) });
+  if (outcome.status === "failed") {
+    if (supStagingDirectory) await rm(supStagingDirectory, { recursive: true, force: true });
+    failStage(progress, STREAM_STEPS.extract, firstBlockingCode(outcome.blockingDiagnostics), outcome.blockingDiagnostics, out);
+    return;
+  }
   // A stream file is read-only input, so the output directory carries no
   // overlap hazard the way a disc root does; exporting next to the stream is
   // the normal case. The transaction still refuses an existing target.
-  const transaction = await beginOutputTransaction(out);
+  let transaction: Awaited<ReturnType<typeof beginOutputTransaction>>;
+  try { transaction = await beginOutputTransaction(out); }
+  catch (error) {
+    if (supStagingDirectory) await rm(supStagingDirectory, { recursive: true, force: true });
+    throw error;
+  }
   try {
     const files: AssetRecord[] = [];
     const supTracks: SupTrackRecord[] = [];
@@ -234,13 +276,26 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
         files.push(igsElementRecord(asset));
       }
     }
-    if ((writesSup || wantsSupPng || outputs.metadata.sup) && pgsPids.length > 0) {
-      const trackDirectory = writesSup ? transaction.stagingPath : await mkdtemp(resolve(tmpdir(), "stream-render-png-"));
+    if (needsSup) {
+      const trackDirectory = writesSup ? transaction.stagingPath : supStagingDirectory ?? await mkdtemp(resolve(tmpdir(), "stream-render-png-"));
       try {
-        const requests = pgsPids.map((pid, index) => ({ pid, outputPath: resolve(trackDirectory, supTrackPath(target.stem, pid, index)) }));
         let tracks;
-        try { tracks = await extractPgsTracks(target.path, requests); }
-        catch (error) { throw new ContractError("EXPORT_INVALID_STREAM", target.path, `A PMT-declared PGS PID could not be extracted as SUP: ${errorText(error)}`); }
+        if (preparedSup) {
+          tracks = preparedSup;
+          // The shared pass had to write outside the output target so a failed
+          // stage left it untouched; move those SUP files into the staging tree.
+          if (writesSup) for (const [index, track] of tracks.entries()) {
+            const staged = resolve(transaction.stagingPath, supTrackPath(target.stem, track.pid, index));
+            await mkdir(dirname(staged), { recursive: true });
+            await copyFile(track.path, staged);
+          }
+        } else if (preparedSupFailed) {
+          throw new ContractError("EXPORT_INVALID_STREAM", target.path, `A PMT-declared PGS PID could not be extracted as SUP: ${errorText(preparedSupError)}`);
+        } else {
+          const requests = pgsPids.map((pid, index) => ({ pid, outputPath: resolve(trackDirectory, supTrackPath(target.stem, pid, index)) }));
+          try { tracks = await extractPgsTracks(target.path, requests); }
+          catch (error) { throw new ContractError("EXPORT_INVALID_STREAM", target.path, `A PMT-declared PGS PID could not be extracted as SUP: ${errorText(error)}`); }
+        }
         progress.done(STREAM_STEPS.extract, countOf(tracks.length, "SUP track", "SUP tracks"));
         const decodeTotal = tracks.reduce((count, track) => count + track.displaySets.length, 0);
         const decode = wantsSupPng && decodeTotal > 0;
@@ -291,6 +346,7 @@ export async function exportStreamAssets(target: StreamTarget, out: string, type
     await commitAssetManifest(progress, transaction, writesMnu || writesSup || files.length > 0, writesMetadata, files, outcome.status === "partial" ? "partial" : "complete", out, STREAM_STEPS.commit);
     if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
+  finally { if (supStagingDirectory) await rm(supStagingDirectory, { recursive: true, force: true }); }
 }
 
 /**

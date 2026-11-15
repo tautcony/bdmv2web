@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractPgsTrack, extractPgsTracks } from "./pgs-extract.js";
+import { extractPgsTrack, extractPgsTracks, extractPgsTracksFromChunks } from "./pgs-extract.js";
 
 const roots: string[] = [];
 async function temp(): Promise<string> {
@@ -49,6 +49,25 @@ describe("PGS transport extraction", () => {
     await expect(extractPgsTrack(sourcePath, 0x1200, existingOutput, { maxBytes: 64 * 1024 * 1024 })).rejects.toThrow(/exceeds maxBytes/);
     expect(await readFile(existingOutput, "utf8")).toBe("preserve this output on failure");
   }, 120_000);
+
+  it("extracts the same SUP from an externally provided chunk stream", async () => {
+    const root = await temp();
+    const sourcePath = join(root, "source.m2ts");
+    const fromChunksPath = join(root, "chunked.sup");
+    const fromFilePath = join(root, "file.sup");
+    const bytes = concat(m2tsPacket(0x1200, pesPacket(pgsDisplaySet(), 90_000n, 88_000n)));
+    await writeFile(sourcePath, bytes);
+
+    // Split inside transport packets: the reader must carry the remainder over.
+    async function* chunked(): AsyncGenerator<Uint8Array> {
+      for (let offset = 0; offset < bytes.byteLength; offset += 100) yield bytes.subarray(offset, offset + 100);
+    }
+    const fromChunks = await extractPgsTracksFromChunks(sourcePath, chunked(), [{ pid: 0x1200, outputPath: fromChunksPath }]);
+    const fromFile = await extractPgsTrack(sourcePath, 0x1200, fromFilePath);
+
+    expect(fromChunks[0]).toMatchObject({ pid: 0x1200, byteLength: fromFile.byteLength, displaySets: [{ pts90k: 2_000 }] });
+    expect(await readFile(fromChunksPath)).toEqual(await readFile(fromFilePath));
+  });
 
   it("extracts one PID to SUP with anchored timestamps and parsed display sets", async () => {
     const root = await temp();

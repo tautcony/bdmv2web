@@ -30,6 +30,24 @@ interface PgsTrackState {
 
 /** Extract requested Blu-ray PGS PID and source intervals from one clip scan. */
 export async function extractPgsTracks(sourcePath: string, requests: readonly PgsTrackRequest[], options: ExtractPgsTracksOptions = {}): Promise<ExtractedPgsTrack[]> {
+  return extractPgsTracksFromChunks(sourcePath, fileChunks(resolve(sourcePath)), requests, options);
+}
+
+/**
+ * Chunks open the file on the first pull, so request validation rejects a call
+ * before any I/O and a missing file surfaces as an ordinary read error.
+ */
+async function* fileChunks(path: string): AsyncGenerator<Uint8Array> {
+  const stream = createReadStream(path, { highWaterMark: 256 * 1024 });
+  for await (const chunk of stream) yield chunk as Uint8Array;
+}
+
+/**
+ * Same extraction over an already-open byte stream, so a caller that also needs
+ * the clip for something else (IGS display sets) can read the file once and fan
+ * the chunks out to both consumers.
+ */
+export async function extractPgsTracksFromChunks(sourcePath: string, chunks: AsyncIterable<Uint8Array>, requests: readonly PgsTrackRequest[], options: ExtractPgsTracksOptions = {}): Promise<ExtractedPgsTrack[]> {
   const maxBytes = options.maxBytes;
   if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)) throw new RangeError("maxBytes must be a positive safe integer.");
   const source = resolve(sourcePath);
@@ -67,7 +85,7 @@ export async function extractPgsTracks(sourcePath: string, requests: readonly Pg
       state.file = await open(state.temporaryOutput, "wx");
       state.temporaryCreated = true;
     }
-    for await (const chunk of createReadStream(source, { highWaterMark: 256 * 1024 }) as AsyncIterable<Uint8Array>) {
+    for await (const chunk of chunks) {
       for (const packet of reader.feed(chunk)) if (pids.has(packet.pid)) await accept(assembler.push(packet));
     }
     reader.end();

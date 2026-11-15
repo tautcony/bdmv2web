@@ -9,7 +9,7 @@
 | `src/closure.ts` | `computeMediaClosure` | CLI `build`、库调用 |
 | `src/media-plan.ts` | `createMediaPlan` | 库/测试（`build` 未调用） |
 | `src/menu-loop-export.ts` | `exportMenuLoopMedia`、`pidSpecifier`、`durationSeconds`、`resolveMenuLoopStart45k`、`runMediaProcess`，并桶式再导出 `pgs/*`（`src/index.ts` 从这里与 `diagram/` 桶式导出） | CLI、`package-builder` |
-| `src/pgs/pgs-extract.ts` | `extractPgsTracks`、`extractPgsTrack`（经 `menu-loop-export.ts` 再导出） | CLI 资产导出 |
+| `src/pgs/pgs-extract.ts` | `extractPgsTracks`、`extractPgsTracksFromChunks`、`extractPgsTrack`（经 `menu-loop-export.ts` 再导出） | CLI 资产导出 |
 | `src/color/color.ts` | `readSourceColor`、`planVideoColor`、`videoEncoderArgs`、`assertEncodedColor`、`pixelFormatBitDepth` | `menu-loop-export.ts`、`linear.ts` |
 | `src/linear.ts` | `exportLinearMedia`、`primaryAudioStreamNumberForLanguage` | 库/测试（`build` 未调用） |
 | `src/pgs/pgs.ts` | `parsePgsSup`、`PgsSubtitleTimeline` | CLI 资产导出、`runtime-web` 的字幕数据 |
@@ -117,6 +117,7 @@ exportMenuLoopMedia(input: MenuLoopMediaInput, options: MenuLoopMediaOptions): P
 - `streamPgsSup(data, options)`：同样的解码，但逐个显示集产出。5 MB 的 SUP 全部展开后约 53 MB RGBA；逐集渲染（`render` 命令）用流式版本，只保留当前帧解码所需的 RLE 数据与已访问的位图。两者对同一字节流给出相同的时间轴、位置和像素。
 - `PgsSubtitleTimeline`：按语言注册并选择显示集；跨 33 位 PTS 回绕时延续时间轴。
 - CLI `export` 用 `extractPgsTrack(sourcePath, pid, outputPath, { maxBytes, timestampOffset90k })` 写出 `.sup`；`export --render` 与 `render` 使用 `pgs-render.ts` 导出非全透明显示集 PNG。
+- `extractPgsTracksFromChunks(sourcePath, chunks, requests, options)` 接受外部字节流，供调用方与其它消费者共用一次读取（`export` 流模式把它和 IGS 提取接在同一个分块广播上）。`extractPgsTracks` 只是用惰性读文件的分块流调用它；两种形式的输出逐字节相同。`maxBytes`/`timestampOffset90k` 语义不变。
 - `pgs-render.ts` 的 `renderPgsDisplaySet(display, n, endTime90k, origin90k, options?)` 同时返回 `startTime90k`/`endTime90k`（90 kHz）和 `startSeconds`/`endSeconds`（秒，相对 `origin90k`：轨道起点，独立 SUP 为首个显示集）。`pgsSeconds90k` 对负数与无符号回绕返回 `null`。`options.level` 是 PNG 的 deflate 档位：画布默认 6（`DEFAULT_CANVAS_PNG_LEVEL`），因为整幅 1920×1080 即使只有一行字幕也要 deflate 完整扫描行，降到 3 会让单帧体积翻倍。
 
 ## 外部播放目标

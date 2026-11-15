@@ -44,9 +44,10 @@ export function patPacket(cc = 0): Uint8Array {
 
 export function pmtPacket(entries: PmtEntry[], cc = 0): Uint8Array {
   const loop = entries.flatMap((entry) => [entry.type, 0xe0 | (entry.pid >> 8), entry.pid & 255, 0xf0, 0]);
+  // section_length covers everything after its own field, CRC included.
   const sectionLength = 13 + loop.length;
   const first = entries[0]!.pid;
-  const section = Uint8Array.of(0x02, 0xb0 | (sectionLength >> 8), sectionLength & 255, 0, 1, 0xc1, 0, 0, 0xe0 | (first >> 8), first & 255, 0xf0, 0, ...loop);
+  const section = withMpegCrc(Uint8Array.of(0x02, 0xb0 | (sectionLength >> 8), sectionLength & 255, 0, 1, 0xc1, 0, 0, 0xe0 | (first >> 8), first & 255, 0xf0, 0, ...loop));
   return m2tsPacket(PMT_PID, concat(Uint8Array.of(0), section), { cc, pusi: true });
 }
 
