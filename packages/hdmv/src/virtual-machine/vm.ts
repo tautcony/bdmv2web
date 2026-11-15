@@ -41,6 +41,11 @@ export class HdmvVm {
   private readonly entries: VmOptions["entries"];
   private readonly onTrace: VmOptions["onTrace"];
   private playback: PlaybackContext = { status: "idle", playlist: null, playItem: null, presentationTime: null, pendingActionId: null };
+  // Consecutive trace entries usually see the same playback context and call
+  // stack. The snapshots are immutable, so one snapshot serves every entry that
+  // observes an unchanged value.
+  private lastTracePlayback: PlaybackContext | null = null;
+  private lastTraceCallStack: Array<{ programId: number; pc: number }> | null = null;
   constructor(programs: Array<VmProgram | MovieObject>, options: VmOptions = {}) {
     this.traceRegisters = options.traceRegisters ?? false;
     this.limits = Object.freeze(validateLimits(options.limits ?? {
@@ -995,10 +1000,34 @@ export class HdmvVm {
     this.record({ ...(location ? { programId: location.programId, pc: location.pc } : {}), source, raw: d?.bytes ?? null, decoded: d ? textInstruction(d) : null, registerDelta: before !== undefined ? this.registers.deltaSinceMark(before) : EMPTY_DELTA, status: this.status, diagnostic: issue });
   }
   private record(entry: Omit<TraceEntry, "sequence" | "generation" | "programId" | "pc" | "callDepth" | "callStack" | "playback" | "limits" | "registers"> & Partial<Pick<TraceEntry, "programId" | "pc">>): void {
-    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, ...(this.traceRegisters ? { registers: this.registers.snapshot() } : {}), callDepth: this.callStack.length, callStack: this.callStack.map((x) => ({ ...x })), playback: { ...this.playback }, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
+    const playback = samePlayback(this.playback, this.lastTracePlayback) ? this.lastTracePlayback! : { ...this.playback };
+    this.lastTracePlayback = playback;
+    const callStack = sameCallStack(this.callStack, this.lastTraceCallStack) ? this.lastTraceCallStack! : this.callStack.map((x) => ({ ...x }));
+    this.lastTraceCallStack = callStack;
+    const trace: TraceEntry = { sequence: ++this.sequence, generation: this.generation, programId: entry.programId ?? this.programId, pc: entry.pc ?? this.pc, source: entry.source, raw: entry.raw, decoded: entry.decoded, ...(entry.input ? { input: entry.input } : {}), ...(entry.action ? { action: entry.action } : {}), ...(entry.event ? { event: entry.event } : {}), registerDelta: entry.registerDelta, ...(this.traceRegisters ? { registers: this.registers.snapshot() } : {}), callDepth: this.callStack.length, callStack, playback, limits: this.limits, status: entry.status, ...(entry.diagnostic ? { diagnostic: entry.diagnostic } : {}) };
     this.logs.trace.push(trace);
     try { this.onTrace?.(trace); } catch { /* Trace observers cannot change VM execution. */ }
   }
+}
+
+/** Compare the playback fields a trace snapshot captures, so an unchanged
+ * context can be shared without aliasing the VM's mutable state. */
+function samePlayback(current: PlaybackContext, snapshot: PlaybackContext | null): boolean {
+  return snapshot !== null
+    && current.status === snapshot.status
+    && current.playlist === snapshot.playlist
+    && current.playItem === snapshot.playItem
+    && current.presentationTime === snapshot.presentationTime
+    && current.pendingActionId === snapshot.pendingActionId;
+}
+
+function sameCallStack(current: Array<{ programId: number; pc: number }>, snapshot: Array<{ programId: number; pc: number }> | null): boolean {
+  if (snapshot === null || current.length !== snapshot.length) return false;
+  for (let index = 0; index < current.length; index++) {
+    const frame = current[index]!, saved = snapshot[index]!;
+    if (frame.programId !== saved.programId || frame.pc !== saved.pc) return false;
+  }
+  return true;
 }
 
 /** Replace a queue's contents in place without spreading them as call arguments. */
