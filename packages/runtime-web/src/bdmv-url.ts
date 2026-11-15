@@ -1,5 +1,5 @@
 import { errorText } from "@bdmv2web/utils";
-import { EXTERNAL_UNKNOWN_CODES, type ExternalPlayTarget } from "@bdmv2web/media-export/external-targets";
+import { EXTERNAL_UNKNOWN_CODES, type ExternalPlayTarget } from "@bdmv2web/core/playback-targets";
 
 /** Resolve one declared STREAM path against the BDMV path in the current package configuration. */
 export function fileUrlFromBdmvPath(bdmvPath: string, streamPath: string, pageUrl: string): string {

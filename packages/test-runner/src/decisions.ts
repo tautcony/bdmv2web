@@ -90,11 +90,9 @@ export function decideDelivery(input: DeliveryDecisionInput): DeliveryDecision {
   const diagnosticFacts = classifyDiagnostics(input.diagnostics);
   const failedDiagnostic = diagnosticFacts.hasFatal;
   const errorDiagnostic = diagnosticFacts.hasBlockingError;
-  const onlyBdj = input.declaredEntryCount !== undefined && input.hdmvEntryCount === 0;
-  const hardFailure = blockingChecks.length > 0 || failedDiagnostic || onlyBdj || input.hasMissingRequiredAsset === true;
+  const hardFailure = blockingChecks.length > 0 || failedDiagnostic || input.hasMissingRequiredAsset === true;
   if (blockingChecks.length) reasons.push("One or more package audit checks failed.");
   if (failedDiagnostic) reasons.push("A fatal diagnostic is present.");
-  if (onlyBdj) reasons.push("No valid HDMV entry is available for this release profile.");
   if (input.hasMissingRequiredAsset) reasons.push("A required package asset is missing.");
 
   // Checks that never ran and counts that were never supplied are collected in

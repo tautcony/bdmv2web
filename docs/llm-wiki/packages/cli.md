@@ -17,8 +17,12 @@ src/
     profile.ts          loadPlayerProfile、loadLimits
     stages.ts           stageFailure、firstBlockingCode、deliveryDiagnostics
     assets.ts           AssetRecord、--type/--m2ts/--pid/--render 解析、输出选择（OutputSelection）、资产路径命名
+  application/
+    build-plan.ts      planBuild、BuildPlan（从 ParsedDisc + 提取结果到打包输入）
+    build-use-case.ts  buildUseCase（组装 MenuPackageInput 并调用 assembleMenuPackage）
   commands/
-    inspect.ts list.ts export.ts render.ts build.ts validate.ts compare.ts
+    build.ts           参数、进度、输出事务、报告、stdout 与退出码
+    inspect.ts list.ts export.ts render.ts validate.ts compare.ts
     serve.ts visualize.ts menu-planning.ts media-progress.ts
   shared/
     asset-export.ts     export/render 共用的 BDMV/流管线（GraphicsRun.outputs 决定写容器、PNG 还是元数据）

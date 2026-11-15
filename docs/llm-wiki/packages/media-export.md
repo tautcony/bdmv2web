@@ -9,6 +9,8 @@
 | `src/closure.ts` | `computeMediaClosure` | CLI `build`、库调用 |
 | `src/media-plan.ts` | `createMediaPlan` | 库/测试（`build` 未调用） |
 | `src/menu-loop-export.ts` | `exportMenuLoopMedia`、`pidSpecifier`、`durationSeconds`、`resolveMenuLoopStart45k`、`runMediaProcess`，并桶式再导出 `pgs/*`（`src/index.ts` 从这里与 `diagram/` 桶式导出） | CLI、`package-builder` |
+| `src/menu-media-layout.ts` | `menuMediaPaths`、`priorMenuMediaPaths`（包内媒体目录与计划命名） | `export-menu-media`、`package-builder` 再导出 |
+| `src/export-menu-media.ts` | `exportMenuMedia`、`PreparedMenuMedia`：按顺序编码 primary/additional 单元、复用等价媒体，返回组包输入 | `apps/cli` 应用层、`package-builder` 兼容入口 |
 | `src/pgs/pgs-extract.ts` | `extractPgsTracks`、`extractPgsTracksFromChunks`、`extractPgsTracksFromPacketBatches`、`extractPgsTrack`（经 `menu-loop-export.ts` 再导出）；packet 批次入口接收外层共享扫描的传输诊断，按 PID 保持失败契约 | CLI 资产导出 |
 | `src/color/color.ts` | `readSourceColor`、`planVideoColor`、`videoEncoderArgs`、`assertEncodedColor`、`pixelFormatBitDepth` | `menu-loop-export.ts`、`linear.ts` |
 | `src/linear.ts` | `exportLinearMedia`、`primaryAudioStreamNumberForLanguage` | 库/测试（`build` 未调用） |

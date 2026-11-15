@@ -17,7 +17,7 @@ import type {
 } from "./vm-types.js";
 export type {
   ActionType, ButtonCommand, ButtonCommandContext, ButtonCommandResult, ButtonProgramResult,
-  HdmvVmCheckpoint, MediaEventType, NavigationAction, PlaybackContext, TraceEntry,
+  HdmvUpdate, HdmvVmCheckpoint, MediaEventType, NavigationAction, PlaybackContext, TraceEntry,
   VmDiagnostic, VmEvent, VmOptions, VmProgram, VmSnapshot, VmStatus, WaitFor,
 } from "./vm-types.js";
 

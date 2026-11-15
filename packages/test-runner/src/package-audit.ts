@@ -392,12 +392,14 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
   }
 
   const seen = new Set<string>();
+  const localJvm = isRecord(parsed) && parsed.launchMode === "local-jvm";
   for (const [index, entry] of manifest.files.entries()) {
     const path = safeManifestPath(entry.path);
     if (!path) { add(checks, "PACKAGE_PATH_INVALID", "fail", "Manifest file path must be a relative POSIX path without dot segments", `manifest.json/files/${index}`, { value: entry.path }); continue; }
     if (seen.has(path)) { add(checks, "MANIFEST_DUPLICATE_PATH", "fail", "Manifest contains a duplicate path", path); continue; }
     seen.add(path);
-    if (path === manifestRel || isReportPath(path)) { add(checks, "MANIFEST_PATH_RESERVED", "fail", "Manifest file path overlaps a report or manifest file", path); continue; }
+    const runtimeIndex = localJvm && path === "asset-manifest.json";
+    if (path === manifestRel || (isReportPath(path) && !runtimeIndex)) { add(checks, "MANIFEST_PATH_RESERVED", "fail", "Manifest file path overlaps a report or manifest file", path); continue; }
     if (path === "index.html" && entry.required === false) add(checks, "PACKAGE_ENTRY_OPTIONAL", "fail", "The startup file must be a required manifest entry", path);
     const absolute = resolve(root, path);
     if (!within(root, absolute)) { add(checks, "PACKAGE_PATH_ESCAPE", "fail", "Manifest path resolves outside package", path); continue; }
@@ -406,6 +408,11 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
       if (fileStat.isSymbolicLink() || !fileStat.isFile()) { add(checks, "PACKAGE_FILE_INVALID", "fail", "Expected a regular package file (symlinks are not accepted)", path); continue; }
       const canonical = await realpath(absolute);
       if (!within(root, canonical)) { add(checks, "PACKAGE_PATH_ESCAPE", "fail", "Resolved file escapes package root", path); continue; }
+      if (path === "asset-manifest.json" && runtimeIndex) {
+        try { JSON.parse(await readFile(canonical, "utf8")); }
+        catch (error) { add(checks, "PACKAGE_RUNTIME_INDEX_INVALID", "fail", `asset-manifest.json is not valid JSON: ${errorText(error)}`, path); }
+        continue;
+      }
       if (path === "runtime/bdmv-config.js" && entry.kind === "external-config") {
         let bdmvPath: unknown;
         try {
@@ -424,6 +431,10 @@ export async function auditOutputPackage(inputRoot: string): Promise<OfflinePack
     } catch { add(checks, entry.required === false ? "PACKAGE_OPTIONAL_ASSET_MISSING" : "PACKAGE_MISSING_ASSET", entry.required === false ? "not-verified" : "fail", "Manifest asset is missing or unreadable", path); }
   }
   if (files.includes("index.html") && !seen.has("index.html")) add(checks, "PACKAGE_ENTRY_UNLISTED", "fail", "Required startup file index.html is absent from manifest files", "index.html");
+  if (localJvm) {
+    if (!files.includes("asset-manifest.json")) add(checks, "PACKAGE_RUNTIME_INDEX_MISSING", "fail", "A local-jvm package must contain its asset-manifest.json runtime index", "asset-manifest.json");
+    else if (!seen.has("asset-manifest.json")) add(checks, "PACKAGE_RUNTIME_INDEX_UNLISTED", "fail", "asset-manifest.json is absent from manifest files", "asset-manifest.json");
+  }
   const unlisted = files.filter((path) => path !== manifestRel && !isReportPath(path) && !seen.has(path));
   const unlistedRuntime = unlisted.filter((path) => isPayloadEntry(path));
   for (const path of unlistedRuntime) add(checks, "PACKAGE_UNLISTED_PAYLOAD", "fail", "Runtime payload file is absent from manifest files", path);

@@ -34,6 +34,7 @@
 ### 设计
 
 - [BDMV/HDMV 离线 Web 架构方案（2026-11-02）](archive/design/bdmv_hdmv_offline_web_architecture.md)：初版技术设计与组件关系，含未实现的设计名和早期包结构。
+- [bdmv2web 架构整改实施任务书（2026-11-15）](refactor-plan.md)：T01–T09 的任务范围、接口、测试与实施进度记录。
 
 ### 审查
 

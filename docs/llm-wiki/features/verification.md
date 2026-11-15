@@ -14,7 +14,7 @@
 ## 交付状态规则
 
 ```text
-failed  ← 有 fail 检查 / 有 fatal / 无 HDMV 入口 / 缺必需资产
+failed  ← 有 fail 检查 / 有 fatal / 缺必需资产
 partial ← 可达性未解析 / 可达能力不支持 / 有 error（无 fatal）/ 诊断严重性未识别
 complete← 以上都没有
 ```
@@ -76,7 +76,7 @@ complete← 以上都没有
 }
 ```
 
-`reports.json` 与 `asset-manifest.json` 是报告元数据，不出现在 `files`。
+`reports.json` 是报告元数据，位于 `files` 之外。`asset-manifest.json` 在 `launchMode: "local-jvm"` 的包中是运行时索引：它必须存在、以 `kind: "runtime-index"` 列入 `files` 并可解析为 JSON。HDMV 包的 `files` 可省略该条目。
 
 ### `reports/release-summary.json`
 

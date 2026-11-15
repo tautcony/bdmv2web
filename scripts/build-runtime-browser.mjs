@@ -15,7 +15,7 @@ const shared = {
   legalComments: "none",
   alias: {
     "@bdmv2web/hdmv": resolve(root, "packages/hdmv/src/index.ts"),
-    "@bdmv2web/media-export/external-targets": resolve(root, "packages/media-export/src/external-targets.ts"),
+    "@bdmv2web/core/playback-targets": resolve(root, "packages/core/src/playback-targets.ts"),
   },
 };
 await build({

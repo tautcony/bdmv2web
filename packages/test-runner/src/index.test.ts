@@ -177,14 +177,15 @@ describe("delivery status and coverage", () => {
     const acknowledged = acknowledgeDiagnostic({ severity: "error", code: "UNSUPPORTED", blocksComplete: true }, "reviewer", "accepted for preview");
     expect(acknowledged).toMatchObject({ severity: "error", blocksComplete: true, acknowledged: true });
     expect(decideDelivery({ ...base, diagnostics: [acknowledged] })).toMatchObject({ status: "partial", exitCode: 0 });
-    expect(decideDelivery({ ...base, declaredEntryCount: 2, hdmvEntryCount: 0 })).toMatchObject({ status: "failed", exitCode: 1 });
+    expect(decideDelivery({ ...base, declaredEntryCount: 1, hdmvEntryCount: 0, diagnostics: [{ severity: "error", code: "BDJ_NON_FATAL" }] })).toMatchObject({ status: "partial", exitCode: 0 });
     expect(decideDelivery({ ...base, checks: [{ checkId: "ASSET_MISSING", result: "fail", message: "Required asset is missing" }] })).toMatchObject({ status: "failed", exitCode: 1 });
   });
 
   it.each([
     ["without gaps", { ...base }, "complete", 0],
     ["mixed HDMV and BD-J entries", { ...base, declaredEntryCount: 2, hdmvEntryCount: 1, hasUnsupportedReachableCapability: true, diagnostics: [{ severity: "warning", code: "BDJ_UNSUPPORTED" }] }, "partial", 0],
-    ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, "failed", 1],
+    ["pure BD-J", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0 }, "complete", 0],
+    ["pure BD-J with a missing required asset", { ...base, declaredEntryCount: 1, hdmvEntryCount: 0, hasMissingRequiredAsset: true }, "failed", 1],
     ["unknown opcode", { ...base, checks: [{ checkId: "UNKNOWN_OPCODE", result: "not-verified" as const, message: "Unknown reachable opcode", evidence: { instructionOffset: "24" } }], hasUnresolvedReachability: true, diagnostics: [{ severity: "warning", code: "UNKNOWN_OPCODE" }] }, "partial", 0],
     ["missing required media", { ...base, hasMissingRequiredAsset: true }, "failed", 1],
   ])("applies delivery policy to %s", (_label, input, status, exitCode) => {

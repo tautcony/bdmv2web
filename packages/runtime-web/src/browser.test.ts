@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { access } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { DiscIR, PlayerProfile } from "@bdmv2web/core";
 import { parseBdmv } from "@bdmv2web/bdmv-parser";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
 import { installBdjKeyboardInput, installBdjPointerInput, startBdjRuntime, type BdjPackageData } from "./bdj-runtime.js";
 
-const validIr = {
+const validIr: DiscIR = {
   schemaVersion: "1.0", entries: [], programs: [], menus: [], playlists: [], mediaAssets: [], diagnostics: [],
 };
 
@@ -83,7 +84,7 @@ function createHost(options: { data: Record<string, unknown>; assetBatches?: unk
     };
   };
   for (const id of ["runtime-status", "runtime-status-copy", "runtime-diagnostics", "start-menu", "audio-mute-toggle", "menu-canvas", "popup-canvas", "menu-background", "menu-audio", "bdj-runtime-root"]) elements.set(id, element(id));
-  const document = { getElementById: (id: string) => elements.get(id) ?? null } as unknown as Document;
+  const document = { getElementById: (id: string) => elements.get(id) ?? null, querySelector: () => null } as unknown as Document;
   const fakeWindow = {
     devicePixelRatio: 1,
     addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
@@ -212,6 +213,72 @@ describe("browser boot", () => {
     eventSource.emit("trace", { line: "Spider-Man fixture BD-J trace" });
     await host.fakeWindow.fire("pagehide", { persisted: false });
     expect(eventSource.closed).toBe(true);
+  });
+
+  it("follows server HDMV updates through the remote host", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("location", { protocol: "http:", hash: "", href: "http://127.0.0.1:4173/" });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      requests.push({ url, ...(init ? { init } : {}) });
+      return { ok: true, status: 200, json: async () => ({ attached: false }), text: async () => "" } as Response;
+    });
+    const eventSource = {
+      listeners: new Map<string, Array<(event: MessageEvent<string>) => void>>(),
+      emit(type: string, value: unknown) { for (const listener of this.listeners.get(type) ?? []) listener({ data: JSON.stringify(value) } as MessageEvent<string>); },
+    };
+    vi.stubGlobal("EventSource", class {
+      addEventListener(type: string, listener: (event: MessageEvent<string>) => void) { eventSource.listeners.set(type, [...(eventSource.listeners.get(type) ?? []), listener]); }
+      close() {}
+    });
+    vi.stubGlobal("__BDMV_BDJ_CLIENT__", { start: startBdjRuntime, installKeyboardInput: installBdjKeyboardInput, installPointerInput: installBdjPointerInput });
+
+    const source = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
+    const menuScene = { width: 100, height: 60, compositionTimeout90k: null, selectionTimeout90k: null, pages: [{
+      id: 0, uoMask: "0", defaultButtonId: 1, animationFrameRateCode: 0, buttons: [{
+        id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 },
+        states: { normal: { bounds: { x: 10, y: 10, width: 20, height: 20 }, assetId: "logo", startObjectId: 1, endObjectId: 1 } },
+        commands: [{ bytes: m3Fixtures.move5.bytes }],
+      }],
+    }] };
+    const shared = sharedScenes([{ playlistId: 3, playItem: 0, igStreamNumber: 1, igStreamCount: 1, scene: menuScene }]);
+    const snapshot = {
+      status: "running", programId: 0, pc: 0, registers: { gpr: [], psr: [] }, callStack: [],
+      playback: { status: "idle", playlist: 3, playItem: 0, presentationTime: null, pendingActionId: null },
+      generation: 1, waiting: null, instructionsThisTurn: 0, diagnostic: null,
+    };
+    const host = await launch(packageData({
+      ir: { ...structuredClone(validIr), bdjos: [{ path: "BDJO/00000.bdjo", applications: [], accessiblePlaylists: { accessToAll: true, autostartFirst: true, playlistIds: [] }, terminalInfo: { menuCallMask: false, titleSearchMask: false } }] },
+      scene: null, bdjRuntime: true, ...shared, menuPlaylistIds: [3],
+      vmEntries: [
+        { id: "first-play", kind: "firstPlay", target: { objectType: "BDJ", playbackType: 1, target: "00000", source } },
+        { id: "top-menu", kind: "topMenu", target: { objectType: "BDJ", playbackType: 1, target: "00000", source } },
+      ],
+    }), { assetBatches: [[{ id: "logo", dataUrl: "data:image/png;base64,AA==" }]] });
+
+    await host.elements.get("start-menu")!.fire("click");
+    await vi.waitFor(() => expect(requests.map((request) => request.url)).toContain("/api/bdj/start"));
+
+    const buttonRequests = () => requests.filter((request) => request.url === "/api/bdj/hdmv" && initKind(request) === "button");
+    const initKind = (request: { init?: RequestInit }) => { const body = request.init?.body; if (typeof body !== "string") return undefined; try { return (JSON.parse(body) as { kind?: string }).kind; } catch { return undefined; } };
+    expect(buttonRequests()).toHaveLength(0);
+
+    eventSource.emit("hdmv-update", { active: true, origin: "authored", snapshot, actions: [{ id: "a1", type: "PLAY_PLAYLIST", generation: 1, payload: { playlist: 3 }, source }] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // One click sends exactly one button request; the server update owns the result.
+    await host.fakeWindow.fire("keydown", { code: "Enter", key: "Enter", shiftKey: false, preventDefault() {}, stopImmediatePropagation() {} });
+    await vi.waitFor(() => expect(buttonRequests()).toHaveLength(1));
+    const beforeStreamAction = requests.length;
+    eventSource.emit("hdmv-update", { active: true, origin: "authored", snapshot, actions: [{ id: "a2", type: "SET_STREAM", generation: 1, payload: { interactiveGraphicsStream: 2 }, source }] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // A stream state change is published by the server; the page applies it through the update.
+    expect(requests).toHaveLength(beforeStreamAction);
+
+    eventSource.emit("hdmv-update", { active: false, origin: "system", snapshot, actions: [] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await host.fakeWindow.fire("keydown", { code: "Enter", key: "Enter", shiftKey: false, preventDefault() {}, stopImmediatePropagation() {} });
+    expect(buttonRequests()).toHaveLength(1);
   });
 
   it("opens a matching popup IGS overlay on POPUP_MENU and closes it on POPUP_OFF", async () => {
@@ -880,7 +947,7 @@ describe("browser boot", () => {
   it("applies the packaged player profile to the menu VM registers", async () => {
     const { createMenuVm } = await import("./browser.js");
     const decoded = (word: number, width = 3) => Array.from({ length: width }, (_, index) => String.fromCharCode((word >>> (8 * (width - 1 - index))) & 0xff)).join("");
-    const registers = (profile?: Record<string, unknown>) => createMenuVm({
+    const registers = (profile?: PlayerProfile) => createMenuVm({
       ir: structuredClone(validIr), scene: null, vmPrograms: [{ id: 7, instructions: [] }],
       ...(profile ? { profile } : {}),
     }).snapshot().registers.psr;

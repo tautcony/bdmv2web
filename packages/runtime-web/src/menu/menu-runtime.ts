@@ -32,13 +32,20 @@ export interface MenuPage {
   allowedActions?: Partial<Record<"activate" | "move" | "popup" | "topMenu", boolean>>;
 }
 export interface MenuScene { width: number; height: number; frameRateCode?: number; compositionTimeout90k?: string | null; selectionTimeout90k?: string | null; pages: MenuPage[] }
+/** A remote button program completes through the next authoritative `hdmv-update`. */
+export type MenuButtonExecution = ButtonProgramResult | { kind: "pending" };
+
+export function isPendingMenuButtonExecution(result: MenuButtonExecution): result is { kind: "pending" } {
+  return "kind" in result && result.kind === "pending";
+}
+
 export interface RuntimeVmPort {
   handleEvent(event: VmEvent): unknown;
-  snapshot?(): VmSnapshot;
+  snapshot?(): VmSnapshot | undefined;
   applyMenuContext?(pageId: number, selectedButtonId: number | null): void;
   beginMenuAction?(): void;
   recoverMenuAction?(): boolean;
-  executeButtonProgram?(commands: RawCommand[], context?: ButtonCommandContext): ButtonProgramResult;
+  executeButtonProgram?(commands: RawCommand[], context?: ButtonCommandContext): MenuButtonExecution;
   executeButtonCommand?(command: string | Uint8Array, source?: SourceLocation, context?: ButtonCommandContext): { status?: string; diagnostic?: { message?: string } | null; buttonCommandTerminated?: boolean };
 }
 export type InputKind = "up" | "down" | "left" | "right" | "activate" | "popup" | "topMenu" | "escape";
@@ -410,9 +417,13 @@ export class MenuController {
           return { bytes: decoded.bytes, words: decoded.words, source: decoded.source };
         });
         const result = this.vm.executeButtonProgram(commands, "ig_object");
-        if (result.fault?.message) { this.hooks.diagnostic?.(result.fault.message); this.recoverMenuAction(); }
-        else if (result.diagnostic?.message) { this.hooks.diagnostic?.(result.diagnostic.message); this.recoverMenuAction(); }
-        else this.hooks.dispatchActions?.();
+        // A pending remote request keeps the activated button visual state; the
+        // authoritative update runs the server actions and refreshes the UI.
+        if (!isPendingMenuButtonExecution(result)) {
+          if (result.fault?.message) { this.hooks.diagnostic?.(result.fault.message); this.recoverMenuAction(); }
+          else if (result.diagnostic?.message) { this.hooks.diagnostic?.(result.diagnostic.message); this.recoverMenuAction(); }
+          else this.hooks.dispatchActions?.();
+        }
       } catch (error) {
         this.recoverMenuAction();
         this.hooks.diagnostic?.(errorText(error));
@@ -548,7 +559,7 @@ export class MenuController {
       }
     }
     const declaredDefault = page.defaultButtonId === 0xffff ? undefined : page.buttons.find((b) => b.id === page.defaultButtonId && this.isUsable(b));
-    const psrSelection = this.vm.snapshot?.().registers.psr[10];
+    const psrSelection = this.vm.snapshot?.()?.registers.psr[10];
     const preservedSelection = psrSelection === undefined ? previousSelection : psrSelection === 0xffff ? null : psrSelection;
     const priorEnabled = preservedSelection === null ? undefined : page.buttons.find((b) => b.id === preservedSelection && this.isUsable(b));
     const firstEnabled = page.bogDefaults ? page.buttons.find((b) => this.isUsable(b)) : undefined;

@@ -347,17 +347,22 @@ it.skipIf(process.platform === "win32")("routes mixed BD-J and HDMV title events
     const events = await fetch(`http://127.0.0.1:${port}/api/bdj/events`);
     const reader = events.body!.getReader();
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/start`, { method: "POST" })).status).toBe(200);
+    // The Java-selected title publishes the authored state first.
+    await expect(readEvent(reader, "hdmv-update")).resolves.toMatchObject({ active: true, origin: "authored", actions: [], snapshot: expect.objectContaining({ programId: 1 }) });
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/title`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: 1, origin: "user" }) })).status).toBe(204);
-    await expect(readEvent(reader, "hdmv-mode")).resolves.toMatchObject({ active: true });
+    await expect(readEvent(reader, "hdmv-update")).resolves.toMatchObject({ active: true, origin: "user", actions: [] });
     for (let attempt = 0; attempt < 50; attempt++) {
       try { if (await readFile(join(parent, "rpc-response.log"), "utf8") === "requested") break; } catch { /* The Java response is pending. */ }
       await new Promise((resolveWait) => setTimeout(resolveWait, 20));
     }
     expect(await readFile(join(parent, "rpc-response.log"), "utf8")).toBe("requested");
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/hdmv`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "event", event: { type: "TOP_MENU" } }) })).status).toBe(204);
-    await expect(readEvent(reader, "hdmv-actions")).resolves.toMatchObject({ actions: [expect.objectContaining({ type: "TITLE_SEARCH", payload: { title: 0 } })], origin: "authored" });
+    await expect(readEvent(reader, "hdmv-update")).resolves.toMatchObject({ active: true, origin: "authored", actions: [expect.objectContaining({ type: "TITLE_SEARCH", payload: { title: 0 } })] });
     expect((await fetch(`http://127.0.0.1:${port}/api/bdj/title`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: 0, origin: "authored" }) })).status).toBe(204);
     await expect(readEvent(reader, "navigation")).resolves.toMatchObject({ title: 0, programId: 1 });
+    // A button program publishes the authoritative snapshot with the actions it produced.
+    expect((await fetch(`http://127.0.0.1:${port}/api/bdj/hdmv`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "button", commands: [m3Fixtures.popupOff] }) })).status).toBe(204);
+    await expect(readEvent(reader, "hdmv-update")).resolves.toMatchObject({ active: true, origin: "authored", actions: [expect.objectContaining({ type: "POPUP_OFF" })], snapshot: expect.objectContaining({ status: "running" }) });
     await reader.cancel();
   } finally {
     await stopServer(serverProcess, parent);
@@ -400,7 +405,11 @@ it.skipIf(process.platform === "win32")("runs HDMV First Play before the indexed
     await expect(readEvent(reader, "navigation")).resolves.toMatchObject({ title: 0xffff, programId: 0, gpr: expect.arrayContaining([5]) });
     const topMenu = await fetch(`http://127.0.0.1:${port}/api/bdj/title`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: 0, origin: "system" }) });
     expect(topMenu.status).toBe(204);
-    await expect(readEvent(reader, "hdmv-mode")).resolves.toMatchObject({ active: false });
+    await expect(readEvent(reader, "hdmv-update")).resolves.toMatchObject({ active: false, origin: "system", actions: [] });
+    // A new SSE client receives the current authoritative state immediately.
+    const reconnectedReader = (await fetch(`http://127.0.0.1:${port}/api/bdj/events`)).body!.getReader();
+    await expect(readEvent(reconnectedReader, "hdmv-update")).resolves.toMatchObject({ active: false, actions: [] });
+    await reconnectedReader.cancel();
     for (let attempt = 0; attempt < 50; attempt++) {
       try { if ((await readFile(observations, "utf8")).includes("gpr:5")) break; } catch { /* Java has not read the session register yet. */ }
       await new Promise((resolveWait) => setTimeout(resolveWait, 20));

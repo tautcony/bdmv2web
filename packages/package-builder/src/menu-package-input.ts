@@ -1,35 +1,31 @@
-import type { DiscIR, Limits, PlayerProfile } from "@bdmv2web/core";
+import type { DiscIR, Limits, PlayerProfile, RuntimeDataV1, SerializedScene } from "@bdmv2web/core";
 import type { VmOptions, VmProgram } from "@bdmv2web/hdmv";
-import type { ExternalMediaTargets, HdrMode, MediaAssetProgress, MediaProcessRunner, MenuLoopMediaInput, VideoCodec, VideoExportMode } from "@bdmv2web/media-export";
+import type { ExternalMediaTargets, MediaAssetProgress, MediaProcessRunner, MenuLoopMediaInput, MenuMediaEncoding } from "@bdmv2web/media-export";
+import type { MenuLoopMediaPackage } from "@bdmv2web/runtime-web";
 import type { PngPayload } from "./asset-batches.js";
 import type { SoundMetadata } from "./sounds.js";
 import type { MenuPackageDiagnostic, MenuPackageMetadata, MenuPackageStatus } from "./types.js";
-import type { PgsTrackPackageInput } from "./pgs-package.js";
+import type { PgsTrackPackageInput, serializePgsTrack } from "./pgs-package.js";
+
+/** The exact bytes written to `runtime/disc-data.js`. */
+export type MenuRuntimeData = RuntimeDataV1<VmProgram, NonNullable<VmOptions["entries"]>[number], ExternalMediaTargets, MenuLoopMediaPackage, ReturnType<typeof serializePgsTrack>>;
 
 export interface BdjPackageFile { path: string; sourcePath: string; bytes: Uint8Array }
 
-/** Menu media encoder settings forwarded to every menu media export. */
-export interface MenuMediaEncoding {
-  crf?: number;
-  preset?: "medium" | "fast" | "veryfast" | "ultrafast";
-  codec?: VideoCodec;
-  hdrMode?: HdrMode;
-  /** `copy` remuxes the source H.264 or HEVC stream into MP4; see `exportMenuLoopMedia`. */
-  videoMode?: VideoExportMode;
-}
+export type { MenuMediaEncoding } from "@bdmv2web/media-export";
 
 export interface MenuPackageInput {
   outputDirectory: string;
   title: string;
   ir: DiscIR;
-  scene: unknown;
+  scene: SerializedScene | null;
   /** Extracted title popup IGS compositions, retained with their source clip/PID. */
-  popupScenes?: unknown[];
+  popupScenes?: SerializedScene[];
   /** Extracted IGS compositions keyed by their owning HDMV menu playlist number.
    * Entries are indexed by PlayItem; the compositions themselves are written
    * once into a shared table, so PlayItems that name the same clip/PID cost
    * only their index record. */
-  menuScenes?: Array<{ playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; scene: unknown }>;
+  menuScenes?: Array<{ playlistId: number; playItem?: number; igStreamNumber?: number; igStreamCount?: number; scene: SerializedScene }>;
   /** HDMV playlist numbers that carry a menu IGS stream. */
   menuPlaylistIds?: number[];
   /** Play mark to PlayItem mapping per menu playlist, so a `PLAY_PLAYLIST_MARK` request selects the right packaged scene. */

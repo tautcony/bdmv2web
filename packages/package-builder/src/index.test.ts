@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, menuMediaPaths, packagedMediaMetadata, priorMenuMediaPaths, runtimeAudioTrackMetadata } from "./index.js";
+import { assembleMenuPackage, buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, menuMediaPaths, packagedMediaMetadata, priorMenuMediaPaths, runtimeAudioTrackMetadata, serializeSafeScriptData } from "./index.js";
 import type { MediaProcessRunner } from "@bdmv2web/media-export";
+import type { SerializedMenuButton, SerializedScene } from "@bdmv2web/core";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
 
 const ir = {
@@ -13,7 +14,7 @@ const ir = {
   programs: [{ id: "program-00001", title: "Test menu" }], menus: [{ id: "menu-00001" }],
   playlists: [{ id: "playlist-00001", programIds: ["program-00001"], menuIds: ["menu-00001"], duration90k: "90000" }], mediaAssets: [], diagnostics: [],
 };
-const scene = { width: 1920, height: 1080, pages: [{ id: 0, defaultButtonId: 1, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1" }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1" } }, commands: [] as Array<{ bytes: string; sourceOffset: string; source: { path: string; origin: "primary"; offset: string } }> }] }] };
+const scene: SerializedScene = { width: 1920, height: 1080, compositionTimeout90k: null, selectionTimeout90k: null, pages: [{ id: 0, uoMask: "0", animationFrameRateCode: 0, defaultButtonId: 1, buttons: [{ id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1", startObjectId: 0, endObjectId: 0 }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, assetId: "graphic-1", startObjectId: 0, endObjectId: 0 } }, commands: [] as NonNullable<SerializedMenuButton["commands"]> }] }] };
 const png1x1 = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=", "base64"));
 function compactCss(css: string): string { return css.replace(/\s*([{}:;,])\s*/g, "$1").trim(); }
 const mediaOutputs = (args: string[]): string[] => args.filter((arg) => arg.endsWith(".mp4") || arg.endsWith(".m4a"));
@@ -32,9 +33,10 @@ describe("menu package primitives", () => {
       const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");
       const appBundle = await readFile(resolve(outputDirectory, "runtime/app.bundle.js"), "utf8");
       const bdjClient = await readFile(resolve(outputDirectory, "runtime/bdj-client.js"), "utf8");
-      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { launchMode: string; files: Array<{ path: string }> };
+      const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { launchMode: string; files: Array<{ path: string; kind: string }> };
       expect(manifest.launchMode).toBe("local-jvm");
       expect(manifest.files.map((file) => file.path)).toContain("runtime/bdj-client.js");
+      expect(manifest.files).toContainEqual({ path: "asset-manifest.json", kind: "runtime-index", required: true, byteLength: expect.any(String) });
       expect(html.indexOf("runtime/bdj-client.js")).toBeLessThan(html.indexOf("runtime/app.bundle.js"));
       expect(appBundle).not.toMatch(/\bfetch\s*\(|new EventSource/);
       expect(bdjClient).toContain('fetch("/api/bdj/start"');
@@ -56,7 +58,7 @@ describe("menu package primitives", () => {
     expect(audioTracks.map(({ streamNumber, psrStreamNumber }) => [streamNumber, psrStreamNumber])).toEqual([[0, 1], [1, 2]]);
 
     const embedded: { __BDMV_MENU_DATA__?: { media?: { audioTracks?: unknown[] } } } = {};
-    runInNewContext(createDataScript({ media: { audioTracks } }), embedded);
+    runInNewContext(createDataScript({ ir, scene: null, media: { playlist: 0, background: { path: "assets/media/background.mp4", loop: false }, audioTracks } }), embedded);
     expect(embedded.__BDMV_MENU_DATA__?.media?.audioTracks).toEqual(audioTracks);
 
     const media = {
@@ -70,14 +72,14 @@ describe("menu package primitives", () => {
   });
   it("escapes script termination sequences as data and escapes HTML titles", () => {
     const maliciousTitle = "</script><script>globalThis.pwned=1</script>&\u2028\u2029";
-    const source = createDataScript({ title: maliciousTitle });
+    const source = createDataScript({ ir, scene: null, title: maliciousTitle });
     expect(source).not.toContain("</script>"); expect(source).toContain("\\u003c/script\\u003e");
     expect(source).not.toContain("<script>"); expect(source).toContain("\\u0026\\u2028\\u2029");
     const scriptContext: { __BDMV_MENU_DATA__?: { title?: string }; pwned?: number } = {};
     runInNewContext(source, scriptContext);
     expect(scriptContext.__BDMV_MENU_DATA__?.title).toBe(maliciousTitle);
     expect(scriptContext.pwned).toBeUndefined();
-    expect(createDataScript({ bytes: new Uint8Array([0x01, 0xab]) })).toContain('"bytes":"01ab"');
+    expect(serializeSafeScriptData({ bytes: new Uint8Array([0x01, 0xab]) })).toContain('"bytes":"01ab"');
     const html = createMenuIndexHtml("</title><script>globalThis.pwned=1</script> & 'quote' \"menu\"");
     expect(html).toContain("&lt;/title&gt;&lt;script&gt;globalThis.pwned=1&lt;/script&gt; &amp; &#39;quote&#39; &quot;menu&quot;");
     expect(html).not.toContain("<script>globalThis.pwned");
@@ -134,9 +136,9 @@ describe("menu package primitives", () => {
       soundBytes[46] = 0x11; soundBytes[47] = 0x40; put32(48, 0); put32(52, 4);
       soundBytes[56] = 0x21; soundBytes[57] = 0x40; put32(58, 4); put32(62, 4);
       soundBytes.set([0x12, 0x34, 0xab, 0xcd, 0x56, 0x78, 0xef, 0x01], 80);
-      const soundScene = { width: 1920, height: 1080, pages: [{ id: 0, defaultButtonId: 1, buttons: [
-        { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 } }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 0 }, activated: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 1 } }, commands: [] },
-        { id: 2, bog: 0, enabled: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 }, soundId: 2 } }, commands: [] },
+      const soundScene: SerializedScene = { width: 1920, height: 1080, compositionTimeout90k: null, selectionTimeout90k: null, pages: [{ id: 0, uoMask: "0", animationFrameRateCode: 0, defaultButtonId: 1, buttons: [
+        { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 }, startObjectId: 0, endObjectId: 0 }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 0, startObjectId: 0, endObjectId: 0 }, activated: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 1, startObjectId: 0, endObjectId: 0 } }, commands: [] },
+        { id: 2, bog: 0, enabled: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 }, soundId: 2, startObjectId: 0, endObjectId: 0 } }, commands: [] },
       ] }] };
       const packaged = await buildMenuPackage({
         outputDirectory, title: "Sound preview", ir, scene: soundScene, graphics: [], soundBytes, inputConfig: { escapeMapping: "topMenu" },
@@ -324,8 +326,8 @@ describe("menu package primitives", () => {
       const commandSource = { path: "BDMV/STREAM/00001.m2ts", origin: "primary" as const, offset: "128" };
       const fixtureScene = structuredClone(scene);
       fixtureScene.pages[0]!.buttons[0]!.commands = [
-        { bytes: m3Fixtures.move5.bytes, sourceOffset: "128", source: commandSource },
-        { bytes: m3Fixtures.playPlaylist42.bytes, sourceOffset: "140", source: { ...commandSource, offset: "140" } },
+        { bytes: m3Fixtures.move5.bytes, sourceOffset: "128" },
+        { bytes: m3Fixtures.playPlaylist42.bytes, sourceOffset: "140" },
       ];
       const popupScene = { ...fixtureScene, id: "popup-title-1", clipId: "00001", pid: 0x1400, streamModel: 0, uiModel: 1, source: { clipId: "00001", pid: 0x1400, packetOffset: "192", pesOffset: "208", segmentOffset: "4", segmentFileOffset: "400", pts90k: "9000", timeDomain: 0 } };
       await buildMenuPackage({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, popupScenes: [popupScene], vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmEntries: [{ id: "title:0", kind: "title", source: commandSource, target: { objectType: "HDMV", playbackType: 0, target: 0, source: commandSource } }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
@@ -507,4 +509,26 @@ describe("menu media layout", () => {
       expect(sourceProbeCount()).toBe(2);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
+});
+
+it("assembles prepared media from the supplied result", async () => {
+  const parent = await mkdtemp(resolve(tmpdir(), "bdmv-menu-prepared-"));
+  const outputDirectory = resolve(parent, "prepared");
+  let encoderCalls = 0;
+  const mediaProcessRunner: MediaProcessRunner = async () => {
+    encoderCalls += 1;
+    throw new Error("assembly received an unexpected media call");
+  };
+  try {
+    const result = await assembleMenuPackage({
+      outputDirectory, title: "Prepared media", ir, scene, graphics: [], mediaProcessRunner,
+      menuLoopMedia: { sourcePath: resolve(parent, "unused.m2ts"), sourceFile: "BDMV/STREAM/00001.m2ts", playlistId: "00007", playItemIndex: 0, clipId: "00001", inTime45k: 0, outTime45k: 45_000, stillMode: 0, repeatCount: 1, videoPid: 0x1011, audioTracks: [] },
+      preparedMedia: { additional: [] },
+    });
+    expect(encoderCalls).toBe(0);
+    expect(result.diagnostics).toEqual([]);
+    const manifest = JSON.parse(await readFile(resolve(outputDirectory, "manifest.json"), "utf8")) as { files: Array<{ kind: string }> };
+    expect(manifest.files.some((file) => file.kind === "media" || file.kind === "media-plan")).toBe(false);
+    expect(await readFile(resolve(outputDirectory, "index.html"), "utf8")).toContain("runtime/disc-data.js");
+  } finally { await rm(parent, { recursive: true, force: true }); }
 });

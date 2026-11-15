@@ -3,17 +3,18 @@ import { createRequire } from "node:module";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseDiscIR } from "@bdmv2web/core";
-import { exportMenuLoopMedia, resolveEncodingDefaults, type MediaProcessResult, type MenuLoopMediaInput, type MenuLoopMediaResult } from "@bdmv2web/media-export";
+import { parseDiscIR, type SerializedScene, type RuntimeMenuSceneEntry } from "@bdmv2web/core";
+import { exportMenuMedia, menuMediaPaths, priorMenuMediaPaths, type MenuLoopMediaResult, type PreparedMenuMedia } from "@bdmv2web/media-export";
 import { makePngBatches } from "./asset-batches.js";
 import { convertSounds } from "./sounds.js";
 import { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, packagedStyle, serializeSafeScriptData } from "./scripts.js";
-import type { MenuPackageInput, MenuPackageResult, MenuMediaEncoding } from "./menu-package-input.js";
+import type { MenuPackageInput, MenuPackageResult } from "./menu-package-input.js";
 import type { MenuPackageMetadata } from "./types.js";
 import { serializePgsTrack } from "./pgs-package.js";
 import { packagedMediaMetadata, runtimeAudioTrackMetadata } from "./media-metadata.js";
 
-const RESERVED_REPORT_FILES = new Set(["reports.json", "asset-manifest.json"]);
+/** Reports stay out of `manifest.files`; `asset-manifest.json` is a BD-J runtime index. */
+const RESERVED_REPORT_FILES = new Set(["reports.json"]);
 
 /** The published CLI carries the menu bundle beside its entry; a workspace build reads the runtime-web export. */
 function menuRuntimeBundlePath(): string {
@@ -43,24 +44,8 @@ export function createCompatibility(metadata: MenuPackageMetadata, externalPlayb
  * zero-based PlayItem, and the clip (`<clipId>.m2ts`). A folder therefore
  * points back at its source without opening the media plan.
  */
-export function menuMediaPaths(input: Pick<MenuLoopMediaInput, "playlistId" | "playItemIndex" | "clipId">): { directory: string; planPath: string } {
-  const id = `playlist-${input.playlistId}-pi${String(input.playItemIndex).padStart(2, "0")}-clip-${input.clipId}`.replace(/[^0-9A-Za-z._-]/g, "_");
-  return { directory: `assets/media/${id}`, planPath: `media-plans/${id}.json` };
-}
-
-/**
- * Compatible media paths: one folder per playlist PlayItem
- * (`playlist-<id>-pi<n>`, no clip in the name), and the Top Menu background at
- * the media root. Reuse checks these after the current names, so a package or
- * unfinished staging directory resumes with its existing encoded media.
- */
-export function priorMenuMediaPaths(input: Pick<MenuLoopMediaInput, "playlistId" | "playItemIndex">): Array<{ assetDirectory: string; planPath: string }> {
-  const id = `playlist-${input.playlistId}-pi${input.playItemIndex}`.replace(/[^0-9A-Za-z._-]/g, "_");
-  return [
-    { assetDirectory: `assets/media/${id}`, planPath: `media-plans/${id}.json` },
-    { assetDirectory: "assets/media", planPath: "media-plan.json" },
-  ];
-}
+/** Media path naming comes from media-export; re-exported for package-builder importers. */
+export { menuMediaPaths, priorMenuMediaPaths };
 
 /**
  * Split menu scene entries into one shared table plus a per-PlayItem index.
@@ -70,17 +55,17 @@ export function priorMenuMediaPaths(input: Pick<MenuLoopMediaInput, "playlistId"
  * holds each composition once under its extracted id while entries keep every
  * other field and name their composition through `sceneId`.
  */
-function shareMenuScenes(entries: NonNullable<MenuPackageInput["menuScenes"]>): { scenes: Record<string, unknown>; menuScenes: Array<Record<string, unknown>> } {
-  const scenes: Record<string, unknown> = {};
-  const sceneIds = new Map<unknown, string>();
+function shareMenuScenes(entries: NonNullable<MenuPackageInput["menuScenes"]>): { scenes: Record<string, SerializedScene>; menuScenes: RuntimeMenuSceneEntry[] } {
+  const scenes: Record<string, SerializedScene> = {};
+  const sceneIds = new Map<SerializedScene | string, string>();
   let anonymousCount = 0;
-  const menuScenes = entries.map(({ scene, ...entry }) => {
-    const declaredId = (scene as { id?: unknown } | null)?.id;
+  const menuScenes: RuntimeMenuSceneEntry[] = entries.map(({ scene, ...entry }) => {
+    const declaredId = scene.id;
     const identifiable = typeof declaredId === "string" && declaredId !== "";
     // Compositions without an extracted id are keyed by the object the caller
     // passed, so a caller that hands over one scene per PlayItem still gets one
     // copy as long as those PlayItems share that object.
-    const key: unknown = identifiable ? `declared:${declaredId}` : scene;
+    const key: SerializedScene | string = identifiable ? `declared:${declaredId}` : scene;
     const shared = sceneIds.get(key);
     if (shared !== undefined) return { ...entry, sceneId: shared };
     const sceneId = identifiable ? declaredId : `menu-scene-${anonymousCount++}`;
@@ -92,7 +77,7 @@ function shareMenuScenes(entries: NonNullable<MenuPackageInput["menuScenes"]>): 
 }
 
 /** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
-export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
+export async function assembleMenuPackage(input: MenuPackageInput & { preparedMedia: PreparedMenuMedia }): Promise<MenuPackageResult> {
   const ir = parseDiscIR(input.ir);
   const bdjFiles = input.bdjFiles ?? [];
   const bdjRuntime = bdjFiles.length > 0;
@@ -118,40 +103,10 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
   const output = resolve(input.outputDirectory); const runtimeDirectory = resolve(output, "runtime");
   await mkdir(runtimeDirectory, { recursive: true });
   if (bdjRuntime) await mkdir(resolve(runtimeDirectory, "bdj"), { recursive: true });
-  input.onPhase?.("media");
-  const mediaEncoding = input.mediaEncoding ?? {};
-  const sourceProbeCache = new Map<string, Promise<MediaProcessResult>>();
-  const primaryMedia = input.menuLoopMedia === undefined ? undefined : menuMediaPaths(input.menuLoopMedia);
-  const exportedMedia = input.menuLoopMedia && primaryMedia ? await exportMenuLoopMedia(input.menuLoopMedia, { outputDirectory: output, ...mediaEncoding, sourceProbeCache, assetDirectory: primaryMedia.directory, planPath: primaryMedia.planPath, ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(input.menuLoopMedia) } : {}), ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}), ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}) }) : undefined;
-  const mediaByKey = new Map<string, { result: MenuLoopMediaResult; planPath: string }>();
-  if (input.menuLoopMedia && exportedMedia && primaryMedia) mediaByKey.set(menuMediaReuseKey(input.menuLoopMedia, mediaEncoding), { result: exportedMedia, planPath: primaryMedia.planPath });
-  const additionalMedia: Array<{ input: MenuLoopMediaInput; result: MenuLoopMediaResult; planPath: string }> = [];
-  for (const media of input.additionalMenuMedia ?? []) {
-    const key = menuMediaReuseKey(media, mediaEncoding);
-    const existing = mediaByKey.get(key);
-    if (existing) {
-      // The PlayItem shares its bytes with one already exported, so it also
-      // shares that unit's plan file: `media-plans/` holds one plan per encoded
-      // unit, not per PlayItem.
-      input.onMediaProgress?.({ state: "end", outTimeSeconds: existing.result.background.durationSeconds, durationSeconds: existing.result.background.durationSeconds, assetPath: existing.result.background.path, source: { playlistId: media.playlistId, playItemIndex: media.playItemIndex, clipId: media.clipId, kind: "background", pid: media.videoPid, videoMode: existing.result.plan.encoding.video.mode, reused: true } });
-      const result = referenceMenuMediaResult(existing.result, media);
-      additionalMedia.push({ input: media, result, planPath: existing.planPath });
-      continue;
-    }
-    const { directory, planPath } = menuMediaPaths(media);
-    const result = await exportMenuLoopMedia(media, {
-      outputDirectory: output,
-      ...mediaEncoding,
-      sourceProbeCache,
-      assetDirectory: directory,
-      planPath,
-      ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory, reuseAlternatives: priorMenuMediaPaths(media) } : {}),
-      ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}),
-      ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}),
-    });
-    additionalMedia.push({ input: media, result, planPath });
-    mediaByKey.set(key, { result, planPath });
-  }
+  // Media arrives prepared by `exportMenuMedia()`; assembly writes the package files.
+  const { primary, additional: additionalMedia } = input.preparedMedia;
+  const primaryMedia = primary === undefined ? undefined : { planPath: primary.planPath };
+  const exportedMedia: MenuLoopMediaResult | undefined = primary?.result;
   // Append shared colour warnings once.
   const mediaResults = [
     ...(exportedMedia ? [exportedMedia] : []),
@@ -196,7 +151,7 @@ export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPac
     ...[...new Set((input.pgsTracks ?? []).map((track) => track.path))].map((path) => ({ path, kind: "subtitle", required: true })),
     ...[...new Set([...(exportedMedia && primaryMedia ? [primaryMedia.planPath] : []), ...additionalMedia.map(({ planPath }) => planPath)])].map((path) => ({ path, kind: "media-plan", required: true })),
     ...(input.externalTargets ? [{ path: "runtime/bdmv-config.js", kind: "external-config", required: true }, { path: "external-targets.json", kind: "runtime", required: true }] : []),
-    ...(bdjRuntime ? [{ path: "runtime/bdj/bdj-host-api.jar", kind: "bdj-host", required: true }, { path: "runtime/bdj/session.json", kind: "bdj-session", required: true }] : []),
+    ...(bdjRuntime ? [{ path: "runtime/bdj/bdj-host-api.jar", kind: "bdj-host", required: true }, { path: "runtime/bdj/session.json", kind: "bdj-session", required: true }, { path: "asset-manifest.json", kind: "runtime-index", required: true }] : []),
     ...bdjFiles.map((file) => ({ path: `bdj/${file.path}`, kind: "bdj", required: true })),
   ];
   const sharedMenuScenes = input.menuScenes?.length ? shareMenuScenes(input.menuScenes) : undefined;
@@ -252,48 +207,19 @@ function getSceneSize(scene: unknown): { width: number; height: number } | undef
   return { width: (scene as { width: number }).width, height: (scene as { height: number }).height };
 }
 
-
-function menuMediaReuseKey(media: MenuLoopMediaInput, encoding: MenuMediaEncoding): string {
-  const defaults = resolveEncodingDefaults(encoding);
-  return JSON.stringify({
-    sourcePath: resolve(media.sourcePath),
-    sourceFile: media.sourceFile,
-    clipId: media.clipId,
-    inTime45k: media.inTime45k,
-    loopStart45k: media.loopStart45k ?? null,
-    includeIntro: media.includeIntro ?? false,
-    outTime45k: media.outTime45k,
-    stillMode: media.stillMode,
-    repeatCount: media.repeatCount,
-    loopBackground: media.loopBackground ?? (media.stillMode !== 2 && media.repeatCount > 1),
-    videoPid: media.videoPid,
-    audioTracks: media.audioTracks.map(({ streamNumber, pid, language }) => [streamNumber, pid, language]),
-    encoding: {
-      codec: defaults.codec,
-      crf: defaults.crf,
-      preset: defaults.preset,
-      hdrMode: defaults.hdrMode,
-      videoMode: defaults.videoMode,
-    },
-  });
-}
-
-/** Record a PlayItem that names media already exported for another one.
- *
- * The record keeps the requesting PlayItem and the shared asset paths, and no
- * file is written: `planPath` points at the plan of the unit that was encoded,
- * so a package with N PlayItems over one clip holds one plan.
+/**
+ * Compatibility entry: run media-export's `exportMenuMedia()`, then
+ * `assembleMenuPackage()`. New callers use `planBuild()` and run both steps
+ * through `buildUseCase()`.
  */
-function referenceMenuMediaResult(media: MenuLoopMediaResult, input: MenuLoopMediaInput): MenuLoopMediaResult {
-  return {
-    ...media,
-    plan: {
-      ...media.plan,
-      playlistId: input.playlistId,
-      playItemIndex: input.playItemIndex,
-      assetPaths: { background: media.background.path, audioTracks: media.audioTracks.map((track) => track.path) },
-    },
-    tools: { ffmpeg: "reused", ffprobe: "reused", invocations: [] },
-    files: [],
-  };
+export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
+  input.onPhase?.("media");
+  const preparedMedia = await exportMenuMedia(input.menuLoopMedia, input.additionalMenuMedia ?? [], {
+    outputDirectory: input.outputDirectory,
+    ...(input.mediaEncoding ? { mediaEncoding: input.mediaEncoding } : {}),
+    ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}),
+    ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}),
+    ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}),
+  });
+  return assembleMenuPackage({ ...input, preparedMedia });
 }

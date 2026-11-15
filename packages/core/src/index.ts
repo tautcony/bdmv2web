@@ -12,6 +12,34 @@ export type NavigationDescriptor = DiscIR["entries"][number]["navigation"];
 export type AssetReference = DiscIR["mediaAssets"][number];
 export type Diagnostic = DiscIR["diagnostics"][number];
 export { DEFAULT_PLAYER_PROFILE } from "./defaults.js";
+export {
+  EXTERNAL_UNKNOWN_CODES,
+  isDeclaredExternalStreamPath,
+  resolveExternalPlayTarget,
+} from "./playback-targets.js";
+export type {
+  ExternalMediaTargets,
+  ExternalPlayItem,
+  ExternalPlaylist,
+  ExternalPlayRequest,
+  ExternalPlayTarget,
+  PlaybackRoute,
+  PlaybackSourceLocation,
+  PlaybackUnknown,
+} from "./playback-targets.js";
+export type {
+  RuntimeBdjFile,
+  RuntimeDataV1,
+  RuntimeEscapeMapping,
+  RuntimeInputConfig,
+  RuntimeMenuPlaylistMark,
+  RuntimeMenuSceneEntry,
+  SerializedMenuButton,
+  SerializedMenuPage,
+  SerializedMenuState,
+  SerializedScene,
+  SerializedSceneSource,
+} from "./runtime-data.js";
 export { ContractError } from "./contract-error.js";
 export { DEFAULT_LIMITS, validateLimits } from "./limits.js";
 export type { Limits } from "./limits.js";

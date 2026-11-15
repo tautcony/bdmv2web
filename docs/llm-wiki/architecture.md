@@ -36,7 +36,7 @@
 | `ParsedDisc` | `bdmv-parser` | `hdmv`、`igs`、`media-export`、CLI | `entries`、`movieObjects`、`playlists`、`clips`、`sounds`、`graph`、`declarations`、`diagnostics` |
 | `IgsExtraction` | `igs` | CLI、`media-export`、`runtime-web` | `scenes`、`assets`、`diagnostics`、`status`、`streams` |
 | `DiscIR` | CLI（`createMenuDiscIR`） | `package-builder`、浏览器 | `schemaVersion`、`entries`、`programs`、`menus`、`playlists`、`mediaAssets`、`diagnostics` |
-| `MenuScene` / `SerializedScene` | `runtime-web`（`adaptIgsScene`） | `package-builder` → `runtime/disc-data.js` | 顶层 `pages`；`buttons`/`objects`/`effects` 嵌在 page 内 |
+| `MenuScene` / `SerializedScene` | 类型在 `core`（`runtime-data.ts`）；`runtime-web`（`adaptIgsScene`）产出 | `package-builder` → `runtime/disc-data.js` | 顶层 `pages`；`buttons`/`objects`/`effects` 嵌在 page 内 |
 | `MediaClosure` / `MediaPlan` | `media-export` | CLI、`package-builder` | 可达 `playlistIds`/`clipIds`、未知项、预算估算 |
 | 菜单包 | `package-builder` | 浏览器、`test-runner` | `index.html`、`runtime/*`、`assets/*`、`manifest.json` |
 | 交付报告 | `test-runner` + CLI | 人、CI | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` |
@@ -45,21 +45,21 @@
 
 ## 一次 `build` 的时序
 
-入口：`apps/cli/src/index.ts` → `cli/program.ts` 的 `dispatch` → `commands/build.ts` 的 `build()`。
+入口：`apps/cli/src/index.ts` → `cli/program.ts` 的 `dispatch` → `commands/build.ts` 的 `build()`；领域编排在 `application/build-plan.ts` 的 `planBuild()`，组包输入由 `application/build-use-case.ts` 的 `buildUseCase()` 交给 `assembleMenuPackage`。
 
 1. **参数先于输入**：`loadLimits(--limits)`、`loadPlayerProfile(--player-profile)` 在任何解析与输出事务之前完成校验。
 2. `parseBdmv(input)` → `ParsedDisc`；`classifyDiagnostics` 出现 `fatal` 立即失败，不创建 staging。
 3. 计算输出目录（默认 `<BDMV 父目录>/BDMV-menu`）与标题（默认 `<BDMV 父目录名>`），`assertDisjointRoots` 拒绝输入/输出重叠。
 4. `extractIgsScenes(disc)` 提取场景与 PNG（`renderAssets` 默认开启）。
 5. `findTopMenuPlaylist` 从 HDMV 入口解析 Top Menu 播放列表；`menuLoopMediaInput` 计算背景循环区间与音轨。
-6. `beginOutputTransaction` 建 staging；后续任一步失败都 `abort`，不提交半成品。
+6. `beginOutputTransaction` 建 staging；后续任一步失败都 `abort`，不提交半成品。`planBuild()` 在事务内完成场景选择、媒体闭包、外部目标、VM 程序、媒体输入与诊断集合。
 7. 场景选择：`findMenuScene` 按播放列表的 clip/PID 匹配场景。无场景 → `MENU_SCENE_NOT_FOUND`；多义 → `MENU_SCENE_AMBIGUOUS`；无 Top Menu 播放列表 → `MENU_PLAYLIST_NOT_RESOLVED`。失败仍写 `README.md` + `reports.json` 并提交，退出码 1。
 8. `adaptIgsScene` 序列化主导航场景；`uiModel === 0` 的场景作为菜单画面，`uiModel === 1` 作为弹出菜单；可达的其他菜单播放列表额外导出本地媒体。
 9. `buildMediaClosure` + `createExternalMediaTargets` 生成可达播放列表与外部播放目标。
 10. 收集：MovieObject 程序、入口表、音效字节、被引用 PNG、诊断。
-11. `decideDelivery` 先算状态（`checks: []`，只由诊断与事实决定），`buildMenuPackage` 按该状态写包，避免包自己造结论。
-12. `buildMenuPackage` 写文件、导出媒体、复制 `runtime-web/dist/browser.bundle.js` 为 `runtime/app.bundle.js`（bundle 由 workspace build 期的 `scripts/build-runtime-browser.mjs` 用 esbuild 产出）、写 `manifest.json`。
-13. 写入 `reports.json`，`commit()`，stdout 输出 `{ status, output }`；`status !== complete` 时退出码按 `0/1/2` 规则。
+11. `decideDelivery` 先算状态（`checks: []`，由诊断与事实决定）；`buildUseCase()` 先调用 `exportMenuMedia()` 编码，再由 `assembleMenuPackage()` 按该状态写包并记录同一结论。
+12. `assembleMenuPackage()` 写文件、消费已编码媒体、复制 `runtime-web/dist/browser.bundle.js` 为 `runtime/app.bundle.js`（bundle 由 workspace build 期的 `scripts/build-runtime-browser.mjs` 用 esbuild 产出）、写 `manifest.json`。
+13. 写入 `reports.json`，`commit()`，由 `publishBuildOutcome()` 统一输出 stdout JSON 并设置退出码（`complete`/`partial` → 0，`failed` → 1）；BD-J 包的 JSON 另带 `launch`。
 
 ## 产物与仓库目录
 

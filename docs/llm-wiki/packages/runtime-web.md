@@ -10,9 +10,12 @@ workspace build 期 `scripts/build-runtime-browser.mjs` 把 `src/browser.ts` 用
 | --- | --- |
 | `src/index.ts` | 从 `src/menu/menu-runtime.ts` 桶式导出 |
 | `src/menu/menu-runtime.ts` | `MenuController`、`MenuSoundPlayer`、`CanvasViewport`、`EventScheduler`、`drawMenu`、输入绑定 |
-| `src/browser.ts` | 浏览器入口：`boot()`、`createMenuVm`、`createStatusToast`、外链播放 |
+| `src/browser.ts` | 浏览器入口：`boot()`、`createStatusToast`、外链播放；按 `bdjRuntime` 选择本地或远端导航 host（local-jvm 使用远端 host 提供状态与动作） |
+| `src/navigation/local-host.ts` | `LocalNavigationHost`：离线 `file://` 菜单的同步 `RuntimeVmPort`，包装 `HdmvVm` |
+| `src/navigation/remote-host.ts` | `RemoteNavigationHost`：发送现有 `context/event/button` 请求并保存 `hdmv-update` 权威快照 |
+| `src/navigation/action-routing.ts` | Playlist/PlayItem/Mark → 已打包场景的公共解析；DOM 与播放器副作用由 `browser.ts` 执行 |
 | `src/menu-playback.ts` | 两个播放桥（菜单循环与外部媒体）的实现 |
-| `src/igs-adapter.ts` | `adaptIgsScene`（IGS 场景 → 可序列化 `SerializedScene`）、`selectPopupScene` |
+| `src/igs-adapter.ts` | `adaptIgsScene`（IGS 场景 → 可序列化 `SerializedScene`，类型从 `core/runtime-data` 再导出）、`selectPopupScene` |
 | `src/scene-normalizer.ts` | 场景归一化与 `menuSceneKey` |
 | `src/linear-playback.ts` | `LinearPlaybackBridge`：按显式时间线播放线性资产 |
 | `src/media-loop.ts` | 菜单循环媒体的视频元素控制 |
@@ -137,6 +140,6 @@ HDMV VM actions resolve through `external-targets.json`. `bdmv2web serve <packag
 | 改渲染 | `drawMenu`、`visualState`、`CanvasViewport.toCss` | DPI 变化时逻辑坐标不变 |
 | 改媒体行为 | `MenuLoopPlaybackBridge` | 事件必须带匹配的 `generation`+`responseTo` |
 | 改启动流程 | `browser.ts` `boot()` | 包内脚本顺序：`disc-data.js` → `assets-data-*.js` → `app.bundle.js` |
-| 新增包内数据字段 | `PackageData` | 同时改 `package-builder` 写 `disc-data.js` 的分支 |
+| 新增包内数据字段 | `core` 的 `RuntimeDataV1`（`PackageData` 是其别名） | 同时改 `package-builder` 写 `disc-data.js` 的分支 |
 
 约束：运行时代码不得出现 `fetch`、`XMLHttpRequest`、`WebSocket`、`import`、`eval`。`validate` 的 `auditScript` 会对整包做静态扫描并判 fail。

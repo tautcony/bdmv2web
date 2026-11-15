@@ -111,7 +111,7 @@ assets/media/playlist-<id>-pi<n>-clip-<clipId>/audio-<pid>-<lang>.m4a
 media-plans/playlist-<id>-pi<n>-clip-<clipId>.json
 ```
 
-一个导出单元（一个播放列表的某个 PlayItem，读自一个 STREAM clip）一个目录。目录名带三处源信息：Playlist 编号（对应 `<id>.mpls`）、PlayItem 序号（补零两位）、clip 编号（对应 `BDMV/STREAM/<clipId>.m2ts`），不必打开计划就知道素材来自哪个文件。Top Menu 背景与额外菜单播放列表使用同一模板，BD-J 与 HDMV 输出因此同名同构。`exportMenuLoopMedia` 自身的默认值仍是 `assets/media/` + `media-plan.json`，目录由 `package-builder` 传入。
+一个导出单元（一个播放列表的某个 PlayItem，读自一个 STREAM clip）一个目录。目录名带三处源信息：Playlist 编号（对应 `<id>.mpls`）、PlayItem 序号（补零两位）、clip 编号（对应 `BDMV/STREAM/<clipId>.m2ts`），凭目录名就能看出素材来自哪个文件。Top Menu 背景与额外菜单播放列表使用同一模板，BD-J 与 HDMV 输出因此同名同构。`exportMenuLoopMedia` 自身的默认值仍是 `assets/media/` + `media-plan.json`，目录由 `exportMenuMedia` 传入（命名来自 `menuMediaPaths`）。
 
 ## 4. 线性变体（库能力）
 

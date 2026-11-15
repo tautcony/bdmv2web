@@ -55,7 +55,7 @@ inspectRuntimeUrl(raw: string): UrlAuditResult
 
 | 输入事实 | 结果 |
 | --- | --- |
-| 任一 `fail` 检查 / `fatal` 诊断 / 无 HDMV 入口 / 缺失必需资产 | `failed`，退出码 1 |
+| 任一 `fail` 检查 / `fatal` 诊断 / 缺失必需资产 | `failed`，退出码 1 |
 | 可达性有未解析项 / 可达能力不支持 / 有 `error`（无 fatal）/ 诊断严重性未识别 | `partial`，退出码 0 |
 | 以上都没有 | `complete`，退出码 0 |
 

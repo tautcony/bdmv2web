@@ -167,6 +167,24 @@ describe("menu primitives", () => {
     expect(vm.snapshot().registers.gpr[0]).toBe(5);
     expect(vm.snapshot().status).not.toBe("faulted");
   });
+  it("keeps the activated button state when a remote button program is pending", () => {
+    const testScene = scene();
+    testScene.pages[0]!.buttons[0]!.commands = [{ bytes: m3Fixtures.move5.bytes }];
+    const sendButton = vi.fn();
+    const dispatchActions = vi.fn();
+    const controller = new MenuController(testScene, {
+      handleEvent: vi.fn(),
+      executeButtonProgram: (commands) => { sendButton(commands); return { kind: "pending" }; },
+    }, { dispatchActions });
+
+    controller.handle("activate");
+
+    expect(sendButton).toHaveBeenCalledOnce();
+    // The server event owns the actions; the client keeps the visual state only.
+    expect(dispatchActions).not.toHaveBeenCalled();
+    expect(controller.selectedButtonId).toBe(1);
+    expect(controller.activatedButtonId).toBe(1);
+  });
   it("keeps the menu usable after an ignored invalid button target", () => {
     const testScene = scene();
     testScene.pages[0]!.buttons[0]!.neighbors.down = 2;

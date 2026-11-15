@@ -8,9 +8,10 @@ import { within } from "@bdmv2web/utils/node-path";
 import { isRecord, errorText } from "@bdmv2web/utils";
 import { inputPath, optionValue } from "../cli/context.js";
 import { fail } from "../cli/errors.js";
-import { HdmvVm, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
+import { type HdmvUpdate, type VmOptions, type VmProgram } from "@bdmv2web/hdmv";
 import { isDeclaredExternalStreamPath, resolveExternalPlayTarget, type ExternalMediaTargets, type ExternalPlayItem, type ExternalPlayRequest } from "@bdmv2web/media-export/external-targets";
 import { buildExternalPlayerLaunch, launchExternalPlayer } from "../shared/external-player.js";
+import { HdmvSession } from "../shared/hdmv-session.js";
 import { normalizeDiscId } from "../shared/disc-id.js";
 
 const contentTypes: Record<string, string> = {
@@ -74,7 +75,7 @@ export async function serve(): Promise<void> {
   let javaSessionStarted = false;
   let javaSessionReady = false;
   let stopping = false;
-  let hdmvVm: HdmvVm | undefined;
+  let hdmvSession: HdmvSession | undefined;
   let hdmvMode = false;
   let activeBdjoId = "";
   let activeLaunch: RuntimeLaunch | undefined;
@@ -94,12 +95,23 @@ export async function serve(): Promise<void> {
   const eventClients = new Set<import("node:http").ServerResponse>();
   const pendingStartResponses: import("node:http").ServerResponse[] = [];
   const emit = (name: string, value: unknown) => { const record = `event: ${name}\ndata: ${JSON.stringify(value)}\n\n`; for (const client of eventClients) client.write(record); };
+  /**
+   * Publish the one authoritative HDMV state and its actions. The same update
+   * is returned so a caller that also reports `navigation` reuses the actions
+   * instead of draining the VM twice.
+   */
+  const emitHdmvUpdate = (active: boolean, origin: HdmvUpdate["origin"]): HdmvUpdate | undefined => {
+    if (!hdmvSession) return undefined;
+    const update: HdmvUpdate = { active, snapshot: hdmvSession.snapshot(), actions: hdmvSession.drainActions(), origin };
+    emit("hdmv-update", update);
+    return update;
+  };
   const outsidePackage = (path: string): boolean => !within(root, path);
   const resetBdjSession = (): void => {
     javaProcess = undefined;
     javaSessionStarted = false;
     javaSessionReady = false;
-    hdmvVm = undefined;
+    hdmvSession = undefined;
     hdmvMode = false;
     activeBdjoId = "";
     activeLaunch = undefined;
@@ -183,6 +195,7 @@ export async function serve(): Promise<void> {
       if (latestFrame) response.write(`event: frame\ndata: ${JSON.stringify(latestFrame)}\n\n`);
       for (const handoff of latestPlayerHandoffs.values()) response.write(`event: player-handoff\ndata: ${JSON.stringify(handoff)}\n\n`);
       for (const media of menuMediaSessions.values()) response.write(`event: player-menu-media\ndata: ${JSON.stringify(media)}\n\n`);
+      if (hdmvSession) response.write(`event: hdmv-update\ndata: ${JSON.stringify({ active: hdmvMode, snapshot: hdmvSession.snapshot(), actions: [], origin: "system" } satisfies HdmvUpdate)}\n\n`);
       eventClients.add(response); request.on("close", () => eventClients.delete(response)); return;
     }
     const menuAssetId = url.pathname.match(/^\/api\/bdj\/menu-media\/([0-9a-f-]+)$/i)?.[1];
@@ -228,7 +241,8 @@ export async function serve(): Promise<void> {
         }
         catch (error) { failStart(`BD-J launch data is unavailable: ${errorText(error)}`); return; }
         try {
-        if (launch.session) hdmvVm = new HdmvVm(launch.session.vmPrograms, {
+        if (launch.session) hdmvSession = new HdmvSession({
+          vmPrograms: launch.session.vmPrograms,
           ...(launch.session.vmEntries ? { entries: launch.session.vmEntries } : {}),
           ...(launch.session.playerProfile ? { profile: launch.session.playerProfile } : {}),
           ...(launch.session.vmLimits ? { limits: launch.session.vmLimits } : {}),
@@ -236,7 +250,7 @@ export async function serve(): Promise<void> {
         activeBdjoId = launch.initialBdjoId;
         const initialEntry = launch.session?.vmEntries?.find((item) => item.kind === "firstPlay" && item.target.objectType === "BDJ" && String(item.target.target).replace(/\.bdjo$/i, "").padStart(5, "0") === activeBdjoId)
           ?? launch.session?.vmEntries?.find((item) => item.kind === "topMenu" && item.target.objectType === "BDJ" && String(item.target.target).replace(/\.bdjo$/i, "").padStart(5, "0") === activeBdjoId);
-        if (initialEntry) hdmvVm?.selectBdjTitle(initialEntry.kind === "firstPlay" ? 0xffff : 0);
+        if (initialEntry) hdmvSession?.selectBdjTitle(initialEntry.kind === "firstPlay" ? 0xffff : 0);
         const hostJar = resolve(root, "runtime/bdj/bdj-host-api.jar");
         const classpath = hostJar;
         const applicationRecord = (app: typeof launch.applications[number]) => {
@@ -285,26 +299,26 @@ export async function serve(): Promise<void> {
               try {
                 if (operation === "discId") result = launch.discId;
                 else if (operation === "xletEvent") { emit("xlet-event", { name: fields[0] ?? "", value: fields[1] ?? "", bdjoId: activeBdjoId }); result = "ok"; }
-                else if (operation === "readGPR") result = String(hdmvVm?.registers.read({ kind: "gpr", index: Number(fields[0]) }) ?? 0);
-                else if (operation === "readPSR") result = String(hdmvVm?.registers.read({ kind: "psr", index: Number(fields[0]) }) ?? 0);
-                else if (operation === "writeGPR") { hdmvVm?.registers.write({ kind: "gpr", index: Number(fields[0]) }, Number(fields[1]) >>> 0); result = "ok"; }
-                else if (operation === "writePSR") { hdmvVm?.registers.systemWrite(Number(fields[0]), Number(fields[1]) >>> 0); result = "ok"; }
+                else if (operation === "readGPR") result = String(hdmvSession?.registers.read({ kind: "gpr", index: Number(fields[0]) }) ?? 0);
+                else if (operation === "readPSR") result = String(hdmvSession?.registers.read({ kind: "psr", index: Number(fields[0]) }) ?? 0);
+                else if (operation === "writeGPR") { hdmvSession?.registers.write({ kind: "gpr", index: Number(fields[0]) }, Number(fields[1]) >>> 0); result = "ok"; }
+                else if (operation === "writePSR") { hdmvSession?.registers.systemWrite(Number(fields[0]), Number(fields[1]) >>> 0); result = "ok"; }
                 else if (operation === "selectTitle") {
                   const title = Number(fields[0]);
                   const entry = entryForTitle(launch, title);
                   if (!entry) throw new Error(`Title ${title} has no INDEX entry.`);
                   if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") {
                     activeTitle = title; userFeatureTitleSelected = false; pendingUserSelection = false;
-                    hdmvVm?.selectBdjTitle(title); hdmvMode = false; emit("hdmv-mode", { active: false }); activeBdjoId = entry.target.target.replace(/\.bdjo$/i, "").padStart(5, "0");
+                    hdmvSession?.selectBdjTitle(title); hdmvMode = false; emitHdmvUpdate(false, "authored"); activeBdjoId = entry.target.target.replace(/\.bdjo$/i, "").padStart(5, "0");
                     const restart = fields[1] === "true";
                     const message = Buffer.from(`${title}|start|${restart}`, "utf8").toString("base64");
                     javaProcess?.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${message}\n`); result = "requested";
                   } else if (entry.target.objectType === "HDMV") {
                     activeTitle = title; userFeatureTitleSelected = pendingUserSelection; pendingUserSelection = false;
-                    hdmvMode = true; emit("hdmv-mode", { active: true });
-                    const snapshot = hdmvVm?.selectTitle(title); const actions = hdmvVm?.drainActions() ?? [];
-                    emit("navigation", { title, status: snapshot?.status, programId: snapshot?.programId, pc: snapshot?.pc, gpr: snapshot?.registers.gpr, psr: snapshot?.registers.psr, actions });
-                    if (actions.length) emit("hdmv-actions", { actions, origin: "authored" });
+                    hdmvMode = true;
+                    hdmvSession?.selectTitle(title);
+                    const update = emitHdmvUpdate(true, "authored");
+                    emit("navigation", { title, ...(update ? { status: update.snapshot.status, programId: update.snapshot.programId, pc: update.snapshot.pc, gpr: update.snapshot.registers.gpr, psr: update.snapshot.registers.psr } : {}), actions: update?.actions ?? [] });
                     const message = Buffer.from(`${title}|stop`, "utf8").toString("base64");
                     javaProcess?.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${message}\n`); result = "requested";
                   } else throw new Error(`Title ${title} target is unavailable.`);
@@ -317,20 +331,20 @@ export async function serve(): Promise<void> {
                   const target = topMenu.target;
                   if (target.objectType === "BDJ" && typeof target.target === "string") {
                     activeTitle = 0; userFeatureTitleSelected = false; pendingUserSelection = false;
-                    hdmvMode = false; emit("hdmv-mode", { active: false });
+                    hdmvMode = false;
                     const bdjoId = target.target.replace(/\.bdjo$/i, "").padStart(5, "0");
-                    hdmvVm?.selectBdjTitle(0);
+                    hdmvSession?.selectBdjTitle(0);
+                    emitHdmvUpdate(false, "authored");
                     activeBdjoId = bdjoId;
                     javaProcess?.stdin.write(`BDMV_EVENT\ttitle\t${bdjoId}\t${Buffer.from("0|start", "utf8").toString("base64")}\n`);
                     emit("navigation", { type: "title", title: 0, target });
                     result = "requested";
                   } else if (target.objectType === "HDMV" && typeof target.target === "number") {
                     activeTitle = 0; userFeatureTitleSelected = false; pendingUserSelection = false;
-                    hdmvMode = true; emit("hdmv-mode", { active: true });
-                    const snapshot = hdmvVm?.selectTitle(0);
-                    const actions = hdmvVm?.drainActions() ?? [];
-                    emit("navigation", { type: "title", title: 0, target, status: snapshot?.status, programId: snapshot?.programId, pc: snapshot?.pc, gpr: snapshot?.registers.gpr, psr: snapshot?.registers.psr, actions });
-                    if (actions.length) emit("hdmv-actions", { actions, origin: "authored" });
+                    hdmvMode = true;
+                    hdmvSession?.selectTitle(0);
+                    const update = emitHdmvUpdate(true, "authored");
+                    emit("navigation", { type: "title", title: 0, target, ...(update ? { status: update.snapshot.status, programId: update.snapshot.programId, pc: update.snapshot.pc, gpr: update.snapshot.registers.gpr, psr: update.snapshot.registers.psr } : {}), actions: update?.actions ?? [] });
                     javaProcess?.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${Buffer.from("0|stop", "utf8").toString("base64")}\n`);
                     result = "requested";
                   } else throw new Error("The INDEX Top Menu target is unavailable.");
@@ -487,41 +501,39 @@ export async function serve(): Promise<void> {
       }); return;
     }
     if (url.pathname === "/api/bdj/hdmv" && request.method === "POST") {
-      const hostProcess = javaProcess; const sessionVm = hdmvVm;
-      if (!hostProcess || hostProcess.exitCode !== null || !sessionVm || !hdmvMode) { response.writeHead(409).end("The BD-J session is not in HDMV mode."); return; }
+      const hostProcess = javaProcess; const session = hdmvSession;
+      if (!hostProcess || hostProcess.exitCode !== null || !session || !hdmvMode) { response.writeHead(409).end("The BD-J session is not in HDMV mode."); return; }
       let body = ""; request.setEncoding("utf8"); request.on("data", (part: string) => { body += part; });
       request.on("end", () => {
         try {
-          if (javaProcess !== hostProcess || hostProcess.exitCode !== null || hdmvVm !== sessionVm || !hdmvMode) { response.writeHead(409).end("BD-J session changed while reading HDMV input."); return; }
+          if (javaProcess !== hostProcess || hostProcess.exitCode !== null || hdmvSession !== session || !hdmvMode) { response.writeHead(409).end("BD-J session changed while reading HDMV input."); return; }
           const input: unknown = JSON.parse(body);
           if (!isRecord(input) || typeof input.kind !== "string") throw new Error("Invalid HDMV request.");
           if (input.kind === "context") {
             const pageId = input.pageId;
             const selectedButtonId = input.selectedButtonId;
             if (typeof pageId !== "number" || !Number.isSafeInteger(pageId) || typeof selectedButtonId !== "number" && selectedButtonId !== null) throw new Error("Invalid menu context.");
-            sessionVm.applyMenuContext(pageId, selectedButtonId);
+            session.applyMenuContext(pageId, selectedButtonId);
           } else if (input.kind === "event") {
             if (!isRecord(input.event) || !["MENU_INPUT", "TOP_MENU", "POPUP_MENU", "RETURN"].includes(String(input.event.type))) throw new Error("Invalid HDMV event.");
-            sessionVm.beginMenuAction(); sessionVm.handleEvent(input.event as unknown as Parameters<HdmvVm["handleEvent"]>[0]);
+            session.handleEvent(input.event as unknown as Parameters<HdmvSession["handleEvent"]>[0]);
           } else if (input.kind === "button") {
             const commands = input.commands;
             if (!Array.isArray(commands) || commands.length > 256 || !commands.every(isRawCommand)) throw new Error("Invalid HDMV button program.");
-            sessionVm.beginMenuAction(); sessionVm.executeButtonProgram(commands, "ig_object");
+            session.executeButtonProgram(commands);
           } else throw new Error("Unsupported HDMV request.");
-          const actions = sessionVm.drainActions();
-          emit("hdmv-state", { snapshot: sessionVm.snapshot() });
-          if (actions.length) emit("hdmv-actions", { actions, origin: "authored" });
+          emitHdmvUpdate(true, "authored");
           response.writeHead(204).end();
         } catch { response.writeHead(400).end("Invalid HDMV request."); }
       }); return;
     }
     if (url.pathname === "/api/bdj/title" && request.method === "POST") {
-      const sessionVm = hdmvVm; const launch = activeLaunch; const hostProcess = javaProcess;
-      if (!hostProcess || hostProcess.exitCode !== null || !sessionVm || !launch) { response.writeHead(409).end("BD-J session is not running."); return; }
+      const session = hdmvSession; const launch = activeLaunch; const hostProcess = javaProcess;
+      if (!hostProcess || hostProcess.exitCode !== null || !session || !launch) { response.writeHead(409).end("BD-J session is not running."); return; }
       let body = ""; request.setEncoding("utf8"); request.on("data", (part: string) => { body += part; });
       request.on("end", () => {
         try {
-          if (javaProcess !== hostProcess || hostProcess.exitCode !== null || hdmvVm !== sessionVm || activeLaunch !== launch) { response.writeHead(409).end("BD-J session changed while reading the title request."); return; }
+          if (javaProcess !== hostProcess || hostProcess.exitCode !== null || hdmvSession !== session || activeLaunch !== launch) { response.writeHead(409).end("BD-J session changed while reading the title request."); return; }
           const input: unknown = JSON.parse(body);
           if (!isRecord(input) || !Number.isSafeInteger(input.title) || (input.title as number) < 0 || (input.title as number) > 0xffff) throw new Error("Invalid title number.");
           const title = input.title as number;
@@ -535,16 +547,18 @@ export async function serve(): Promise<void> {
           activeTitle = title;
           userFeatureTitleSelected = origin === "user" && entry.target.objectType === "HDMV";
           if (origin === "user") pendingUserSelection = false;
+          const updateOrigin: HdmvUpdate["origin"] = origin === "startup" ? "system" : origin;
           if (entry.target.objectType === "BDJ" && typeof entry.target.target === "string") {
             userFeatureTitleSelected = false;
-            hdmvMode = false; emit("hdmv-mode", { active: false });
-            sessionVm.selectBdjTitle(title); activeBdjoId = entry.target.target.replace(/\.bdjo$/i, "").padStart(5, "0");
+            hdmvMode = false;
+            session.selectBdjTitle(title); activeBdjoId = entry.target.target.replace(/\.bdjo$/i, "").padStart(5, "0");
+            emitHdmvUpdate(false, updateOrigin);
             hostProcess.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${Buffer.from(`${title}|start`, "utf8").toString("base64")}\n`);
           } else if (entry.target.objectType === "HDMV") {
-            hdmvMode = true; emit("hdmv-mode", { active: true });
-            const snapshot = sessionVm.selectTitle(title); const actions = sessionVm.drainActions();
-            emit("navigation", { title, status: snapshot.status, programId: snapshot.programId, pc: snapshot.pc, gpr: snapshot.registers.gpr, psr: snapshot.registers.psr, actions });
-            if (actions.length) emit("hdmv-actions", { actions, origin: origin === "startup" ? "system" : origin });
+            hdmvMode = true;
+            session.selectTitle(title);
+            const update = emitHdmvUpdate(true, updateOrigin);
+            emit("navigation", { title, ...(update ? { status: update.snapshot.status, programId: update.snapshot.programId, pc: update.snapshot.pc, gpr: update.snapshot.registers.gpr, psr: update.snapshot.registers.psr } : {}), actions: update?.actions ?? [] });
             hostProcess.stdin.write(`BDMV_EVENT\ttitle\t${activeBdjoId}\t${Buffer.from(`${title}|stop`, "utf8").toString("base64")}\n`);
           } else throw new Error(`Title ${title} target is unavailable.`);
           response.writeHead(204).end();
@@ -642,7 +656,7 @@ function decodeTrace(line: string): string {
   if (fields.length !== 4) return line;
   return fields.map((field) => Buffer.from(field, "base64").toString("utf8")).join("\t");
 }
-function isRawCommand(value: unknown): value is Parameters<HdmvVm["executeButtonProgram"]>[0][number] {
+function isRawCommand(value: unknown): value is Parameters<HdmvSession["executeButtonProgram"]>[0][number] {
   if (!isRecord(value) || typeof value.bytes !== "string" || !Array.isArray(value.words) || value.words.length !== 3 || !value.words.every(Number.isSafeInteger) || !isRecord(value.source)) return false;
   return typeof value.source.path === "string" && (value.source.origin === "primary" || value.source.origin === "backup") && typeof value.source.offset === "string";
 }

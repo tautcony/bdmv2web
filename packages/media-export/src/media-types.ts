@@ -9,6 +9,16 @@ export interface MediaToolInvocation { executable: string; args: string[]; }
 export interface MediaAudioTrackInput { streamNumber: number; pid: number; language: string; codingType?: number; }
 /** How the background video reaches MP4: encoded here, or copied from the source stream. */
 export type VideoExportMode = "encode" | "copy";
+/** Menu media encoder settings forwarded to every menu media export. */
+export interface MenuMediaEncoding {
+  crf?: number;
+  preset?: "medium" | "fast" | "veryfast" | "ultrafast";
+  codec?: VideoCodec;
+  hdrMode?: HdrMode;
+  /** `copy` remuxes the source H.264 or HEVC stream into MP4; see `exportMenuLoopMedia`. */
+  videoMode?: VideoExportMode;
+}
+
 export interface MenuLoopMediaInput {
   sourcePath: string;
   sourceFile: string;

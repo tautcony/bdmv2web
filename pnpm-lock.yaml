@@ -188,6 +188,9 @@ importers:
       '@bdmv2web/bdmv-parser':
         specifier: workspace:*
         version: link:../bdmv-parser
+      '@bdmv2web/core':
+        specifier: workspace:*
+        version: link:../core
       '@bdmv2web/hdmv':
         specifier: workspace:*
         version: link:../hdmv
@@ -250,13 +253,13 @@ importers:
       '@bdmv2web/igs':
         specifier: workspace:*
         version: link:../igs
-      '@bdmv2web/media-export':
-        specifier: workspace:*
-        version: link:../media-export
       '@bdmv2web/utils':
         specifier: workspace:*
         version: link:../utils
     devDependencies:
+      '@bdmv2web/media-export':
+        specifier: workspace:*
+        version: link:../media-export
       '@bdmv2web/test-fixtures':
         specifier: workspace:*
         version: link:../test-fixtures

@@ -20,7 +20,8 @@
     "@bdmv2web/bdmv-parser": "workspace:*",
     "@bdmv2web/hdmv": "workspace:*",
     "@bdmv2web/igs": "workspace:*",
-    "@bdmv2web/utils": "workspace:*"
+    "@bdmv2web/utils": "workspace:*",
+    "@bdmv2web/core": "workspace:*"
   },
   "devDependencies": {
     "@bdmv2web/test-fixtures": "workspace:*",

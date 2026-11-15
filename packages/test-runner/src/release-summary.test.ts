@@ -179,10 +179,9 @@ describe("delivery decision truth table", () => {
     expect(decide({ diagnostics })).toMatchObject({ status: "partial", exitCode: 0 });
   });
 
-  it("fails pure BD-J packages, fatal diagnostics and missing required assets", () => {
-    expect(decide({ hdmvEntryCount: 0 }).status).toBe("failed");
+  it("uses fatal diagnostics and missing required assets as failure facts", () => {
+    expect(decide({ hdmvEntryCount: 0 })).toMatchObject({ status: "complete", exitCode: 0 });
     expect(decide({ diagnostics: [{ severity: "fatal", code: "PACKAGE_CORRUPT" }] }).status).toBe("failed");
     expect(decide({ hasMissingRequiredAsset: true }).status).toBe("failed");
-    expect(decide({ hdmvEntryCount: 0 }).exitCode).toBe(1);
   });
 });

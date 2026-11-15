@@ -3,30 +3,29 @@ import { fail } from "../cli/errors.js";
 import { loadLimits, loadPlayerProfile } from "../cli/profile.js";
 import { deliveryDiagnostics, firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { commandProgress, countOf } from "../progress.js";
-import { buildMediaClosure } from "../shared/media.js";
+import { publishBuildOutcome } from "./build-outcome.js";
 import { collectBdjApplicationFiles } from "../shared/bdj-files.js";
 import { buildBdjHostApiJar } from "../shared/bdj-host.js";
 import { normalizeDiscId, readBdmvDiscId } from "../shared/disc-id.js";
-import { referencedAssetIds, safeDiagnosticMessage } from "../shared/metadata.js";
+import { safeDiagnosticMessage } from "../shared/metadata.js";
 import { mediaExportProgress } from "./media-progress.js";
 import { readJsonObject } from "../cli/output.js";
-import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot, resolveInputFile } from "@bdmv2web/bdmv-io";
+import { assertDisjointRoots, beginOutputTransaction, locateBdmvRoot } from "@bdmv2web/bdmv-io";
 import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
-import { createExternalMediaTargets, type MenuLoopMediaInput } from "@bdmv2web/media-export";
-import { buildMenuPackage } from "@bdmv2web/package-builder";
-import { adaptIgsScene } from "@bdmv2web/runtime-web";
+import type { MenuLoopMediaInput } from "@bdmv2web/media-export";
 import { classifyDiagnostics, decideDelivery } from "@bdmv2web/test-runner";
-import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
 import { errorText } from "@bdmv2web/utils";
-import { readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
-import { createVmPrograms, createMenuDiscIR, findTopMenuPlaylist, findMenuScene, isMenuSurfaceScene, menuIgsSceneStreamCount, menuIgsSceneTargets, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, menuMediaEncoding, menuPlaylistMarks as collectMenuPlaylistMarks, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS } from "./menu-planning.js";
+import { findTopMenuPlaylist, menuLoopMediaInput, menuMediaScopedOut, menuMediaScope, playlistDurationSeconds } from "./menu-planning.js";
+import { planBuild } from "../application/build-plan.js";
+import { buildUseCase } from "../application/build-use-case.js";
 
 export {
   createMenuDiscIR, createVmPrograms, findMenuScene, findTopMenuPlaylist,
   menuIgsSceneTargets, menuLoopMediaInput, menuMediaEncoding, menuMediaScope,
-  menuMediaScopedOut, menuMediaEntryPoint45k, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS,
+  menuMediaScopedOut, menuMediaEntryPoint45k, menuSceneDetail, playlistDurationSeconds, MENU_MEDIA_AUTO_MAX_SECONDS,
 } from "./menu-planning.js";
 export type { MenuMediaScope, MenuPlaylistTarget } from "./menu-planning.js";
 
@@ -74,13 +73,6 @@ export async function packageSummary(packageRoot: string): Promise<string | unde
     bytes += typeof record.byteLength === "string" ? Number(record.byteLength) || 0 : 0;
   }
   return `${countOf(files, "file", "files")} · ${formatBytes(bytes)}`;
-}
-
-/** Selected scene plus one loop length for the resolved menu media. */
-export function menuSceneDetail(scene: { clipId: string; pid: number }, media: Awaited<ReturnType<typeof menuLoopMediaInput>>): string {
-  const label = `clip ${scene.clipId} · PID 0x${scene.pid.toString(16)}`;
-  if (media === null) return `${label} · no loop media`;
-  return `${label} · loop ${((media.outTime45k - media.inTime45k) / 45000).toFixed(1)}s`;
 }
 
 /** Canonical path for an output target whose parent exists, matching the committed output path. */
@@ -200,9 +192,6 @@ export async function build(): Promise<void> {
   const title = plannedTitle ?? basename(dirname(disc.root));
   const roots = await assertDisjointRoots(disc.root, resolve(out));
   const bdmvPath = dirname(roots.input) === dirname(roots.output) ? relative(roots.output, disc.root).replace(/\\/g, "/") : disc.root;
-  const bdjSession = (vmPrograms: ReturnType<typeof createVmPrograms>, externalTargets: ReturnType<typeof createExternalMediaTargets>) => ({
-    vmPrograms, vmEntries: disc.entries, playerProfile: profile, vmLimits: limits, externalTargets, bdjoDescriptors: disc.bdjos ?? [], bdmvPath,
-  });
   const resumeDirectory = plannedResume ?? (resumeWithoutDirectory ? await resumeMediaDirectory(roots.output, true) : undefined);
   const reuseDirectory = optionState("--reuse") === false ? resumeDirectory : (resumeDirectory ?? (overwrite ? roots.output : undefined));
   // The header names the target for inputs that follow the documented BDMV layout.
@@ -236,280 +225,42 @@ export async function build(): Promise<void> {
       const report = { schemaVersion: "1.0", status: "failed", code, reasons: [message], diagnostics };
       await writeConversionReport(transaction.stagingPath, report);
       await transaction.commit();
-      progress.finish("failed", [["output", roots.output], ["report", "reports.json · status failed"]], code);
-      process.stdout.write(`${JSON.stringify({ status: "failed", code, output: roots.output })}\n`);
-      process.exitCode = 1;
+      publishBuildOutcome({ status: "failed", exitCode: 1, code, output: roots.output }, progress, [["output", roots.output], ["report", "reports.json · status failed"]]);
     };
-    // Adapt each extracted composition once: a menu playlist can name the same
-    // clip/PID from every one of its PlayItems (this disc: 999 PlayItems over one
-    // clip), and every adaptation is a full scene.
-    const adaptedCompositions = new Map<Parameters<typeof adaptIgsScene>[0], ReturnType<typeof adaptIgsScene>>();
-    const adaptComposition = (composition: Parameters<typeof adaptIgsScene>[0]): ReturnType<typeof adaptIgsScene> => {
-      const cached = adaptedCompositions.get(composition);
-      if (cached !== undefined) return cached;
-      const adapted = adaptIgsScene(composition, extraction.assets);
-      adaptedCompositions.set(composition, adapted);
-      return adapted;
-    };
-    const firstPlayEntry = disc.entries.find((entry) => entry.kind === "firstPlay");
-    const topMenuEntry = disc.entries.find((entry) => entry.kind === "topMenu");
-    const initialBdjEntry = firstPlayEntry?.target.objectType === "BDJ" ? firstPlayEntry
-      : topMenuEntry?.target.objectType === "BDJ" ? topMenuEntry
-        : undefined;
-    if (!menuTarget && initialBdjEntry && hasBdjEntries && bdjFiles.files.length) {
-      const missingApplication = bdjFiles.diagnostics.find((item) => item.code === "BDJ_APPLICATION_BASE_PATH_INVALID" || item.code === "BDJ_APPLICATION_JAR_MISSING");
-      if (missingApplication) { await failMenuConversion(missingApplication.code, missingApplication.message); return; }
-      const vmPrograms = createVmPrograms(disc);
-      const firstPlayHdmv = firstPlayEntry?.target.objectType === "HDMV" && typeof firstPlayEntry.target.target === "number" ? firstPlayEntry.target.target : undefined;
-      const topMenuHdmv = topMenuEntry?.target.objectType === "HDMV" && typeof topMenuEntry.target.target === "number" ? topMenuEntry.target.target : undefined;
-      const vmInitialProgramId = firstPlayEntry?.target.objectType === "BDJ" ? undefined : topMenuHdmv ?? firstPlayHdmv;
-      const mediaClosure = buildMediaClosure(disc, extraction.scenes);
-      const externalTargets = createExternalMediaTargets(disc, mediaClosure);
-      const mixedPlaylistSceneResults = disc.playlists.flatMap((playlist) => playlist.playItems.flatMap((playItem) => {
-        const result = findMenuScene(disc, playlist, extraction.scenes, playItem.index);
-        return result.status === "found" ? [{ playlistId: Number(playlist.id), playItem: playItem.index, scene: result.scene, adapted: adaptComposition(result.scene) }] : [];
-      }));
-      const mixedMenuSceneResults = mixedPlaylistSceneResults.filter((item) => item.scene.uiModel === 0);
-      const mixedMenuScenes = mixedMenuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, scene: item.adapted.scene }));
-      const mixedMenuPlaylistIds = [...new Set(mixedMenuScenes.map((item) => item.playlistId))];
-      const mixedMenuPlaylistMarks = collectMenuPlaylistMarks(disc, mixedMenuPlaylistIds);
-      const mixedPopupScenes = extraction.scenes.filter((item) => item.uiModel === 1).map((item) => adaptComposition(item).scene);
-      const mixedReferencedAssets = referencedAssetIds([...mixedPopupScenes, ...mixedMenuScenes.map((item) => item.scene)]);
-      const mixedGraphics = extraction.assets.filter((asset) => mixedReferencedAssets.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
-      const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
-        ...disc.diagnostics.filter((item) => item.code !== "BDMV_BDJ_UNSUPPORTED").map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
-        ...bdjFiles.diagnostics,
-        ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
-        { code: "BDJ_RUNTIME_EXECUTION_UNVERIFIED", message: "Browser execution, Java API host calls, AWT rendering, and disc playback callbacks have not been verified with this runtime package.", severity: "warning" },
-        ...(bdjScopedOutPlaylists.length ? [{
-          code: "M5_MENU_MEDIA_SCOPE_SKIPPED",
-          message: `Skipped ${countOf(bdjScopedOutPlaylists.length, "playlist", "playlists")} longer than ${MENU_MEDIA_AUTO_MAX_SECONDS} seconds (${bdjScopedOutPlaylists.slice(0, 8).map((item) => `${item.id} · ${Math.round(item.seconds / 60)} min`).join(", ")}${bdjScopedOutPlaylists.length > 8 ? ", …" : ""}). --menu-media auto exports menu-length playlists only; use --menu-media all to export every playlist the BDJO declares.`,
-          severity: "info",
-        }] : []),
-        ...(mediaScope === "none" ? [{ code: "M5_MENU_MEDIA_DISABLED", message: "--menu-media none: no playlist media was exported; BD-J players that request a playlist will report it as unavailable.", severity: "info" }] : []),
-      ];
-      const decisionFacts = deliveryDiagnostics(diagnostics);
-      const decision = decideDelivery({
-        checks: [], diagnostics: decisionFacts,
-        declaredEntryCount: disc.entries.length,
-        hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
-        hasMissingRequiredAsset: false,
-        limitations: ["BD-J menu background and playlist media depend on the browser playback bridge."],
-      });
-      progress.done(BUILD_STEPS.scene, `BDJO ${String(initialBdjEntry.target.target)} · ${bdjFiles.files.length} application/resource files`);
-      const mediaEncoding = menuMediaEncoding();
-      const mediaProgress = mediaExportProgress(bdjMenuMediaAssets, (ratio, detail) => progress.progress(ratio, detail));
-      const packaged = await buildMenuPackage({
-        outputDirectory: transaction.stagingPath, title, ir: createMenuDiscIR(disc, mixedMenuScenes.map((item) => ({ id: item.scene.id ?? `playlist-${item.playlistId}-pi-${item.playItem}`, clipId: item.scene.clipId ?? "" })), false, true), scene: null, graphics: mixedGraphics,
-        status: decision.status, entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
-        vmPrograms, vmEntries: disc.entries, externalTargets, menuScenes: mixedMenuScenes, menuPlaylistIds: mixedMenuPlaylistIds,
-        ...(mixedMenuPlaylistMarks.length ? { menuPlaylistMarks: mixedMenuPlaylistMarks } : {}), popupScenes: mixedPopupScenes,
-        bdmvPath,
-        ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
-        ...(firstPlayHdmv === undefined ? {} : { vmFirstPlayProgramId: firstPlayHdmv }),
-        ...(mediaEncoding ? { mediaEncoding } : {}),
-        soundEntries: disc.sounds, playerProfile: profile, vmLimits: limits,
-        ...(bdjMenuMediaAssets.length ? { additionalMenuMedia: bdjMenuMediaAssets } : {}),
-        ...(reuseDirectory === undefined ? {} : { reuseMediaFromDirectory: reuseDirectory }),
-        bdjFiles: bdjFiles.files, ...(bdjHostApiJar ? { bdjHostApiJar } : {}), ...(bdjLaunch ? { bdjLaunch: { ...bdjLaunch, session: bdjSession(vmPrograms, externalTargets) } } : {}),
-        diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
-        onMediaProgress: mediaProgress.onMediaProgress,
-        onPhase: (phase) => {
-          if (phase === "media") { if (bdjMenuMediaAssets.length) progress.start(BUILD_STEPS.media, countOf(mediaProgress.clips, "clip", "clips")); return; }
-          if (phase === "assets") { if (bdjMenuMediaAssets.length) progress.done(BUILD_STEPS.media, countOf(bdjMenuMediaAssets.length, "BD-J PlayItem", "BD-J PlayItems")); else progress.skip(BUILD_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no playlist media inside the menu scope"); progress.start(BUILD_STEPS.package); return; }
-          if (phase === "bundle") { progress.note("bundling BD-J and HDMV runtime"); return; }
-          if (phase === "manifest") { progress.done(BUILD_STEPS.package, "manifest written"); progress.start(BUILD_STEPS.report); }
-        },
-      });
-      for (const { code, message, severity } of packaged.diagnostics) {
-        if (severity !== "warning" || decisionFacts.some((fact) => fact.code === code)) continue;
-        decisionFacts.push({ severity, code, message: safeDiagnosticMessage(message, roots.input) });
-      }
-      const report = { schemaVersion: "1.0", status: decision.status, reasons: decision.reasons, diagnostics: decisionFacts };
-      await writeConversionReport(transaction.stagingPath, report);
-      await transaction.commit();
-      progress.done(BUILD_STEPS.report, `status ${decision.status}`);
-      const packageText = await packageSummary(roots.output);
-      progress.finish(decision.status, [["output", roots.output], ...(packageText === undefined ? [] : [["package", packageText] as const]), ["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"], ["report", `reports.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`]]);
-      process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" })}\n`);
-      return;
-    }
-    if (!extraction.scenes.length) {
-      const hasDeclaredIg = disc.playlists.some((playlist) => menuIgsSceneTargets(disc, playlist).length > 0);
-      await failMenuConversion("MENU_SCENE_NOT_FOUND", hasDeclaredIg
-        ? "The BDMV declares IGS streams, but no complete IGS scene was extracted from their referenced clips."
-        : "No IG stream is declared by any MPLS PlayItem or referenced CLPI program; the HDMV menu has no IGS scene to render.");
-      return;
-    }
-    if (!menuPlaylist) {
-      await failMenuConversion("MENU_PLAYLIST_NOT_RESOLVED", "The HDMV Top Menu playlist could not be resolved from the disc navigation entries; no IGS scene was selected.");
-      return;
-    }
-    const menuSceneResult = findMenuScene(disc, menuPlaylist, extraction.scenes, menuTarget?.playItem, menuTarget?.igStreamNumber);
-    if (menuSceneResult.status === "not-found") {
-      await failMenuConversion("MENU_SCENE_NOT_FOUND", `No extracted IGS scene matches the stream and clip declarations in Top Menu playlist ${menuPlaylist.id}; no other scene was selected.`);
-      return;
-    }
-    if (menuSceneResult.status === "ambiguous") {
-      const sources = menuSceneResult.scenes.map((scene) => `${scene.id} (clip ${scene.clipId}, PID ${scene.pid} @ byte ${scene.source.segmentFileOffset})`);
-      await failMenuConversion("MENU_SCENE_AMBIGUOUS", `Top Menu playlist ${menuPlaylist.id} maps to multiple extracted IGS scenes: ${sources.join(", ")}; no scene was selected.`);
-      return;
-    }
-    const menuScene = menuSceneResult.scene;
-    const adapted = adaptComposition(menuScene);
-    const scene = adapted.scene;
-    const mediaClosure = buildMediaClosure(disc, extraction.scenes);
-    const externalTargets = createExternalMediaTargets(disc, mediaClosure);
-    const reachablePlaylistIds = new Set(mediaClosure.playlistIds.map((id) => Number(id.slice("playlist:".length))));
-    const menuPlaylistNumber = Number(menuPlaylist.id);
-    const playlistSceneResults = disc.playlists.flatMap((playlist) => {
-      const isMenuPlaylist = Number(playlist.id) === menuPlaylistNumber;
-      const playItemIndexes = isMenuPlaylist ? playlist.playItems.map((item) => item.index) : [undefined];
-      return playItemIndexes.flatMap((playItem) => {
-        const targets = menuIgsSceneTargets(disc, playlist, playItem);
-        const streamCount = menuIgsSceneStreamCount(disc, playlist, playItem);
-        const streamNumbers = [...new Set(targets.map((target) => target.igStreamNumber))];
-        return streamNumbers.flatMap((igStreamNumber) => {
-          const result = findMenuScene(disc, playlist, extraction.scenes, playItem, igStreamNumber);
-          return result.status === "found"
-            ? [{ playlistId: Number(playlist.id), playItem: playItem ?? 0, igStreamNumber, igStreamCount: streamCount, scene: result.scene, adapted: adaptComposition(result.scene) }]
-            : [];
-        });
-      });
+    const planned = await planBuild({
+      disc, extraction, profile, limits, bdmvPath, inputRoot: roots.input, mediaScope,
+      hasBdjEntries, bdjFiles,
+      ...(bdjLaunch === undefined ? {} : { bdjLaunch }),
+      ...(bdjHostApiJar === undefined ? {} : { bdjHostApiJar }),
+      bdjMenuMediaAssets, bdjScopedOutPlaylists, menuTarget, menuMedia,
+      ...(reuseDirectory === undefined ? {} : { reuseDirectory }),
     });
-    const menuSceneResults = playlistSceneResults.filter((item) => isMenuSurfaceScene(item.scene.uiModel, item.playlistId, menuPlaylistNumber));
-    const menuPlaylistIds = [...new Set(menuSceneResults.map((item) => item.playlistId))];
-    // PLAY_PLAYLIST_MARK names a play mark; the runtime needs the mark-to-
-    // PlayItem mapping to select the packaged scene for the marked PlayItem.
-    const menuPlaylistMarks = collectMenuPlaylistMarks(disc, [...new Set([...menuPlaylistIds, Number(menuPlaylist.id)])]);
-    const menuScenes = menuSceneResults.map((item) => ({ playlistId: item.playlistId, playItem: item.playItem, igStreamNumber: item.igStreamNumber, igStreamCount: item.igStreamCount, scene: item.adapted.scene }));
-    const additionalMenuMedia: Array<NonNullable<Awaited<ReturnType<typeof menuLoopMediaInput>>>> = [];
-    const popupContentPlaylists: number[] = [];
-    const missingPlayItemMedia: number[] = [];
-    const primaryPlayItem = menuMedia ? menuTarget?.playItem ?? 0 : null;
-    const queuedPlayItems = new Set<string>();
-    for (const item of playlistSceneResults) {
-      const isMenuPlaylist = item.playlistId === menuPlaylistNumber;
-      queuedPlayItems.add(`${item.playlistId}\0${item.playItem}`);
-      if (isMenuPlaylist && item.playItem === primaryPlayItem) continue;
-      if (!isMenuPlaylist && !reachablePlaylistIds.has(item.playlistId)) continue;
-      if (!isMenuPlaylist && item.scene.uiModel === 1) {
-        popupContentPlaylists.push(item.playlistId);
-        continue;
-      }
-      if (mediaScope === "none") continue;
-      const playlist = disc.playlists.find((candidate) => Number(candidate.id) === item.playlistId);
-      const media = await menuLoopMediaInput(disc, playlist, { playItemIndex: item.playItem });
-      if (media) additionalMenuMedia.push(media);
-      else if (isMenuPlaylist) missingPlayItemMedia.push(item.playItem);
-    }
-    if (mediaScope === "all") for (const playlist of disc.playlists) {
-      const id = Number(playlist.id);
-      if (!reachablePlaylistIds.has(id) || popupContentPlaylists.includes(id)) continue;
-      for (const playItem of playlist.playItems) {
-        const key = `${id}\0${playItem.index}`;
-        if (queuedPlayItems.has(key)) continue;
-        queuedPlayItems.add(key);
-        const media = await menuLoopMediaInput(disc, playlist, { playItemIndex: playItem.index, purpose: "bdj-playback" }).catch(() => null);
-        if (media) additionalMenuMedia.push(media);
-      }
-    }
-    const popupAdaptations = extraction.scenes.filter((candidate) => candidate.uiModel === 1).map((candidate) => adaptComposition(candidate));
-    const popupScenes = popupAdaptations.map((result) => result.scene);
-    const vmPrograms = createVmPrograms(disc);
-    const menuEntry = disc.entries.find((entry) => entry.kind === "topMenu" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number")
-      ?? disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
-    const vmInitialProgramId = typeof menuEntry?.target.target === "number" ? menuEntry.target.target : undefined;
-    const firstPlay = disc.entries.find((entry) => entry.kind === "firstPlay" && entry.target.objectType === "HDMV" && typeof entry.target.target === "number");
-    const vmFirstPlayProgramId = typeof firstPlay?.target.target === "number" ? firstPlay.target.target : undefined;
-    const referenced = referencedAssetIds([scene, ...popupScenes, ...menuScenes.map((item) => item.scene)]);
-    const graphics = extraction.assets.filter((asset) => referenced.has(asset.id)).map((asset) => ({ id: asset.id, bytes: asset.pngBytes }));
-    const diagnostics: Array<{ code: string; message: string; severity?: string }> = [
-      ...disc.diagnostics.filter((item) => !(hasBdjEntries && item.code === "BDMV_BDJ_UNSUPPORTED")).map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
-      ...bdjFiles.diagnostics,
-      ...extraction.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
-      ...adapted.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity })),
-      ...popupAdaptations.flatMap((result) => result.diagnostics.map((item) => ({ code: item.code, message: safeDiagnosticMessage(item.message, roots.input), severity: item.severity }))),
-    ];
-    const packagedMenuPlayItems = new Set(menuSceneResults.filter((item) => item.playlistId === menuPlaylistNumber).map((item) => item.playItem));
-    for (const playItem of menuPlaylist.playItems) {
-      if (packagedMenuPlayItems.has(playItem.index) || !menuIgsSceneTargets(disc, menuPlaylist, playItem.index).length) continue;
-      diagnostics.push({ code: "M4_MENU_PLAY_ITEM_NOT_PACKAGED", message: `Top Menu playlist ${menuPlaylist.id} PlayItem ${playItem.index} declares an IGS stream but no extracted composition matched it; a LinkPI jump to that PlayItem keeps the current menu page.`, severity: "warning" });
-    }
-    if (missingPlayItemMedia.length) diagnostics.push({ code: "M5_MENU_PLAY_ITEM_MEDIA_UNAVAILABLE", message: `Menu playlist ${menuPlaylist.id} PlayItem${missingPlayItemMedia.length === 1 ? "" : "s"} ${missingPlayItemMedia.join(", ")} could not be exported as background media; the previous menu background keeps playing on those pages.`, severity: "warning" });
-    if (popupScenes.length) diagnostics.push({ code: "M4_POPUP_RENDER_PARTIAL", message: "Popup IGS compositions are overlaid when POPUP_MENU has an unambiguous match for the active packaged menu clip/PID. Title playback delegated to the external player cannot be overlaid.", severity: "warning" });
-    const menuScenePlayItems = menuPlaylist.playItems.filter((playItem) => menuIgsSceneTargets(disc, menuPlaylist, playItem.index).length > 0);
-    const individuallyPackagedMenuPlayItems = new Set(additionalMenuMedia.filter((media) => Number(media.playlistId) === menuPlaylistNumber).map((media) => media.playItemIndex));
-    const menuBackgroundsCoverScenes = menuScenePlayItems.length > 0 && menuScenePlayItems.every((playItem) => playItem.index === primaryPlayItem ? !!menuMedia : individuallyPackagedMenuPlayItems.has(playItem.index));
-    if (!menuMedia && !menuBackgroundsCoverScenes && mediaScope !== "none") diagnostics.push({ code: "M5_MENU_LOOP_UNAVAILABLE", message: "The HDMV Top Menu background timeline cannot be exported as one continuous source-clip span; packaged PlayItem backgrounds switch when menu navigation selects their PlayItem.", severity: "warning" });
-    if (mediaScope === "none") diagnostics.push({ code: "M5_MENU_MEDIA_DISABLED", message: "--menu-media none: no playlist media was exported; the runtime falls back to the preview bridge and reports PLAY_PLAYLIST as unavailable.", severity: "info" });
-    for (const playlistId of popupContentPlaylists) diagnostics.push({ code: "M5_POPUP_CONTENT_MEDIA_EXTERNAL", message: `Playlist ${String(playlistId).padStart(5, "0")} is title playback with a popup IGS composition; its video is handed to the external player and the popup composition is not available there.`, severity: "warning" });
-    if (additionalMenuMedia.length) diagnostics.push({ code: "M5_PLAYLIST_MEDIA_EXPORTED", message: `Packaged local media for playlist${additionalMenuMedia.length === 1 ? "" : "s"} ${[...new Set(additionalMenuMedia.map((media) => media.playlistId))].join(", ")}.`, severity: "info" });
-    if (vmInitialProgramId === undefined || !vmPrograms.some((program) => program.id === vmInitialProgramId)) diagnostics.push({ code: "M4_MENU_OBJECT_CONTEXT_MISSING", message: "No valid HDMV Top Menu or First Play MovieObject is available for menu button commands.", severity: "warning" });
-    let soundBytes: Uint8Array | null = null;
-    const soundPath = disc.sounds[0]?.source.path;
-    if (soundPath) {
-      try {
-        const relativeSoundPath = bdmvRelativePath(soundPath);
-        soundBytes = await readFile(await resolveInputFile(disc.root, relativeSoundPath));
-      } catch (error) {
-        diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(errorText(error), roots.input) });
-      }
-    }
-    const ir = createMenuDiscIR(disc, extraction.scenes.map(({ id, clipId }) => ({ id, clipId })), menuMedia !== null, hasBdjEntries);
+    if (planned.status === "failed") { await failMenuConversion(planned.code, planned.message); return; }
+    const plan = planned.plan;
     // Delivery status is decided from facts that are all known before packaging.
     // The package records the same conclusion (D-2R).
-    const decisionFacts = deliveryDiagnostics(diagnostics);
+    const decisionFacts = deliveryDiagnostics(plan.packageInput.diagnostics ?? []);
     const decision = decideDelivery({
       checks: [],
       diagnostics: decisionFacts,
       declaredEntryCount: disc.entries.length,
       hdmvEntryCount: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length,
-      // `buildMenuPackage` reached this point, so no required asset can be missing.
+      // Planning reached the package step, so no required asset can be missing.
       hasMissingRequiredAsset: false,
-      limitations: menuMedia ? [] : [mediaScope === "none" ? "Menu media export is disabled by --menu-media none." : "Menu loop media is unavailable; the menu background holds its final frame."],
+      limitations: plan.limitations,
     });
-    const plannedMedia = [
-      menuMedia === null ? null : "background",
-      additionalMenuMedia.length ? countOf(additionalMenuMedia.length, "extra playlist", "extra playlists") : null,
-    ].filter((item): item is string => item !== null);
-    progress.done(BUILD_STEPS.scene, menuSceneDetail(menuScene, menuMedia));
-    const mediaEncoding = menuMediaEncoding();
-    const mediaProgress = mediaExportProgress([...(menuMedia === null ? [] : [menuMedia]), ...additionalMenuMedia], (ratio, detail) => progress.progress(ratio, detail));
-    const packaged = await buildMenuPackage({
-      outputDirectory: transaction.stagingPath, title, ir, status: decision.status,
-      ...(mediaEncoding ? { mediaEncoding } : {}),
-      entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
-      scene, popupScenes, menuScenes, menuPlaylistIds, vmPrograms, vmEntries: disc.entries,
-      ...(menuPlaylistMarks.length ? { menuPlaylistMarks } : {}),
-      ...(menuTarget?.preMenuPlaylistIds?.length ? { preMenuPlaylistIds: menuTarget.preMenuPlaylistIds } : {}),
-      externalTargets,
-      bdmvPath,
-      ...(vmInitialProgramId === undefined ? {} : { vmInitialProgramId }),
-      ...(vmFirstPlayProgramId === undefined ? {} : { vmFirstPlayProgramId }),
-      graphics, soundEntries: disc.sounds, soundBytes, playerProfile: profile, vmLimits: limits,
-      ...(reuseDirectory === undefined ? {} : { reuseMediaFromDirectory: reuseDirectory }),
-      ...(menuMedia ? { menuLoopMedia: menuMedia } : {}),
-      ...(additionalMenuMedia.length ? { additionalMenuMedia } : {}),
-      ...(bdjFiles.files.length ? { bdjFiles: bdjFiles.files } : {}),
-      ...(bdjFiles.files.length && bdjLaunch ? { bdjFiles: bdjFiles.files, bdjHostApiJar: bdjHostApiJar!, bdjLaunch: { ...bdjLaunch, session: bdjSession(vmPrograms, externalTargets) } } : {}),
+    progress.done(BUILD_STEPS.scene, plan.sceneDetail);
+    const mediaProgress = mediaExportProgress(plan.mediaInputs, (ratio, detail) => progress.progress(ratio, detail));
+    const packaged = await buildUseCase({
+      plan, outputDirectory: transaction.stagingPath, title, status: decision.status,
       onMediaProgress: mediaProgress.onMediaProgress,
       onPhase: (phase) => {
-        if (phase === "media") {
-          if (plannedMedia.length) progress.start(BUILD_STEPS.media, countOf(mediaProgress.clips, "clip", "clips"));
-          return;
-        }
-        if (phase === "assets") {
-          if (plannedMedia.length) progress.done(BUILD_STEPS.media, plannedMedia.join(" + "));
-          else progress.skip(BUILD_STEPS.media, mediaScope === "none" ? "menu media disabled" : "no menu media");
-          progress.start(BUILD_STEPS.package);
-          return;
-        }
-        if (phase === "bundle") { progress.note("bundling runtime"); return; }
+        if (phase === "media") { if (plan.mediaInputs.length) progress.start(BUILD_STEPS.media, countOf(mediaProgress.clips, "clip", "clips")); return; }
+        if (phase === "assets") { if (plan.mediaInputs.length) progress.done(BUILD_STEPS.media, plan.mediaDetail); else progress.skip(BUILD_STEPS.media, plan.mediaDetail); progress.start(BUILD_STEPS.package); return; }
+        if (phase === "bundle") { progress.note(plan.bundleNote); return; }
         progress.done(BUILD_STEPS.package, "manifest written");
         progress.start(BUILD_STEPS.report);
       },
-      diagnostics: diagnostics.map(({ code, message, severity }) => ({ code, message, ...(severity === undefined ? {} : { severity }) })),
     });
     // Append post-export colour warnings to the final report diagnostics.
     for (const { code, message, severity } of packaged.diagnostics) {
@@ -521,13 +272,12 @@ export async function build(): Promise<void> {
     await transaction.commit();
     progress.done(BUILD_STEPS.report, `status ${decision.status}`);
     const packageText = await packageSummary(roots.output);
-    progress.finish(decision.status, [
+    const launch = "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL";
+    publishBuildOutcome({ status: decision.status, exitCode: decision.exitCode, output: roots.output, ...(hasBdjEntries ? { launch } : {}) }, progress, [
       ["output", roots.output],
       ...(packageText === undefined ? [] : [["package", packageText] as const]),
-    ...(hasBdjEntries ? [["launch", "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL"] as const] : []),
+      ...(hasBdjEntries ? [["launch", launch] as const] : []),
       ["report", `reports.json · ${countOf(decisionFacts.length, "diagnostic", "diagnostics")}`],
     ]);
-    process.stdout.write(`${JSON.stringify({ status: decision.status, output: roots.output, ...(hasBdjEntries ? { launch: "bdmv2web serve <package-directory> [--java <executable>] · open the printed loopback URL" } : {}) })}\n`);
-    if (decision.exitCode !== 0) process.exitCode = decision.exitCode;
   } catch (error) { await transaction.abort(); throw error; }
 }

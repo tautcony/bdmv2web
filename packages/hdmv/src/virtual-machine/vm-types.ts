@@ -12,6 +12,14 @@ export interface VmEvent { type: MediaEventType; generation?: number; responseTo
 export interface VmDiagnostic { code: string; message: string; source: SourceLocation | null; }
 export interface PlaybackContext { status: "idle" | "requested" | "playing" | "ended" | "error" | "unavailable"; playlist: number | null; playItem: number | null; presentationTime: number | null; pendingActionId: string | null; }
 export interface TraceEntry { sequence: number; generation: number; programId: number; pc: number; source: SourceLocation | null; raw: string | null; decoded: string | null; input?: VmEvent; action?: NavigationAction; event?: VmEvent; registerDelta: { gpr: Record<number, number>; psr: Record<number, number> }; callDepth: number; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; limits: Readonly<Limits>; status: VmStatus; diagnostic?: VmDiagnostic; /** Register file state at record time; filled when the VM runs with `traceRegisters`. */ registers?: ReturnType<RegisterFile["snapshot"]>; }
+/** One authoritative HDMV state/action publication for the local session SSE stream. */
+export interface HdmvUpdate {
+  active: boolean;
+  snapshot: VmSnapshot;
+  actions: NavigationAction[];
+  origin: "user" | "startup" | "system" | "authored";
+}
+
 export interface VmSnapshot { status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>; callStack: Array<{ programId: number; pc: number }>; playback: PlaybackContext; generation: number; waiting: NavigationAction | null; instructionsThisTurn: number; diagnostic: VmDiagnostic | null; }
 export interface HdmvVmCheckpoint {
   status: VmStatus; programId: number; pc: number; registers: ReturnType<RegisterFile["snapshot"]>;

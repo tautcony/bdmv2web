@@ -26,7 +26,7 @@ export type {
   MediaProcessResult, MediaProcessProgress, MediaProcessRunner, MediaToolInvocation,
   MediaAudioTrackInput, VideoExportMode, MenuLoopMediaInput, MediaAssetSource,
   MediaAssetProgress, MenuLoopMediaOptions, MediaPlan, ExportedMediaAsset,
-  MediaWarning, MenuLoopMediaResult, MenuLoopEncoding,
+  MediaWarning, MenuLoopMediaResult, MenuLoopEncoding, MenuMediaEncoding,
 } from "./media-types.js";
 export * from "./process/process.js";
 import type { MediaProcessProgress, MediaProcessResult, MediaProcessRunner, MediaToolInvocation, VideoExportMode, MenuLoopMediaInput, MenuLoopMediaOptions, MediaPlan, MenuLoopMediaResult, MenuLoopEncoding, MediaWarning, ExportedMediaAsset } from "./media-types.js";

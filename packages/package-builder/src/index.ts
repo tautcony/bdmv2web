@@ -5,4 +5,4 @@ export { convertSounds, type SoundMetadata, type SoundPayload } from "./sounds.j
 export { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, serializeSafeScriptData } from "./scripts.js";
 export { type MenuPackageDiagnostic, type MenuPackageMetadata, type MenuPackageStatus } from "./types.js";
 export type { BdjPackageFile, MenuMediaEncoding, MenuPackageInput, MenuPackageResult } from "./menu-package-input.js";
-export { buildMenuPackage, createCompatibility, menuMediaPaths, priorMenuMediaPaths } from "./build-menu-package.js";
+export { assembleMenuPackage, buildMenuPackage, createCompatibility, menuMediaPaths, priorMenuMediaPaths } from "./build-menu-package.js";

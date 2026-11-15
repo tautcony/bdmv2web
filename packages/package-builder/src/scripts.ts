@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { bytesToHex } from "@bdmv2web/utils";
 import type { PngBatch } from "./asset-batches.js";
 import type { MenuPackageStatus } from "./types.js";
+import type { MenuRuntimeData } from "./menu-package-input.js";
 
 const templateDirectory = existsSync(new URL("./templates/index.html", import.meta.url)) ? "./templates/" : "../templates/";
 const PACKAGE_TEMPLATES = {
@@ -42,8 +43,8 @@ export function createMenuIndexHtml(title: string, assetBatchCount = 0, sceneSiz
   }).replace(/\n{3,}/g, "\n\n");
 }
 
-export function createDataScript(ir: unknown): string {
-  return `globalThis.__BDMV_MENU_DATA__=${serializeSafeScriptData(ir)};\n`;
+export function createDataScript(data: MenuRuntimeData): string {
+  return `globalThis.__BDMV_MENU_DATA__=${serializeSafeScriptData(data)};\n`;
 }
 
 export function createAssetBatchScript(batch: PngBatch): string {

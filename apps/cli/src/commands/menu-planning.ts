@@ -224,6 +224,13 @@ export function menuMediaEntryPoint45k(disc: ParsedDisc, clipId: string, time45k
   return entry;
 }
 
+/** Selected scene plus one loop length for the resolved menu media. */
+export function menuSceneDetail(scene: { clipId: string; pid: number }, media: { inTime45k: number; outTime45k: number } | null): string {
+  const label = `clip ${scene.clipId} · PID 0x${scene.pid.toString(16)}`;
+  if (media === null) return `${label} · no loop media`;
+  return `${label} · loop ${((media.outTime45k - media.inTime45k) / 45000).toFixed(1)}s`;
+}
+
 export async function menuLoopMediaInput(disc: ParsedDisc, playlist: ParsedDisc["playlists"][number] | undefined, options: { playItemIndex?: number; purpose?: "static-background" | "bdj-playback" } = {}): Promise<{ sourcePath: string; sourceFile: string; playlistId: string; playItemIndex: number; clipId: string; inTime45k: number; loopStart45k?: number; copyStart45k?: number; outTime45k: number; stillMode: number; repeatCount: number; loopBackground: boolean; videoPid: number; audioTracks: Array<{ streamNumber: number; pid: number; language: string }> } | null> {
   if (!playlist || playlist.playItems.length === 0) return null;
   const playItems = options.playItemIndex === undefined ? playlist.playItems : playlist.playItems.filter((item) => item.index === options.playItemIndex);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExternalPlayTarget } from "@bdmv2web/media-export/external-targets";
+import type { ExternalPlayTarget } from "@bdmv2web/core/playback-targets";
 import { createExternalPlayerUrl, fileUrlFromBdmvPath, format90kSeconds, requestExternalPlayback } from "./bdmv-url.js";
 
 const streamPath = "STREAM/00002.m2ts";

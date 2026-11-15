@@ -1,56 +1,8 @@
 import type { IgsAsset, IgsScene, IgsSource } from "@bdmv2web/igs";
+import type { SerializedMenuButton, SerializedMenuPage, SerializedScene, SerializedMenuState } from "@bdmv2web/core/runtime-data";
 import { bytesToHex as toHex } from "@bdmv2web/utils";
 
-export interface SerializedMenuState {
-  bounds: { x: number; y: number; width: number; height: number };
-  assetId?: string;
-  soundId?: number;
-  startObjectId: number;
-  endObjectId: number;
-  repeat?: boolean;
-}
-
-export interface SerializedMenuButton {
-  id: number;
-  bog?: number;
-  enabled?: boolean;
-  autoAction?: boolean;
-  neighbors: { up: number; down: number; left: number; right: number };
-  states: { normal?: SerializedMenuState; selected?: SerializedMenuState; activated?: SerializedMenuState };
-  commands?: Array<{ bytes: string; sourceOffset?: string }>;
-}
-
-export interface SerializedMenuPage {
-  id: number;
-  uoMask: string;
-  defaultButtonId: number;
-  animationFrameRateCode: number;
-  objects?: Array<{ id: number; width: number; height: number; assetId: string }>;
-  effects?: {
-    enter: Array<{ duration90k: number; objects: Array<{ objectId: number; x: number; y: number; width: number; height: number; assetId: string; crop?: { x: number; y: number; width: number; height: number } }> }>;
-    exit: Array<{ duration90k: number; objects: Array<{ objectId: number; x: number; y: number; width: number; height: number; assetId: string; crop?: { x: number; y: number; width: number; height: number } }> }>;
-  };
-  defaultActivatedButtonId?: number;
-  bogDefaults?: Array<{ bog: number; defaultButtonId: number }>;
-  buttons: SerializedMenuButton[];
-  allowedActions?: Record<string, boolean>;
-}
-
-/** JSON-safe shape accepted by the M4 browser bootloader. */
-export interface SerializedScene {
-  id?: string;
-  clipId?: string;
-  pid?: number;
-  streamModel?: number;
-  uiModel?: number;
-  source?: IgsSource;
-  width: number;
-  height: number;
-  frameRateCode?: number;
-  compositionTimeout90k: string | null;
-  selectionTimeout90k: string | null;
-  pages: SerializedMenuPage[];
-}
+export type { SerializedMenuButton, SerializedMenuPage, SerializedScene, SerializedMenuState } from "@bdmv2web/core/runtime-data";
 
 export interface IgsAdapterDiagnostic {
   severity: "warning" | "error";
