@@ -1,3 +1,4 @@
+export * from "./diagnostics.js";
 export * from "./scene/types.js";
 export * from "./transport/transport.js";
 export * from "./transport/probe.js";

@@ -9,7 +9,6 @@ import { parseBdmvWithInputTable } from "@bdmv2web/bdmv-parser";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { classifyDiagnostics } from "@bdmv2web/test-runner";
 import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
-import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -36,39 +35,6 @@ function formatOptionalBytes(bytes: number | undefined): string {
   return bytes === undefined ? "size unavailable" : formatBytes(bytes);
 }
 
-async function rawPidPayloadSizes(path: string, pids: ReadonlySet<number>): Promise<Map<number, number>> {
-  const sizes = new Map<number, number>();
-  let pending = new Uint8Array();
-  let packetSize: 188 | 192 | undefined;
-  let syncOffset = 0;
-  for await (const rawChunk of createReadStream(path, { highWaterMark: 256 * 1024 })) {
-    if (!Buffer.isBuffer(rawChunk)) throw new TypeError("M2TS input stream returned a non-Buffer chunk.");
-    const chunk: Buffer = rawChunk;
-    const joined = new Uint8Array(pending.byteLength + chunk.byteLength);
-    joined.set(pending); joined.set(chunk, pending.byteLength);
-    if (!packetSize && joined.byteLength >= 384) {
-      if (joined[0] === 0x47 && joined[188] === 0x47) packetSize = 188;
-      else if (joined[4] === 0x47 && joined[196] === 0x47) { packetSize = 192; syncOffset = 4; }
-    }
-    if (!packetSize) { pending = joined; continue; }
-    let offset = 0;
-    while (offset + packetSize <= joined.byteLength) {
-      if (joined[offset + syncOffset] !== 0x47) { offset++; continue; }
-      const packet = joined.subarray(offset + syncOffset, offset + syncOffset + 188);
-      const pid = ((packet[1]! & 0x1f) << 8) | packet[2]!;
-      if (pids.has(pid)) {
-        const adaptationControl = (packet[3]! >> 4) & 3;
-        let payloadOffset = 4;
-        if (adaptationControl & 2) payloadOffset += 1 + packet[payloadOffset]!;
-        if ((adaptationControl & 1) && payloadOffset < 188) sizes.set(pid, (sizes.get(pid) ?? 0) + 188 - payloadOffset);
-      }
-      offset += packetSize;
-    }
-    pending = joined.slice(offset);
-  }
-  return sizes;
-}
-
 export async function listAssets(): Promise<void> {
   const input = inputPath(); if (!input) fail("CLI_MISSING_INPUT", "list requires a BDMV input path");
   const type = assetTypeOption();
@@ -78,7 +44,14 @@ export async function listAssets(): Promise<void> {
   const { disc, table } = await parseBdmvWithInputTable(input);
   const fatal = classifyDiagnostics(disc.diagnostics);
   if (fatal.hasFatal) { stageFailure(firstBlockingCode(fatal.blocking), fatal.blocking); return; }
-  const extraction = await extractIgsScenes(disc, { renderAssets: false, table });
+  // The tree view reports per-PID transport payload sizes out of this scan, so
+  // each clip is read once. The JSON report carries no sizes and skips measuring.
+  const extraction = await extractIgsScenes(disc, {
+    renderAssets: false,
+    table,
+    ...(format === "table" ? { measurePayloadBytes: true } : {}),
+    ...(selection.clipId === undefined ? {} : { clipFilter: (clipId: string) => selectedClip(clipId, selection) }),
+  });
   const scenes = extraction.scenes.filter((scene) => selectedClip(scene.clipId, selection) && selectedPid(scene.pid, selection));
   const igsStreams = type === "sup" ? [] : extraction.streams.filter((stream) => selectedClip(stream.clipId, selection) && selectedPid(stream.pid, selection)).map((stream) => ({ type: "igs", format: "mnu", path: igsMnuPath(stream.clipId, stream.pid), clipId: stream.clipId, pid: stream.pid, byteLength: stream.byteLength }));
   const igsElements = type === "sup" ? [] : scenes.flatMap((scene) => scene.objects.map((object) => ({ type: "igs-image-element", clipId: scene.clipId, pid: scene.pid, sceneId: scene.id, compositionNumber: scene.compositionNumber, objectId: object.id, objectVersion: object.version, width: object.width, height: object.height })));
@@ -101,17 +74,12 @@ export async function listAssets(): Promise<void> {
       const relativeSource = source === undefined ? undefined : bdmvRelativePath(source);
       const hasM2tsSource = relativeSource !== undefined && new RegExp(`^STREAM/${clipId}\\.m2ts$`, "i").test(relativeSource);
       let rawBytes: number | undefined;
-      let rawPidSizes = new Map<number, number>();
       if (hasM2tsSource) {
-        const sourcePath = resolve(disc.root, relativeSource);
-        try { rawBytes = (await stat(sourcePath)).size; }
+        try { rawBytes = (await stat(resolve(disc.root, relativeSource))).size; }
         catch { rawBytes = undefined; }
-        if (rawBytes !== undefined) {
-          const pids = new Set(assets.filter((item) => item.clipId === clipId).map((item) => item.pid));
-          try { rawPidSizes = await rawPidPayloadSizes(sourcePath, pids); }
-          catch { rawPidSizes = new Map(); }
-        }
       }
+      // Payload sizes come from the extraction scan this run already performed.
+      const rawPidSizes: ReadonlyMap<number, number> = extraction.payloadBytesByClip?.get(clipId) ?? new Map<number, number>();
       const children: AssetTreeNode[] = [];
       for (const stream of igsStreams.filter((item) => item.clipId === clipId)) {
         const streamScenes = scenes.filter((scene) => scene.clipId === clipId && scene.pid === stream.pid);

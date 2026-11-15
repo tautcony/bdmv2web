@@ -8,6 +8,9 @@ import { consumeSegment, createIgsState, parseSegments } from "./igs.js";
 import { renderIgsAssets, validateIgsSceneAssets } from "../rendering/png.js";
 import { M2tsPacketReader, PesAssembler, PsiAssembler, source, type PesPacket } from "../transport/transport.js";
 
+/** Shared empty residual; `parseSegments` only ever reads it. */
+const NO_BYTES = new Uint8Array();
+
 export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & { table?: InputFileTable } = {}): Promise<IgsExtraction> {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const table = options.table ?? (await discoverBdmvInput(disc.root)).table;
@@ -15,6 +18,7 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
   const scenes: IgsScene[] = [];
   const assets: IgsExtraction["assets"] = [];
   const streams: IgsExtraction["streams"] = [];
+  const payloadBytesByClip = new Map<string, ReadonlyMap<number, number>>();
   const seen = new Set<string>();
   for (const playlist of disc.playlists) {
     for (const item of playlist.playItems) {
@@ -41,6 +45,9 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
       for (const target of targets) {
         if (seen.has(target.clipId)) continue;
         seen.add(target.clipId);
+        // A caller that only reports one clip's assets does not need the other
+        // stream files read; the filter runs before the clip is opened.
+        if (options.clipFilter && !options.clipFilter(target.clipId)) continue;
         const clipInfo = disc.clips.find((clip) => sameId(clip.id, target.clipId));
         const declaredIgsPid = target.mplsStreams.find((stream) => stream.pid !== null)?.pid
           ?? clipInfo?.programs.flatMap((program) => program.streams).find((stream) => stream.codingType === 0x91)?.pid
@@ -64,12 +71,18 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
         scenes.push(...result.scenes);
         assets.push(...result.assets);
         streams.push(...result.streams);
+        for (const [clipId, payloadBytes] of result.payloadBytesByClip ?? []) payloadBytesByClip.set(clipId, payloadBytes);
       }
     }
   }
   const hasErrors = diagnostics.some((d) => d.severity === "error");
   const hasWarnings = diagnostics.some((d) => d.severity === "warning");
-  return { scenes, assets, streams, diagnostics, status: hasErrors ? (scenes.length ? "partial" : "failed") : (hasWarnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
+  return {
+    scenes, assets, streams, diagnostics,
+    status: hasErrors ? (scenes.length ? "partial" : "failed") : (hasWarnings || !scenes.length ? "partial" : "complete"),
+    support: { format: "Blu-ray IGS", status: "unverified" },
+    ...(options.measurePayloadBytes ? { payloadBytesByClip } : {}),
+  };
 }
 
 export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable<Uint8Array>, expectedPidCues: Array<{ pid: number; source: SourceLocation }> = [], options: IgsOptions = {}): Promise<IgsExtraction> {
@@ -80,11 +93,17 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const pes = new PesAssembler(clipId, limits);
   const state = createIgsState(); const diagnostics: IgsDiagnostic[] = [];
   const candidatePids = new Set(expectedPidCues.map((x) => x.pid));
+  // Derived once: the conflict check below runs on every packet of the clip.
+  const expectedPids = uniquePids(expectedPidCues);
   const streamBytes = new Map<number, bigint>();
   const residuals = new Map<number, Uint8Array<ArrayBufferLike>>();
   const spans = new Map<number, Array<{ start: bigint; end: bigint; packetOffset: bigint; pesOffset: bigint; payloadOffset: bigint; pts: PtsValue | null }>>();
   const streamChunks = new Map<number, Uint8Array[]>();
   const streamByteLengths = new Map<number, number>();
+  // Transport payload sizes come out of this scan: the caller that reports them
+  // (`list`) reads the sizes of packets this pass already visited.
+  const measurePayloadBytes = options.measurePayloadBytes === true;
+  const payloadBytes = new Map<number, number>();
   let stoppedOnPidConflict = false;
   const processPes = (unit: PesPacket): void => {
     const mnuHeader = new Uint8Array(10);
@@ -105,7 +124,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
     const spanList = spans.get(unit.pid) ?? [];
     spanList.push({ start: previousTotal, end: previousTotal + BigInt(unit.payload.length), packetOffset: unit.packetOffset, pesOffset: unit.pesOffset, payloadOffset: unit.payloadOffset, pts: unit.pts });
     spans.set(unit.pid, spanList);
-    const parsed = parseSegments(unit.payload, segmentStart, Uint8Array.from(residuals.get(unit.pid) ?? []), clipId, unit.pid, unit.pts);
+    const parsed = parseSegments(unit.payload, segmentStart, residuals.get(unit.pid) ?? NO_BYTES, clipId, unit.pid, unit.pts);
     residuals.set(unit.pid, parsed.residual); streamBytes.set(unit.pid, previousTotal + BigInt(unit.payload.length));
     diagnostics.push(...parsed.diagnostics);
     for (const segment of parsed.segments) {
@@ -119,10 +138,22 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const processPacket = (packet: TsPacket): void => {
     const wasKnownIgPid = psi.streamsByPid.get(packet.pid) === 0x91;
     psi.push(packet);
+    // Counted for every PID before the candidate check so a PGS/audio/video PID
+    // the caller reports on has a size, not only the IGS PIDs this scan assembles.
+    if (measurePayloadBytes && packet.payload.length) payloadBytes.set(packet.pid, (payloadBytes.get(packet.pid) ?? 0) + packet.payload.length);
     if (expectedPidCues.length && psi.hasCompleteProgramTables()) {
-      const expectedPids = uniquePids(expectedPidCues);
-      const pmtPids = [...psi.streamsByPid].filter(([, type]) => type === 0x91).map(([pid]) => pid);
-      if (!pmtPids.length || pmtPids.some((pid) => !expectedPids.includes(pid)) || expectedPids.some((pid) => !pmtPids.includes(pid))) {
+      // Allocation-free form of "PMT IG PIDs must equal the structural cues":
+      // this runs on every packet, so it walks the map in place and allocates
+      // nothing per 192-byte packet of the clip.
+      let pmtIgPidCount = 0;
+      let conflicts = false;
+      for (const [pid, type] of psi.streamsByPid) {
+        if (type !== 0x91) continue;
+        pmtIgPidCount += 1;
+        if (!expectedPids.includes(pid)) { conflicts = true; break; }
+      }
+      if (!conflicts) for (const pid of expectedPids) if (psi.streamsByPid.get(pid) !== 0x91) { conflicts = true; break; }
+      if (!pmtIgPidCount || conflicts) {
         stoppedOnPidConflict = true;
         return;
       }
@@ -162,7 +193,7 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   }
   const pmtIgsCues = [...psi.streamsByPid].filter(([, type]) => type === 0x91).map(([pid]) => ({ pid, source: psi.streamSourcesByPid.get(pid) ?? null }));
   const streamPids = pmtIgsCues.map((cue) => cue.pid);
-  const cuePids = uniquePids(expectedPidCues);
+  const cuePids = expectedPids;
   if ((expectedPidCues.length && (!streamPids.length || streamPids.some((pid) => !cuePids.includes(pid)) || cuePids.some((pid) => !streamPids.includes(pid)))) || (!expectedPidCues.length && streamPids.length > 0)) {
     const structuralEvidence = expectedPidCues.map((cue) => ({ pid: cue.pid, path: cue.source.path, origin: cue.source.origin, offset: cue.source.offset }));
     const pmtEvidence = pmtIgsCues.map((cue) => ({ streamPid: cue.pid, clipId: cue.source?.clipId ?? null, pmtPid: cue.source?.pid ?? null, packetOffset: cue.source?.packetOffset ?? null }));
@@ -193,7 +224,12 @@ export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable
   const warnings = diagnostics.some((d) => d.severity === "warning");
   if (!scenes.length && !diagnostics.length) diagnostics.push({ severity: "warning", code: "IGS_NO_DISPLAY_SETS", message: "No complete IGS Display Set was found", source: null, affectedSceneIds: [], stage: "igs" });
   const streams = [...streamByteLengths].map(([pid, byteLength]) => ({ clipId, pid, byteLength, ...(options.captureStreams ? { bytes: concatByteChunks(streamChunks.get(pid) ?? []) } : {}) }));
-  return { scenes, assets, streams, diagnostics, status: errors ? (scenes.length ? "partial" : "failed") : (warnings || !scenes.length ? "partial" : "complete"), support: { format: "Blu-ray IGS", status: "unverified" } };
+  return {
+    scenes, assets, streams, diagnostics,
+    status: errors ? (scenes.length ? "partial" : "failed") : (warnings || !scenes.length ? "partial" : "complete"),
+    support: { format: "Blu-ray IGS", status: "unverified" },
+    ...(measurePayloadBytes ? { payloadBytesByClip: new Map<string, ReadonlyMap<number, number>>([[clipId, payloadBytes]]) } : {}),
+  };
 }
 
 async function extractClip(clipId: string, path: string, expected: Array<StreamDeclaration | { pid: number; source: SourceLocation }>, streamSource: { path: string; origin: "primary" | "backup" | null }, options: IgsOptions): Promise<IgsExtraction> {

@@ -92,7 +92,9 @@ export async function readRegisteredFile(table: InputFileTable, relativePath: st
     try { const buffer = Buffer.alloc(Math.min(byteLength, maxBytes)); const result = await handle.read(buffer, 0, buffer.length, 0); return { bytes: new Uint8Array(buffer.subarray(0, result.bytesRead)), byteLength }; }
     finally { await handle.close(); }
   }
-  return { bytes: new Uint8Array(await readFile(path)), byteLength };
+  // `readFile` already returns a `Uint8Array` over an exact-size, offset-0
+  // buffer; wrapping it in `new Uint8Array(...)` copied the whole file again.
+  return { bytes: await readFile(path), byteLength };
 }
 
 export async function buildInputFileTable(rootPath: string, relativePaths: string[]): Promise<InputFileTable> {

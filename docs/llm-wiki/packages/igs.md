@@ -11,6 +11,7 @@
 | `src/rendering/png.ts` | `renderSceneAssets`、`renderIgsAssets`、`validateIgsSceneAssets`、`encodeIndexedPng`、`encodeRgbaPng`、`paletteRgbaTable` |
 | `src/rendering/mnu.ts` | `parseIgsMnu`（igstools 兼容 `.mnu`） |
 | `src/scene/extract.ts` | `extractIgsScenes`（基于 `ParsedDisc`）、`extractIgsFromChunks`（任意分块输入） |
+| `src/diagnostics.ts` | `diagnosticKey`、`uniqueDiagnostics`：把多趟读同一 clip 时重复报告的同一事件折成一条 |
 | `src/scene/types.ts` | `IgsScene`、`IgsPage`、`IgsButton`、`IgsAsset`、`IgsExtraction`、`IgsOptions`、`IgsDiagnostic` |
 
 ## 公开接口
@@ -23,6 +24,8 @@ consumeSegment(state, segment, clipId, pid, pts, packetOffset, pesOffset, segmen
 decodeRle(data, width, height, limits?): Uint8Array
 renderSceneAssets(scene, options?): { assets: IgsAsset[]; diagnostics: IgsDiagnostic[] }
 parseIgsMnu(data, options?): IgsExtraction
+diagnosticKey(diagnostic): string
+uniqueDiagnostics(diagnostics): IgsDiagnostic[]
 encodeIndexedPng(width, height, indices, paletteRgba, options?): Uint8Array
 encodeRgbaPng(width, height, rgba, options?): Uint8Array
 ```
@@ -36,6 +39,8 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | `renderAssets` | `true` | 关闭后只解析场景，不生成 PNG（元数据形态的 `export --metadata-only` 用） |
 | `pngLevel` | 调优默认 | 写 PNG 的 deflate 档位 0–9；元素图默认 1（`DEFAULT_ASSET_PNG_LEVEL`） |
 | `captureStreams` | `false` | 保留 igstools 兼容 `.mnu` 字节（`export` 用） |
+| `measurePayloadBytes` | `false` | 同一次扫描里按 PID 累计 TS 载荷字节，填入 `IgsExtraction.payloadBytesByClip`（`list` 用，避免为算大小再读一遍 clip） |
+| `clipFilter` | 不过滤 | 谓词拒绝的 clip 在打开文件前跳过，供只报告部分 clip 的调用方省掉无关读取 |
 | `table` | 自动发现 | 复用已验证的输入文件表 |
 
 `parseIgsMnu` 接受每段带 `IG` + PTS + DTS 头的 MNU，也接受旧版每 PES 一个 `IG` 头、后续段复用 PTS 的形态。
@@ -48,7 +53,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
    - CLPI 中 `codingType === 0x91` 的流（MPLS 未声明时补充）；
    - `streamType === 2` 的 SubPath 流，按 `subPathId`/`subClipId` 解析到实际 clip。
 3. clip 去重；从 `disc.graph` 取 `clip:<id>` 的 `STREAM/xxxxx.m2ts` 路径，缺失 → `BDMV_MISSING_STREAM`。
-4. `readFileChunks` 流式读；`M2tsPacketReader` 校验 192 字节包与同步字节。
+4. `readFileChunks` 流式读；`M2tsPacketReader` 校验 192 字节包与同步字节。包载荷是读缓冲上的视图（PSI/PES 组装器只在需要保留时复制），连续性校验复用每个 PID 的保留缓冲，所以整段扫描不产生逐包 184 字节拷贝。
 5. `PsiAssembler` 解析 PAT/PMT；`PesAssembler` 按 PID 拼 PES，`decodeTimestamp` 解 33 位 PTS 并处理回绕/时间域重置。
 6. `parseSegments` 在 PES 载荷上切段（3 字节头：类型 + 16 位长度），残片留到下一块。
 7. `consumeSegment` 按段类型更新流状态：
@@ -56,13 +61,16 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | 段 | 作用 |
 | --- | --- |
 | `0x14` PDS | 调色板，按 `(id, version)` 缓存；缺省索引渲染为全透明 |
-| `0x15` ODS | 图像对象，支持跨段续传；超过 `maxObjectPixels` 在分配前拒绝 |
+| `0x15` ODS | 图像对象，支持跨段续传；超过 `maxObjectPixels` 在分配前拒绝。续传缓冲按声明长度倍增，一个对象被许多 PES 载荷切开时拷贝次数保持线性 |
 | `0x18` ICS | 组合/页/BOG/按钮/效果；完整后才提交场景 |
 | `0x80` END | 结束当前 Display Set |
 
 8. 场景完整后才 `complete: true`；损坏数据、未解析对象/调色板、未完成对象序列都使其不完整。
 9. `renderAssets` 时对每个被引用对象按当前调色板做 RLE 解码，直接写成调色板索引 PNG（color type 3 + `PLTE` + `tRNS`）：像素与展开后逐字节一致，deflate 输入只有 RGBA 展开的四分之一。
 10. 汇总 `status`：有 `error` 且无场景 → `failed`；有 `error` 或有 `warning` 或无场景 → `partial`；否则 `complete`。
+11. `measurePayloadBytes` 时，同一次扫描里按 PID 累计 TS 载荷字节（含脚本/视频/字幕 PID），返回 `payloadBytesByClip`（clip → PID → 字节）。`list` 的树形视图读这份统计，一次读取同时得到容器与载荷大小。
+
+多个 pass 看同一段字节时（`export`/`render` 先 probe 再提取），每个 pass 各自报告自己看到的传输损伤；合并两组诊断用 `uniqueDiagnostics`，键包含严重性、码、文案与完整 `source`（含包偏移），因此文案相同但偏移不同的事件各占一行，`affectedSceneIds` 取并集。
 
 ## 场景模型
 
@@ -106,6 +114,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 | --- | --- |
 | `packages/igs/src/transport/transport.test.ts` | 192B 包、PSI/PES、PTS 回绕、连续性错误 |
 | `packages/igs/tests/integration/extraction.test.ts` | 段拼装、版本缓存、RLE、场景完整性 |
+| `packages/igs/tests/integration/diagnostics.test.ts` | 诊断身份：多趟读同一 clip 的同一事件折叠、同文案不同偏移保留、场景引用并集 |
 | `packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts` | 打包的 IG 包夹具（`test-data/fixtures/hdmv-navigation/`） |
 | `packages/igs/tests/integration/igs-reference-element-summary.test.ts` | 重算 9 个 clip、892 个 asset 的 RGBA 渲染，与 pinned igstools 参考 PNG 的逐元素像素值和通道分布比对；golden 在 `test-data/baselines/igs-reference-element-summary.json` |
 | `packages/igs/tests/integration/libbluray-igs-baseline.test.ts` | 对 9 个 clip 的 display set、ICS 页面/BOG/按钮/进入退出效果、256 项调色板与 873 个对象 RLE 与 libbluray 1.5.0 `graphics_processor_decode_ts()` 输出逐项比对；golden 在 `test-data/baselines/libbluray-1.5.0-igs-baseline.json` |

@@ -38,7 +38,7 @@ export async function collectBdjApplicationFiles(disc: ParsedDisc): Promise<BdjF
       if (!entry.isFile()) continue;
       const inputPath = `JAR/${relativePath}`;
       const validatedPath = await resolveInputFile(disc.root, inputPath);
-      files.push({ path: `BDMV/${inputPath}`, sourcePath: `BDMV/${inputPath}`, bytes: new Uint8Array(await readFile(validatedPath)) });
+      files.push({ path: `BDMV/${inputPath}`, sourcePath: `BDMV/${inputPath}`, bytes: await readFile(validatedPath) });
     }
   };
 

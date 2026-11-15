@@ -451,7 +451,7 @@ export async function build(): Promise<void> {
     if (soundPath) {
       try {
         const relativeSoundPath = bdmvRelativePath(soundPath);
-        soundBytes = new Uint8Array(await readFile(await resolveInputFile(disc.root, relativeSoundPath)));
+        soundBytes = await readFile(await resolveInputFile(disc.root, relativeSoundPath));
       } catch (error) {
         diagnostics.push({ code: "SOUND_SOURCE_MISSING", message: safeDiagnosticMessage(errorText(error), roots.input) });
       }

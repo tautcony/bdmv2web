@@ -161,6 +161,12 @@ export interface IgsExtraction {
   diagnostics: IgsDiagnostic[];
   status: "complete" | "partial" | "failed";
   support: { format: "Blu-ray IGS"; status: "unverified" };
+  /**
+   * TS payload bytes per PID of each scanned clip, present only when
+   * `measurePayloadBytes` was requested. A caller that reports per-PID transport
+   * sizes reads them from this scan, so the clip is read once.
+   */
+  payloadBytesByClip?: ReadonlyMap<string, ReadonlyMap<number, number>>;
 }
 
 export interface IgsAsset {
@@ -187,4 +193,15 @@ export interface IgsOptions {
   pngLevel?: number | undefined;
   /** Retain igstools-compatible MNU bytes for explicit asset export. Defaults to false. */
   captureStreams?: boolean;
+  /**
+   * Accumulate TS payload bytes per PID for every stream of the scanned clips.
+   * `list` shows those sizes, and measuring inside this scan keeps it to one read
+   * per clip. Defaults to false.
+   */
+  measurePayloadBytes?: boolean;
+  /**
+   * Scan only the clips the predicate accepts. Callers that filter assets after
+   * extraction can use it to leave unrelated stream files unread.
+   */
+  clipFilter?: (clipId: string) => boolean;
 }

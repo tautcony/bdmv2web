@@ -325,6 +325,46 @@ describe("synthetic IGS extraction", () => {
     expect([...state.objects.values()][0]).toMatchObject({ id: 5, version: 0, width: 1, height: 1, indices: Uint8Array.of(1) });
   });
 
+  it("reassembles a wide object delivered in many fragments into its exact declared bytes", () => {
+    const state = createIgsState();
+    const sourcePts = { raw: 100n, epoch: 0n, normalized: 100n, timeDomain: 0 };
+    // A 16x16 object in palette entry 1: one run of 16 pixels plus an end-of-line
+    // marker per row, which is enough RLE data to spread over many fragments.
+    const rle = new Uint8Array(16 * 5);
+    for (let row = 0; row < 16; row++) rle.set(Uint8Array.of(0x00, 0x90, 0x01, 0x00, 0x00), row * 5);
+    const declaredLength = 4 + rle.length;
+    const header = Uint8Array.of(0, 7, 0, 0x80, declaredLength >> 16, (declaredLength >> 8) & 0xff, declaredLength & 0xff, 0, 16, 0, 16);
+    const fragmentBytes = (start: number, end: number): Uint8Array => rle.slice(start, end);
+    const deliveries: Uint8Array[] = [concat(header, fragmentBytes(0, 9))];
+    for (let offset = 9; offset < rle.length; offset += 9) {
+      const end = Math.min(offset + 9, rle.length);
+      deliveries.push(Uint8Array.of(0, 7, 0, end === rle.length ? 0x40 : 0, ...fragmentBytes(offset, end)));
+    }
+    expect(deliveries.length).toBeGreaterThan(8);
+    for (const [index, data] of deliveries.entries()) {
+      consumeSegment(state, { type: 0x15, offset: BigInt(index * 16), data }, "00001", IG_PID, sourcePts, BigInt(index * 192), BigInt(index * 192), BigInt(index * 192));
+    }
+    expect(state.pendingObjects.size).toBe(0);
+    expect(state.diagnostics).toEqual([]);
+    const object = [...state.objects.values()][0];
+    expect(object).toMatchObject({ id: 7, version: 0, width: 16, height: 16 });
+    expect(object?.indices).toHaveLength(256);
+    expect([...object!.indices].every((value) => value === 1)).toBe(true);
+  });
+
+  it("rejects a fragment that carries an object past its declared length", () => {
+    const state = createIgsState();
+    const sourcePts = { raw: 100n, epoch: 0n, normalized: 100n, timeDomain: 0 };
+    // Declared length 6 leaves two bytes of object data; the continuation pushes three.
+    const first = Uint8Array.of(0, 9, 0, 0x80, 0, 0, 6, 0, 1, 0, 1, 0x01);
+    const continuation = Uint8Array.of(0, 9, 0, 0x40, 0x01, 0x00, 0x00);
+    consumeSegment(state, { type: 0x15, offset: 0n, data: first }, "00001", IG_PID, sourcePts, 0n, 0n, 0n);
+    consumeSegment(state, { type: 0x15, offset: 12n, data: continuation }, "00001", IG_PID, sourcePts, 192n, 192n, 192n);
+    expect(state.diagnostics.map((item) => item.message)).toContain("ODS object 9 fragment bytes exceed declared object length");
+    expect(state.pendingObjects.size).toBe(0);
+    expect(state.objects.size).toBe(0);
+  });
+
   it.each([
     ["missing object", { missingObject: true }, "UNRESOLVED_OBJECT"],
     ["missing palette", { missingPalette: true }, "UNRESOLVED_PALETTE"],
@@ -403,6 +443,48 @@ describe("synthetic IGS extraction", () => {
       const result = await extractIgsScenes(disc, { table, chunkSize: 192 });
       expect(result.scenes).toHaveLength(1);
       expect(result.diagnostics.map((item) => item.code)).not.toContain("BDMV_MISSING_STREAM");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
+  it("measures per-PID transport payload bytes in the same scan only when asked", async () => {
+    const bytes = syntheticClip();
+    const measured = await extractIgsFromChunks("00001", chunks(bytes, 13), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "100" } }], { measurePayloadBytes: true });
+    // Every fixture packet carries an adaptation-free 184-byte payload, so the
+    // per-PID total is the packet count times 184 for PAT, PMT and the IG PID.
+    expect([...measured.payloadBytesByClip!.get("00001")!]).toEqual([[0, 184], [PMT_PID, 184], [IG_PID, 184]]);
+    const unmeasured = await extractIgsFromChunks("00001", chunks(bytes, 13), [{ pid: IG_PID, source: { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary", offset: "100" } }]);
+    expect(unmeasured.payloadBytesByClip).toBeUndefined();
+  });
+
+  it("skips a clip the caller filters out before its stream file is resolved", async () => {
+    const root = await mkdtemp(join(tmpdir(), "igs-clip-filter-"));
+    try {
+      await mkdir(join(root, "STREAM"), { recursive: true });
+      // Only clip 00002 is registered: an unfiltered run would report the missing
+      // 00001 stream, so a silent 00001 shows the filter skipped the clip.
+      await writeFile(join(root, "STREAM", "00002.m2ts"), syntheticClip());
+      const table = await buildInputFileTable(root, ["STREAM/00002.m2ts"]);
+      const source = { path: "BDMV/PLAYLIST/00001.mpls", origin: "primary" as const, offset: "0" };
+      const streams = [{ streamType: 1, pid: IG_PID, subPathId: null, subClipId: null, codingType: 0x91, language: null, dynamicRangeType: null, colorSpace: null, source }];
+      const playItem = (clipId: string) => ({ index: 0, clipId, codecId: "M2TS", stcId: 0, inTime45k: 0, outTime45k: 45_000, connectionCondition: 0, multiAngle: false, angleCount: 1, differentAudio: false, seamlessAngle: false, uoMask: "0", stillMode: 0, stillTime: 0, streams, source });
+      const disc = {
+        schemaVersion: "1.0", analysisStage: "structural", root, entries: [], movieObjects: [], sounds: [],
+        playlists: [
+          { id: "00001", version: "0200", playItems: [playItem("00001")], marks: [], subPaths: [], source },
+          { id: "00002", version: "0200", playItems: [playItem("00002")], marks: [], subPaths: [], source },
+        ],
+        clips: [], graph: { nodes: [
+          { id: "clip:00001", type: "clip", state: "present", source: { path: "BDMV/STREAM/00001.m2ts", origin: "primary", offset: "0" } },
+          { id: "clip:00002", type: "clip", state: "present", source: { path: "BDMV/STREAM/00002.m2ts", origin: "primary", offset: "0" } },
+        ], edges: [] },
+        declarations: { entries: 0, movieObjects: 0, playlists: 2, playItems: 2, clips: 0, streams: 2, sounds: 0, unknown: 0 }, diagnostics: [], supportPrediction: { status: "partial", supported: [], unsupported: [], unverified: [] },
+      } as unknown as ParsedDisc;
+
+      const filtered = await extractIgsScenes(disc, { table, chunkSize: 192, clipFilter: (clipId) => clipId === "00002" });
+      expect(filtered.scenes.map((scene) => scene.clipId)).toEqual(["00002"]);
+      expect(filtered.diagnostics.map((item) => item.code)).not.toContain("BDMV_MISSING_STREAM");
+      const unfiltered = await extractIgsScenes(disc, { table, chunkSize: 192 });
+      expect(unfiltered.diagnostics).toContainEqual(expect.objectContaining({ code: "BDMV_MISSING_STREAM", severity: "error" }));
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 

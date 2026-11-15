@@ -7,6 +7,8 @@ const MAX_PTS = 1n << 33n;
 const M2TS_PACKET_BYTES = 192;
 const SYNC_OFFSET_IN_PACKET = 4;
 const SPLIT_RETAINED_BYTES = M2TS_PACKET_BYTES + SYNC_OFFSET_IN_PACKET - 1;
+/** Shared payload for packets that carry none; callers only ever read it. */
+const NO_PAYLOAD = new Uint8Array();
 
 export class M2tsPacketReader {
   private pending = new Uint8Array();
@@ -93,15 +95,18 @@ export class M2tsPacketReader {
       offset += 1 + length;
     }
     const hasPayload = !!(adaptationControl & 1) && offset < 188;
-    const payload = hasPayload ? p.slice(offset, 188) : new Uint8Array();
+    // A view: the payload is read by the PSI/PES assemblers, which copy anything
+    // they retain. A per-packet 184-byte copy is the largest allocator cost on a
+    // whole-clip scan (~1.6M packets per 300 MB menu clip).
+    const payload = hasPayload ? p.subarray(offset, 188) : NO_PAYLOAD;
     let continuityError = false;
     if (transportError) this.diagnostics.push(diag("TS_TRANSPORT_ERROR", `PID ${pid} packet has transport_error_indicator`, packetOffset, pid));
     // Null packets (PID 0x1fff) are stuffing and are excluded from per-PID
     // continuity validation by MPEG-TS; their continuity counter is undefined.
     if (pid === 0x1fff) return { packetOffset, payloadOffset: offset, pid, payloadUnitStart, continuityCounter, hasPayload, discontinuity, transportError, continuityError, payload };
     if (hasPayload && !transportError) {
-      const previous = this.continuity.get(pid);
-      if (discontinuity) this.continuity.delete(pid);
+      let previous = this.continuity.get(pid);
+      if (discontinuity) { this.continuity.delete(pid); previous = undefined; }
       else if (previous) {
         if (continuityCounter === previous.cc) {
           if (sameBytes(payload, previous.payload)) {
@@ -115,7 +120,12 @@ export class M2tsPacketReader {
           continuityError = true;
         }
       }
-      this.continuity.set(pid, { cc: continuityCounter, payload: payload.slice() });
+      // Reuse the retained buffer when the payload length matches; only a
+      // length change (adaptation field size change) needs a fresh allocation.
+      if (previous && previous.payload.length === payload.length) {
+        previous.cc = continuityCounter;
+        previous.payload.set(payload);
+      } else this.continuity.set(pid, { cc: continuityCounter, payload: payload.slice() });
     }
     return { packetOffset, payloadOffset: offset, pid, payloadUnitStart, continuityCounter, hasPayload, discontinuity, transportError, continuityError, payload };
   }
@@ -181,8 +191,17 @@ export class PsiAssembler {
     return sections;
   }
 
-  private programsHasPid(pid: number): boolean { return [...this.programs.values()].includes(pid); }
-  hasCompleteProgramTables(): boolean { return this.programs.size > 0 && [...this.programs.values()].every((pid) => this.parsedProgramMapPids.has(pid)); }
+  // Both run once per packet and walk the map in place, so a whole-clip scan
+  // allocates nothing per 192-byte packet for these two checks.
+  private programsHasPid(pid: number): boolean {
+    for (const programMapPid of this.programs.values()) if (programMapPid === pid) return true;
+    return false;
+  }
+  hasCompleteProgramTables(): boolean {
+    if (this.programs.size === 0) return false;
+    for (const programMapPid of this.programs.values()) if (!this.parsedProgramMapPids.has(programMapPid)) return false;
+    return true;
+  }
   private limitsMax(): number { return 4096; }
   private process(section: Uint8Array, pid: number, at: bigint): void {
     if (!mpegCrcOkay(section)) { this.diagnostics.push({ severity: "warning", code: "PSI_CRC_INVALID", message: `PID ${pid} section CRC failed`, source: source(this.clipId, pid, at), affectedSceneIds: [] }); return; }

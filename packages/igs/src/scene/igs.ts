@@ -8,7 +8,12 @@ export interface SegmentParseResult { segments: IgsSegment[]; residual: Uint8Arr
 export interface IgsStreamState {
   objects: Map<string, IgsObject>;
   palettes: Map<string, IgsPalette>;
-  pendingObjects: Map<string, { id: number; version: number; width: number; height: number; declaredLength: number; bytes: Uint8Array; source: IgsObject["source"]; last: boolean }>;
+  /**
+   * `bytes` is a capacity buffer, `received` is how much of it is object data.
+   * The buffer doubles as it fills, so an object split across many PES payloads
+   * copies its bytes a linear number of times.
+   */
+  pendingObjects: Map<string, { id: number; version: number; width: number; height: number; declaredLength: number; bytes: Uint8Array; received: number; source: IgsObject["source"]; last: boolean }>;
   scenes: IgsScene[];
   diagnostics: IgsDiagnostic[];
   current: Map<number, { ics: Uint8Array; source: IgsScene["source"]; pts: string | null; timeDomain: number; objects: IgsObject[]; palettes: IgsPalette[]; invalid: boolean }>;
@@ -18,15 +23,19 @@ export function createIgsState(): IgsStreamState {
   return { objects: new Map(), palettes: new Map(), pendingObjects: new Map(), scenes: [], diagnostics: [], current: new Map() };
 }
 
-export function parseSegments(input: Uint8Array, baseOffset = 0n, residual = new Uint8Array(), clipId = "", pid = 0, pts: PtsValue | null = null): SegmentParseResult {
-  const bytes = join(residual, input); const segments: IgsSegment[] = []; const diagnostics: IgsDiagnostic[] = [];
+export function parseSegments(input: Uint8Array, baseOffset = 0n, residual: Uint8Array<ArrayBufferLike> = new Uint8Array(), clipId = "", pid = 0, pts: PtsValue | null = null): SegmentParseResult {
+  // Only a carried-over residual needs a join; with none, the PES payload is
+  // parsed where it lies and no full copy of the payload is made.
+  const bytes = residual.length ? join(residual, input) : input; const segments: IgsSegment[] = []; const diagnostics: IgsDiagnostic[] = [];
   let pos = 0;
   while (bytes.length - pos >= 3) {
     const type = bytes[pos]!; const length = (bytes[pos + 1]! << 8) | bytes[pos + 2]!;
     if (length > 0xffff) { diagnostics.push(error("IGS_INVALID_SEGMENT", "Segment length exceeds its 16-bit field", source(clipId, pid, baseOffset + BigInt(pos)))); break; }
     const total = length + 3;
     if (bytes.length - pos < total) break;
-    segments.push({ type, data: bytes.slice(pos + 3, pos + total), offset: baseOffset + BigInt(pos) });
+    // A view, valid only while this PES payload is alive: every consumer either
+    // reads it synchronously or copies what it retains (ICS, ODS reassembly).
+    segments.push({ type, data: bytes.subarray(pos + 3, pos + total), offset: baseOffset + BigInt(pos) });
     pos += total;
   }
   return { segments, residual: bytes.slice(pos), diagnostics };
@@ -217,7 +226,7 @@ function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsO
     const width = u16(data, cursor); const height = u16(data, cursor + 2); cursor += 4;
     const pixels = checkedObjectPixels(width, height, limits);
     if (declaredLength < 4 || declaredLength > limits.maxSegmentBytes || declaredLength - 4 > limits.maxReassemblyBytes) throw new IgsError("LIMIT_EXCEEDED", `ODS declared data length ${declaredLength} exceeds supported limits`);
-    pending = { id, version, width, height, declaredLength, bytes: new Uint8Array(), source: src, last };
+    pending = { id, version, width, height, declaredLength, bytes: new Uint8Array(), received: 0, source: src, last };
     state.pendingObjects.set(key, pending);
     void pixels;
   } else if (!pending) {
@@ -225,17 +234,26 @@ function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsO
   }
   if (!pending) return;
   const fragment = data.subarray(cursor);
-  const activeBytes = [...state.pendingObjects.values()].reduce((sum, item) => sum + item.bytes.length, 0) - pending.bytes.length;
-  if (activeBytes + pending.bytes.length + fragment.length > limits.maxReassemblyBytes) {
+  const activeBytes = [...state.pendingObjects.values()].reduce((sum, item) => sum + item.received, 0) - pending.received;
+  if (activeBytes + pending.received + fragment.length > limits.maxReassemblyBytes) {
     state.pendingObjects.delete(key);
     throw new IgsError("LIMIT_EXCEEDED", `Active ODS reassembly bytes exceed maxReassemblyBytes ${limits.maxReassemblyBytes}`);
   }
-  pending.bytes = join(pending.bytes, fragment);
+  // Grow by doubling up to the declared object length, which keeps the copy
+  // count linear when one object is split across many PES payloads.
+  const nextLength = pending.received + fragment.length;
+  if (nextLength > pending.bytes.length) {
+    const grown = new Uint8Array(Math.max(nextLength, Math.min(pending.declaredLength - 4, pending.bytes.length * 2)));
+    grown.set(pending.bytes.subarray(0, pending.received));
+    pending.bytes = grown;
+  }
+  pending.bytes.set(fragment, pending.received);
+  pending.received = nextLength;
   pending.last ||= last;
-  if (pending.bytes.length > limits.maxReassemblyBytes || pending.bytes.length > pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} fragment bytes exceed declared object length`);
+  if (pending.received > limits.maxReassemblyBytes || pending.received > pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} fragment bytes exceed declared object length`);
   if (!pending.last) return;
-  if (pending.bytes.length !== pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} ended at ${pending.bytes.length} bytes; expected ${pending.declaredLength - 4}`);
-  const indices = decodeRle(pending.bytes, pending.width, pending.height, limits);
+  if (pending.received !== pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} ended at ${pending.received} bytes; expected ${pending.declaredLength - 4}`);
+  const indices = decodeRle(pending.bytes.subarray(0, pending.received), pending.width, pending.height, limits);
   const object: IgsObject = { id, version, width: pending.width, height: pending.height, indices, source: pending.source };
   state.objects.set(key, object);
   const current = state.current.get(src.pid);
