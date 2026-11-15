@@ -81,6 +81,18 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     fixtureRoot, scope: "cli-stream-export", spawnsChild: true,
     options: { operation: "stream-export", input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: 64 * 1024 * 1024 },
   });
+  // A disc export reads each clip once for IGS and once for PGS. The filtered
+  // row narrows --m2ts to one clip, so its IGS scan touches one clip and the
+  // row measures the effect of pushing the filter into that scan.
+  for (const [suffix, m2ts] of [["", null], ["filtered", "00001"]]) {
+    result.push({
+      caseId: `cli.perf.bdmv.export${suffix ? `.${suffix}` : ""}`, suite: "scenario", category: "cli",
+      name: `CLI BDMV export${m2ts ? ` limited to clip ${m2ts}` : ""} over 64 MiB of clip data`, sample: "synthetic-clip-set",
+      fixture: { id: "synthetic-clip-set", version: "1", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024, ...(m2ts ? { m2ts } : {}) } },
+      fixtureRoot, scope: "cli-bdmv-export", spawnsChild: true,
+      options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024, ...(m2ts ? { m2ts } : {}) },
+    });
+  }
   const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "buildMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
   result.push({
     caseId: "cli.synthetic-package.validate", suite: "scenario", category: "cli", name: "CLI synthetic package audit", sample: "synthetic-browser-menu",
@@ -187,6 +199,7 @@ async function runCli(root, caseDef, outputDir, sequence) {
   else if (caseDef.options.operation === "export") args = ["export", input, "--type", "hdmv", "--out", output];
   else if (caseDef.options.operation === "list") args = ["list", input];
   else if (caseDef.options.operation === "stream-export") args = ["export", input, "--out", output];
+  else if (caseDef.options.operation === "bdmv-export") args = ["export", input, "--out", output, ...(caseDef.options.m2ts ? ["--m2ts", caseDef.options.m2ts] : [])];
   else if (caseDef.options.operation === "render") args = ["render", input, "--out", output];
   else if (caseDef.options.operation === "validate") args = ["validate", input, "--format", "json"];
   else throw new Error(`Unsupported prepared CLI operation: ${caseDef.options.operation}`);
@@ -207,9 +220,10 @@ async function runCli(root, caseDef, outputDir, sequence) {
     return { command: "list", stdoutBytes: Buffer.byteLength(stdout), clips };
   }
   if (args[0] === "export" || args[0] === "render") {
-    // A disc export writes the analysis manifest; a stream export and a render
-    // write the asset manifest.
-    const stageReportPath = args[0] === "render" || caseDef.options.operation === "stream-export" ? join(output, "assets-manifest.json") : join(output, "manifest.json");
+    // A metadata-only disc export writes the analysis manifest; asset-side
+    // exports and renders write the asset manifest.
+    const assetSide = args[0] === "render" || caseDef.options.operation === "stream-export" || caseDef.options.operation === "bdmv-export";
+    const stageReportPath = assetSide ? join(output, "assets-manifest.json") : join(output, "manifest.json");
     const stageReport = JSON.parse(await readFile(stageReportPath, "utf8"));
     if (stageReport.stageStatus === "failed" || stageReport.status === "failed") throw new Error(`CLI ${args[0]} stage status is failed`);
   }
@@ -287,12 +301,12 @@ export async function prepareScenarioCase(caseDef, root) {
       inputPath = materialized.directory;
     }
     const fixtureRoot = caseDef.fixtureRoot ?? root;
-    if (options.operation === "list") inputPath = await paddedDisc(fixtureRoot, options.input, temp, options.clips, options.clipBytes);
+    if (options.operation === "list" || options.operation === "bdmv-export") inputPath = await paddedDisc(fixtureRoot, options.input, temp, options.clips, options.clipBytes);
     if (options.operation === "stream-export") inputPath = await paddedClip(fixtureRoot, options.input, temp, options.clipBytes);
     const cliCase = { ...caseDef, options: { ...options, input: inputPath, packagePath } };
     const run = () => runCli(root, cliCase, temp, sequence++);
-    // `stream-export` is the `export` command on a stream clip rather than on a disc.
-    const cliCommand = options.operation === "stream-export" ? "export" : options.operation;
+    // `stream-export` and `bdmv-export` are the `export` command on two input kinds.
+    const cliCommand = options.operation === "stream-export" || options.operation === "bdmv-export" ? "export" : options.operation;
     const validate = (value) => { if (value.command !== cliCommand) throw new Error(`CLI ran ${value.command}; expected ${cliCommand}`); return { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }) }; };
     const describe = (value) => ({ summary: `${value.command} CLI completed`, details: { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }), ...(value.checks === undefined ? {} : { checks: value.checks, decision: value.decision }) } });
     const cleanup = async () => { await materialized?.cleanup(); await rm(temp, { recursive: true, force: true }); };

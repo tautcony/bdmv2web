@@ -118,7 +118,46 @@ export async function prepareCase(caseDef, root) {
     };
     return { run, validate: (v) => { const d = describeValue(v); expected(d.details, o.expected, caseDef.caseId); usefulOutput(d, caseDef.caseId); }, describe: describeValue, scope: caseDef.scope, input: { path: toPortablePath(root, o.file), sourceBytes: bytes.length, fullLength }, fixture: caseDef.fixture };
   }
+  if (caseDef.category === "diagnostics") {
+    const igs = await dist(root, "igsDiagnostics", "packages/igs/dist/diagnostics.js");
+    // A damaged clip reaches the merge as duplicate packet events, one row per
+    // sighting. The input is prepared once, so the sample measures the merge.
+    const uniqueCount = Math.floor(o.events / 2);
+    const onePass = Array.from({ length: uniqueCount }, (_, index) => ({
+      severity: "error", code: "TS_CONTINUITY_ERROR",
+      message: `PID 0x1200 changed payload without advancing CC ${index & 15}`,
+      source: { clipId: "00002", pid: 0x1200, packetOffset: String(index * 192), pesOffset: String(index * 192 + 4), segmentOffset: "0", segmentFileOffset: String(index * 192), pts90k: null, timeDomain: 0 },
+      affectedSceneIds: [],
+    }));
+    const merged = [...onePass, ...onePass];
+    const run = () => igs.uniqueDiagnostics(merged);
+    const describeValue = (result) => describe(result, { inputRows: merged.length, outputRows: result.length }, { value: result.length, unit: "unique diagnostics" });
+    return {
+      run,
+      validate: (result) => { const d = describeValue(result); if (result.length !== uniqueCount) throw new Error(`${caseDef.caseId}: merged ${result.length} rows; expected ${uniqueCount}`); usefulOutput(d, caseDef.caseId); },
+      describe: describeValue, scope: caseDef.scope,
+      input: { inputRows: merged.length, duplicatePairs: uniqueCount }, fixture: caseDef.fixture,
+    };
+  }
   if (caseDef.category === "vm") {
+    if (o.kind === "vmTraceGrowth") {
+      const hdmv = await dist(root, "hdmv", "packages/hdmv/dist/index.js");
+      const instructions = Array.from({ length: o.traceEntries }, () => NO_OP_COMMAND);
+      // Each sample builds a whole menu session: trace entries accumulate while
+      // playback ticks, and the memory columns show what a long session retains.
+      const run = () => {
+        const vm = new hdmv.HdmvVm([{ id: 0, instructions }], { maxInstructionsPerTurn: o.traceEntries });
+        vm.runTurn();
+        return { traceEntries: vm.trace.length, heapUsedBytes: process.memoryUsage().heapUsed };
+      };
+      const describeValue = (result) => describe(result, { traceEntries: result.traceEntries, heapUsedBytes: result.heapUsedBytes }, { value: result.traceEntries, unit: "trace entries" });
+      return {
+        run,
+        validate: (result) => { const d = describeValue(result); if (result.traceEntries < o.traceEntries) throw new Error(`${caseDef.caseId}: recorded ${result.traceEntries} trace entries; expected at least ${o.traceEntries}`); usefulOutput(d, caseDef.caseId); },
+        describe: describeValue, scope: caseDef.scope,
+        input: { instructions: o.traceEntries, prepared: true }, fixture: caseDef.fixture,
+      };
+    }
     if (o.kind === "vmCheckpoint") {
       const hdmv = await dist(root, "hdmv", "packages/hdmv/dist/index.js");
       // The measured operation is the checkpoint, so the program runs once while
