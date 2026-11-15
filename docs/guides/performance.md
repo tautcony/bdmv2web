@@ -100,6 +100,17 @@ corepack pnpm bench:report test-data/bench/runs --format html --out test-data/be
 
 Trend series separate by case, fixture parameters, scope, runtime environment, and benchmark configuration. Each HTML plot shows milliseconds, revision labels, and the minimum and maximum fork medians. Tables list run IDs, environment details, output statuses, per-fork medians, calls per sample, p95 and p99, calls per second, coefficient of variation, outlier share, window drift, and relative links to CPU profiles, heap profiles, memory records, and browser artifacts. Percentiles interpolate linearly over the sample; outliers are samples outside the 1.5 IQR fence; calls per second derive from the median fork median. Run directories and report directories stay together for downloadable artifacts.
 
+The HTML report is a self-contained dashboard with no external requests:
+
+- KPI cards summarize the newest comparable session: current cases and runs, changes beyond the comparison thresholds, unstable rows, recorded statuses, and the slowest and GC-heaviest case.
+- The change ranking sorts the latest run against the previous run by absolute change. The hotspots section ranks GC per call, heap peak, median latency, and median CV, then ranks every latest case in a heatmap across median, p95, GC per call, GC events, heap, CV, and drift.
+- Each case has a trend chart with one point per run, a min–max fork band, a first-run reference, and hover details. The latency table draws a box plot from the stored per-call samples (p5–p95 whiskers, p25–p75 box, median, min/max), and the latest-results table adds a window sparkline built from bucket maxima.
+- The toolbar filters by environment, category, and case text, and sorts every data table by column. Every table keeps the per-fork median, range, p95, p99, CV, outlier share, and drift columns.
+
+The report loads `samples.f64` and `gc.f64` beside each record when they exist. GC per call is the recorded pause time divided by measured calls (including `callsPerSample`); heap is the peak sampled heap. A CLI case whose measurement covers only the parent process is marked `parent`, and its GC and heap values stay out of the work hotspots.
+
+"Current session" means runs within six hours of the newest run and with the same environment and configuration identity. Older series stay in the trend cards and the all-run table; clearing the "Current session only" checkbox reveals them. Toolbar filters apply to the trend cards and tables; change ranking, KPI cards, and hotspot lists always describe the current session. Change labels use milliseconds, microseconds, or nanoseconds according to the size of the delta.
+
 When `--out` is set, the command prints the written path and the count of recorded failures and skips. Those entries describe outcomes stored in the source runs, not the report render; the report lists them under "Recorded run failures and skips" with a link to each run record. A failed case in a source record does not fail the export, and removing a failed scratch record is a decision about the input directory, not about the report command.
 
 ## CI runs

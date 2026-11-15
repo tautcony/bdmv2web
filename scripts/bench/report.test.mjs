@@ -72,8 +72,11 @@ test("Markdown and standalone HTML preserve profile links and process-level labe
   assert.match(output, /Synthetic parser run/);
   assert.match(output, /Example disc · PLAYLIST\/00001\.mpls/);
   assert.match(output, /Fork median range \(ms\)/);
-  assert.match(output, /<th>Calls\/sample<\/th>/);
+  assert.match(output, /<th[^>]*>Calls\/sample<\/th>/);
   assert.match(output, /Profile and browser captures/);
+  assert.match(output, /id="changes"/);
+  assert.match(output, /Latency distribution/);
+  assert.match(output, /data-current="true"/);
   assert.ok(output.includes("href=\"../runs/a/profiles/a.cpuprofile\""));
   assert.match(output, /text-anchor="end"/);
   assert.doesNotMatch(output, /https?:\/\//);
@@ -133,4 +136,81 @@ test("GC counts come from the stored summary and from inline legacy events", () 
   const legacy = run("b", "2026-01-02");
   legacy.run.rows[0].forks[0].gc = { available: true, events: [{}, {}] };
   assert.equal(buildTrend([legacy]).series[0].runs[0].gcEvents, 2);
+});
+
+test("report data separates the current session from historical series", () => {
+  const historical = run("old", "2026-01-01");
+  const current = run("new", "2026-01-02");
+  const trend = buildTrend([historical, current]);
+  assert.equal(trend.summary.runs, 2);
+  assert.equal(trend.summary.currentRuns, 1);
+  assert.equal(trend.summary.cases, 1);
+  assert.equal(trend.summary.allSeries, 1);
+  assert.equal(trend.series[0].current, true);
+  assert.equal(trend.series[0].change, null);
+  assert.equal(trend.summary.improvements, 0);
+  assert.match(html(trend), /Current session:/);
+  assert.match(html(trend), /Current session only/);
+});
+
+test("report data derives GC, CPU, memory, and distribution from fork details", () => {
+  const sampled = run("details", "2026-01-01");
+  const row = sampled.run.rows[0];
+  row.callsPerSample = 2;
+  const fork = row.forks[0];
+  fork.iterations = 10;
+  fork.callsPerSample = 2;
+  fork.sampleValues = Float64Array.from([1, 1, 2, 3]);
+  fork.gcEventList = [{ kind: 1, durationMs: 2 }, { kind: 4, durationMs: 2 }];
+  fork.memory = { heapUsedBytes: 1024, peakObservedRssBytes: 2048, maxRSSBytes: 4096, externalBytes: 512 };
+  fork.cpuUsage = { user: 1000, system: 1000, coversSpawnedProcess: true };
+  const latest = buildTrend([sampled]).series[0].runs[0];
+  assert.equal(latest.gc.events, 2);
+  assert.equal(latest.gc.major, 1);
+  assert.equal(latest.gc.minor, 1);
+  assert.equal(latest.gc.msPerCall, 0.2);
+  assert.equal(latest.cpuMsPerCall, 0.1);
+  assert.equal(latest.memory.heapUsedBytes, 1024);
+  assert.equal(latest.distribution.sampleCount, 4);
+  assert.equal(latest.distribution.p25, 1);
+  assert.equal(latest.parentOnly, false);
+});
+
+test("parent-only measurements are marked and stay out of work hotspots", () => {
+  const sampled = run("cli-like", "2026-01-01");
+  const fork = sampled.run.rows[0].forks[0];
+  fork.iterations = 5;
+  fork.gcEventList = [{ kind: 1, durationMs: 5 }];
+  fork.memory = { heapUsedBytes: 4096 };
+  fork.cpuUsage = { user: 100, system: 0, coversSpawnedProcess: false };
+  const trend = buildTrend([sampled]);
+  const latest = trend.series[0].runs[0];
+  assert.equal(latest.parentOnly, true);
+  assert.equal(latest.gc.parentOnly, true);
+  assert.equal(trend.summary.hotspots.gc.length, 0);
+  assert.equal(trend.summary.hotspots.heap.length, 0);
+});
+
+test("recorded failure paths are sanitized in reports", () => {
+  const sample = run("paths", "2026-01-01");
+  sample.run.failures.push({ caseId: "other.case", reason: "at file:///Users/alice/repo/scripts/bench/worker.mjs:1:2" });
+  const trend = buildTrend([sample]);
+  const output = html(trend, "/reports");
+  assert.doesNotMatch(output, /alice/);
+  assert.match(output, /&lt;home&gt;/);
+  assert.match(markdown(trend), /<home>/);
+});
+
+test("change ranking renders a current-session pair", () => {
+  const before = run("before", "2026-01-01T00:00:00.000Z");
+  const after = run("after", "2026-01-01T01:00:00.000Z");
+  for (const fork of before.run.rows[0].forks) fork.stats.median = 10;
+  for (const fork of after.run.rows[0].forks) fork.stats.median = 5;
+  const trend = buildTrend([before, after]);
+  assert.equal(trend.summary.improvements, 1);
+  assert.equal(trend.series[0].change.status, "improvement");
+  const output = html(trend, "/reports");
+  assert.match(output, /Performance change/);
+  assert.match(output, /-50\.0%/);
+  assert.match(output, /<svg/);
 });
