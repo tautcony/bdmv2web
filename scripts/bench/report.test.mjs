@@ -214,3 +214,20 @@ test("change ranking renders a current-session pair", () => {
   assert.match(output, /-50\.0%/);
   assert.match(output, /<svg/);
 });
+
+test("child measurements become the CLI GC and memory source", () => {
+  const sampled = run("cli-child", "2026-01-01");
+  const fork = sampled.run.rows[0].forks[0];
+  fork.cpuUsage = { user: 1000, system: 0, coversSpawnedProcess: false };
+  fork.child = {
+    calls: 2, durationMs: 400,
+    gc: { events: 4, durationMs: 8, major: 1, minor: 3, maxPauseMs: 3 },
+    memory: { heapUsedBytes: 1024, rssBytes: 2048, maxRSSBytes: 4096, externalBytes: 512 },
+  };
+  const latest = buildTrend([sampled]).series[0].runs[0];
+  assert.equal(latest.gc.parentOnly, false);
+  assert.equal(latest.gc.msPerCall, 4);
+  assert.equal(latest.memory.heapUsedBytes, 1024);
+  assert.equal(latest.cpuParentOnly, true);
+  assert.equal(latest.parentOnly, false);
+});

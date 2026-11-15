@@ -80,7 +80,7 @@ function heatmap(trend) {
     { key: "p95", label: "p95", value: (run) => run.p95Ms, display: (run) => fmtMs(run.p95Ms) },
     { key: "gc", label: "GC / call", value: (run) => run.gc?.parentOnly ? null : run.gc?.msPerCall, display: (run) => run.gc?.parentOnly ? "parent" : fmtMs(run.gc?.msPerCall) },
     { key: "gcEvents", label: "GC events", value: (run) => run.gc?.parentOnly ? null : run.gc?.events, display: (run) => run.gc?.parentOnly ? "parent" : `${run.gc?.events ?? "—"}` },
-    { key: "heap", label: "Heap peak", value: (run) => run.parentOnly ? null : run.memory?.heapUsedBytes, display: (run) => run.parentOnly ? "parent" : fmtBytes(run.memory?.heapUsedBytes) },
+    { key: "heap", label: "Heap peak", value: (run) => run.memory?.parentOnly ? null : run.memory?.heapUsedBytes, display: (run) => run.memory?.parentOnly ? "parent" : fmtBytes(run.memory?.heapUsedBytes) },
     { key: "cv", label: "Median CV", value: (run) => run.medianCvPercent, display: (run) => `${fmtNumber(run.medianCvPercent, 3)}%` },
     { key: "drift", label: "|Drift|", value: (run) => Number.isFinite(run.driftPercent) ? Math.abs(run.driftPercent) : null, display: (run) => `${formatDrift(run.driftPercent)}%` },
   ];
@@ -114,7 +114,7 @@ function trendCards(trend) {
     <div><dt>latest</dt><dd>${escapeXml(fmtMs(run.forkMedianMs))}</dd></div>
     <div><dt>p95</dt><dd>${escapeXml(fmtMs(run.p95Ms))}</dd></div>
     <div><dt>GC / call</dt><dd>${escapeXml(run.gc?.parentOnly ? "parent" : fmtMs(run.gc?.msPerCall))}</dd></div>
-    <div><dt>heap</dt><dd>${escapeXml(run.parentOnly ? "parent" : fmtBytes(run.memory?.heapUsedBytes))}</dd></div>
+    <div><dt>heap</dt><dd>${escapeXml(run.memory?.parentOnly ? "parent" : fmtBytes(run.memory?.heapUsedBytes))}</dd></div>
   </dl>
 </article>`).join("");
 }
@@ -146,10 +146,11 @@ function latestTable(trend, baseDir) {
 <td class="num" data-sort-value="${run.worstCvPercent ?? ""}">${escapeXml(fmtNumber(run.worstCvPercent, 3))}%</td>
 <td class="num" data-sort-value="${run.driftPercent ?? ""}">${formatDrift(run.driftPercent)}${unstableMark(run)}</td>
 <td class="num" data-sort-value="${run.gc?.parentOnly ? "" : run.gc?.msPerCall ?? ""}">${run.gc?.parentOnly ? `<span class="pill">parent</span>` : `${escapeXml(fmtMs(run.gc?.msPerCall))}<span class="sub">${run.gc?.events ?? 0} events · ${run.gc?.major ?? 0} major</span>`}</td>
-<td class="num" data-sort-value="${run.parentOnly ? "" : run.memory?.heapUsedBytes ?? ""}">${run.parentOnly ? `<span class="pill">parent</span>` : escapeXml(fmtBytes(run.memory?.heapUsedBytes))}</td>
-<td class="num" data-sort-value="${run.parentOnly ? "" : run.cpuMsPerCall ?? ""}">${run.parentOnly ? `<span class="pill">parent</span>` : escapeXml(fmtMs(run.cpuMsPerCall))}</td>
+<td class="num" data-sort-value="${run.memory?.parentOnly ? "" : run.memory?.heapUsedBytes ?? ""}">${run.memory?.parentOnly ? `<span class="pill">parent</span>` : escapeXml(fmtBytes(run.memory?.heapUsedBytes))}</td>
+<td class="num" data-sort-value="${run.cpuParentOnly ? "" : run.cpuMsPerCall ?? ""}">${run.cpuParentOnly ? `<span class="pill">parent</span>` : escapeXml(fmtMs(run.cpuMsPerCall))}</td>
 <td>${sparkline(run.sampleWindow)}</td>
 <td class="num">${run.callsPerSample}</td>
+<td class="num" data-sort-value="${run.transport?.nullPacketShare ?? ""}">${run.transport ? `${(run.transport.nullPacketShare * 100).toFixed(2)}% null<span class="sub">${run.transport.packets} packets</span>` : "—"}</td>
 <td class="num">${run.forkCount}</td>
 <td class="num">${escapeXml(fmtMs(run.minForkMedianMs))}–${escapeXml(fmtMs(run.maxForkMedianMs))}</td>
 <td><a href="${escapeXml(href)}">${escapeXml(run.runId)}</a></td>
@@ -162,7 +163,7 @@ function latestTable(trend, baseDir) {
 <th class="num" data-sort="number">p95 (ms)</th><th class="num" data-sort="number">p99 (ms)</th>
 <th class="num" data-sort="number">Worst fork CV %</th><th class="num" data-sort="number">Drift %</th>
 <th class="num" data-sort="number">GC ms/call</th><th class="num" data-sort="number">Heap peak</th><th class="num" data-sort="number">CPU ms/call</th><th>Window</th>
-<th class="num" data-sort="number">Calls/sample</th><th class="num" data-sort="number">Forks</th>
+<th class="num" data-sort="number">Calls/sample</th><th class="num" data-sort="number">Input null share</th><th class="num" data-sort="number">Forks</th>
 <th class="num" data-sort="number">Fork median range (ms)</th><th data-sort="text">Run</th><th>CPU profiles</th>
 </tr></thead><tbody>${rows}</tbody></table></div>`;
 }

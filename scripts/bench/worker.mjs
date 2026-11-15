@@ -420,6 +420,7 @@ async function main() {
   const peak = (read) => Math.max(...memorySamples.map(read));
   const result = {
     caseId, scope: prepared.scope, input: prepared.input, fixture: prepared.fixture, output: prepared.describe(last),
+    child: last?.child ?? null,
     callsPerSample, iterations: samples.length, rawMsPerCall,
     // `process.cpuUsage` only sees this process. Cases that spawn a CLI child
     // report that scope explicitly instead of implying the number covers the work.

@@ -99,7 +99,7 @@ export function rankingChart(changes, { width = 900, rowHeight = 26, limit = 18 
     const label = `${point.percent >= 0 ? "+" : ""}${point.percent.toFixed(1)}%`;
     const detail = `${fmtDeltaMs(point.fromMs)} → ${fmtDeltaMs(point.toMs)}`;
     const labelText = point.label ?? point.caseId;
-    return `<g><text x="8" y="${top + 12}" text-anchor="start">${escapeXml(labelText.length > 42 ? `${labelText.slice(0, 40)}…` : labelText)}</text><rect x="${left}" y="${top + 2}" width="${Math.max(1, length)}" height="14" rx="3" fill="${color}"><title>${escapeXml(`${point.caseId}\n${label} (${detail})\n${point.fromRunId} → ${point.toRunId}`)}</title></rect><text x="${zero + (point.percent >= 0 ? length + 6 : -length - 6)}" y="${top + 13}" text-anchor="${point.percent >= 0 ? "start" : "end"}">${label}</text></g>`;
+    return `<g><text x="8" y="${top + 12}" text-anchor="start">${escapeXml(labelText.length > 34 ? `${labelText.slice(0, 32)}…` : labelText)}</text><rect x="${left}" y="${top + 2}" width="${Math.max(1, length)}" height="14" rx="3" fill="${color}"><title>${escapeXml(`${point.caseId}\n${label} (${detail})\n${point.fromRunId} → ${point.toRunId}`)}</title></rect><text x="${zero + (point.percent >= 0 ? length + 6 : -length - 6)}" y="${top + 13}" text-anchor="${point.percent >= 0 ? "start" : "end"}">${label}</text></g>`;
   }).join("");
   return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Change ranking">${rows}<line x1="${zero}" y1="0" x2="${zero}" y2="${height}" stroke="#cbd5e1"/></svg>`;
 }

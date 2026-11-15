@@ -57,6 +57,7 @@ describe("M2TS packet and PES reconstruction", () => {
     const packets = frames.flatMap((frame) => reader.feed(frame));
     expect(packets).toHaveLength(4);
     expect(packets.every((packet) => packet.pid === 0x1fff && !packet.continuityError)).toBe(true);
+    expect(packets.every((packet) => !packet.hasPayload && packet.payload.length === 0)).toBe(true);
     expect(reader.diagnostics).toEqual([]);
   });
 

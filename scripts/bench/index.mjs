@@ -15,7 +15,7 @@ import { summarizeForks, summarizeSamples } from "./stats.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(scriptDir, "../..");
-const MODES = ["benchmark", "cpu", "heap", "memory", "browser"];
+const MODES = ["benchmark", "cpu", "heap", "memory", "child", "browser"];
 const SUITES = ["all", "real", "synthetic", "scenario"];
 
 function createBenchCommand() {
@@ -100,13 +100,14 @@ async function main() {
     }
   }
   if (cli.mode !== "benchmark") {
-    const file = cli.mode === "browser" ? "browser.mjs" : cli.mode === "memory" ? "memory.mjs" : "profile.mjs";
+    const file = cli.mode === "browser" ? "browser.mjs" : cli.mode === "memory" ? "memory.mjs" : cli.mode === "child" ? "child.mjs" : "profile.mjs";
     const caseId = cli.cases[0];
     if (!caseId) throw new Error(`--mode ${cli.mode} requires --case <caseId>`);
     const common = ["--case", caseId, "--root", root, "--fixture-root", fixtureRoot];
     const declaredBuildMode = cli.buildMode ? ["--build-mode", cli.buildMode] : [];
     let childArgs;
     if (cli.mode === "memory") childArgs = [...common, ...declaredBuildMode, "--duration-ms", String(cli.durationMs ?? (timeMsProvided ? cli.timeMs : 5_000)), "--output", cli.out];
+    else if (cli.mode === "child") childArgs = [...common, ...declaredBuildMode, "--duration-ms", String(cli.durationMs ?? (timeMsProvided ? cli.timeMs : 5_000)), "--out", cli.out];
     else if (cli.mode === "cpu" || cli.mode === "heap") childArgs = ["--mode", cli.mode, ...common, ...declaredBuildMode, "--duration-ms", String(cli.durationMs ?? (timeMsProvided ? cli.timeMs : 5_000)), "--warmup-ms", String(cli.warmupMs), ...(cli.warmupRuns === undefined ? [] : ["--warmup-runs", String(cli.warmupRuns)]), "--out", cli.out, ...(cli.artifact ? ["--artifact", cli.artifact] : [])];
     else childArgs = [...common, ...declaredBuildMode, "--out", cli.out];
     const profileFlags = cli.mode === "cpu" || cli.mode === "heap" ? ["--enable-source-maps"] : [];

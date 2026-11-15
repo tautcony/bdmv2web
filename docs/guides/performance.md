@@ -36,7 +36,7 @@ Window drift compares the median of the first fifth of a fork's samples with the
 
 Operations faster than the 1 ms sample target are timed in batches: the worker warms the operation for the configured warmup duration, measures one call, times the estimated call count, and divides every sample by that count. Each recorded value stays milliseconds per call, and each measured interval is long enough for the timer to resolve. Rows record `callsPerSample`, one case uses the same count in every fork, and `--calls-per-sample N` fixes the count instead of calibrating. Batching changes sample resolution only; medians, percentiles, and throughputs remain per call.
 
-CLI cases run the built `apps/cli/dist/index.js` as a child process, so each sample covers process start, argument parsing, and the modules the selected command loads. `cli.startup.version` times only process start and argument parsing; a command case minus that baseline is the command's own cost. Command modules load on first use, so `--version` and `--help` do not load the commands they never run. `scale.pes-*x.extract` times transport scanning and IGS scene extraction; asset rendering is a separate case (`perf.igs.battle-royale.render`). Packaging is split the same way: `perf.package.igs-serialize` times the batching and script serialization that every machine performs, and `perf.package.igs-assembly` additionally writes the package tree to a temporary directory, so the difference between the two rows is filesystem work rather than code.
+CLI cases run the built `apps/cli/dist/index.js` as a child process, so each sample covers process start, argument parsing, and the modules the selected command loads. Their benchmark forks keep parent-only CPU, GC, and memory scope; `--mode child` records the child numbers separately. `cli.startup.version` times only process start and argument parsing; a command case minus that baseline is the command's own cost. Command modules load on first use, so `--version` and `--help` do not load the commands they never run. `scale.pes-*x.extract` times transport scanning and IGS scene extraction; asset rendering is a separate case (`perf.igs.battle-royale.render`). Packaging is split the same way: `perf.package.igs-serialize` times the batching and script serialization that every machine performs, and `perf.package.igs-assembly` additionally writes the package tree to a temporary directory, so the difference between the two rows is filesystem work rather than code.
 
 Four CLI rows read whole clips. `cli.perf.list.table` and the two `cli.perf.bdmv.export*` rows grow each committed synthetic clip to 32 MiB; `cli.perf.stream.export` grows one clip to 64 MiB. `scripts/bench/padded-clips.mjs` appends null transport packets (PID 0x1fff) in a temporary directory: the appended PID carries no elementary stream, the printed sizes and extracted assets stay identical, and the scan dominates the measured cost. `cli.perf.list.table` runs the table output, which reports each graphics PID's transport payload from the same scan that extracts the scenes. `cli.perf.stream.export` runs `export` on a clip whose PMT declares PGS and IGS, so the row covers the single packet scan that feeds both graphics extractors. `cli.perf.bdmv.export` runs the default asset export on a synthetic disc whose clips carry both graphics streams, covering the IGS and PGS reads of a disc input; `cli.perf.bdmv.export.filtered` adds `--m2ts 00001`, so the row measures the filter at the point where it bounds the IGS scan.
 
@@ -44,16 +44,17 @@ Four CLI rows read whole clips. `cli.perf.list.table` and the two `cli.perf.bdmv
 
 ## Capture profiles and memory
 
-CPU, heap, memory, and browser captures are separate modes. Each mode writes a schema version 1 record plus its artifacts under the output directory.
+CPU, heap, memory, child, and browser captures are separate modes. Each mode writes a schema version 1 record plus its artifacts under the output directory.
 
 ```sh
 corepack pnpm bench --mode cpu --case perf.igs.battle-royale.render --duration-ms 5000 --out test-data/bench/profiles
 corepack pnpm bench --mode heap --case perf.pgs.baja.compose --duration-ms 5000 --out test-data/bench/profiles
 corepack pnpm bench --mode memory --case cli.perf.metadata.inspect --duration-ms 5000 --out test-data/bench/profiles
+corepack pnpm bench --mode child --case cli.perf.list.table --duration-ms 5000 --out test-data/bench/profiles
 corepack pnpm bench --mode browser --case browser.synthetic-menu.file-navigation --out test-data/bench/profiles
 ```
 
-CPU captures use Node source maps. Memory records hold heap, external memory, observed RSS, process-lifetime maximum RSS, GC events, and their observation scope. The browser mode records one navigation per run: elapsed time, the interaction sequence, canvas size, page and console errors, browser version, and the CDP CPU profile and trace. Timing budgets and fork counts apply to benchmark mode.
+CPU captures use Node source maps. Memory records hold heap, external memory, observed RSS, process-lifetime maximum RSS, GC events, and their observation scope. The child mode preloads a GC/memory observer into the spawned CLI process and writes `child.json`; it does not change the benchmark rows, which keep the parent-only scope so the measured wall time stays comparable. The browser mode records one navigation per run: elapsed time, the interaction sequence, canvas size, page and console errors, browser version, and the CDP CPU profile and trace. Timing budgets and fork counts apply to benchmark mode.
 
 ### Read GC pressure
 
@@ -68,7 +69,7 @@ corepack pnpm bench --mode heap --case hdmv.vm-trace.growth --duration-ms 3000 -
 node --trace-gc apps/cli/dist/index.js export <disc> --out <new-directory>
 ```
 
-The heap sampling interval is 32 KiB. A `--mode cpu` or `--mode heap` capture of a CLI case covers only the parent process; run the CLI entry point directly when the attribution must reach inside the child. `node --trace-gc` prints each collection with its pause, which shows whether the measured window is dominated by young-generation scavenges or by a mark-compact pause.
+The heap sampling interval is 32 KiB. A `--mode cpu` or `--mode heap` capture of a CLI case covers only the parent process; use `--mode child` for the child's GC and memory, or run the CLI entry point directly when attribution must reach further inside the child. `node --trace-gc` prints each collection with its pause, which shows whether the measured window is dominated by young-generation scavenges or by a mark-compact pause.
 
 On 2026-11-15 the largest JavaScript-heap allocators were HDMV command hex decoding and per-entry trace text, media-closure route projection, and IGS page object/palette enumeration. The measurements and the changes are recorded in [the GC pressure review](../archive/reviews/review-2026-11-15-gc-pressure/index.md).
 
@@ -107,7 +108,7 @@ The HTML report is a self-contained dashboard with no external requests:
 - Each case has a trend chart with one point per run, a min–max fork band, a first-run reference, and hover details. The latency table draws a box plot from the stored per-call samples (p5–p95 whiskers, p25–p75 box, median, min/max), and the latest-results table adds a window sparkline built from bucket maxima.
 - The toolbar filters by environment, category, and case text, and sorts every data table by column. Every table keeps the per-fork median, range, p95, p99, CV, outlier share, and drift columns.
 
-The report loads `samples.f64` and `gc.f64` beside each record when they exist. GC per call is the recorded pause time divided by measured calls (including `callsPerSample`); heap is the peak sampled heap. A CLI case whose measurement covers only the parent process is marked `parent`, and its GC and heap values stay out of the work hotspots.
+The report loads `samples.f64` and `gc.f64` beside each record when they exist. GC per call is the recorded pause time divided by measured calls (including `callsPerSample`); heap is the peak sampled heap. A CLI benchmark row whose measurement covers only the parent process is marked `parent`, and its GC and heap values stay out of the work hotspots; use `--mode child` for the child's GC and memory. The latest-results table also shows the prepared input's null-packet share, so a scan dominated by transport stuffing is visible rather than implied.
 
 "Current session" means runs within six hours of the newest run and with the same environment and configuration identity. Older series stay in the trend cards and the all-run table; clearing the "Current session only" checkbox reveals them. Toolbar filters apply to the trend cards and tables; change ranking, KPI cards, and hotspot lists always describe the current session. Change labels use milliseconds, microseconds, or nanoseconds according to the size of the delta.
 

@@ -2,7 +2,7 @@ import type { BdjoInfo, ClipInfo, GraphEdge, GraphNode, MovieObject, ParseDiagno
 import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
 import { sourceFor, type FileEntry } from "../parsing/source-location.js";
 
-function normCase(value: string): string { return value.toLocaleLowerCase("en-US"); }
+function normCase(value: string): string { return value.toLowerCase(); }
 type Report = (diagnostics: ParseDiagnostic[], code: string, message: string, file?: FileEntry, offset?: number, severity?: ParseDiagnostic["severity"], recoverable?: boolean, entityId?: string | null) => void;
 
 export function buildDiscGraph(entries: ParsedDisc["entries"], objects: MovieObject[], playlists: Playlist[], clips: ClipInfo[], sounds: SoundEntry[], files: FileEntry[], diagnostics: ParseDiagnostic[], diagnose: Report, bdjos: BdjoInfo[] = [], metadata: NonNullable<ParsedDisc["metadata"]> = []): ParsedDisc["graph"] {
@@ -18,6 +18,16 @@ export function buildDiscGraph(entries: ParsedDisc["entries"], objects: MovieObj
   const fileByRelativePath = new Map<string, FileEntry>();
   for (const file of files) { const key = bdmvRelativePath(file.rel); if (!fileByRelativePath.has(key)) fileByRelativePath.set(key, file); }
   const bdjoByPath = new Map(bdjos.map((bdjo) => [normCase(bdjo.path.replace(/^BACKUP\//i, "")), bdjo]));
+  const declaredByClip = new WeakMap<ClipInfo, Map<number, ClipInfo["programs"][number]["streams"][number]>>();
+  const declaredStreams = (info: ClipInfo) => {
+    let declared = declaredByClip.get(info);
+    if (!declared) {
+      declared = new Map();
+      for (const program of info.programs) for (const stream of program.streams) if (!declared.has(stream.pid)) declared.set(stream.pid, stream);
+      declaredByClip.set(info, declared);
+    }
+    return declared;
+  };
   const pathSource = (file: FileEntry) => sourceFor(file, "primary", 0);
   for (const entry of entries) {
     const id = `entry:${entry.id}`;
@@ -53,7 +63,7 @@ export function buildDiscGraph(entries: ParsedDisc["entries"], objects: MovieObj
       if (!streamFile) diagnose(diagnostics, "BDMV_MISSING_STREAM", `PlayItem ${playlist.id}/${item.index} references missing STREAM clip ${item.clipId}`, fileByRelativePath.get(item.source.path), Number(item.source.offset), "error", true, itemId);
       if (!info) diagnose(diagnostics, "BDMV_MISSING_CLPI", `PlayItem ${playlist.id}/${item.index} references missing CLPI ${item.clipId}`, fileByRelativePath.get(item.source.path), Number(item.source.offset), "error", true, itemId);
       if (info) {
-        const declared = new Map(info.programs.flatMap((program) => program.streams.map((stream) => [stream.pid, stream] as const)));
+        const declared = declaredStreams(info);
         for (const stream of item.streams) {
           // Stream type 2 carries a SubPath/SubClip selector. Its PID belongs to
           // that secondary clip, so comparing it with this PlayItem's CLPI is false.

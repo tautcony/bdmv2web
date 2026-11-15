@@ -7,7 +7,7 @@ Local output of the performance tooling in [`scripts/bench/`](../../scripts/benc
 | Path | Content | Produced by |
 | --- | --- | --- |
 | `runs/<runId>/` | One benchmark run: `run.json` plus `samples.f64` | `pnpm bench` |
-| `profiles/<runId>/` | CPU, heap, memory, and browser captures with their artifacts | `pnpm bench --mode cpu\|heap\|memory\|browser` |
+| `profiles/<runId>/` | CPU, heap, memory, child, and browser captures with their artifacts | `pnpm bench --mode cpu\|heap\|memory\|child\|browser` |
 | `pairs/<label>/` | Baseline and candidate records, `comparison.json`, `summary.md` | `node scripts/bench/ci.mjs` |
 | `reports/<date>/` | `trend.md`, `trend.html`, `trend.json` rendered from `runs/` | `node scripts/bench/report.mjs` |
 

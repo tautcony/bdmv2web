@@ -87,7 +87,6 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
     return cache;
   };
   const pending = new Map<number, { width: number; height: number; expected: number; chunks: Uint8Array[]; received: number }>();
-  let scratch: Uint8Array = new Uint8Array(0);
   let composition: Composition | undefined;
 
   for (const segment of readSegments(data)) {
@@ -150,7 +149,9 @@ function* readDisplaySets(data: Uint8Array, limits: { maxDimension: number; maxO
           if (!object) continue;
           const cached = decoded.get(placement.objectId);
           if (cached && cached.source === object) { used.set(placement.objectId, cached.bitmap); continue; }
-          scratch = decodeIndices(placement.objectId, object, maxObjectBytes, scratch);
+          // Validate the RLE once here, without writing a pixel buffer that the
+          // lazy bitmap would decode again only when `pixels` is first read.
+          decodeIndices(placement.objectId, object, maxObjectBytes, undefined, false);
           const bitmap = lazyBitmap(placement.objectId, object, maxObjectBytes, palette);
           decoded.set(placement.objectId, { source: object, bitmap });
           used.set(placement.objectId, bitmap);
@@ -233,11 +234,11 @@ function parseComposition(segment: Segment, maxDimension: number): Composition {
   return { pts: segment.pts, width, height, number, state, paletteId, placements };
 }
 
-function decodeIndices(id: number, object: ObjectData, maxObjectBytes: number, target?: Uint8Array): Uint8Array {
+function decodeIndices(id: number, object: ObjectData, maxObjectBytes: number, target?: Uint8Array, write = true): Uint8Array | null {
   const pixelBytes = object.width * object.height * 4;
   if (!Number.isSafeInteger(pixelBytes) || pixelBytes > maxObjectBytes) throw new RangeError(`PGS object ${id} decoded bitmap exceeds configured byte limit.`);
   const pixelCount = object.width * object.height;
-  const indices = target !== undefined && target.length >= pixelCount ? target.subarray(0, pixelCount) : new Uint8Array(pixelCount);
+  const indices = write ? target !== undefined && target.length >= pixelCount ? target.subarray(0, pixelCount) : new Uint8Array(pixelCount) : null;
   let x = 0; let y = 0; let offset = 0;
   while (offset < object.encoded.length && y < object.height) {
     const value = object.encoded[offset++]!;
@@ -261,11 +262,13 @@ function decodeIndices(id: number, object: ObjectData, maxObjectBytes: number, t
   function takeColor(): number { if (offset >= object.encoded.length) throw new TypeError(`PGS object ${id} has a truncated RLE color run.`); return object.encoded[offset++]!; }
   function put(index: number, count: number): void {
     if (y >= object.height || x + count > object.width) throw new TypeError(`PGS object ${id} RLE run exceeds bitmap bounds.`);
-    const start = y * object.width + x;
-    // `fill` costs more than a store loop for the short runs that anti-aliased
-    // subtitles produce; it only pays off for long solid runs.
-    if (count >= 16) indices.fill(index, start, start + count);
-    else for (let n = 0; n < count; n++) indices[start + n] = index;
+    if (indices) {
+      const start = y * object.width + x;
+      // `fill` costs more than a store loop for the short runs that anti-aliased
+      // subtitles produce; it only pays off for long solid runs.
+      if (count >= 16) indices.fill(index, start, start + count);
+      else for (let n = 0; n < count; n++) indices[start + n] = index;
+    }
     x += count;
   }
 }
@@ -278,7 +281,7 @@ function lazyBitmap(objectId: number, object: ObjectData, maxObjectBytes: number
     objectId, width, height,
     get pixels(): Uint8Array {
       if (pixels) return pixels;
-      const indices = decodeIndices(objectId, encoded!, maxObjectBytes);
+      const indices = decodeIndices(objectId, encoded!, maxObjectBytes)!;
       const output = new Uint8Array(width * height * 4);
       const words = LITTLE_ENDIAN ? new Uint32Array(output.buffer) : null;
       if (words) {

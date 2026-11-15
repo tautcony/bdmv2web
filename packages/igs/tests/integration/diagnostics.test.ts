@@ -36,6 +36,13 @@ describe("uniqueDiagnostics", () => {
     expect(merged.map((item) => (item.source as { packetOffset: string }).packetOffset)).toEqual(["4096", "6144"]);
   });
 
+  it("collapses one shared diagnostic object by identity", () => {
+    const shared = transportDiagnostic({ sceneIds: ["scene-a"] });
+    const merged = uniqueDiagnostics([shared, shared]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toBe(shared);
+  });
+
   it("keeps first-sighting order across different codes", () => {
     const warning: IgsDiagnostic = { severity: "warning", code: "PES_TRUNCATED_EOF", message: "PID 256 has 12 pending PES bytes at EOF", source: null, affectedSceneIds: [] };
     const merged = uniqueDiagnostics([warning, transportDiagnostic(), warning]);

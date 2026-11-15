@@ -16,7 +16,7 @@ const SAMPLE_WINDOW_POINTS = 48;
 /** Runs within this window of the newest run and with the same identity form the current session. */
 const CURRENT_SESSION_HOURS = 6;
 
-const RUN_MODES = ["benchmark", "cpu", "heap", "memory", "browser"];
+const RUN_MODES = ["benchmark", "cpu", "heap", "memory", "child", "browser"];
 const FORMATS = ["json", "markdown", "html"];
 
 function createReportCommand() {
@@ -133,8 +133,29 @@ function forkSummary(row) {
       sharePercent: totalMs !== null && fork?.wallMs ? totalMs / fork.wallMs * 100 : null,
     };
   });
-  const parentOnly = forks.some((fork) => fork?.cpuUsage?.coversSpawnedProcess === false);
-  const gc = {
+  const childForks = forks.map((fork) => fork?.child).filter((child) => child?.calls);
+  const childCalls = childForks.reduce((sum, child) => sum + child.calls, 0);
+  const childGcMs = childForks.reduce((sum, child) => sum + (child.gc?.durationMs ?? 0), 0);
+  const childDurationMs = childForks.reduce((sum, child) => sum + (child.durationMs ?? 0), 0);
+  const childMemory = childForks.length ? {
+    heapUsedBytes: Math.max(...childForks.map((child) => child.memory?.heapUsedBytes ?? 0)),
+    peakRssBytes: Math.max(...childForks.map((child) => child.memory?.rssBytes ?? 0)),
+    maxRSSBytes: Math.max(...childForks.map((child) => child.memory?.maxRSSBytes ?? 0)),
+    externalBytes: Math.max(...childForks.map((child) => child.memory?.externalBytes ?? 0)),
+  } : null;
+  const cpuParentOnly = forks.some((fork) => fork?.cpuUsage?.coversSpawnedProcess === false);
+  const parentOnly = !childForks.length && cpuParentOnly;
+  const gc = childForks.length ? {
+    parentOnly: false,
+    events: childForks.reduce((sum, child) => sum + (child.gc?.events ?? 0), 0),
+    major: childForks.reduce((sum, child) => sum + (child.gc?.major ?? 0), 0),
+    minor: childForks.reduce((sum, child) => sum + (child.gc?.minor ?? 0), 0),
+    totalMs: childGcMs,
+    maxPauseMs: finiteMax(childForks.map((child) => child.gc?.maxPauseMs)),
+    msPerCall: childCalls ? childGcMs / childCalls : null,
+    sharePercent: childDurationMs ? childGcMs / childDurationMs * 100 : null,
+    scope: "spawned CLI child processes; per-call values divide by child calls",
+  } : {
     parentOnly,
     events: perForkGc.reduce((sum, item) => sum + item.events, 0),
     major: perForkGc.reduce((sum, item) => sum + item.major, 0),
@@ -143,12 +164,15 @@ function forkSummary(row) {
     maxPauseMs: finiteMax(perForkGc.map((item) => item.maxPauseMs)),
     msPerCall: finiteMedian(perForkGc.map((item) => item.msPerCall)),
     sharePercent: finiteMedian(perForkGc.map((item) => item.sharePercent)),
+    scope: "parent process",
   };
-  const memory = {
+  const memory = childForks.length ? { parentOnly: false, ...childMemory, scope: "spawned CLI child processes" } : {
+    parentOnly,
     heapUsedBytes: finiteMedian(forks.map((fork) => fork?.memory?.heapUsedBytes)),
     peakRssBytes: finiteMedian(forks.map((fork) => fork?.memory?.peakObservedRssBytes)),
     maxRSSBytes: finiteMedian(forks.map((fork) => fork?.memory?.maxRSSBytes)),
     externalBytes: finiteMedian(forks.map((fork) => fork?.memory?.externalBytes)),
+    scope: "parent process",
   };
   return {
     forkCount: forkMediansMs.length,
@@ -168,6 +192,9 @@ function forkSummary(row) {
     gc,
     memory,
     parentOnly,
+    cpuParentOnly,
+    child: childForks.length ? { calls: childCalls, durationMs: childDurationMs } : null,
+    transport: forks.find((fork) => fork?.input?.transport)?.input.transport ?? null,
     cpuMsPerCall: finiteMedian(forks.map((fork) => {
       const usage = fork?.cpuUsage;
       const calls = (fork?.iterations ?? 0) * (fork?.callsPerSample ?? row?.callsPerSample ?? 1);
@@ -267,7 +294,7 @@ function buildTrend(runs) {
     skips: currentStatuses.filter((item) => item.status === "skipped").length,
     hotspots: {
       gc: topEntries((run) => run.gc?.parentOnly ? null : run.gc?.msPerCall),
-      heap: topEntries((run) => run.parentOnly ? null : run.memory?.heapUsedBytes),
+      heap: topEntries((run) => run.memory?.parentOnly ? null : run.memory?.heapUsedBytes),
       slowest: topEntries((run) => run.forkMedianMs),
       variable: topEntries((run) => run.medianCvPercent),
     },

@@ -71,7 +71,11 @@ export function decodeRle(data: Uint8Array, width: number, height: number, limit
     if (run === 0) continue;
     if (y >= height || run > width - x) throw new IgsError("IGS_RLE_OVERRUN", `Run of ${run} pixels crosses row ${y} width ${width}`);
     if (outPos + run > pixelCount) throw new IgsError("IGS_RLE_OVERRUN", "Decoded RLE exceeds declared pixel count");
-    output.fill(value, outPos, outPos + run); outPos += run; x += run;
+    // UI graphics are mostly short anti-aliased runs; `fill` loses to a store
+    // loop there and only wins on the long solid runs.
+    if (run >= 16) output.fill(value, outPos, outPos + run);
+    else for (let n = 0; n < run; n++) output[outPos + n] = value;
+    outPos += run; x += run;
   }
   if (outPos !== pixelCount || !((x === width && y === height - 1) || (x === 0 && y === height))) throw new IgsError("IGS_RLE_TRUNCATED", `RLE ended at ${outPos}/${pixelCount} pixels (${y} rows)`);
   return output;

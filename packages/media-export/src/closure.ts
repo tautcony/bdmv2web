@@ -32,6 +32,9 @@ export interface MediaClosure {
 const MEDIA_NODE_TYPES = new Set(["playlist", "playItem", "subPath", "clip", "clipInfo"]);
 const EMPTY_EDGES: never[] = [];
 type RouteEdge = MediaClosureRoute["navigationEdges"][number];
+function navigationEdgeKey(edge: NavigationGraphEdge): string {
+  return `${edge.from}\0${edge.to ?? ""}\0${edge.kind}\0${edge.condition ?? ""}\0${edge.source.path}\0${edge.source.offset}`;
+}
 
 /**
  * Merge M1 structural roots with M3 object/control-flow graphs. Conditional
@@ -140,13 +143,18 @@ export function computeMediaClosure(
   // each button root walks it. Index each graph once instead of per root; the
   // index also tracks first-ever visits so root re-walks of the shared graph
   // collect route provenance without re-charging the exploration budget.
-  const graphIndexes = new Map<NavigationGraph, { nodes: Map<string, NavigationGraphNode>; edges: Map<string, NavigationGraphEdge[]>; visited: Set<string> }>();
+  const graphIndexes = new Map<NavigationGraph, { nodes: Map<string, NavigationGraphNode>; edges: Map<string, NavigationGraphEdge[]>; edgeKeys: WeakMap<NavigationGraphEdge, string>; visited: Set<string> }>();
   const indexGraph = (graph: NavigationGraph) => {
     const cached = graphIndexes.get(graph);
     if (cached) return cached;
     const edges = new Map<string, NavigationGraphEdge[]>();
-    for (const edge of graph.edges) { const list = edges.get(edge.from); if (list) list.push(edge); else edges.set(edge.from, [edge]); }
-    const index = { nodes: new Map(graph.nodes.map((node) => [node.id, node])), edges, visited: new Set<string>() };
+    const edgeKeys = new WeakMap<NavigationGraphEdge, string>();
+    for (const edge of graph.edges) {
+      const list = edges.get(edge.from);
+      if (list) list.push(edge); else edges.set(edge.from, [edge]);
+      edgeKeys.set(edge, navigationEdgeKey(edge));
+    }
+    const index = { nodes: new Map(graph.nodes.map((node) => [node.id, node])), edges, edgeKeys, visited: new Set<string>() };
     graphIndexes.set(graph, index);
     return index;
   };
@@ -154,21 +162,23 @@ export function computeMediaClosure(
   // One generation-marked map serves every root walk of this closure and reuses
   // its buckets.
   const seenGenerations = new Map<string, number>();
+  const observedGenerations = new Map<string, number>();
   let walkGeneration = 0;
 
   const runNavigation = (graph: NavigationGraph, roots: Array<{ id: string; entryId: string | null; entrySource: SourceLocation | null; buttonProgramId: number | null; origin: "entry" | "button-program" }>, label: string): void => {
-    const { nodes, edges: edgesBySource, visited } = indexGraph(graph);
+    const { nodes, edges: edgesBySource, edgeKeys, visited } = indexGraph(graph);
     if (!graph.complete && !reportedIncomplete.has(graph)) {
       reportedIncomplete.add(graph);
       markUnknown("MEDIA_NAVIGATION_INCOMPLETE", `navigation graph is incomplete: ${graph.diagnostics.join("; ") || "unresolved states remain"}.`);
       widenToAllPlaylists();
     }
+    const pending: string[] = [];
+    const projectedEdges: RouteEdge[] = [];
     for (const root of roots) {
     walkGeneration += 1;
     const walk = walkGeneration;
-    const pending = [root.id];
-    const observedKeys = new Set<string>();
-    const projectedEdges: RouteEdge[] = [];
+    pending.length = 0; pending.push(root.id);
+    projectedEdges.length = 0;
     while (pending.length) {
       const id = pending.pop()!;
       if (seenGenerations.get(id) === walk) continue;
@@ -194,9 +204,9 @@ export function computeMediaClosure(
       }
       if (!visited.has(id)) { visited.add(id); explored++; }
       for (const edge of edgesBySource.get(id) ?? EMPTY_EDGES) {
-        const observedKey = `${edge.from}\0${edge.to ?? ""}\0${edge.kind}\0${edge.condition ?? ""}\0${edge.source.path}\0${edge.source.offset}`;
-        if (!observedKeys.has(observedKey)) {
-          observedKeys.add(observedKey);
+        const observedKey = edgeKeys.get(edge) ?? navigationEdgeKey(edge);
+        if (observedGenerations.get(observedKey) !== walk) {
+          observedGenerations.set(observedKey, walk);
           projectedEdges.push({ from: edge.from, to: edge.to, kind: edge.kind, condition: edge.condition, source: edge.source });
         }
         followNavigationEdge(edge, nodes, pending, label, root, projectedEdges, observedKey);
@@ -212,11 +222,11 @@ export function computeMediaClosure(
       let markedKeys = unknownEdgeMarks.get(graphLabel);
       if (!markedKeys) { markedKeys = new Set(); unknownEdgeMarks.set(graphLabel, markedKeys); }
       const alreadyMarked = markedKeys.has(observedKey);
-      if (!alreadyMarked) markedKeys.add(observedKey);
+      const markOnce = () => { if (alreadyMarked) return false; markedKeys.add(observedKey); return true; };
       if (edge.kind === "conditional") {
         // Both known destinations are candidates even while the predicate is unresolved.
         if (edge.to !== null && navNodes.has(edge.to)) { queue.push(edge.to); return; }
-        if (!alreadyMarked) { markUnknown("MEDIA_CONDITIONAL_TARGET_UNKNOWN", `Conditional edge from '${edge.from}' has no known destination.`, edge.source); widenToAllPlaylists(); }
+        if (markOnce()) { markUnknown("MEDIA_CONDITIONAL_TARGET_UNKNOWN", `Conditional edge from '${edge.from}' has no known destination.`, edge.source); widenToAllPlaylists(); }
         return;
       }
       if (edge.kind === "play") {
@@ -225,16 +235,16 @@ export function computeMediaClosure(
           recordRoute({ playlistId: edge.to, origin: root.origin, entryId: root.entryId, entrySource: root.entrySource, buttonProgramId: root.buttonProgramId }, observed, root.id);
           return;
         }
-        if (!alreadyMarked) { markUnknown("MEDIA_PLAY_TARGET_UNKNOWN", `${graphLabel} play/title navigation edge from '${edge.from}' has no proven playlist target.`, edge.source); widenToAllPlaylists(); }
+        if (markOnce()) { markUnknown("MEDIA_PLAY_TARGET_UNKNOWN", `${graphLabel} play/title navigation edge from '${edge.from}' has no proven playlist target.`, edge.source); widenToAllPlaylists(); }
         return;
       }
       if (edge.resolution === "resolved" && edge.to !== null && navNodes.has(edge.to)) { queue.push(edge.to); return; }
       if (edge.to !== null && structuralNodes.get(edge.to)?.type === "playlist" && edge.resolution === "resolved") { includePlaylist(edge.to); return; }
       if (edge.resolution !== "resolved" || edge.to === null) {
-        if (!alreadyMarked) { markUnknown("MEDIA_NAVIGATION_TARGET_UNKNOWN", `${graphLabel} ${edge.kind} edge from '${edge.from}' is unresolved.`, edge.source); widenToAllPlaylists(); }
+        if (markOnce()) { markUnknown("MEDIA_NAVIGATION_TARGET_UNKNOWN", `${graphLabel} ${edge.kind} edge from '${edge.from}' is unresolved.`, edge.source); widenToAllPlaylists(); }
         return;
       }
-      if (!alreadyMarked) { markUnknown("MEDIA_NAVIGATION_TARGET_MISSING", `${graphLabel} edge target '${edge.to}' is not present in either navigation or structural graph.`, edge.source); widenToAllPlaylists(); }
+      if (markOnce()) { markUnknown("MEDIA_NAVIGATION_TARGET_MISSING", `${graphLabel} edge target '${edge.to}' is not present in either navigation or structural graph.`, edge.source); widenToAllPlaylists(); }
     }
   };
 

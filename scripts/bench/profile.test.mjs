@@ -23,7 +23,7 @@ test("heap sampling output follows DevTools sampling profile shape", async () =>
 
 
 test("root CLI accepts all isolated measurement modes", () => {
-  for (const mode of ["cpu", "heap", "memory", "browser"]) {
+  for (const mode of ["cpu", "heap", "memory", "child", "browser"]) {
     assert.equal(parseBenchArguments(["--mode", mode, "--case", "browser.synthetic-menu.file-navigation"]).mode, mode);
   }
 });

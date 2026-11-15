@@ -38,7 +38,12 @@ export function diagnosticKey(diagnostic: IgsDiagnostic): string {
  */
 export function uniqueDiagnostics(diagnostics: readonly IgsDiagnostic[]): IgsDiagnostic[] {
   const byKey = new Map<string, IgsDiagnostic>();
+  // A shared scan can concatenate the same diagnostic object from several
+  // stages; identity collapses those before key construction.
+  const seenObjects = new Set<IgsDiagnostic>();
   for (const diagnostic of diagnostics) {
+    if (seenObjects.has(diagnostic)) continue;
+    seenObjects.add(diagnostic);
     const key = diagnosticKey(diagnostic);
     const seen = byKey.get(key);
     if (!seen) { byKey.set(key, diagnostic); continue; }

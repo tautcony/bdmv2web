@@ -9,6 +9,15 @@ const SYNC_OFFSET_IN_PACKET = 4;
 const SPLIT_RETAINED_BYTES = M2TS_PACKET_BYTES + SYNC_OFFSET_IN_PACKET - 1;
 /** Shared payload for packets that carry none; callers only ever read it. */
 const NO_PAYLOAD = new Uint8Array();
+/**
+ * One record for every null-stuffing packet. A padded clip is almost entirely
+ * PID 0x1fff, and no consumer reads a null packet's offset, CC, or payload.
+ */
+const NULL_PACKET: TsPacket = {
+  packetOffset: 0n, payloadOffset: 4, pid: 0x1fff, payloadUnitStart: false,
+  continuityCounter: 0, hasPayload: false, discontinuity: false,
+  transportError: false, continuityError: false, payload: NO_PAYLOAD,
+};
 
 export class M2tsPacketReader {
   private pending = new Uint8Array();
@@ -44,6 +53,14 @@ export class M2tsPacketReader {
         if (this.pending[consumed + SYNC_OFFSET_IN_PACKET] !== SYNC) continue;
       }
       const offset = this.baseOffset + BigInt(consumed);
+      const pid = ((this.pending[consumed + 5]! & 0x1f) << 8) | this.pending[consumed + 6]!;
+      if (pid === 0x1fff) {
+        // Null stuffing has no elementary stream. Keep one packet in the feed
+        // count, but skip the 192-byte view and payload view entirely.
+        packets.push(NULL_PACKET);
+        consumed += M2TS_PACKET_BYTES;
+        continue;
+      }
       const packet = this.parsePacket(this.pending.subarray(consumed, consumed + M2TS_PACKET_BYTES), offset);
       if (packet) packets.push(packet);
       consumed += M2TS_PACKET_BYTES;

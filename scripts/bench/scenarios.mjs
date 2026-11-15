@@ -6,6 +6,22 @@ import { pathToFileURL } from "node:url";
 import { toPortablePath } from "./fixture-input.mjs";
 import { padClipBytes } from "./padded-clips.mjs";
 
+function transportStats(bytes) {
+  let packets = 0, nullPackets = 0;
+  for (let offset = 0; offset + 192 <= bytes.length; offset += 192) {
+    packets++;
+    if ((((bytes[offset + 5] & 0x1f) << 8) | bytes[offset + 6]) === 0x1fff) nullPackets++;
+  }
+  return { packets, nullPackets, nullPacketShare: packets ? nullPackets / packets : 0 };
+}
+function sumTransport(left, right) {
+  return {
+    packets: left.packets + right.packets,
+    nullPackets: left.nullPackets + right.nullPackets,
+    nullPacketShare: (left.nullPackets + right.nullPackets) / Math.max(1, left.packets + right.packets),
+  };
+}
+
 const SCALES = [1, 2, 4];
 const GRAPH_CASE = "perf.graph.tamako.build";
 const IGS_PACKET_CASE = "perf.igs.battle-royale.parse";
@@ -172,22 +188,26 @@ async function outputFileCount(directory) {
 async function paddedDisc(fixtureRoot, sourcePath, directory, clips, clipBytes) {
   const target = join(directory, "BDMV");
   await cp(fileFor(fixtureRoot, sourcePath), target, { recursive: true });
+  let transport = { packets: 0, nullPackets: 0, nullPacketShare: 0 };
   for (const clip of clips) {
     const path = join(target, "STREAM", `${clip}.m2ts`);
-    await writeFile(path, padClipBytes(new Uint8Array(await readFile(path)), clipBytes));
+    const padded = padClipBytes(new Uint8Array(await readFile(path)), clipBytes);
+    await writeFile(path, padded);
+    transport = sumTransport(transport, transportStats(padded));
   }
-  return target;
+  return { directory: target, transport };
 }
 
 /** Copy one committed clip and grow it in place of the original. */
 async function paddedClip(fixtureRoot, sourcePath, directory, clipBytes) {
   const source = fileFor(fixtureRoot, sourcePath);
   const target = join(directory, basename(source));
-  await writeFile(target, padClipBytes(new Uint8Array(await readFile(source)), clipBytes));
-  return target;
+  const padded = padClipBytes(new Uint8Array(await readFile(source)), clipBytes);
+  await writeFile(target, padded);
+  return { file: target, transport: transportStats(padded) };
 }
 
-async function runCli(root, caseDef, outputDir, sequence) {
+async function runCli(root, caseDef, outputDir, sequence, observeChild = false) {
   const cli = fileFor(root, "apps/cli/dist/index.js");
   const input = caseDef.options.operation === "validate" ? caseDef.options.packagePath
     : caseDef.options.operation === "version" ? undefined
@@ -204,20 +224,31 @@ async function runCli(root, caseDef, outputDir, sequence) {
   else if (caseDef.options.operation === "validate") args = ["validate", input, "--format", "json"];
   else throw new Error(`Unsupported prepared CLI operation: ${caseDef.options.operation}`);
   let stdout;
-  try { stdout = execFileSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 }); }
+  const childReport = observeChild ? join(outputDir, `child-${sequence}-${process.pid}.json`) : null;
+  const childEnvironment = childReport ? {
+    ...process.env,
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import=${pathToFileURL(join(root, "scripts/bench/child-observer.mjs")).href}`].filter(Boolean).join(" "),
+    BDMV2WEB_BENCH_CHILD_REPORT: childReport,
+  } : process.env;
+  try { stdout = execFileSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024, env: childEnvironment }); }
   catch (error) {
     const stderr = error?.stderr?.toString?.().trim() ?? "";
     throw new Error(`CLI ${args[0]} failed with exit ${error?.status ?? "unknown"}${stderr ? `: ${stderr}` : ""}`, { cause: error });
   }
+  let child = null;
+  if (childReport) {
+    try { child = JSON.parse(await readFile(childReport, "utf8")); } catch { child = null; }
+  }
+  const childResult = child ? { child } : {};
   const report = args[0] === "inspect" || args[0] === "validate" ? JSON.parse(stdout) : null;
   // `--version` exits before any command module loads, so it measures the
   // process start and argument parsing that every CLI case also pays for.
-  if (args[0] === "--version") return { command: "version", stdoutBytes: Buffer.byteLength(stdout.trim()), output: null };
+  if (args[0] === "--version") return { command: "version", stdoutBytes: Buffer.byteLength(stdout.trim()), output: null, ...childResult };
   if (args[0] === "inspect" && !["complete", "partial"].includes(report.stageStatus)) throw new Error(`CLI inspect stageStatus is ${String(report.stageStatus)}`);
   if (args[0] === "list") {
     const clips = [...stdout.matchAll(/M2TS \d{5} ·/g)].length;
     if (!clips) throw new Error("CLI list printed no per-clip asset tree");
-    return { command: "list", stdoutBytes: Buffer.byteLength(stdout), clips };
+    return { command: "list", stdoutBytes: Buffer.byteLength(stdout), clips, ...childResult };
   }
   if (args[0] === "export" || args[0] === "render") {
     // A metadata-only disc export writes the analysis manifest; asset-side
@@ -233,7 +264,7 @@ async function runCli(root, caseDef, outputDir, sequence) {
     const fileCount = await outputFileCount(destination);
     if (!fileCount) throw new Error(`${args[0]} CLI completed without creating output files`);
   }
-  return { command: args[0], stdoutBytes: Buffer.byteLength(stdout), output, ...(args[0] === "validate" ? { checks: report.checks?.length ?? 0, decision: report.decision?.status ?? null } : {}) };
+  return { command: args[0], stdoutBytes: Buffer.byteLength(stdout), output, ...(args[0] === "validate" ? { checks: report.checks?.length ?? 0, decision: report.decision?.status ?? null } : {}), ...childResult };
 }
 
 export async function prepareScenarioCase(caseDef, root) {
@@ -279,7 +310,8 @@ export async function prepareScenarioCase(caseDef, root) {
     const packetCount = repeated.byteLength / options.packetSize;
     const sample = await run();
     if (!sample.scenes.length) throw new Error(`PES fixture yielded no IGS scenes at ${packetCount} packets`);
-    return { input: { transportBytes: repeated.byteLength, packets: packetCount, scenes: sample.scenes.length, scale: options.scale }, fixture: { ...fixture, parameters: { ...fixture.parameters, packets: packetCount } }, scope: caseDef.scope,
+    const transport = transportStats(repeated);
+    return { input: { transportBytes: repeated.byteLength, packets: packetCount, ...transport, scenes: sample.scenes.length, scale: options.scale }, fixture: { ...fixture, parameters: { ...fixture.parameters, packets: packetCount } }, scope: caseDef.scope,
       run,
       validate: (value) => { if (!Array.isArray(value.scenes)) throw new Error("IGS extraction returned no scenes collection"); return { scenes: value.scenes.length, diagnostics: value.diagnostics.length }; },
       describe: (value) => ({ summary: `Extracted ${value.scenes.length} scenes from ${packetCount} transport packets`, details: { transportBytes: repeated.byteLength, packets: packetCount, scenes: value.scenes.length, diagnostics: value.diagnostics.length } }) };
@@ -295,23 +327,56 @@ export async function prepareScenarioCase(caseDef, root) {
     }
     let materialized;
     let inputPath = options.input;
+    let transport = null;
     if (options.files) {
       const { materializeBdmvFiles } = await import("./fixture-input.mjs");
       materialized = await materializeBdmvFiles(caseDef.fixtureRoot ?? root, options.files);
       inputPath = materialized.directory;
     }
     const fixtureRoot = caseDef.fixtureRoot ?? root;
-    if (options.operation === "list" || options.operation === "bdmv-export") inputPath = await paddedDisc(fixtureRoot, options.input, temp, options.clips, options.clipBytes);
-    if (options.operation === "stream-export") inputPath = await paddedClip(fixtureRoot, options.input, temp, options.clipBytes);
+    if (options.operation === "list" || options.operation === "bdmv-export") { const padded = await paddedDisc(fixtureRoot, options.input, temp, options.clips, options.clipBytes); inputPath = padded.directory; transport = padded.transport; }
+    if (options.operation === "stream-export") { const padded = await paddedClip(fixtureRoot, options.input, temp, options.clipBytes); inputPath = padded.file; transport = padded.transport; }
     const cliCase = { ...caseDef, options: { ...options, input: inputPath, packagePath } };
-    const run = () => runCli(root, cliCase, temp, sequence++);
+    const childTotals = { calls: 0, gcEvents: 0, gcDurationMs: 0, maxPauseMs: 0, major: 0, minor: 0, heapUsedBytes: 0, rssBytes: 0, maxRSSBytes: 0, externalBytes: 0, durationMs: 0, available: true };
+    const recordChild = (child) => {
+      childTotals.calls++;
+      childTotals.gcEvents += child.gc?.events?.length ?? 0;
+      for (const event of child.gc?.events ?? []) {
+        childTotals.gcDurationMs += event.durationMs ?? 0;
+        childTotals.maxPauseMs = Math.max(childTotals.maxPauseMs, event.durationMs ?? 0);
+        if (event.kind === 1) childTotals.minor++; else childTotals.major++;
+      }
+      childTotals.heapUsedBytes = Math.max(childTotals.heapUsedBytes, child.memory?.heapUsedBytes ?? 0);
+      childTotals.rssBytes = Math.max(childTotals.rssBytes, child.memory?.rssBytes ?? 0);
+      childTotals.maxRSSBytes = Math.max(childTotals.maxRSSBytes, child.memory?.maxRSSBytes ?? 0);
+      childTotals.externalBytes = Math.max(childTotals.externalBytes, child.memory?.externalBytes ?? 0);
+      childTotals.durationMs += child.durationMs ?? 0;
+      childTotals.available &&= child.gc?.available !== false;
+    };
+    const childSummary = () => childTotals.calls ? {
+      calls: childTotals.calls,
+      available: childTotals.available,
+      durationMs: childTotals.durationMs,
+      gc: {
+        events: childTotals.gcEvents, durationMs: childTotals.gcDurationMs, maxPauseMs: childTotals.maxPauseMs,
+        major: childTotals.major, minor: childTotals.minor,
+        msPerCall: childTotals.gcDurationMs / childTotals.calls,
+      },
+      memory: { heapUsedBytes: childTotals.heapUsedBytes, rssBytes: childTotals.rssBytes, maxRSSBytes: childTotals.maxRSSBytes, externalBytes: childTotals.externalBytes },
+      scope: "all spawned CLI children in this fork, including preparation and warmup; per-call values divide by calls",
+    } : null;
+    const run = async () => {
+      const value = await runCli(root, cliCase, temp, sequence++, options.observeChild === true);
+      if (value.child) recordChild(value.child);
+      return { ...value, child: childSummary() };
+    };
     // `stream-export` and `bdmv-export` are the `export` command on two input kinds.
     const cliCommand = options.operation === "stream-export" || options.operation === "bdmv-export" ? "export" : options.operation;
     const validate = (value) => { if (value.command !== cliCommand) throw new Error(`CLI ran ${value.command}; expected ${cliCommand}`); return { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }) }; };
     const describe = (value) => ({ summary: `${value.command} CLI completed`, details: { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }), ...(value.checks === undefined ? {} : { checks: value.checks, decision: value.decision }) } });
     const cleanup = async () => { await materialized?.cleanup(); await rm(temp, { recursive: true, force: true }); };
     const fixturePath = toPortablePath(root, inputPath);
-    const input = { command: options.operation, ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1 } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
+    const input = { command: options.operation, ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1 } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
     return { input, fixture, scope: caseDef.scope, run, validate, describe, afterMeasurement: cleanup, cleanup };
   }
   if (category === "browser") {
