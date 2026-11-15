@@ -53,13 +53,13 @@ jobs:
         run: corepack enable
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: corepack pnpm install --frozen-lockfile
 
       - name: Build workspace
-        run: pnpm build
+        run: corepack pnpm build
 
       - name: Pack release tarball
-        run: pnpm --filter bdmv2web pack --pack-destination artifacts/npm
+        run: corepack pnpm --filter bdmv2web pack --pack-destination artifacts/npm
 
       - name: Verify tarball
         shell: bash

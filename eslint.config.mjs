@@ -2,11 +2,11 @@
 //
 // Linting is type-aware through `tsconfig.lint.json`, which spans every linted
 // TypeScript file (package sources, `{apps,packages}/*/tests`, `vitest.config.ts`).
-// Cross-package imports resolve through each package's built declarations, so
-// run lint after `pnpm build` - the order `scripts/ci.sh` uses.
+// Cross-package imports resolve through each package's built declarations;
+// `pnpm lint` builds them once when missing (see `scripts/ensure-build.mjs`).
 //
-// Formatting rules are out of scope: ESLint 10 no longer ships them, the
-// sources are laid out densely on purpose, and no formatter is enforced here.
+// Formatting rules are out of scope: the sources are laid out densely on
+// purpose, and no formatter runs in this workspace.
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
