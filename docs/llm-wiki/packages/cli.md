@@ -22,7 +22,7 @@ src/
     serve.ts visualize.ts menu-planning.ts media-progress.ts
   shared/
     asset-export.ts     export/render 共用的 BDMV/流管线（GraphicsRun.outputs 决定写容器、PNG 还是元数据）
-    metadata.ts         export --no-assets / --type metadata 写出的结构元数据产物与来源映射
+    metadata.ts         export --metadata-only / --type metadata 写出的结构元数据产物与来源映射
     stream-input.ts     输入分类（内容优先、扩展名兜底）与 PMT 图形流发现
     steps.ts            进度步骤词表（BDMV / 流 / 独立文件）
     concurrency.ts      mapWithConcurrency
@@ -46,17 +46,17 @@ src/
 
 ```ts
 inspect   [input]  --out --format --allow-partial
-build     [input]  --out --title --player-profile --limits --disc-id --overwrite --resume --crf --preset --codec --hdr --video --menu-media --progress/--no-progress
+build     [input]  --out --title --player-profile --limits --disc-id --overwrite --no-reuse --resume --resume-dir --crf --preset --codec --hdr --video --menu-media --progress/--no-progress
 validate  [input]  --format
 serve     [input]  --port --java --disc-id --player --player-executable
 visualize [input]  --out --programs --max-blocks --no-closure --overwrite --format
 compare   [input]  --actual --reference --reference-tool --reference-version --out --format
 list      [input]  --type --m2ts --pid --out --format
-export    [input]  --out --type --m2ts --pid --no-assets --render --png-level --format --progress/--no-progress
+export    [input]  --out --type --m2ts --pid --metadata-only --render --png-level --format --progress/--no-progress
 render    [input]  --out --language --type --m2ts --pid --png-level --format --progress/--no-progress
 ```
 
-`convert` 是 `build` 的别名。带值选项统一用 `nonEmpty` 解析器，`--out=` 这类空值在解析阶段失败。
+`convert` 是 `build` 的别名。带值选项由 Commander 解析器校验：空值与 `--type` 等非法取值在解析阶段以 `CLI_INVALID_ARGUMENT` 失败。
 
 `optionValue("--out")` 之类只读 `dispatch` 保存的解析结果（`--player-profile` 对应 `playerProfile`），不做字符串扫描。
 
@@ -65,7 +65,7 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 | 未知选项（`--stric`、`--ou`） | `CLI_UNKNOWN_OPTION`，`commander` 附拼写建议 |
 | 多于一个位置参数 | `CLI_USAGE` |
 | 带值选项后没有值（`inspect X --out`） | `CLI_MISSING_VALUE` |
-| `--out=` 空值 | `CLI_INVALID_ARGUMENT` |
+| 空值（`--out=`）或 `--type` 取值非法 | `CLI_INVALID_ARGUMENT` |
 | 未知命令 | `CLI_USAGE`；`--help` 打印帮助后退出 0 |
 
 ## 命令实现要点
@@ -78,9 +78,9 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 4. `--format json` 时把完整 JSON 写 stdout；否则打印摘要表。
 5. `--allow-partial` 强制退出 0，报告里仍是 `stageStatus: "failed"`。
 
-### `export --no-assets`
+### `export --metadata-only`
 
-1. `--no-assets` 走同一套 `runGraphicsInput`（输入分类 + 同一条管线），`GraphicsRun.outputs` 只开元数据、容器与 PNG 恒关。非法 `--type` 报 `CLI_INVALID_ASSET_TYPE`；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`；`--no-assets` 与 `--render` 同时给出也报 `CLI_EXPORT_SELECTION`。
+1. `--metadata-only` 走同一套 `runGraphicsInput`（输入分类 + 同一条管线），`GraphicsRun.outputs` 只开元数据、容器与 PNG 恒关。非法 `--type` 由 Commander 报 `CLI_INVALID_ARGUMENT`；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`；`--metadata-only` 与 `--render` 同时给出也报 `CLI_EXPORT_SELECTION`。
 2. 先解析；有 `fatal` 直接失败，不扫描 STREAM。
 3. `--type` 需要 IGS/SUP 段落时先 `extractIgsScenes(..., { renderAssets: false })`，再 `decideStageOutcome`；`failed` 不建事务。
 4. `beginOutputTransaction` 后按类型写：
@@ -94,18 +94,18 @@ render    [input]  --out --language --type --m2ts --pid --png-level --format --p
 
 - `--type all|igs|sup`、`--m2ts CLIP_ID`、`--pid PID` 选择资源范围。
 - 按 M2TS 分组输出树形资源信息。每个 M2TS 节点显示源文件大小；IGS/SUP 节点显示 PID 原始传输载荷大小，IGS 节点展开场景与图像对象，SUP 节点列出语言和 playlist/playItem 引用。大小使用 1024 进位。`--out` 写完整 JSON。
-- 非法值：`CLI_INVALID_ASSET_TYPE`、`CLI_INVALID_M2TS`、`CLI_INVALID_PID`。
+- 非法值：`--type` 取值非法报 `CLI_INVALID_ARGUMENT`（Commander 校验）；`CLI_INVALID_M2TS`、`CLI_INVALID_PID` 分别是 Clip/PID 参数非法。
 
 ### `export`
 
 - 输入为 BDMV 目录，或单个 `.m2ts`/`.rsks` 流文件；`shared/stream-input.ts` 的 `classifyInput` 先按内容判定（传输流同步字节、IGS `ICS`/`PDS`/`ODS` 段标签、PGS `PG` 段标签），再退回扩展名。`.mnu`/`.sup` 输入各自有专门的错误并指向 `render`。
-- `--type` 只选输出：`igs`/`sup` 写容器（配合 `--render` 写 PNG）、`hdmv` 写命令表与来源映射、`metadata` 写整套元数据、`all` 写全部；省略时只写容器。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
+- `export` 的 `--type` 只选输出：`igs`/`sup` 写容器（配合 `--render` 写 PNG）、`hdmv` 写命令表与来源映射、`metadata` 写整套元数据、`all` 写全部；省略时只写容器。流模式从文件自身 PAT/PMT 发现 `0x90`/`0x91`（`@bdmv2web/igs` 的 `probeTransportStreams`），忽略保留 PID（`< 0x20`）上的声明，产物用文件 stem 代替 clipId。
 - 写 igstools 兼容 `.mnu`（`assets/igs/<clip>-pid-<pid>.mnu`）与 `.sup`（`assets/subtitles/<clip>-pid-<pid>.sup`）。
 - `--render` 额外写 IGS 元素（调色板索引 PNG）与 PGS 显示集 PNG；全透明显示集不写文件、不写清单。`--png-level 0-9` 覆盖默认档位。
 - 附 `assets-manifest.json`（类型、格式、路径、大小、字幕元数据）。`igs-png` 记录 `width`/`height`/`objectId`/`objectVersion`/`paletteId`/`paletteVersion`；`sup-png` 记录 `displaySet`、`startSeconds`、`endSeconds`、`width`、`height`，秒值以轨道起点为 0，流模式以首个显示集为 0。
 - 流模式不传 `timestampOffset90k`，`.sup` 保留源 90kHz 时间轴；清单 `sup` 记 `language: "und"` 与发现序号。`--m2ts` 与未在 PMT 声明的 `--pid` 报 `CLI_EXPORT_SELECTION`；无 PAT/PMT 或声明 PID 无显示集报 `EXPORT_INVALID_STREAM`。
 - 显示集 PNG 由 `shared/pgs.ts` 的 `writeDisplaySetPngs` 写出：`mapWithConcurrency` 限 4 路（libuv 默认线程池），每路 `renderPgsDisplaySetAsync` 合成后把 deflate 丢给线程池；目录创建按目录缓存同一个 `mkdir` promise（并发写同一目录不会抢在创建之前），记录按显示集顺序返回。清单记录形状由 `pgsTrackPngPlan` 统一，`export` 与 `render` 共用同一份实现。
-- 进度：`progress.ts` 的 `commandProgress` 统一读 `--progress`/`--no-progress` 并构造 `ProgressReporter`，`build`（7 步）与 `export`（BDMV 5 步 / 流 4 步）都只声明自己的步骤，步骤词表在 `shared/steps.ts`；`countOf` 同在此模块。
+- 进度：`progress.ts` 的 `commandProgress` 统一读 `--progress`/`--no-progress` 并构造 `ProgressReporter`，`build`（7 步）与 `export`（BDMV 5 步 / 流 4 步）都只声明自己的步骤，步骤词表在 `shared/steps.ts`；`countOf` 同在此模块。`build` 的进度头显示 `bdmv2web build`。
 
 ### `render`
 

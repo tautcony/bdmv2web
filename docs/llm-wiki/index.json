@@ -27,7 +27,7 @@
       "kind": "overview",
       "summary": "转换/交付/校验三段边界、包依赖、数据形态、一次 build 的完整时序、状态归属。",
       "covers": ["pipeline", "package graph", "data flow", "artifacts", "ownership"],
-      "keywords": ["架构", "流水线", "依赖", "convert 时序", "产物"],
+      "keywords": ["架构", "流水线", "依赖", "build 时序", "产物"],
       "keyFiles": ["apps/cli/src/cli/program.ts", "packages/package-builder/src/index.ts", "packages/runtime-web/src/browser.ts"]
     },
     {
@@ -113,7 +113,7 @@
     {
       "path": "packages/cli.md",
       "kind": "package",
-      "summary": "参数契约、十个命令实现要点、错误出口、退出码与扩展位置。",
+      "summary": "参数契约、九个命令 + convert 别名实现要点、错误出口、退出码与扩展位置。",
       "covers": ["argument contract", "commands", "exit codes", "error handling"],
       "keywords": ["cli", "commandOptions", "exit code", "CLI_INVALID_PROFILE", "build", "validate"],
       "keyFiles": ["apps/cli/src/cli/program.ts"]
@@ -121,8 +121,8 @@
     {
       "path": "features/cli-commands.md",
       "kind": "feature",
-      "summary": "十个命令的输入、选项、产物、失败码与退出码；含常用命令小抄。",
-      "covers": ["inspect", "extract", "list", "export", "render", "build", "validate", "compare", "serve", "visualize"],
+      "summary": "九个命令 + convert 别名的输入、选项、产物、失败码与退出码；含常用命令小抄。",
+      "covers": ["inspect", "list", "export", "render", "build", "validate", "compare", "serve", "visualize"],
       "keywords": ["命令", "产物", "退出码", "CLI"],
       "keyFiles": ["apps/cli/src/cli/program.ts", "README.md"]
     },
@@ -177,8 +177,8 @@
     {
       "path": "troubleshooting.md",
       "kind": "guide",
-      "summary": "症状驱动排查：构建、inspect/extract、convert、浏览器、交互、音频、弹窗、外部播放、validate、VM。",
-      "covers": ["build failures", "convert failures", "browser boot", "interaction", "audio", "popup", "external playback", "validate", "VM"],
+      "summary": "症状驱动排查：inspect/export、build、浏览器、交互、音频、弹窗、外部播放、validate、VM。",
+      "covers": ["build failures", "browser boot", "interaction", "audio", "popup", "external playback", "validate", "VM"],
       "keywords": ["排查", "故障", "黑屏", "点击偏移", "无声音"],
       "keyFiles": ["packages/runtime-web/src/browser.ts", "packages/runtime-web/src/index.ts", "apps/cli/src/cli/program.ts"]
     },

@@ -4,7 +4,7 @@
 
 `bdmv2web build <BDMV-or-parent>` packages the Java host, BDJO application JARs, authored files under `BDMV/JAR`, and Java launch/session data. The package stores launch data at `runtime/bdj/session.json`, the host at `runtime/bdj/bdj-host-api.jar`, and disc files under `bdj/BDMV/JAR/`.
 
-Workspace builds compile the Java host with `javac` and `jar` and place it directly in the generated package. The published CLI includes its compiled host for package generation.
+Workspace builds compile the Java host with `javac` and `jar` and place it directly in the generated package. The host targets Java 8 (`javac --release 8`), and `lint:java` requires JDK 21 or newer. The published CLI includes its compiled host for package generation.
 
 Use Java 21 or a compatible Java runtime with `java.desktop`:
 
@@ -22,7 +22,7 @@ The Java host receives the package BDMV/JAR directory as its resource root. The 
 
 ## Menu and feature media
 
-The browser presents declared BD-J resources through local package URLs. Build exports accessible menu PlayItem video and audio into the output directory. Equivalent media references share one encoded asset, and `build --overwrite` or `build --resume` reuses media assets whose source plan and encoding settings match. `serve` reads the package manifest and serves those assets without runtime transcoding. Java receives resource `pending` when the browser begins the operation, then receives `started`, `presented`, `ended`, `error`, `blocked`, or `stopped` only from observed browser media events. A blocked operation remains available for user-gesture recovery while its player remains active.
+The browser presents declared BD-J resources through local package URLs. Build exports accessible menu PlayItem video and audio into the output directory. Equivalent media references share one encoded asset. `build --overwrite` reuses media whose source plan and encoding settings match, and `build --no-reuse` generates all menu media for a clean rebuild. `build --resume` reuses completed media from the newest `.<output name>.staging-*` directory beside the output, and `build --resume-dir <dir>` names that directory explicitly. `serve` reads the package manifest and serves those assets without runtime transcoding. Java receives resource `pending` when the browser begins the operation, then receives `started`, `presented`, `ended`, `error`, `blocked`, or `stopped` only from observed browser media events. A blocked operation remains available for user-gesture recovery while its player remains active.
 
 Feature playback uses the system player adapter:
 

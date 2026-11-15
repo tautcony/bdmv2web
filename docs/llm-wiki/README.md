@@ -1,9 +1,8 @@
 # llm-wiki · bdmv2web 工程知识与索引
 
-本目录是给 LLM/agent 使用的工程知识层：说明功能范围、定位实现、实施变更、排查故障。
-行为权威来源是 `openspec/specs/`、`openspec/changes/` 和代码；本目录负责回答“该看哪里、先改哪里”。
+本目录是给 LLM/agent 使用的工程知识层：说明功能范围、定位实现、实施变更、排查故障。本目录以 2026-11-07 commit `21c580a` 的代码结构为基线；命令、选项与验收口径见 `README.md`、`docs/guides/development.md` 与 `openspec/specs/`。本目录负责回答“该看哪里、先改哪里”。
 
-基线：commit `21c580a`（2026-11-07）。行号会漂移，定位以「文件路径 + 符号名」为准；源码符号可用 `rg` 直接搜。
+基线：commit `21c580a`（2026-11-07）。定位以「文件路径 + 符号名」为准；源码符号可用 `rg` 直接搜。
 
 ## 一句话
 
@@ -66,7 +65,7 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 | [packages/test-runner.md](packages/test-runner.md) | `test-runner`：包审计、状态判定、证据、报告 |
 | [packages/test-fixtures.md](packages/test-fixtures.md) | `test-fixtures`：字节构造器与合成夹具 |
 | [packages/cli.md](packages/cli.md) | `apps/cli`：参数契约、命令实现、错误处理 |
-| [features/cli-commands.md](features/cli-commands.md) | 10 个命令的输入、产物、退出码、失败码 |
+| [features/cli-commands.md](features/cli-commands.md) | 九个命令 + convert 别名的输入、产物、退出码、失败码 |
 | [features/navigation.md](features/navigation.md) | HDMV 执行模型、事件/generation、UO、导航图与媒体闭包 |
 | [features/igs-extraction.md](features/igs-extraction.md) | 从 M2TS 到场景与 PNG 的完整链路 |
 | [features/offline-menu.md](features/offline-menu.md) | `build` 管线、包结构、浏览器启动与交互 |

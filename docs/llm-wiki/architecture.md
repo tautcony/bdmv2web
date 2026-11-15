@@ -41,7 +41,7 @@
 | 菜单包 | `package-builder` | 浏览器、`test-runner` | `index.html`、`runtime/*`、`assets/*`、`manifest.json` |
 | 交付报告 | `test-runner` + CLI | 人、CI | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` |
 
-`ParsedDisc.analysisStage` 固定为 `structural`：结构解析成功不代表控制流已验证。`supportPrediction.status` 固定为 `partial`。
+`ParsedDisc.analysisStage` 固定为 `structural`：结构解析成功时控制流仍待验证。`supportPrediction.status` 固定为 `partial`。
 
 ## 一次 `build` 的时序
 

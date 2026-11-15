@@ -22,8 +22,6 @@
 parseDiscIR(input: unknown): DiscIR
 parseTime90k(value: string): bigint
 serializeTime90k(value: bigint): Time90k
-parseOffset(value: string): bigint
-serializeOffset(value: bigint): string
 from45k(value: string): Time90k
 assertWithinLimit(value: number | bigint, key: keyof Limits, limits?): void
 allocateBoundedBytes(size, key, limits?): Uint8Array

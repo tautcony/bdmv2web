@@ -12,7 +12,7 @@ Inspect a Blu-ray BDMV disc and build a web menu package for HDMV and BD-J discs
 
 - Build a menu package with menu navigation, background video, audio tracks, button graphics, and sound effects.
 - Run BD-J Xlets from packaged application JARs with a local Java process.
-- Package BD-J accessible Playlist video and audio for browser playback. `build --overwrite` and `build --resume` reuse matching media assets.
+- Package BD-J accessible Playlist video and audio for browser playback. `build --overwrite` reuses matching media assets, `build --resume` reuses media from an interrupted run, and `build --no-reuse` generates all menu media for a clean rebuild.
 - Inspect BDMV structure and export HDMV, IGS, and SUP data together with menu assets.
 - Hand off supported whole-file feature playback to the system player.
 - Audit package structure, references, paths, and dependencies; produce a compatibility report.
@@ -39,14 +39,14 @@ Inspect a Blu-ray BDMV disc and build a web menu package for HDMV and BD-J discs
 
 | Dependency | Version or requirement | Purpose |
 | --- | --- | --- |
-| Node.js | `>=22` | Run the commands |
-| Node.js | `24.18.0` (`.node-version`) | Build from source |
+| Node.js | `>=22` (npm global install) | Run the installed `bdmv2web` CLI |
+| Node.js | `>=24.18.0` (`.node-version`: `24.18.0`; repository) | Develop and run workspace scripts |
 | pnpm | `11.25.0`, invoked through `corepack pnpm` | Install dependencies and run scripts |
 | ffmpeg | Callable from `PATH`, with `libx265`, `libx264`, and `aac` | Encode menu background video and audio |
 | ffprobe | Callable from `PATH` | Read menu media metadata |
 | Java runtime | Java 21 or compatible with `java.desktop`; BD-J packages only | Run packaged BD-J Xlets with `serve` |
 
-Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; `--codec h264` uses H.264 at `crf` 18. `build --video copy` remuxes the source video stream into MP4 and keeps the source bitrate. Audio is encoded to AAC. A remux requires an 8-bit 4:2:0 SDR H.264 source and a PlayItem in-time that names a decode entry point within the 5.689 ms entry-point map grid; other clips are encoded (H.264 when `--codec` is omitted) and the media plan records a `MEDIA_REMUX_UNAVAILABLE` warning. HDR sources are tone mapped to SDR BT.709 by default through FFmpeg's `zscale` filter (libzimg). FFmpeg builds without `zscale` produce a package with the HDR tag preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning in diagnostics.
+Background video is encoded with `libx265` (HEVC) at `crf` 24 by default; `--codec h264` uses H.264 at `crf` 18. Audio is encoded to AAC. `build --video copy` remuxes the source video stream into MP4 and keeps the source bitrate. A remux requires an 8-bit 4:2:0 SDR H.264 source and a PlayItem in-time that names a decode entry point within the 5.689 ms entry-point map grid; clips that cannot be remuxed fall back to encoding at the remux default of H.264 `crf` 18, and the media plan records a `MEDIA_REMUX_UNAVAILABLE` warning. HDR sources are tone mapped to SDR BT.709 by default through FFmpeg's `zscale` filter (libzimg). FFmpeg builds without `zscale` produce a package with the HDR tag preserved and a `MEDIA_HDR_TONEMAP_UNAVAILABLE` warning in diagnostics.
 
 Menu media is scoped by `--menu-media auto|all|none` for HDMV and BD-J packages: `auto` (default) exports the playlists a menu uses — HDMV playlists matched by an IGS scene, BD-J playlists of at most 15 minutes; `all` exports every reachable playlist; `none` packages a menu without playlist media and the runtime reports `PLAY_PLAYLIST` as unavailable. Playlists skipped by `auto` are listed in a `M5_MENU_MEDIA_SCOPE_SKIPPED` diagnostic.
 
@@ -63,12 +63,11 @@ bdmv2web --version
 
 ```sh
 corepack pnpm install --frozen-lockfile
-corepack pnpm generate:contracts
 corepack pnpm build
 corepack pnpm bundle:cli
 ```
 
-After building from source, `apps/cli/dist/index.js` is the executable entry point. Inside the repository, call the CLI with `corepack pnpm run cli:dev <command> [options]`.
+After building from source, `apps/cli/dist/index.js` is the executable entry point. Inside the repository (Node `>=24.18.0`), call the CLI with `corepack pnpm run cli:dev <command> [options]`.
 
 ## Usage
 
@@ -92,7 +91,7 @@ bdmv2web validate ./BDMV-menu
 
 Open an HDMV package directly from `BDMV-menu/index.html`. Its menu media is stored in the package. Feature playback uses the configured external player adapter. A background item with `loop=false` holds its final decoded frame.
 
-Build exports BD-J accessible Playlist PlayItems as MP4 video and AAC audio assets in the output directory. Equivalent media references share assets. With `--overwrite`, matching media plans reuse existing assets from the output directory; changed source ranges or encoding settings are exported again. `--resume [DIR]` reads that reuse source from a directory an interrupted run left behind: `DIR` when given, otherwise the newest `.<output name>.staging-*` beside the output target. Reused assets are probed, and one whose duration differs from its media plan by more than 0.25s is exported again. The directory is an optional value; write the input before the flag or use `--resume=DIR`.
+Build exports BD-J accessible Playlist PlayItems as MP4 video and AAC audio assets in the output directory. Equivalent media references share assets. With `--overwrite`, matching media plans reuse existing assets from the output directory; changed source ranges or encoding settings are exported again. `build --no-reuse` generates all menu media for a clean rebuild. `build --resume` is a bare flag that reuses media from the newest `.<output name>.staging-*` directory beside the output target; `build --resume-dir <dir>` names the reuse directory explicitly. When `--no-reuse` is also given, `--resume` and `--resume-dir` reuse media from their own directory. Reused assets are probed, and one whose duration differs from its media plan by more than 0.25s is exported again.
 
 Run a BD-J package with a local Java runtime:
 
@@ -110,19 +109,21 @@ Open the loopback URL printed by `serve`. A BD-J page opened with `file://` disp
 | --- | --- | --- |
 | `inspect <INPUT>` | Show disc structure and diagnostics | `--format table\|json`, `--out FILE` |
 | `list <INPUT>` | List exportable IGS and SUP assets | `--type all\|igs\|sup`, `--m2ts CLIP_ID`, `--pid PID`, `--format table\|json` |
-| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally with PNGs and metadata | `--type all\|metadata\|hdmv\|igs\|sup`, `--no-assets`, `--render`, `--m2ts CLIP_ID`, `--pid PID`, `--png-level 0-9` |
-| `render <INPUT>` | Render PNG from a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` | `--out DIR`, `--type all\|igs\|sup`, `--language LANG`, `--png-level 0-9`, `--m2ts CLIP_ID`, `--pid PID` |
-| `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--resume [DIR]` |
+| `export <INPUT> --out DIR` | Export raw `.mnu` and `.sup` assets, optionally with PNGs and metadata | `--type all\|metadata\|hdmv\|igs\|sup`, `--metadata-only`, `--render`, `--m2ts CLIP_ID`, `--pid PID`, `--png-level 0-9` |
+| `render <INPUT> --out DIR` | Render PNG from a BDMV, a `.m2ts`/`.rsks` stream, `.mnu`, or `.sup` | `--type all\|igs\|sup`, `--language LANG`, `--png-level 0-9`, `--m2ts CLIP_ID`, `--pid PID` |
+| `build <BDMV>` | Build a menu package | `--out DIR`, `--title NAME`, `--player-profile FILE`, `--codec hevc\|h264`, `--crf N`, `--preset NAME`, `--hdr tonemap\|preserve`, `--video encode\|copy`, `--menu-media auto\|all\|none`, `--overwrite`, `--no-reuse`, `--resume`, `--resume-dir <dir>` |
 | `validate <menu dir>` | Audit a menu package and update the audit report | `--format json` |
+| `compare <INPUT>` | Compare an actual VM trace against an independent reference trace | `--actual FILE` (required), `--reference FILE`, `--reference-tool NAME`, `--reference-version VERSION`, `--out FILE`, `--format json` |
+| `visualize <INPUT>` | Export the navigation graph as an interactive viewer and mermaid diagrams | `--out DIR`, `--programs IDS`, `--max-blocks N`, `--no-closure`, `--overwrite`, `--format table\|json` |
 | `serve <package dir>` | Serve a generated package and run its BD-J Java session | `--port N`, `--java EXECUTABLE`, `--player system`, `--disc-id HEX` |
 
 `build` writes to `<BDMV parent>/BDMV-menu` by default. Use `--overwrite` when the output directory already exists. An interrupted run keeps completed work in `.<output name>.staging-*`; `--resume` continues from that directory. The output target is written when the build completes. Movie PGS subtitles are exported with `export --type sup`.
 
 Values for `--m2ts` and `--pid` can be looked up with `list`. `list` reports IGS scene and reachable SUP track metadata.
 
-`--type` names the outputs a command writes, never the input: `igs` and `sup` are the `.mnu`/`.sup` containers (with `--render`, their PNGs), `hdmv` is the command table and source map, and `metadata` is the whole structural set — `manifest.json`, `hdmv/*.json`, `igs/*.json`, and `sup/tracks.json`. `all` is everything the command can write. Without `--type`, `export` writes the containers.
+`--type` is command-specific. `export` accepts `all|metadata|hdmv|igs|sup`: `igs` and `sup` write the `.mnu`/`.sup` containers (with `--render`, their PNGs), `hdmv` writes the command table and source map, `metadata` writes the whole structural set — `manifest.json`, `hdmv/*.json`, `igs/*.json`, and `sup/tracks.json` — and `all` writes everything; without `--type`, `export` writes the containers. `list` accepts `all|igs|sup` and filters the listed entries without writing files. `render` accepts `all|igs|sup` and selects which PNG families are decoded. `inspect` has no `--type`. Invalid values are rejected by Commander with `CLI_INVALID_ARGUMENT`.
 
-`--no-assets` writes no containers and no PNGs: on its own it writes the whole metadata set, and with `--type igs` or `--type sup` that one metadata section. `export` and `render` share one pipeline; `render` fixes the selection to PNGs and is the only command that decodes a standalone `.mnu`/`.sup` file, which it detects from the file itself.
+`--metadata-only` writes only structural metadata: on its own the whole set, and with `--type igs` or `--type sup` just that section. It conflicts with `--render` and fails with `CLI_EXPORT_SELECTION`. `export` and `render` share one pipeline; `render` fixes the selection to PNGs and is the only command that decodes a standalone `.mnu`/`.sup` file, which it detects from the file itself.
 
 `--png-level 0-9` sets the deflate level for PNGs written by `export --render` and `render`; the default is level 1 for IGS elements and level 6 for PGS canvases. A run with no asset side writes no `assets-manifest.json`.
 
@@ -149,7 +150,7 @@ Use `build --player-profile FILE` to set menu language, audio language, subtitle
 }
 ```
 
-| Field | Required | Value | Default |
+| Field | Required in file | Value | Default |
 | --- | --- | --- | --- |
 | `menuLanguage` | yes | 3 ASCII letters (PSR18) | `eng` |
 | `audioLanguage` | yes | 3 ASCII letters (PSR16) | `eng` |
@@ -160,6 +161,8 @@ Use `build --player-profile FILE` to set menu language, audio language, subtitle
 | `videoProfiles` | no | Array of strings | `[]` |
 | `audioProfiles` | no | Array of strings | `[]` |
 
+The `Default` column lists the global values used when `--player-profile` is omitted: the whole profile then uses `DEFAULT_PLAYER_PROFILE`. A supplied file must contain all six required fields; only `videoProfiles` and `audioProfiles` may be omitted.
+
 ## Development
 
 ```sh
@@ -167,7 +170,7 @@ corepack pnpm build                              # Compile runtime code
 corepack pnpm run cli:dev inspect /path/to/BDMV  # Run the CLI directly
 corepack pnpm lint                               # ESLint and Java lint
 corepack pnpm lint:fix                           # Apply ESLint fixes
-corepack pnpm lint:java                          # Check BD-J host Java style and Java 8 compilation
+corepack pnpm lint:java                          # Check BD-J host Java style and Java 8 compilation target
 corepack pnpm typecheck                          # Type checking
 corepack pnpm test                               # Run tests
 corepack pnpm test:all                           # Run all tests and collect failures
@@ -175,7 +178,9 @@ corepack pnpm test:coverage                      # Run tests and report source c
 bash scripts/ci.sh                               # Run the full CI check
 ```
 
-`corepack pnpm lint:java` requires JDK 21 or newer and downloads the pinned Checkstyle release on first use.
+On a clean checkout, run `corepack pnpm install --frozen-lockfile`. `lint`, `test`, `test:all`, and `test:coverage` build the workspace once when `dist/` artifacts are missing; `typecheck` rebuilds workspace declarations before each run. `bash scripts/ci.sh` runs the full gate.
+
+`corepack pnpm lint:java` requires JDK 21 or newer, checks the BD-J host's Java 8 compilation target with `javac --release 8`, and downloads the pinned Checkstyle release on first use.
 
 Run tests for a single package:
 

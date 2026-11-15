@@ -1,6 +1,6 @@
 # 功能：CLI 命令
 
-九个命令全部实现：`inspect`、`list`、`export`、`render`、`build`、`validate`、`compare`、`serve`、`visualize`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
+九个命令全部实现，`convert` 是 `build` 的别名：`inspect`、`list`、`export`、`render`、`build`、`validate`、`compare`、`serve`、`visualize`。BDMV 命令的输入为 BDMV 根或包含 `BDMV/` 的父目录；`export` 与 `render` 也接受独立的 `.m2ts`/`.rsks` 流文件，`render` 还接受独立的 `.mnu`/`.sup` 文件。
 
 ## 总表
 
@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | `inspect` | 看结构和诊断 | stdout 表格/JSON；可选 `--out` JSON | 已实现 |
 | `list` | 列 IGS/SUP 资源 | stdout 表/JSON；可选 `--out` | 已实现 |
-| `export` | 导出 `.mnu`/`.sup` 原始资源；`--no-assets` 只出元数据 | `assets-manifest.json` + 资产；元数据时 `manifest.json` | 已实现 |
+| `export` | 导出 `.mnu`/`.sup` 原始资源；`--metadata-only` 只出元数据 | `assets-manifest.json` + 资产；元数据时 `manifest.json` | 已实现 |
 | `render` | 从 BDMV、流文件、`.mnu` 或 `.sup` 生成 PNG | PNG + `assets-manifest.json` | 已实现 |
 | `build` | 生成菜单包；BD-J 包内含 Java host、应用文件和 session 数据 | `BDMV-menu/` 整目录 | 已实现 |
 | `serve` | 提供回环 HTTP 页面和会话 API，管理本地 Java 进程；选项 `--port`、`--java`、`--disc-id`、`--player system`、`--player-executable` | 本地 URL | 已实现 |
@@ -16,7 +16,7 @@
 | `validate` | 重算菜单包审计 | `reports.json`、`dependency-audit.json`、`reports/release-summary.json` | 已实现 |
 | `compare` | 对照 VM trace 与独立参考 trace | stdout 比对报告 JSON；可选 `--out` | 已实现 |
 
-命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。`convert` 是 `build` 的别名。
+命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。
 
 `--format` 的生效范围：`inspect`、`list`、`visualize` 用它选择 `table|json`；`validate`、`compare` 只校验取值必须为 `json`；`export`、`render` 接受该选项但不改变输出。
 
@@ -36,7 +36,7 @@
 
 | 选项 | 作用 |
 | --- | --- |
-| `--type all\|igs\|sup` | 资源类型，默认 `all` |
+| `--type all\|igs\|sup` | 筛选清单条目，不写文件，默认 `all` |
 | `--m2ts CLIP_ID` | 只列指定 clip |
 | `--pid PID` | 只列指定 PID（十进制或 `0x` 前缀） |
 | `--format table\|json`、`--out FILE` | 输出格式与落盘 |
@@ -50,15 +50,15 @@
 | `--out DIR` | 必填 |
 | `--type all\|metadata\|hdmv\|igs\|sup` | 输出选择，默认写 `igs`+`sup` 容器 |
 | `--m2ts` / `--pid` | 选择范围 |
-| `--no-assets` | 不写容器与 PNG；单独使用时写整套元数据，配合 `--type igs`/`sup` 只写该段元数据 |
+| `--metadata-only` | 只写结构元数据；单独使用时写整套，配合 `--type igs`/`sup` 只写该段元数据 |
 | `--render` | 额外渲染 PNG（IGS 元素与 PGS 显示集） |
 | `--png-level 0-9` | 同上；只影响 `--render` 写出的文件 |
 | `--progress` | stderr 非终端时也逐行输出进度（默认自动） |
 | `--no-progress` | 关闭进度输出 |
 
-`--type` 只选输出，不表示输入：`igs`/`sup` 写对应容器（配合 `--render` 还写其 PNG），`hdmv` 写命令表与来源映射，`metadata` 写整套元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` 写全部。省略 `--type` 时只写容器。`--type metadata` 与 `--type hdmv` 拒绝 `--render`（没有可解码的帧）；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`（流内没有 HDMV 命令表）。
+`export` 的 `--type` 选择写出内容：`igs`/`sup` 写对应容器（配合 `--render` 还写其 PNG），`hdmv` 写命令表与来源映射，`metadata` 写整套元数据（`manifest.json`、`hdmv/*.json`、`igs/*.json`、`sup/tracks.json`），`all` 写全部。省略 `--type` 时只写容器。`--type metadata` 与 `--type hdmv` 拒绝 `--render`（没有可解码的帧）；对流文件用 `--type hdmv` 报 `CLI_EXPORT_SELECTION`（流内没有 HDMV 命令表）；非法取值由 Commander 校验，报 `CLI_INVALID_ARGUMENT`。
 
-`--no-assets` 关掉资产侧、保留元数据侧：不带 `--type` 时写整套元数据，`--type igs` 或 `--type sup` 时只写那一段。`--no-assets` 与 `--render` 同时给出会以 `CLI_EXPORT_SELECTION` 失败（没有可写的东西）。元数据产物落在同一个输出事务里：
+`--metadata-only` 只写元数据侧：不带 `--type` 时写整套元数据，`--type igs` 或 `--type sup` 时只写那一段。`--metadata-only` 与 `--render` 冲突，报 `CLI_EXPORT_SELECTION`。元数据产物落在同一个输出事务里：
 
 ```text
 <out>/
@@ -74,7 +74,7 @@
 
 元数据运行不写 `assets-manifest.json`，stdout 也只有 `{ stageStatus, output }`。
 
-进度输出（stderr）与 `build` 同一套渲染。BDMV 输入五步：解析 BDMV 结构、提取 IGS 场景、提取 SUP 轨道、解码显示集、写清单并提交；独立流输入四步：探测流表、提取图形流、解码显示集、写清单并提交。不适用于 `--type` 的步骤标为跳过。只有「解码显示集」能测比例：以全部轨道的显示集总数为分母，跨轨道单调递增，明细为 `<已完成>/<总数> display sets`；其余步骤显示耗时。`--render` 未启用时该步跳过。结尾为 `Done in …` / `Done in … · partial` / `Failed in … · <code>` 与输出目录、资产数。stderr 不是终端时默认静默，`--progress` 强制逐行输出（每步一行 + 每 10% 一行）。stdout 仍只有一行 JSON。`render` 使用同一套步骤名与同一行格式，两个命令的进度逐行对应。
+进度输出（stderr）与 `build` 同一套渲染。BDMV 输入五步：解析 BDMV 结构、提取 IGS 场景、提取 SUP 轨道、解码显示集、写清单并提交；独立流输入四步：探测流表、提取图形流、解码显示集、写清单并提交。`--type` 筛选未覆盖的步骤标为跳过。只有「解码显示集」能测比例：以全部轨道的显示集总数为分母，跨轨道单调递增，明细为 `<已完成>/<总数> display sets`；其余步骤显示耗时。`--render` 未启用时该步跳过。结尾为 `Done in …` / `Done in … · partial` / `Failed in … · <code>` 与输出目录、资产数。stderr 为文件或管道时默认静默，`--progress` 强制逐行输出（每步一行 + 每 10% 一行）。stdout 仍只有一行 JSON。`render` 使用同一套步骤名与同一行格式，两个命令的进度逐行对应。
 
 显示集 PNG 的 deflate 在线程池上并发执行（4 路，等于 libuv 默认线程池大小），合成仍在主线程；`assets-manifest.json` 的记录顺序保持「每条 SUP 记录后紧跟其显示集 PNG」。
 
@@ -106,7 +106,7 @@
 | --- | --- |
 | `--out DIR` | 必填 |
 | `[input]` | 位置参数；按文件内容判定为 BDMV、流文件或 `.mnu`/`.sup`，无需声明类型 |
-| `--type all\|igs\|sup` | 仅 BDMV 与流文件输入；选择 PNG 来源（`metadata`/`hdmv` 不适用） |
+| `--type all\|igs\|sup` | 仅 BDMV 与流文件输入；筛选解码的 PNG 家族，默认 `all` |
 | `--m2ts` / `--pid` | 仅 BDMV 输入；`--pid` 也用于独立 MNU 的场景标识 |
 | `--language LANG` | 仅独立 SUP；写入清单的三字母语言 |
 | `--png-level 0-9` | 写 PNG 时的 deflate 档位，见下 |
@@ -137,12 +137,14 @@ IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与
 | `--limits FILE` | `DEFAULT_LIMITS` | VM 指令/队列/调用预算 |
 | `--disc-id HEX` | `CERTIFICATE/id.bdmv` | 32 位十六进制碟片 ID；只写入 BD-J 包的 `bdjLaunch.discId`，HDMV 包不使用 |
 | `--overwrite` | 关 | 允许覆盖已有目录；匹配的旧媒体可复用 |
-| `--resume [dir]` | 关 | 从上次运行留下的目录复用已完成的媒体；省略 `dir` 时取输出目录旁最新的 `.<输出名>.staging-*` |
-| `--codec hevc\|h264` | `hevc`（`copy` 时 `h264`） | 菜单背景视频编码格式；HDMV 与 BD-J 包共用同一默认 |
+| `--no-reuse` | 关 | 每次构建重新生成菜单媒体，用于干净重建；`--resume` / `--resume-dir` 按指定目录复用媒体 |
+| `--resume` | 关 | 裸开关；从输出目录旁最新的 `.<输出名>.staging-*` 复用已完成的媒体 |
+| `--resume-dir <dir>` | 关 | 指定复用目录 |
+| `--codec hevc\|h264` | `hevc` | 菜单背景视频编码格式；`--video copy` 回退编码的 clip 默认 `h264` |
 | `--crf N` | 24（hevc）/ 18（h264） | 编码质量 0–51 |
 | `--preset NAME` | `veryfast` | `ultrafast` / `veryfast` / `fast` / `medium` |
 | `--hdr tonemap\|preserve` | `tonemap` | HDR 处理方式 |
-| `--video encode\|copy` | `encode` | `copy` 把源 H.264 视频流复制进 MP4 不重编码；复制起点是播放器解码的入口点（EP map 中 `in` 点之前最近的关键帧），`in` 点须落在该入口点 256 tick（5.689 ms）的量化栅格内，其余自动退回编码并给 `MEDIA_REMUX_UNAVAILABLE` 警告。`copy` 时 `--codec` 缺省 `h264` |
+| `--video encode\|copy` | `encode` | `copy` 把源 H.264 视频流复制进 MP4 不重编码；复制起点是播放器解码的入口点（EP map 中 `in` 点之前最近的关键帧），`in` 点须落在该入口点 256 tick（5.689 ms）的量化栅格内，其余自动退回编码并给 `MEDIA_REMUX_UNAVAILABLE` 警告。`copy` 回退编码的 clip 默认 `h264` / `crf` 18 |
 | `--menu-media auto\|all\|none` | `auto` | 导出哪些播放列表的媒体，HDMV 与 BD-J 共用同一个取值。`auto` 只导菜单级媒体；`all` 导出导航可达的全部 PlayItem；`none` 不导媒体 |
 | `--progress` | 自动 | stderr 非终端时也逐行输出进度 |
 | `--no-progress` | 关 | 关闭进度输出 |
@@ -151,7 +153,7 @@ IGS 元素写出的是调色板索引 PNG（color type 3 + `tRNS`），像素与
 
 `--menu-media` 的三种取值在两种导航模式下含义相同，判定证据不同：HDMV 由 IGS 场景确定哪些 PlayItem 属于菜单，`auto` 即「场景匹配到的菜单媒体」；BD-J 没有场景证据，`auto` 以播放列表总时长不超过 900 秒作为菜单级判据，超出的写 `M5_MENU_MEDIA_SCOPE_SKIPPED`（列出编号与分钟数，提示可用 `--menu-media all`）。`all` 在两种模式下都导出全部可达 PlayItem（HDMV 取 VM 可达集合，BD-J 取 BDJO 授权集合），会包含正片，开销接近整碟。`none` 只打包结构与场景，运行时把 `PLAY_PLAYLIST` 报为不可用，并写 `M5_MENU_MEDIA_DISABLED`。
 
-进度输出（stderr）：开头是 `input`、`output`、`title`、`profile` 四行，`--resume` 时另加 `resume` 行给出复用来源，随后是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，行首标记随计时器持续动画，无媒体可导时该步标记为跳过。媒体导出期间该步按 **clip** 聚合：一个 clip 的背景与它的全部音轨算一个单位，音轨再多也只推进一次，百分比与 `clip i/N` 同步，复用的 clip 也计入已完成（它主动上报一个已完成事件，所以 `--resume` 续跑同样能走到 100%）。明细为 `clip i/N · Clip · 流 · 已编码/总时长`，其中 `i/N` 是计划内的 clip 位置，背景流那一项写作 `background copy` 或 `background encode`，直接给出该 clip 实际走的是复制还是重编码（请求了 `--video copy` 但被拒绝时这里显示 `encode`），复用时另带 `· reused`。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 不是终端时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
+进度输出（stderr）：首行是 `bdmv2web build · 7 steps`，随后是 `input`、`output`、`title`、`profile` 四行，`--resume` 时另加 `resume` 行给出复用来源，再是固定 7 步——解析 BDMV 结构、提取 IGS 场景、解析 Top Menu 播放列表、选择菜单场景与媒体、导出菜单媒体、构建菜单包、写入报告并提交。参数解析在打印计划之前完成，不作为步骤。每步占一行 `✓ i/7  标题  耗时  明细`；正在执行的一步在终端上占用一行动态刷新，行首标记随计时器持续动画，无媒体可导时该步标记为跳过。媒体导出期间该步按 **clip** 聚合：一个 clip 的背景与它的全部音轨算一个单位，音轨再多也只推进一次，百分比与 `clip i/N` 同步，复用的 clip 也计入已完成（它主动上报一个已完成事件，所以 `--resume` 续跑同样能走到 100%）。明细为 `clip i/N · Clip · 流 · 已编码/总时长`，其中 `i/N` 是计划内的 clip 位置，背景流那一项写作 `background copy` 或 `background encode`，直接给出该 clip 实际走的是复制还是重编码（请求了 `--video copy` 但被拒绝时这里显示 `encode`），复用时另带 `· reused`。收尾输出 `Done in …` / `Failed in … · <code>` 与输出目录、包大小、诊断数。stderr 为文件或管道时默认静默；`--progress` 强制逐行输出。stdout 只有一行结果 JSON。
 
 产物目录：
 
@@ -256,19 +258,19 @@ bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-c
 | `CLI_USAGE` | 无命令、命令名未知、位置参数过多 |
 | `CLI_UNKNOWN_OPTION` | 命令不支持的选项，`commander` 会给出最接近的拼写建议 |
 | `CLI_MISSING_VALUE` | 带值选项缺值 |
-| `CLI_INVALID_ARGUMENT` | 带值选项给了空值，例如 `--out=` |
+| `CLI_INVALID_ARGUMENT` | 带值选项给了空值（例如 `--out=`），或 `--type` 取值不在该命令允许的集合中 |
 | `CLI_MISSING_INPUT` / `CLI_MISSING_OUTPUT` | 缺输入/`--out` |
 | `CLI_INVALID_FORMAT` | `--format` 值不支持 |
 | `CLI_INVALID_PROFILE` | profile 字段长度/字符/取值非法 |
 | `INVALID_LIMITS_FILE` / `INVALID_LIMIT` | limits JSON 不可读 / 键或值非法 |
-| `CLI_INVALID_ASSET_TYPE` / `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | 资源类型、Clip 或 PID 参数非法 |
-| `CLI_EXPORT_SELECTION` | 流文件输入配合 `--m2ts`，`--pid` 不在 PMT 声明的图形 PID 中，`.mnu`/`.sup` 输入（应改用 `render`），`--type metadata`/`hdmv` 或 `--no-assets` 配合 `--render`，对流文件用 `--type hdmv` |
+| `CLI_INVALID_M2TS` / `CLI_INVALID_PID` | Clip 或 PID 参数非法 |
+| `CLI_EXPORT_SELECTION` | 流文件输入配合 `--m2ts`，`--pid` 不在 PMT 声明的图形 PID 中，`.mnu`/`.sup` 输入（应改用 `render`），`--type metadata`/`hdmv` 或 `--metadata-only` 配合 `--render`，对流文件用 `--type hdmv` |
 | `EXPORT_INVALID_STREAM` | 流文件无法作为 m2ts 解析（无 PAT/PMT），或声明的 PGS PID 无完整显示集；`render` 的流输入沿用该码 |
 | `CLI_INVALID_LANGUAGE` | `render --language` 不是三字母语言码 |
 | `CLI_RENDER_SELECTION` | `render` 的选项不适用于该输入（流文件配合 `--m2ts`、`.mnu`/`.sup` 配合 `--type`、`--pid`/`--language` 给错输入） |
 | `RENDER_INVALID_MNU` / `RENDER_INVALID_SUP` | 独立资源无法解析或没有可渲染内容 |
 | `CLI_INVALID_PNG_LEVEL` | `--png-level` 不是 0–9 |
-| `CLI_INVALID_RESUME` | `build --resume` 没有找到或不是可用的 staging 目录 |
+| `CLI_INVALID_RESUME` | 裸用 `build --resume` 时找不到输出目录旁最新的 staging 目录，或 `--resume-dir` 指定的目录不可用 |
 | `CLI_INVALID_DISC_ID` / `CLI_INVALID_PORT` | `--disc-id` 不是 32 位十六进制 / `--port` 不是 1–65535 整数 |
 | `CLI_SERVE_ROOT_MISSING` / `CLI_SERVE_ROOT_INVALID` / `CLI_SERVE_FAILED` | serve 的包目录缺失 / 非法 / 服务运行失败 |
 | `COMPARE_MISSING_ACTUAL` / `COMPARE_INPUT_INVALID` / `COMPARE_ACTUAL_INVALID` / `COMPARE_REFERENCE_INVALID` / `COMPARE_REFERENCE_NOT_INDEPENDENT` | `compare` 的输入序列、trace 或参考文件校验失败；参考与实际同文件时报 `COMPARE_REFERENCE_NOT_INDEPENDENT` |
@@ -277,7 +279,7 @@ bdmv2web visualize <input> [--out DIR] [--programs IDS] [--max-blocks N] [--no-c
 
 ```sh
 corepack pnpm run cli:dev inspect "/path/BDMV" --format json
-corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/analysis --no-assets
+corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/analysis --metadata-only
 corepack pnpm run cli:dev list "/path/BDMV" --type igs
 corepack pnpm run cli:dev export "/path/BDMV" --out /tmp/assets --type igs
 corepack pnpm run cli:dev export "/path/00005.SumiSora.sc.rsks" --out /tmp/assets --type sup

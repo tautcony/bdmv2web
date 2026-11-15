@@ -34,7 +34,7 @@
 | 阶段 | 行为 | 失败码 |
 | --- | --- | --- |
 | 大小 | 单个资产估算与实测由 `maxAssetBytes` 限制（一段 clip 的每个输出逐个检查）；整包在开始与结束时统计 | `MEDIA_ASSET_BUDGET_EXCEEDED` |
-| 复用 | `overwrite` 或 `--resume` 且旧计划完全匹配 → 复用；无 `asset-manifest.json` 时用 `ffprobe` 读回 codec 与时长 | — |
+| 复用 | `--overwrite`、`--resume` 或 `--resume-dir` 且旧计划完全匹配 → 复用；`--no-reuse` 关闭 `--overwrite` 的复用；无 `asset-manifest.json` 时用 `ffprobe` 读回 codec 与时长 | — |
 | 工具 | `ffmpeg -version`、`ffprobe -version`、`ffmpeg -encoders`、`ffmpeg -filters`，每个包探测一次（按 runner 缓存） | `MEDIA_TOOL_UNAVAILABLE` / `MEDIA_ENCODER_UNAVAILABLE` |
 | 探测 | `ffprobe` 源时间线、视频/音频 PID、色彩参数 | `MEDIA_VIDEO_PID_UNRESOLVED` / `MEDIA_PID_UNRESOLVED` |
 | 编码 | HEVC + AAC（默认），`crf` HEVC 24 / H.264 18，`preset` `veryfast` | `MEDIA_PROCESS_FAILED` / `MEDIA_JOB_TIMEOUT` / `MEDIA_JOB_CANCELLED` |
@@ -56,7 +56,7 @@ BD-J 模式下 `auto` 以播放列表总时长 ≤ 900 秒为菜单级判据，�
 
 ### 编码参数
 
-`build` / `convert` 接受四个菜单媒体参数，写入各 `media-plans/*.json` 的 `encoding`：
+`build`（`convert` 为别名）接受以下菜单媒体参数，写入各 `media-plans/*.json` 的 `encoding`：
 
 | 参数 | 取值 | 默认 |
 | --- | --- | --- |

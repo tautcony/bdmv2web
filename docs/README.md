@@ -5,10 +5,10 @@
 文档分三类：
 
 - **现状类**描述当前行为、支持边界与开发流程，随代码更新，是日常工作入口。
-- **设计类**记录早期技术方案，拟议内容可能与当前实现不一致。
+- **设计类**记录各时点的技术方案与拟议内容。
 - **审查类**记录历次评审与审计的结论和修复过程。
 
-设计类与审查类收录于 [archive/](archive/README.md)，只用于历史语境，不作为当前行为的依据；各篇状态见文首声明与归档清单。
+设计类与审查类收录于 [archive/](archive/README.md)；各篇状态见文首声明与归档清单。
 
 ## 现状类
 
@@ -17,9 +17,10 @@
 - [开发指南](guides/development.md)：工具链、CLI、测试和构建流程。
 - [性能基准指南](guides/performance.md)：稳定 case、独立进程测量、run记录、比较/趋势报告和 CI 流程。
 - [发布指南](guides/release.md)：npm 包名、版本与 tag、发布工作流和一次性配置。
-- [llm-wiki](llm-wiki/README.md)：面向 LLM/agent 的工程知识索引——任务路由、包/功能/诊断/排查文档与机器可读 `index.json`。
+- [llm-wiki](llm-wiki/README.md)：面向 LLM/agent 的工程知识索引——任务路由、包/功能/诊断/排查文档与机器可读 `index.json`。以 2026-11-07 commit `21c580a` 的代码结构为基线；命令、选项与验收口径见 `README.md`、`docs/guides/development.md` 与 `openspec/specs/`。
 - [开发参考索引](references/README.md)：固定版本参考实现、规范入口、许可与 [M0–M6 阶段资料](references/stages/)。
 - [性能 fixture 手册](../test-data/fixtures/perf/README.md)：精选测量输入、来源、阶段与已验证结构计数。
+- [OpenSpec 工件目录](../openspec/changes/README.md)：活动 change、冻结归档与跨 change 过程记录的读法。
 
 ### 能力与支持范围
 
@@ -42,4 +43,5 @@
 - [2026-11-06 提交批次审查](archive/reviews/review-2026-11-06-daily/index.md)：当日 16 提交的批次审查与修复记录。
 - [2026-11-06 HDMV VM 一致性审计](archive/reviews/review-2026-11-06-hdmv-vm-conformance/index.md)：对照 libbluray/libhdmv 的逐指令核对、运行模型差异与修复顺序。
 - [2026-11-07 过度防御与辩解式内容审计](archive/reviews/review-2026-11-07-over-defensive-audit/index.md)：源码死防御、吞错与文档辩解残留的逐条清单。
+- [2026-11-11 全仓代码注释审计](archive/reviews/review-2026-11-11-comment-audit/index.md)：476 条可删判定，已落地 2 条死内容与 29 项结构改动。
 - [归档清单](archive/README.md)：以上记录的范围与状态一览。

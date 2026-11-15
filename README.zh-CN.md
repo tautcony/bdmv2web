@@ -12,7 +12,7 @@
 
 - 生成包含菜单导航、背景视频、音轨、按钮图形和音效的菜单包。
 - 从打包的应用 JAR 运行 BD-J Xlet，并使用本地 Java 进程。
-- 将 BD-J 可访问 Playlist 的视频和音轨打包为浏览器播放资产。`build --overwrite` 与 `build --resume` 会复用匹配的媒体资产。
+- 将 BD-J 可访问 Playlist 的视频和音轨打包为浏览器播放资产。`build --overwrite` 复用匹配的媒体资产，`build --resume` 复用中断运行的媒体，`build --no-reuse` 每次构建都重新生成菜单媒体。
 - 检查 BDMV 结构，导出 HDMV、IGS、SUP 数据与菜单资源。
 - 将受支持的整文件正片播放交给系统播放器。
 - 审计菜单包结构、引用、路径和依赖，并生成兼容性报告。
@@ -39,14 +39,14 @@
 
 | 依赖 | 版本或要求 | 用途 |
 | --- | --- | --- |
-| Node.js | `>=22` | 运行命令 |
-| Node.js | `24.18.0`（`.node-version`） | 从源码构建 |
+| Node.js | `>=22`（npm 全局安装） | 运行已安装的 `bdmv2web` CLI |
+| Node.js | `>=24.18.0`（`.node-version`：`24.18.0`；仓库内） | 在仓库内开发和运行脚本 |
 | pnpm | `11.25.0`，通过 `corepack pnpm` 调用 | 安装依赖和运行脚本 |
 | ffmpeg | 可从 `PATH` 调用，需含 `libx265`、`libx264`、`aac` | 编码菜单背景视频与音轨 |
 | ffprobe | 可从 `PATH` 调用 | 读取菜单媒体信息 |
 | Java 运行时 | Java 21 或兼容 `java.desktop`；仅 BD-J 包需要 | 通过 `serve` 运行打包的 BD-J Xlet |
 
-背景视频默认用 `libx265`（HEVC）编码，`crf` 24；`--codec h264` 使用 H.264 和 `crf` 18。`build --video copy` 把源视频流重新封装进 MP4，保留源码率。音轨编码为 AAC。重新封装要求源为 8-bit 4:2:0 SDR H.264，且 PlayItem 的 in 点落在入口点表 5.689 ms 栅格内的解码入口点；其他 clip 重新编码（未指定 `--codec` 时用 H.264），媒体计划记录 `MEDIA_REMUX_UNAVAILABLE` 警告。HDR 源默认经 FFmpeg 的 `zscale` 滤镜（libzimg）色调映射为 SDR BT.709。FFmpeg 不含 `zscale` 时，包保留 HDR 标签，诊断中给出 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告。
+背景视频默认用 `libx265`（HEVC）编码，`crf` 24；`--codec h264` 使用 H.264 和 `crf` 18。音轨编码为 AAC。`build --video copy` 把源视频流重新封装进 MP4，保留源码率。重新封装要求源为 8-bit 4:2:0 SDR H.264，且 PlayItem 的 in 点落在入口点表 5.689 ms 栅格内的解码入口点；不满足条件的 clip 回退编码，默认用 H.264 和 `crf` 18，媒体计划记录 `MEDIA_REMUX_UNAVAILABLE` 警告。HDR 源默认经 FFmpeg 的 `zscale` 滤镜（libzimg）色调映射为 SDR BT.709。FFmpeg 不含 `zscale` 时，包保留 HDR 标签，诊断中给出 `MEDIA_HDR_TONEMAP_UNAVAILABLE` 警告。
 
 菜单媒体范围由 `--menu-media auto|all|none` 控制，HDMV 与 BD-J 相同：`auto`（默认）导出菜单使用的播放列表——HDMV 为 IGS 场景匹配到的，BD-J 为总时长不超过 15 分钟的；`all` 导出全部可达播放列表；`none` 只打包菜单资源，运行时将 `PLAY_PLAYLIST` 报为不可用。被 `auto` 跳过的播放列表写入 `M5_MENU_MEDIA_SCOPE_SKIPPED` 诊断。
 
@@ -63,12 +63,11 @@ bdmv2web --version
 
 ```sh
 corepack pnpm install --frozen-lockfile
-corepack pnpm generate:contracts
 corepack pnpm build
 corepack pnpm bundle:cli
 ```
 
-从源码构建后，`apps/cli/dist/index.js` 为可直接执行的命令入口。在仓库中开发时，使用 `corepack pnpm run cli:dev <命令> [参数]` 调用 CLI。
+从源码构建后，`apps/cli/dist/index.js` 为可直接执行的命令入口。在仓库内（Node `>=24.18.0`），使用 `corepack pnpm run cli:dev <命令> [参数]` 调用 CLI。
 
 ## 使用
 
@@ -92,7 +91,7 @@ bdmv2web validate ./BDMV-menu
 
 直接打开 `BDMV-menu/index.html` 可运行 HDMV 菜单包。菜单媒体保存在输出包内。正片播放由配置的外部播放器适配器处理。`loop=false` 的背景项停在最后一帧。
 
-构建阶段会将 BD-J 可访问 Playlist 的 PlayItem 导出为 MP4 视频和 AAC 音频，并写入输出目录。等价媒体引用共用资产。使用 `--overwrite` 时从输出目录复用匹配媒体计划的资产；源区间或编码设置变化时重新导出。`--resume [DIR]` 改为从上次中断留下的目录复用：给了 `DIR` 就用它，省略时取输出目录旁最新的 `.<输出名>.staging-*`。复用的资产会被探测，时长与媒体计划相差超过 0.25s 的重新导出。目录是可选值，输入写在标志之前，或用 `--resume=DIR`。
+构建阶段会将 BD-J 可访问 Playlist 的 PlayItem 导出为 MP4 视频和 AAC 音频，并写入输出目录。等价媒体引用共用资产。使用 `--overwrite` 时从输出目录复用匹配媒体计划的资产；源区间或编码设置变化时重新导出。`build --no-reuse` 每次构建都重新生成菜单媒体，用于干净重建。`build --resume` 是裸开关，从输出目录旁最新的 `.<输出名>.staging-*` 复用媒体；`build --resume-dir <dir>` 指定复用目录。同时给出 `--no-reuse` 时，`--resume` / `--resume-dir` 按各自指定的目录复用媒体。复用的资产会被探测，时长与媒体计划相差超过 0.25s 的重新导出。
 
 使用本地 Java 运行时启动 BD-J 菜单包：
 
@@ -110,19 +109,21 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 | --- | --- | --- |
 | `inspect <INPUT>` | 查看光盘结构和诊断信息 | `--format table\|json`、`--out FILE` |
 | `list <INPUT>` | 列出可导出的 IGS 和 SUP 资源 | `--type all\|igs\|sup`、`--m2ts CLIP_ID`、`--pid PID`、`--format table\|json` |
-| `export <INPUT> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源，可按需附加 PNG 与元数据 | `--type all\|metadata\|hdmv\|igs\|sup`、`--no-assets`、`--render`、`--m2ts CLIP_ID`、`--pid PID`、`--png-level 0-9` |
-| `render <INPUT>` | 从 BDMV、`.m2ts`/`.rsks` 流、`.mnu` 或 `.sup` 生成 PNG | `--out DIR`、`--type all\|igs\|sup`、`--language LANG`、`--png-level 0-9`、`--m2ts CLIP_ID`、`--pid PID` |
-| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--menu-media auto\|all\|none`、`--overwrite`、`--resume [DIR]` |
+| `export <INPUT> --out DIR` | 导出 `.mnu` 和 `.sup` 原始资源，可按需附加 PNG 与元数据 | `--type all\|metadata\|hdmv\|igs\|sup`、`--metadata-only`、`--render`、`--m2ts CLIP_ID`、`--pid PID`、`--png-level 0-9` |
+| `render <INPUT> --out DIR` | 从 BDMV、`.m2ts`/`.rsks` 流、`.mnu` 或 `.sup` 生成 PNG | `--type all\|igs\|sup`、`--language LANG`、`--png-level 0-9`、`--m2ts CLIP_ID`、`--pid PID` |
+| `build <BDMV>` | 生成菜单包 | `--out DIR`、`--title NAME`、`--player-profile FILE`、`--codec hevc\|h264`、`--crf N`、`--preset NAME`、`--hdr tonemap\|preserve`、`--video encode\|copy`、`--menu-media auto\|all\|none`、`--overwrite`、`--no-reuse`、`--resume`、`--resume-dir <dir>` |
 | `validate <菜单包目录>` | 审计菜单包并更新审计报告 | `--format json` |
+| `compare <INPUT>` | 对照实际 VM trace 与独立参考 trace | `--actual FILE`（必填）、`--reference FILE`、`--reference-tool NAME`、`--reference-version VERSION`、`--out FILE`、`--format json` |
+| `visualize <INPUT>` | 导出导航图交互查看器与 mermaid 总览/分程序流程图 | `--out DIR`、`--programs IDS`、`--max-blocks N`、`--no-closure`、`--overwrite`、`--format table\|json` |
 | `serve <菜单包目录>` | 提供菜单包并运行 BD-J Java 会话 | `--port N`、`--java EXECUTABLE`、`--player system`、`--disc-id HEX` |
 
 `build` 默认输出到 `<BDMV 父目录>/BDMV-menu`。输出目录已存在时，使用 `--overwrite` 覆盖。运行中断时已完成的工作保留在 `.<输出名>.staging-*`，`--resume` 从该目录继续；输出目标在构建完成时写入。影片 PGS 字幕通过 `export --type sup` 导出。
 
-`--m2ts` 和 `--pid` 的值可通过 `list` 查询。
+`--m2ts` 和 `--pid` 的值可通过 `list` 查询。`list` 会报 IGS 场景与可达 SUP 轨道元数据。
 
-`--type` 指定命令写出哪些产物，与输入类型无关：`igs`、`sup` 是 `.mnu`/`.sup` 容器（配合 `--render` 还包括其 PNG），`hdmv` 是命令表与来源映射，`metadata` 是整套结构元数据——`manifest.json`、`hdmv/*.json`、`igs/*.json` 与 `sup/tracks.json`；`all` 是该命令能写出的全部产物。省略 `--type` 时，`export` 写容器。
+`--type` 按命令区分。`export` 取 `all|metadata|hdmv|igs|sup`：`igs`、`sup` 写 `.mnu`/`.sup` 容器（配合 `--render` 还包括其 PNG），`hdmv` 写命令表与来源映射，`metadata` 写整套结构元数据——`manifest.json`、`hdmv/*.json`、`igs/*.json` 与 `sup/tracks.json`，`all` 写全部；省略时写容器。`list` 取 `all|igs|sup`，筛选清单条目，不写文件。`render` 取 `all|igs|sup`，筛选解码的 PNG 家族。`inspect` 没有 `--type`。非法值由 Commander 校验，报 `CLI_INVALID_ARGUMENT`。
 
-`--no-assets` 不写容器也不写 PNG：单独使用时写出整套元数据，配合 `--type igs` 或 `--type sup` 时只写对应的那一段元数据。`export` 与 `render` 共用一条管线；`render` 把选择固定为 PNG，并且是唯一能解码独立 `.mnu`/`.sup` 文件的命令，输入类型由文件本身判定。
+`--metadata-only` 只写结构元数据：单独使用时写出整套，配合 `--type igs` 或 `--type sup` 时只写对应那一段。它与 `--render` 冲突，报 `CLI_EXPORT_SELECTION`。`export` 与 `render` 共用一条管线；`render` 把选择固定为 PNG，并且是唯一能解码独立 `.mnu`/`.sup` 文件的命令，输入类型由文件本身判定。
 
 `--png-level 0-9` 设置 `export --render` 与 `render` 写出 PNG 的 deflate 级别；IGS 元素默认为 1，PGS 画布默认为 6。没有资产侧的运行不写 `assets-manifest.json`。
 
@@ -149,7 +150,7 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 }
 ```
 
-| 字段 | 必填 | 取值 | 默认 |
+| 字段 | 文件内必填 | 取值 | 默认 |
 | --- | --- | --- | --- |
 | `menuLanguage` | 是 | 3 个 ASCII 字母（PSR18） | `eng` |
 | `audioLanguage` | 是 | 3 个 ASCII 字母（PSR16） | `eng` |
@@ -160,6 +161,8 @@ bdmv2web serve ./BDMV-menu [--port 4173] [--java <executable>]
 | `videoProfiles` | 否 | 字符串数组 | `[]` |
 | `audioProfiles` | 否 | 字符串数组 | `[]` |
 
+`默认` 列是不传 `--player-profile` 时的全局默认值：此时整个对象使用 `DEFAULT_PLAYER_PROFILE`。提供文件时六个必填字段都要给出，只有 `videoProfiles`、`audioProfiles` 可省略。
+
 ## 开发
 
 ```sh
@@ -167,7 +170,7 @@ corepack pnpm build                              # 编译运行时代码
 corepack pnpm run cli:dev inspect /path/to/BDMV  # 直接运行 CLI
 corepack pnpm lint                               # ESLint 和 Java 检查
 corepack pnpm lint:fix                           # 应用 ESLint 自动修复
-corepack pnpm lint:java                          # 检查 BD-J 主机 Java 样式和 Java 8 编译
+corepack pnpm lint:java                          # 检查 BD-J 主机 Java 样式和 Java 8 编译目标
 corepack pnpm typecheck                          # 类型检查
 corepack pnpm test                               # 运行测试
 corepack pnpm test:all                           # 运行全部测试并收集失败结果
@@ -175,7 +178,9 @@ corepack pnpm test:coverage                      # 运行测试并输出源码�
 bash scripts/ci.sh                               # 运行完整 CI 检查
 ```
 
-`corepack pnpm lint:java` 需要 JDK 21 或更新版本；首次运行时会下载固定版本的 Checkstyle。
+干净克隆后运行 `corepack pnpm install --frozen-lockfile`。`lint`、`test`、`test:all`、`test:coverage` 在缺少 `dist/` 产物时会自动构建一次；`typecheck` 每次运行前重建 workspace 声明。完整门禁是 `bash scripts/ci.sh`。
+
+`corepack pnpm lint:java` 需要 JDK 21 或更新版本，用 `javac --release 8` 检查 BD-J 主机的 Java 8 编译目标；首次运行时会下载固定版本的 Checkstyle。
 
 运行单个包的测试：
 
