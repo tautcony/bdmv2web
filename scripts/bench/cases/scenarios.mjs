@@ -398,7 +398,8 @@ export async function prepareScenarioCase(caseDef, root) {
     const temp = await mkdtemp(join(tmpdir(), "bdmv2web-bench-pgs-"));
     const source = new Uint8Array(await readFile(fileFor(root, options.input)));
     const clip = join(temp, "clip.m2ts");
-    await writeFile(clip, growWithRepeatedPackets(source, options.clipBytes));
+    const grown = growWithRepeatedPackets(source, options.clipBytes);
+    await writeFile(clip, grown);
     const requests = options.pids.map((pid) => ({ pid, outputPath: join(temp, `track-${pid.toString(16)}.sup`) }));
     const run = () => extractPgsTracks(clip, requests, {});
     const validate = (tracks) => {
@@ -409,7 +410,7 @@ export async function prepareScenarioCase(caseDef, root) {
       return { tracks: tracks.length, displaySets: sets, supBytes: bytes };
     };
     return {
-      input: { clipBytes: options.clipBytes, packets: options.clipBytes / 192, pids: options.pids.map((pid) => `0x${pid.toString(16)}`).join(","), fill: "repeated-packets" },
+      input: { clipBytes: grown.byteLength, packets: grown.byteLength / 192, pids: options.pids.map((pid) => `0x${pid.toString(16)}`).join(","), fill: "repeated-packets" },
       fixture, scope: caseDef.scope, run, validate,
       describe: (tracks) => ({ summary: `Extracted ${tracks.length} SUP tracks with ${tracks.reduce((sum, track) => sum + track.displaySets.length, 0)} display sets`, details: validate(tracks) }),
       afterMeasurement: () => rm(temp, { recursive: true, force: true }), cleanup: () => rm(temp, { recursive: true, force: true }),

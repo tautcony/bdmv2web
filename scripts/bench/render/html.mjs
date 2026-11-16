@@ -284,7 +284,7 @@ export function html(trend, baseDir = process.cwd()) {
     kpi("Improvements", String(summary.improvements ?? 0), "same thresholds, faster", summary.improvements ? "good" : ""),
     kpi("Unstable", String(summary.unstable ?? 0), "latest run drifted ≥25%", summary.unstable ? "warn" : ""),
     kpi("Failures / skips", `${summary.failures ?? 0} / ${summary.skips ?? 0}`, "current-session source-run status", summary.failures ? "bad" : ""),
-    kpi("Slowest work", slowest ? fmtMs(slowest.value) : "—", slowest ? `${slowest.caseId}${Number.isFinite(slowest.floorMs) ? ` · floor ${fmtMs(slowest.floorMs)}` : ""}` : "no timed rows"),
+    kpi(slowest && Number.isFinite(slowest.floorMs) ? "Slowest work" : "Slowest", slowest ? fmtMs(slowest.value) : "—", slowest ? `${slowest.caseId}${Number.isFinite(slowest.floorMs) ? ` · floor ${fmtMs(slowest.floorMs)}` : ""}` : "no timed rows"),
     kpi("GC hotspot", gcHotspot ? fmtMs(gcHotspot.value) : "—", gcHotspot ? `${gcHotspot.caseId} per call` : "no GC series", gcHotspot ? "warn" : ""),
   ].join("");
   const hotspot = `<section class="panel"><div class="section-head"><h2>Hotspots</h2><p>Latest run per case. Heat cells are ranked within each column across the visible environment; deeper colour means a higher value.</p></div>
