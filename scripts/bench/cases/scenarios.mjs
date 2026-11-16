@@ -125,6 +125,17 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
       options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: CLIP_BYTES, ...(m2ts ? { m2ts } : {}) },
     });
   }
+  // `--type sup` still runs the IGS extraction that discovers which SUP tracks are
+  // reachable, while `--type igs` writes the containers and stops; the pair
+  // separates that IGS read from the PGS read itself on the same input.
+  for (const type of ["igs", "sup"]) {
+    result.push({
+      caseId: `cli.perf.bdmv.export.${type}`, suite: "scenario", category: "cli", name: `CLI BDMV export --type ${type} over 16 MiB of clip data`, sample: "synthetic-clip-set",
+      fixture: { id: "synthetic-clip-set", version: "2", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: CLIP_BYTES, fill: "repeated-packets", type } },
+      fixtureRoot, scope: "cli-bdmv-export", spawnsChild: true, baselineCaseId: "cli.floor.export",
+      options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: CLIP_BYTES, type },
+    });
+  }
   // These rows exist to state the ceiling: the same commands over an input that is
   // pure stuffing, so every packet is skipped. They say what a command costs when
   // there is nothing to read; they are not a description of a clip.
@@ -139,6 +150,15 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     fixture: { id: "synthetic-clip-set", version: "2", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024, fill: "null-packets" } },
     fixtureRoot, scope: "cli-io-ceiling", spawnsChild: true, baselineCaseId: "cli.floor.export", ioCeiling: true,
     options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024, fill: "null" },
+  });
+  // The CLI extracts a SUP track by writing a temporary file, reading it back, and
+  // reparsing it to count display sets. This row runs that whole path in process, so
+  // a change in the write-read-reparse loop shows up without a disc around it.
+  result.push({
+    caseId: "perf.pgs.disc-extract", suite: "scenario", category: "pgs", name: "SUP track extraction from a 2 MiB clip", sample: "synthetic-clip-set",
+    fixture: { id: "synthetic-clip-set", version: "2", parameters: { clip: "00002", pids: "0x1200,0x1201", clipBytes: 2 * 1024 * 1024, fill: "repeated-packets" } },
+    fixtureRoot, scope: "pgs-track-extract",
+    options: { input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: 2 * 1024 * 1024, pids: [0x1200, 0x1201] },
   });
   const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "buildMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
   result.push({
@@ -262,7 +282,7 @@ async function runCli(root, caseDef, outputDir, sequence, observeChild = false) 
   else if (caseDef.options.operation === "export") args = ["export", input, "--type", "hdmv", "--out", output];
   else if (caseDef.options.operation === "list") args = ["list", input];
   else if (caseDef.options.operation === "stream-export") args = ["export", input, "--out", output];
-  else if (caseDef.options.operation === "bdmv-export") args = ["export", input, "--out", output, ...(caseDef.options.m2ts ? ["--m2ts", caseDef.options.m2ts] : [])];
+  else if (caseDef.options.operation === "bdmv-export") args = ["export", input, "--out", output, ...(caseDef.options.type ? ["--type", caseDef.options.type] : []), ...(caseDef.options.m2ts ? ["--m2ts", caseDef.options.m2ts] : [])];
   else if (caseDef.options.operation === "render") args = ["render", input, "--out", output];
   else if (caseDef.options.operation === "validate") args = ["validate", input, "--format", "json"];
   else throw new Error(`Unsupported prepared CLI operation: ${caseDef.options.operation}`);
@@ -372,6 +392,28 @@ export async function prepareScenarioCase(caseDef, root) {
       run,
       validate: (value) => { if (!Array.isArray(value.scenes)) throw new Error("IGS extraction returned no scenes collection"); return { scenes: value.scenes.length, diagnostics: value.diagnostics.length }; },
       describe: (value) => ({ summary: `Extracted ${value.scenes.length} scenes from ${packetCount} transport packets`, details: { transportBytes: repeated.byteLength, packets: packetCount, scenes: value.scenes.length, diagnostics: value.diagnostics.length } }) };
+  }
+  if (caseDef.scope === "pgs-track-extract") {
+    const { extractPgsTracks } = await readModule(root, "packages/media-export/dist/pgs/pgs-extract.js");
+    const temp = await mkdtemp(join(tmpdir(), "bdmv2web-bench-pgs-"));
+    const source = new Uint8Array(await readFile(fileFor(root, options.input)));
+    const clip = join(temp, "clip.m2ts");
+    await writeFile(clip, growWithRepeatedPackets(source, options.clipBytes));
+    const requests = options.pids.map((pid) => ({ pid, outputPath: join(temp, `track-${pid.toString(16)}.sup`) }));
+    const run = () => extractPgsTracks(clip, requests, {});
+    const validate = (tracks) => {
+      if (tracks.length !== requests.length) throw new Error(`SUP extraction returned ${tracks.length} tracks for ${requests.length} PIDs`);
+      const sets = tracks.reduce((sum, track) => sum + track.displaySets.length, 0);
+      const bytes = tracks.reduce((sum, track) => sum + track.byteLength, 0);
+      if (!sets || !bytes) throw new Error("SUP extraction wrote no display sets");
+      return { tracks: tracks.length, displaySets: sets, supBytes: bytes };
+    };
+    return {
+      input: { clipBytes: options.clipBytes, packets: options.clipBytes / 192, pids: options.pids.map((pid) => `0x${pid.toString(16)}`).join(","), fill: "repeated-packets" },
+      fixture, scope: caseDef.scope, run, validate,
+      describe: (tracks) => ({ summary: `Extracted ${tracks.length} SUP tracks with ${tracks.reduce((sum, track) => sum + track.displaySets.length, 0)} display sets`, details: validate(tracks) }),
+      afterMeasurement: () => rm(temp, { recursive: true, force: true }), cleanup: () => rm(temp, { recursive: true, force: true }),
+    };
   }
   if (category === "cli") {
     const temp = await mkdtemp(join(tmpdir(), "bdmv2web-bench-cli-"));
