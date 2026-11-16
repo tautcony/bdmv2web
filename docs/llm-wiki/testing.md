@@ -58,8 +58,8 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 | --- | --- | --- |
 | 手写字节构造器 | `packages/test-fixtures/src/bdmv.ts` | 项目自写，证明实现行为，不是协议证据 |
 | 合成菜单向量 | `packages/test-fixtures/src/menu-runtime.ts` | 两按钮焦点/动作 |
-| 全特性自写合成盘 | `test-data/fixtures/synthetic-all-features/` | `scripts/generate-synthetic-all-features.mjs` 按字段生成；libbluray 1.5.0 读回验证 |
-| IG 包夹具 | `test-data/fixtures/hdmv-navigation/` | 由 `scripts/export-igs-packet-fixtures.mjs` 生成 |
+| 全特性自写合成盘 | `test-data/fixtures/synthetic-all-features/` | `scripts/fixtures/generate-synthetic-all-features.mjs` 按字段生成；libbluray 1.5.0 读回验证 |
+| IG 包夹具 | `test-data/fixtures/hdmv-navigation/` | 由 `scripts/fixtures/export-igs-packets.mjs` 生成 |
 | 外部 ICS 样本 | `test-data/fixtures/igs-parser/` | 带来源与 MIT 许可说明 |
 | igstools 参考摘要 | `test-data/baselines/igs-reference-element-summary.json` | pinned igstools 参考 PNG 的元素级 RGBA 值；测试不读取 `.reference-cache` |
 | libbluray IGS 基线 | `test-data/baselines/libbluray-1.5.0-igs-baseline.json` | 固定 revision `d75c88e` 的 `graphics_processor_decode_ts()` 输出，9 clip / 873 对象 |
@@ -78,9 +78,9 @@ bash scripts/ci.sh                      # install → generate:contracts → bui
 
 三份基线由固定 revision 的外部实现产出，测试只读入库 JSON 与夹具，运行时不需要本机 libbluray 或 igstools。libbluray IGS 基线与 igstools RGBA 基线的 object id 集合逐 clip 交叉核对。
 
-基线 JSON 采用受限深度格式：外层两级展开，`cases` 的每一项占一行，更深的值保持单行紧凑。`scripts/generate-libbluray-baselines.py` 按同一格式写出，重新生成时只改动发生变化的 case 行。
+基线 JSON 采用受限深度格式：外层两级展开，`cases` 的每一项占一行，更深的值保持单行紧凑。`scripts/references/generate-libbluray-baselines.py` 按同一格式写出，重新生成时只改动发生变化的 case 行。
 
-`scripts/generate-libbluray-baselines.py` 与 `scripts/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/tests/integration/hdmv-navigation-corpus-dfs.test.ts` 用本地 DFS explorer 与 libbluray 导航基线对照：index 条目数、静态 playlist 目标集合（`observedPlaylists ⊇ libblurayPlayTargets`）以及 explorer 的边记账不变量。
+`scripts/references/generate-libbluray-baselines.py` 与 `scripts/references/libbluray-igs-dump.c` 是本地证据生成工具，需要本机 libbluray 1.5.0、固定源码树和 clang；CI 不运行它们。`packages/runtime-web/tests/integration/hdmv-navigation-corpus-dfs.test.ts` 用本地 DFS explorer 与 libbluray 导航基线对照：index 条目数、静态 playlist 目标集合（`observedPlaylists ⊇ libblurayPlayTargets`）以及 explorer 的边记账不变量。
 
 ## 新增测试
 

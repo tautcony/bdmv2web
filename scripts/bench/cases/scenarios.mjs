@@ -160,10 +160,10 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     fixtureRoot, scope: "pgs-track-extract",
     options: { input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: 2 * 1024 * 1024, pids: [0x1200, 0x1201] },
   });
-  const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "buildMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
+  const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "assembleMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
   result.push({
     caseId: "cli.synthetic-package.validate", suite: "scenario", category: "cli", name: "CLI synthetic package audit", sample: "synthetic-browser-menu",
-    fixture: browserFixture, scope: "cli-package-audit", spawnsChild: true, baselineCaseId: "cli.floor.validate", options: { operation: "validate", packageBuilder: "buildMenuPackage" },
+    fixture: browserFixture, scope: "cli-package-audit", spawnsChild: true, baselineCaseId: "cli.floor.validate", options: { operation: "validate", packageBuilder: "assembleMenuPackage" },
   });
   if (igsPacketCase) {
     const expected = igsPacketCase.expected?.details ?? {};
@@ -482,7 +482,7 @@ export async function prepareScenarioCase(caseDef, root) {
       : { summary: `${value.command} CLI completed`, details: { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }), ...(value.checks === undefined ? {} : { checks: value.checks, decision: value.decision }) } };
     const cleanup = async () => { await materialized?.cleanup(); await rm(temp, { recursive: true, force: true }); };
     const fixturePath = toPortablePath(root, inputPath);
-    const input = { command: options.operation, ...(options.operation === "floor" ? { loaded: options.command } : {}), ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1, fill: options.fill ?? "repeated" } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
+    const input = { command: options.operation, ...(options.operation === "floor" ? { loaded: options.command } : {}), ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1, fill: options.fill ?? "repeated" } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "assembleMenuPackage" } : {}) };
     return { input, fixture, scope: caseDef.scope, run, validate, describe, afterMeasurement: cleanup, cleanup };
   }
   if (category === "browser") {

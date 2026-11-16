@@ -17,7 +17,7 @@ JSON files and the checked-in fixtures; CI runs neither this script nor libblura
 Each baseline keeps the two outer levels expanded and every deeper value compact,
 so one `cases` entry occupies exactly one line.
 
-Usage:  python3 scripts/generate-libbluray-baselines.py
+Usage:  python3 scripts/references/generate-libbluray-baselines.py
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CACHE = ROOT / ".reference-cache" / "repositories"
 LIBBLURAY_SRC = CACHE / "libbluray-1.5.0" / "src"
-IGS_DUMP_SRC = ROOT / "scripts" / "libbluray-igs-dump.c"
+IGS_DUMP_SRC = ROOT / "scripts" / "references" / "libbluray-igs-dump.c"
 CORPUS_ROOT = ROOT / "test-data" / "fixtures" / "hdmv-navigation" / "disc-data"
 SYNTHETIC_ROOT = ROOT / "test-data" / "fixtures" / "synthetic-all-features"
 BASELINES = ROOT / "test-data" / "baselines"
@@ -517,7 +517,7 @@ def dumps_baseline(value: object, level: int = 0) -> str:
 
 def main() -> None:
     if not LIBBLURAY_SRC.exists():
-        raise RuntimeError("run scripts/fetch-reference-cache.py first")
+        raise RuntimeError("run scripts/references/fetch-cache.py first")
     with tempfile.TemporaryDirectory(prefix="libbluray-baseline-") as tmp:
         work = Path(tmp)
         print("Compiling libbluray evidence tools...")

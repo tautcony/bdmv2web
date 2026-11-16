@@ -38,7 +38,7 @@
 ## 2. 构建与类型检查作用域（D2）
 
 - [x] 2.1 为 `packages/*` 与 `apps/cli` 逐个新增 `tsconfig.build.json`：`{ "extends": "./tsconfig.json", "exclude": ["**/*.test.ts", "**/*.test-d.ts"] }`。验收：11 个包均存在该文件，`node -e` 读取 `exclude` 逐包断言。
-- [x] 2.2 各包 `build` 脚本改为 `tsc -p tsconfig.build.json`；`packages/core` 的第二段 `node ../../scripts/build-core-browser.mjs` 保留。验收：`corepack pnpm -r build` 全通过；`packages/core/dist/` 同时存在 `index.js` 与 `browser.js`。
+- [x] 2.2 各包 `build` 脚本改为 `tsc -p tsconfig.build.json`；`packages/core` 的第二段 `node ../../scripts/build/core-browser.mjs` 保留。验收：`corepack pnpm -r build` 全通过；`packages/core/dist/` 同时存在 `index.js` 与 `browser.js`。
 - [x] 2.3 `typecheck` 保持 `tsc -p tsconfig.json --noEmit`（覆盖测试）。验收：在任一 `.test.ts` 中临时制造类型错误（如 `const x: number = ""`），`typecheck` 必须失败而 `build` 必须成功；验证后还原并确认两者恢复通过。该正反例需写入验证记录。
 - [x] 2.4 保留 `packages/runtime-web/src/`（`package-builder` 仍直接引用 `runtime-web/src/browser.ts`，解耦属第 2 批 D7）。验收：`grep -rn "runtime-web/src/browser.ts" packages/package-builder/src/index.ts` 有命中，且 `corepack pnpm --filter @bdmv2web/package-builder build` 成功；在 change 内留一行注释说明该依赖将在 D7 移除。
 - [x] 2.5 确认发布内容只含产物。验收：`cd packages/core && npm pack --dry-run` 的文件清单不含 `src/`、不含任何 `*.test.*`；对 `packages/test-runner`、`apps/cli` 执行同检查。

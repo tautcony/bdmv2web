@@ -76,7 +76,7 @@
 9. `buildMediaClosure` + `createExternalMediaTargets` 生成可达播放列表与外部播放目标。
 10. 收集：MovieObject 程序、入口表、音效字节、被引用 PNG、诊断。
 11. `decideDelivery` 先算状态（`checks: []`，由诊断与事实决定）；`buildUseCase()` 先调用 `exportMenuMedia()` 编码，再由 `assembleMenuPackage()` 按该状态写包并记录同一结论。
-12. `assembleMenuPackage()` 写文件、消费已编码媒体、复制 `runtime-web/dist/browser.bundle.js` 为 `runtime/app.bundle.js`（bundle 由 workspace build 期的 `scripts/build-runtime-browser.mjs` 用 esbuild 产出）、写 `manifest.json`。
+12. `assembleMenuPackage()` 写文件、消费已编码媒体、复制 `runtime-web/dist/browser.bundle.js` 为 `runtime/app.bundle.js`（bundle 由 workspace build 期的 `scripts/build/runtime-browser.mjs` 用 esbuild 产出）、写 `manifest.json`。
 13. 写入 `reports.json`，`commit()`，由 `publishBuildOutcome()` 统一输出 stdout JSON 并设置退出码（`complete`/`partial` → 0，`failed` → 1）；BD-J 包的 JSON 另带 `launch`。
 
 ## 产物与仓库目录

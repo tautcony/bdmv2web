@@ -8,7 +8,7 @@ import { extractIgsScenes } from "@bdmv2web/igs";
 import { extractPgsTrack } from "@bdmv2web/media-export";
 import { minimalHdmvGolden } from "@bdmv2web/test-fixtures";
 import { adaptIgsScene } from "@bdmv2web/runtime-web";
-import { buildMenuPackage } from "../../src/index.js";
+import { assembleMenuPackage } from "../../src/index.js";
 
 const fixtureRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../test-data/fixtures/synthetic-all-features/BDMV");
 
@@ -40,7 +40,7 @@ describe("package builder with the existing synthetic BDMV fixture", () => {
     const subtitleDeclaration = subtitlePlayItem.streams.find((stream) => stream.pid === subtitle.pid)!;
     const phases: string[] = [];
 
-    const result = await buildMenuPackage({
+    const result = await assembleMenuPackage({
       outputDirectory: outputRoot,
       title: "Synthetic all-features fixture",
       ir: minimalHdmvGolden,
@@ -63,6 +63,7 @@ describe("package builder with the existing synthetic BDMV fixture", () => {
       entryCounts: { declared: disc.entries.length, hdmv: disc.entries.filter((entry) => entry.target.objectType === "HDMV").length },
       diagnostics: extraction.diagnostics,
       onPhase: (phase) => phases.push(phase),
+      preparedMedia: { additional: [] },
     });
 
     const manifest = JSON.parse(await readFile(join(outputRoot, "manifest.json"), "utf8")) as {
@@ -83,6 +84,6 @@ describe("package builder with the existing synthetic BDMV fixture", () => {
     expect(data).toContain('"menuPlaylistIds":[1]');
     expect(data).toContain('"menuScenes":[{"playlistId":1');
     expect((await readdir(join(outputRoot, "assets/audio"))).sort()).toEqual(["sound-0.wav", "sound-1.wav"]);
-    expect(phases).toEqual(["media", "assets", "bundle", "manifest"]);
+    expect(phases).toEqual(["assets", "bundle", "manifest"]);
   });
 });

@@ -200,7 +200,7 @@ buildNavigationGraph(objects, appendedPrograms?, { maxStates?, entries?, context
 - `JUMP_TITLE` 同时生成指向目标 entry object 的 `jump` 边和 `origin: "jump-title"` 的 `sequence` 边；原程序下一条指令不会因此成为可达。
 - `context` 默认是 `object`；`LINK_PI` / `LINK_MK` 在 object context 不终止指令流，在 playlist context 终止。`TERMINATE_PL` 只在 playlist context 终止。
 - 立即数目标可解析就建 resolved 边；紧邻无条件 `MOVE gpr, IMMEDIATE` 装载同一寄存器的跳转（`JUMP_OBJECT`/`CALL_OBJECT`/`JUMP_TITLE`/`CALL_TITLE`/`PLAY_PL`）也按常量解析，条件是跳转不是 `GOTO` 落点、`MOVE` 不被比较指令跳过；其余寄存器目标、缺失目标、编码非法、预算耗尽保留 `unresolved` 并写 `diagnostics`。不把未解析路径标成不可达。
-- `findStaticNavigationLoops(graph)` 用 DFS 回边，返回 `{ backEdge, cycle, movieObjects, commandLocations }`。`scripts/visualize-hdmv-vm-flow.mjs` 用它生成 Markdown 流程图。
+- `findStaticNavigationLoops(graph)` 用 DFS 回边，返回 `{ backEdge, cycle, movieObjects, commandLocations }`。`scripts/visualize/hdmv-vm-flow.mjs` 用它生成 Markdown 流程图。
 
 ## 测试
 

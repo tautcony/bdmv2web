@@ -1,8 +1,8 @@
 import { build } from "esbuild";
 import { resolve } from "node:path";
-import { writeBuildMode } from "./bench/store/build-mode.mjs";
+import { writeBuildMode } from "../bench/store/build-mode.mjs";
 
-const root = resolve(import.meta.dirname, "..");
+const root = resolve(import.meta.dirname, "../..");
 const profilingBuild = process.env.BDMV2WEB_PROFILE_BUILD === "1";
 
 /** Browser IIFEs read their data from globals at run time. BD-J transport is a separate opt-in script. */

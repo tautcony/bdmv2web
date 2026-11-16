@@ -33,7 +33,7 @@
 
 `build` 走 `tsc -p tsconfig.build.json`，`typecheck` 保持 `tsc -p tsconfig.json --noEmit`。两者失败互不掩盖：产物编译失败只影响 `build`，测试编译失败只影响 `typecheck`。
 
-`packages/core` 的 `build` 还有第二步 `node ../../scripts/build-core-browser.mjs`，保持在后。
+`packages/core` 的 `build` 还有第二步 `node ../../scripts/build/core-browser.mjs`，保持在后。
 
 ### 2. 测试作用域由配置锁定，脚本字面统一
 

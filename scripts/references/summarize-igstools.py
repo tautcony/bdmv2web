@@ -9,10 +9,10 @@ the summary JSON. Case lines not named in --case are kept byte-identical.
 
 Needs pypng-free dependencies only: Pillow. The pinned igstools checkout and
 the reference PNGs under .reference-cache/verification/ are produced by
-scripts/compare-igstools-reference.py.
+scripts/references/compare-igstools.py.
 
 Usage:
-  python3 scripts/summarize-igstools-references.py REFERENCE_ROOT SUMMARY_JSON \
+  python3 scripts/references/summarize-igstools.py REFERENCE_ROOT SUMMARY_JSON \
       --case synthetic-all-features:00002 [--case CASE:CLIP ...]
 """
 

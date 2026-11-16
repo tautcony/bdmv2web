@@ -17,7 +17,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node ../../scripts/build-runtime-browser.mjs",
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/build/runtime-browser.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

@@ -3,7 +3,7 @@
 // Linting is type-aware through `tsconfig.lint.json`, which spans every linted
 // TypeScript file (package sources, `{apps,packages}/*/tests`, `vitest.config.ts`).
 // Cross-package imports resolve through each package's built declarations;
-// `pnpm lint` builds them once when missing (see `scripts/ensure-build.mjs`).
+// `pnpm lint` builds them once when missing (see `scripts/build/ensure-workspace.mjs`).
 //
 // Formatting rules are out of scope: the sources are laid out densely on
 // purpose, and no formatter runs in this workspace.

@@ -11,7 +11,7 @@ import os
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / 'docs/references/cache-manifest.json'
 CACHE_ROOT = ROOT / '.reference-cache/repositories'
 LINK_ROOT = CACHE_ROOT.parent

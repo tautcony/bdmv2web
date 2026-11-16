@@ -50,7 +50,7 @@ export async function prepareIgsInput(root, options) {
 
 /**
  * The CPU side of packaging: batch the prepared PNGs and serialize every script the
- * package ships. `buildMenuPackage` adds roughly 40% of filesystem work on top of
+ * package ships. `assembleMenuPackage` adds roughly 40% of filesystem work on top of
  * this, so the two are measured separately: this row compares across machines, and
  * the assembly row states what writing the package costs here.
  */
@@ -67,14 +67,15 @@ export async function serializeIgsMenuPackage(root, prepared) {
 }
 
 export async function assembleIgsMenuPackage(root, outputDirectory, prepared, packageOptions = {}) {
-  const { buildMenuPackage } = await moduleAt(root, "packages/package-builder/dist/index.js");
-  const result = await buildMenuPackage({
+  const { assembleMenuPackage } = await moduleAt(root, "packages/package-builder/dist/index.js");
+  const result = await assembleMenuPackage({
     outputDirectory, title: "Prepared IGS performance menu",
     ir: { schemaVersion: "1.0", entries: [], programs: [], menus: [], playlists: [], mediaAssets: [], diagnostics: [] },
     scene: prepared.scene, graphics: prepared.graphics,
     status: "partial", runtimeVersion: "0.1.0",
     diagnostics: [{ code: "BENCH_PREPARED_IGS", message: "Package assembled from a complete filtered IGS fixture." }],
     ...packageOptions,
+    preparedMedia: { additional: [] },
   });
   return result;
 }

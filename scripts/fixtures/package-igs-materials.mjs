@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 function usage() {
-  console.error("Usage: node package-igs-fixture-materials.mjs --root SOURCE_ROOT --output ARCHIVE --plan PLAN.json");
+  console.error("Usage: node scripts/fixtures/package-igs-materials.mjs --root SOURCE_ROOT --output ARCHIVE --plan PLAN.json");
   process.exit(2);
 }
 

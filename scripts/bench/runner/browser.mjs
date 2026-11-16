@@ -21,7 +21,7 @@ async function loadPlaywright() {
 export async function buildSyntheticPackage(root, output) {
   const builderPath = resolve(root, "packages/package-builder/dist/index.js");
   const graphicsPath = resolve(root, "packages/igs/dist/rendering/png.js");
-  const [{ buildMenuPackage }, { encodeRgbaPng }] = await Promise.all([
+  const [{ assembleMenuPackage }, { encodeRgbaPng }] = await Promise.all([
     import(pathToFileURL(builderPath).href), import(pathToFileURL(graphicsPath).href),
   ]);
   const ir = { schemaVersion: "1.0", entries: [], programs: [], menus: [], playlists: [], mediaAssets: [], diagnostics: [] };
@@ -41,18 +41,19 @@ export async function buildSyntheticPackage(root, output) {
     id: 0, defaultButtonId: 1,
     buttons: [button(1, 100, 2, 2), button(2, 700, 1, 1)],
   }] };
-  await buildMenuPackage({
+  await assembleMenuPackage({
     outputDirectory: output, title: "Synthetic browser performance menu", ir, scene, graphics: [
       { id: "normal", bytes: solid(24, 88, 184) }, { id: "selected", bytes: solid(224, 48, 32) },
     ], status: "partial", runtimeVersion: "0.1.0",
     diagnostics: [{ code: "BENCH_SYNTHETIC_FIXTURE", message: "Generated two-button menu for local browser capture." }],
+    preparedMedia: { additional: [] },
   });
   const manifestPath = join(output, "manifest.json");
   let manifest;
   try { manifest = JSON.parse(await readFile(manifestPath, "utf8")); }
   catch (error) { throw new Error(`Generated browser package has no readable manifest.json: ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
   if (manifest.status !== "partial") throw new Error(`Generated browser package status is ${String(manifest.status)}`);
-  return { destination: output, manifest, packageBuilder: "buildMenuPackage" };
+  return { destination: output, manifest, packageBuilder: "assembleMenuPackage" };
 }
 
 function readPageEvidence(page) {

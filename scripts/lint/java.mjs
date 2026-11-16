@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
-const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const sourceDirectory = resolve(root, "packages/runtime-web/bdj-host/src");
 const configPath = resolve(root, "config/checkstyle.xml");
 const checkstyleVersion = "14.4.0";

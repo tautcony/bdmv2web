@@ -14,7 +14,9 @@
 
 ### 使用与开发
 
+- [更新记录（英文）](../CHANGELOG.md) 和 [更新记录（简体中文）](../CHANGELOG.zh-CN.md)：各个发布版本的功能、改进与修复。
 - [开发指南](guides/development.md)：工具链、CLI、测试和构建流程。
+- [Workspace scripts 指南](../scripts/README.md)：按职责查找构建、CI、夹具、参考资料及报告脚本。
 - [性能基准指南](guides/performance.md)：稳定 case、独立进程测量、run记录、比较/趋势报告和 CI 流程。
 - [发布指南](guides/release.md)：npm 包名、版本与 tag、发布工作流和一次性配置。
 - [llm-wiki](llm-wiki/README.md)：面向 LLM/agent 的工程知识索引——任务路由、包/功能/诊断/排查文档与机器可读 `index.json`。以 2026-11-07 commit `21c580a` 的代码结构为基线；命令、选项与验收口径见 `README.md`、`docs/guides/development.md` 与 `openspec/specs/`。

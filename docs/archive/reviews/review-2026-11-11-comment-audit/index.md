@@ -103,7 +103,7 @@
 | 未落地 | `packages/hdmv/src/vm.ts:1012` trace 观察者隔离 | 该行为在 [review-2026-11-07](../review-2026-11-07-over-defensive-audit/index.md) §1.5 已判定有真实作用，仅删除注释会让空 catch 失去解释 |
 | 未落地 | `packages/hdmv/src/registers.ts:38` | 需要把只读寄存器初始化改成单一类型化路径，属行为与类型设计改动 |
 | 未落地 | `packages/test-runner/src/package-audit.ts:44`、`packages/test-fixtures/src/bdmv.ts:36` | 前者要改 `validate` 的对外 JSON 结果类型；后者是 fixture 构造函数表驱动化，均不属注释问题 |
-| 未落地 | `apps/cli/tests/e2e/index.test.ts:495,816,862,879`、`packages/igs/tests/integration/extraction.test.ts:389,418,451,471`、`scripts/generate-synthetic-all-features.mjs:72`、`scripts/bench/fixture-audit.mjs:13` | 测试与基准脚本的结构化改动。e2e 用例以字节偏移直接改写合成碟，替换为具名 patch helper 需重写四处构造器；extraction 的 `as unknown as ParsedDisc` fixture 缺字段，补齐 `ParsedDisc` 全量要求四个用例体 |
+| 未落地 | `apps/cli/tests/e2e/index.test.ts:495,816,862,879`、`packages/igs/tests/integration/extraction.test.ts:389,418,451,471`、`scripts/fixtures/generate-synthetic-all-features.mjs:72`、`scripts/bench/fixture-audit.mjs:13` | 测试与基准脚本的结构化改动。e2e 用例以字节偏移直接改写合成碟，替换为具名 patch helper 需重写四处构造器；extraction 的 `as unknown as ParsedDisc` fixture 缺字段，补齐 `ParsedDisc` 全量要求四个用例体 |
 
 ## 5. 复核后拒绝的条目
 

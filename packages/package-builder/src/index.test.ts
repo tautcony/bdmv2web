@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { assembleMenuPackage, buildMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, menuMediaPaths, packagedMediaMetadata, priorMenuMediaPaths, runtimeAudioTrackMetadata, serializeSafeScriptData } from "./index.js";
-import type { MediaProcessRunner } from "@bdmv2web/media-export";
+import { assembleMenuPackage, convertSounds, createAssetBatchScript, createCompatibility, createDataScript, createMenuIndexHtml, createReadme, makePngBatches, menuMediaPaths, packagedMediaMetadata, priorMenuMediaPaths, runtimeAudioTrackMetadata, serializeSafeScriptData } from "./index.js";
+import { exportMenuMedia, type MediaProcessRunner } from "@bdmv2web/media-export";
+import type { MenuPackageInput } from "./menu-package-input.js";
 import type { SerializedMenuButton, SerializedScene } from "@bdmv2web/core";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
 
@@ -18,13 +19,14 @@ const scene: SerializedScene = { width: 1920, height: 1080, compositionTimeout90
 const png1x1 = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/2ioAAAAASUVORK5CYII=", "base64"));
 function compactCss(css: string): string { return css.replace(/\s*([{}:;,])\s*/g, "$1").trim(); }
 const mediaOutputs = (args: string[]): string[] => args.filter((arg) => arg.endsWith(".mp4") || arg.endsWith(".m4a"));
+const assembleWithoutMedia = (input: MenuPackageInput) => assembleMenuPackage({ ...input, preparedMedia: { additional: [] } });
 
 describe("menu package primitives", () => {
   it("loads the BD-J transport as a separate local-jvm package script", async () => {
     const parent = await mkdtemp(resolve(tmpdir(), "bdmv2web-bdj-client-"));
     const outputDirectory = resolve(parent, "native package");
     try {
-      await buildMenuPackage({
+      await assembleWithoutMedia({
         outputDirectory, title: "Native menu", ir, scene, graphics: [],
         bdjFiles: [{ path: "BDMV/JAR/00000.jar", sourcePath: "BDMV/JAR/00000.jar", bytes: new Uint8Array([0]) }],
         bdjHostApiJar: new Uint8Array([0x50, 0x4b]),
@@ -140,7 +142,7 @@ describe("menu package primitives", () => {
         { id: 1, bog: 0, enabled: true, neighbors: { up: 1, down: 1, left: 1, right: 1 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 }, startObjectId: 0, endObjectId: 0 }, selected: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 0, startObjectId: 0, endObjectId: 0 }, activated: { bounds: { x: 100, y: 100, width: 500, height: 100 }, soundId: 1, startObjectId: 0, endObjectId: 0 } }, commands: [] },
         { id: 2, bog: 0, enabled: true, neighbors: { up: 2, down: 2, left: 2, right: 2 }, states: { normal: { bounds: { x: 0, y: 0, width: 1, height: 1 }, soundId: 2, startObjectId: 0, endObjectId: 0 } }, commands: [] },
       ] }] };
-      const packaged = await buildMenuPackage({
+      const packaged = await assembleWithoutMedia({
         outputDirectory, title: "Sound preview", ir, scene: soundScene, graphics: [], soundBytes, inputConfig: { escapeMapping: "topMenu" },
         soundEntries: [
           { index: 0, channelCode: 1, sampleRateCode: 1, bitsPerSampleCode: 1, channels: 1, sampleRate: 48000, bitsPerSample: 16, sampleOffset: 80, sampleByteLength: 4 },
@@ -173,7 +175,7 @@ describe("menu package primitives", () => {
     const outputDirectory = resolve(parent, "profile preview");
     try {
       const playerProfile = { menuLanguage: "jpn", audioLanguage: "jpn", subtitleLanguage: "eng", country: "JP", region: "A" as const, outputProfile: "portable" as const, videoProfiles: [], audioProfiles: [] };
-      await buildMenuPackage({ outputDirectory, title: "Profile preview", ir, scene, graphics: [], playerProfile });
+      await assembleWithoutMedia({ outputDirectory, title: "Profile preview", ir, scene, graphics: [], playerProfile });
       const embedded: { __BDMV_MENU_DATA__?: { profile?: unknown } } = {};
       runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
       expect(embedded.__BDMV_MENU_DATA__?.profile).toEqual(playerProfile);
@@ -229,7 +231,8 @@ describe("menu package primitives", () => {
     }));
     const mediaWithDistinctSegment = [...equivalentMedia, { ...equivalentMedia[0]!, playItemIndex: 999, inTime45k: 569_280, outTime45k: 5_484_815 }];
     try {
-      await buildMenuPackage({ outputDirectory, title: "Repeated menu", ir, scene, graphics: [], additionalMenuMedia: mediaWithDistinctSegment, mediaEncoding: { codec: "h264" }, mediaProcessRunner });
+      const preparedMedia = await exportMenuMedia(undefined, mediaWithDistinctSegment, { outputDirectory, mediaEncoding: { codec: "h264" }, runProcess: mediaProcessRunner });
+      await assembleMenuPackage({ outputDirectory, title: "Repeated menu", ir, scene, graphics: [], preparedMedia });
       const assetManifest = JSON.parse(await readFile(resolve(outputDirectory, "asset-manifest.json"), "utf8")) as {
         menuMedia: Array<{ playlistId: string; playItemIndex: number; planPath: string }>;
         mediaPlans: Record<string, { plan: { playItemIndex: number }; background: { path: string }; audioTracks: Array<{ path: string }> }>;
@@ -281,7 +284,7 @@ describe("menu package primitives", () => {
     const firstAnonymous = { ...scene, pages: [...scene.pages] };
     const secondAnonymous = { ...scene, pages: [...scene.pages] };
     try {
-      await buildMenuPackage({
+      await assembleWithoutMedia({
         outputDirectory, title: "Shared scenes", ir, scene, graphics: [],
         menuScenes: [
           ...Array.from({ length: 999 }, (_, playItem) => ({ playlistId: 3, playItem, igStreamNumber: 1, igStreamCount: 1, scene: topMenu })),
@@ -312,7 +315,7 @@ describe("menu package primitives", () => {
     const outputDirectory = resolve(parent, "limits preview");
     try {
       const vmLimits = { maxReadWindowBytes: 4096, maxSegmentBytes: 8192, maxReassemblyBytes: 16384, maxObjectPixels: 1024, maxInstructionsPerTurn: 77, maxQueueDepth: 12, maxCallDepth: 0, maxExplorationStates: 100, maxOutputBytes: null };
-      await buildMenuPackage({ outputDirectory, title: "Limits preview", ir, scene, graphics: [], vmLimits });
+      await assembleWithoutMedia({ outputDirectory, title: "Limits preview", ir, scene, graphics: [], vmLimits });
       const embedded: { __BDMV_MENU_DATA__?: { limits?: unknown } } = {};
       runInNewContext(await readFile(resolve(outputDirectory, "runtime/disc-data.js"), "utf8"), embedded);
       expect(embedded.__BDMV_MENU_DATA__?.limits).toEqual(vmLimits);
@@ -330,7 +333,7 @@ describe("menu package primitives", () => {
         { bytes: m3Fixtures.playPlaylist42.bytes, sourceOffset: "140" },
       ];
       const popupScene = { ...fixtureScene, id: "popup-title-1", clipId: "00001", pid: 0x1400, streamModel: 0, uiModel: 1, source: { clipId: "00001", pid: 0x1400, packetOffset: "192", pesOffset: "208", segmentOffset: "4", segmentFileOffset: "400", pts90k: "9000", timeDomain: 0 } };
-      await buildMenuPackage({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, popupScenes: [popupScene], vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmEntries: [{ id: "title:0", kind: "title", source: commandSource, target: { objectType: "HDMV", playbackType: 0, target: 0, source: commandSource } }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
+      await assembleWithoutMedia({ outputDirectory, title: "Test </script> 菜单", ir, scene: fixtureScene, popupScenes: [popupScene], vmPrograms: [{ id: 0, instructions: [m3Fixtures.break] }], vmEntries: [{ id: "title:0", kind: "title", source: commandSource, target: { objectType: "HDMV", playbackType: 0, target: 0, source: commandSource } }], vmInitialProgramId: 0, graphics: [{ id: "graphic-1", bytes: png1x1 }] });
       const html = await readFile(resolve(outputDirectory, "index.html"), "utf8");
       expect(html.indexOf('<video id="menu-background"')).toBeLessThan(html.indexOf('<canvas id="menu-canvas"'));
       const style = await readFile(resolve(outputDirectory, "runtime/style.css"), "utf8");
@@ -456,12 +459,12 @@ describe("menu media layout", () => {
     const top = media("00003", 0, "00004");
     const extra = media("00001", 2, "00377");
     try {
-      await buildMenuPackage({
-        outputDirectory, title: "Layout", ir, scene, graphics: [],
-        menuLoopMedia: top, additionalMenuMedia: [extra],
+      const preparedMedia = await exportMenuMedia(top, [extra], {
+        outputDirectory,
         mediaEncoding: { codec: "h264" },
-        mediaProcessRunner: runner(new Map([[top.sourcePath, "10"], [extra.sourcePath, "10"]])),
+        runProcess: runner(new Map([[top.sourcePath, "10"], [extra.sourcePath, "10"]])),
       });
+      await assembleMenuPackage({ outputDirectory, title: "Layout", ir, scene, graphics: [], preparedMedia });
       const topDirectory = resolve(outputDirectory, "assets/media/playlist-00003-pi00-clip-00004");
       expect((await readdir(topDirectory)).sort()).toEqual(["audio-1100-eng.m4a", "background.mp4"]);
       const extraDirectory = resolve(outputDirectory, "assets/media/playlist-00001-pi02-clip-00377");
@@ -496,16 +499,10 @@ describe("menu media layout", () => {
     };
     const sourceProbeCount = () => calls.filter((call) => call.executable === "ffprobe" && call.args.includes("-probesize") && call.args.at(-1) === sourcePath).length;
     try {
-      await buildMenuPackage({
-        outputDirectory: resolve(parent, "first"), title: "Shared source", ir, scene, graphics: [],
-        menuLoopMedia: top, additionalMenuMedia: [extra], mediaEncoding: { codec: "h264" }, mediaProcessRunner,
-      });
+      await exportMenuMedia(top, [extra], { outputDirectory: resolve(parent, "first"), mediaEncoding: { codec: "h264" }, runProcess: mediaProcessRunner });
       expect(sourceProbeCount()).toBe(1);
 
-      await buildMenuPackage({
-        outputDirectory: resolve(parent, "second"), title: "Fresh source probe", ir, scene, graphics: [],
-        menuLoopMedia: top, additionalMenuMedia: [extra], mediaEncoding: { codec: "h264" }, mediaProcessRunner,
-      });
+      await exportMenuMedia(top, [extra], { outputDirectory: resolve(parent, "second"), mediaEncoding: { codec: "h264" }, runProcess: mediaProcessRunner });
       expect(sourceProbeCount()).toBe(2);
     } finally { await rm(parent, { recursive: true, force: true }); }
   });

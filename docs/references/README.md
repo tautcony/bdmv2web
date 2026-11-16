@@ -61,7 +61,7 @@ SAPikachu/igstools 固定为已核验的 `34a133150ca8b52237284da4d47d93911bcd49
 为便于按固定 revision 对照，本地 `.reference-cache/repositories/` 保存上游仓库的完整 checkout，不含商业素材或 Blu-ray/ITU 标准 PDF；根 `.gitignore` 将缓存排除在版本控制外。初始化脚本在 POSIX 平台创建相对目录符号链接，在 Windows 创建目录联接（junction），均提供 `.reference-cache/<id>` 入口。来源清单只记录仓库地址、固定 revision 和许可证信息，见 [cache-manifest.json](cache-manifest.json)。下载并检出固定版本：
 
 ```sh
-python3 scripts/fetch-reference-cache.py
+python3 scripts/references/fetch-cache.py
 ```
 
 缓存来源包括 libbluray、igstools、libhdmv 和 bdmvkit 四个上游仓库。bdmvkit 固定在 commit `57890760c60b3c31dacc9db1112467d4510925aa`，源码与 `COPYING` / `COPYING.LESSER` 以 LGPL-3.0-or-later 授权；其 `tests/bluray_sim.py` ctypes harness 驱动 libbluray 生成基线，不进入产品运行时。继续分发缓存前必须逐项审查许可证。H.222.0 的本地 PDF 不保留。

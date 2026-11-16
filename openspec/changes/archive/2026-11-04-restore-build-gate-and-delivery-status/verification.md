@@ -90,7 +90,7 @@ index.js
 
 ### 2.1 / 2.2 `tsconfig.build.json`
 
-11 个包（10 个 `packages/*` + `apps/cli`）逐个用 `node -e` 读取断言：`extends === "./tsconfig.json"`、`exclude` 含 `**/*.test.ts` 与 `**/*.test-d.ts` → `11 / 11`。`build` 脚本改为 `tsc -p tsconfig.build.json`，`packages/core` 保留第二步 `node ../../scripts/build-core-browser.mjs`；`corepack pnpm -r build` 全通过，`packages/core/dist/` 同时有 `index.js` 与 `browser.js`。
+11 个包（10 个 `packages/*` + `apps/cli`）逐个用 `node -e` 读取断言：`extends === "./tsconfig.json"`、`exclude` 含 `**/*.test.ts` 与 `**/*.test-d.ts` → `11 / 11`。`build` 脚本改为 `tsc -p tsconfig.build.json`，`packages/core` 保留第二步 `node ../../scripts/build/core-browser.mjs`；`corepack pnpm -r build` 全通过，`packages/core/dist/` 同时有 `index.js` 与 `browser.js`。
 
 ### 2.3 test 里的类型错误
 

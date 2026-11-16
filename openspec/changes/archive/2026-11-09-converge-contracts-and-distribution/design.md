@@ -86,7 +86,7 @@ M6 对文件完整性与制品替换的验证任务保持未完成。文档只�
 
 每项连续测量三次，输出 `{ case, n, ms, rss }` 到 `test-data/bench/<git-sha>.json`（不入库，路径加入 `.gitignore`）。真实碟片导出使用现有过滤 IGS 包样本；完整 M2TS 不在该真实碟片样本集中。`bd_info` 与 `bd_list_titles -a` 分别记录自身进程时间，RSS 字段记录基准 Node 进程读数；参考命令单独报告。
 
-比较参考行为时运行 `scripts/generate-libbluray-baselines.py` 的工具生成逻辑并将结果与已提交基线比较。IGS 参考图像脚本 `scripts/compare-igstools-reference.py` 需要 igstools 和 pypng；环境缺少依赖时记录不可运行状态。基准文档记录参考工具可用性、比较范围及每项测量波动。修复针对实测呈超线性或占比显著的项，每项记录前后对比；其他项的测量结论写入 `benchmark.md`。
+比较参考行为时运行 `scripts/references/generate-libbluray-baselines.py` 的工具生成逻辑并将结果与已提交基线比较。IGS 参考图像脚本 `scripts/references/compare-igstools.py` 需要 igstools 和 pypng；环境缺少依赖时记录不可运行状态。基准文档记录参考工具可用性、比较范围及每项测量波动。修复针对实测呈超线性或占比显著的项，每项记录前后对比；其他项的测量结论写入 `benchmark.md`。
 
 基准记录重复测量的波动范围；同一 case 相对记录基线退化超过 20% 时记录原因。
 

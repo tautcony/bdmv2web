@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { tmpdir } from "node:os";
 
 function usage() {
-  console.error("Usage: node package-hdmv-metadata-fixtures.mjs --root SOURCE_ROOT --output ARCHIVE case_id=relative/BDMV/path [...]");
+  console.error("Usage: node scripts/fixtures/package-hdmv-metadata.mjs --root SOURCE_ROOT --output ARCHIVE case_id=relative/BDMV/path [...]");
   process.exit(2);
 }
 

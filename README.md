@@ -191,7 +191,7 @@ corepack pnpm --filter @bdmv2web/igs test
 Fetch the local reference source cache:
 
 ```sh
-python3 scripts/fetch-reference-cache.py
+python3 scripts/references/fetch-cache.py
 ```
 
 ### Repository layout

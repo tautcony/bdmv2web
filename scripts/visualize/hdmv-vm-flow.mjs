@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Usage: node scripts/visualize-hdmv-vm-flow.mjs <BDMV-directory> <output.md>
-// Example: node scripts/visualize-hdmv-vm-flow.mjs test-data/fixtures/hdmv-navigation/disc-data/kyoani-ova/BDMV /tmp/kyoani-flow.md
+// Usage: node scripts/visualize/hdmv-vm-flow.mjs <BDMV-directory> <output.md>
+// Example: node scripts/visualize/hdmv-vm-flow.mjs test-data/fixtures/hdmv-navigation/disc-data/kyoani-ova/BDMV /tmp/kyoani-flow.md
 // Build the workspace packages first with `pnpm build`.
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { parseBdmv } from "../packages/bdmv-parser/dist/index.js";
-import { buildNavigationGraph, decodeInstruction, disassemble, findStaticNavigationLoops } from "../packages/hdmv/dist/index.js";
+import { parseBdmv } from "../../packages/bdmv-parser/dist/index.js";
+import { buildNavigationGraph, decodeInstruction, disassemble, findStaticNavigationLoops } from "../../packages/hdmv/dist/index.js";
 
 const [inputArg, outputArg, ...extra] = process.argv.slice(2);
 if (!inputArg || !outputArg || extra.length) {
-  console.error("Usage: node scripts/visualize-hdmv-vm-flow.mjs <BDMV-directory> <output.md>");
+  console.error("Usage: node scripts/visualize/hdmv-vm-flow.mjs <BDMV-directory> <output.md>");
   process.exitCode = 2;
 } else {
   const disc = await parseBdmv(resolve(inputArg));

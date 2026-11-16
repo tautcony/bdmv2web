@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { resolve } from "node:path";
 
-const root = resolve(import.meta.dirname, "..");
+const root = resolve(import.meta.dirname, "../..");
 await build({
   entryPoints: [resolve(root, "packages/core/src/browser.ts")],
   outfile: resolve(root, "packages/core/dist/browser.js"),

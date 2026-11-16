@@ -5,7 +5,7 @@
  *
  * Build (needs the pinned libbluray source tree and its static library):
  *   clang -I<libbluray-src>/libbluray -I<libbluray-src> \
- *     scripts/libbluray-igs-dump.c <libbluray.a> -lxml2 -lz -lbz2 -liconv \
+ *     scripts/references/libbluray-igs-dump.c <libbluray.a> -lxml2 -lz -lbz2 -liconv \
  *     -lfreetype -ludfread -framework CoreFoundation -framework DiskArbitration
  *
  * Usage: libbluray-igs-dump <6144-byte-aligned-units.bin> <pid>

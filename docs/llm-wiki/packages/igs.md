@@ -132,7 +132,7 @@ encodeRgbaPng(width, height, rgba, options?): Uint8Array
 
 合成字节在 `packages/igs/tests/helpers/fixtures.ts`；外部来源的 ICS 样本在 `test-data/fixtures/igs-parser/`，旁边带来源与许可说明。
 
-两份独立 golden 覆盖同一批对象：`libbluray-igs-baseline.test.ts` 逐 case/clip 核对 libbluray 解码出的 object id/version 集合与 igstools RGBA 参考摘要的资产集合一致。libbluray golden 由 `scripts/generate-libbluray-baselines.py` 调用 `scripts/libbluray-igs-dump.c` 本地生成，测试只读入库 JSON。
+两份独立 golden 覆盖同一批对象：`libbluray-igs-baseline.test.ts` 逐 case/clip 核对 libbluray 解码出的 object id/version 集合与 igstools RGBA 参考摘要的资产集合一致。libbluray golden 由 `scripts/references/generate-libbluray-baselines.py` 调用 `scripts/references/libbluray-igs-dump.c` 本地生成，测试只读入库 JSON。
 
 ## 改动入口
 

@@ -3,13 +3,13 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractIgsFromChunks } from "../packages/igs/dist/index.js";
+import { extractIgsFromChunks } from "../../packages/igs/dist/index.js";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const fixtureRoot = resolve(process.argv[2] ?? join(repositoryRoot, "test-data/fixtures/hdmv-navigation/disc-data"));
 const outputRoot = resolve(process.argv[3] ?? "");
 if (process.argv.length !== 4) {
-  console.error("Usage: node scripts/export-igs-packet-fixtures.mjs FIXTURE_ROOT OUTPUT_ROOT");
+  console.error("Usage: node scripts/fixtures/export-igs-packets.mjs FIXTURE_ROOT OUTPUT_ROOT");
   process.exit(2);
 }
 

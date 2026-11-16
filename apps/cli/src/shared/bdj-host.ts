@@ -10,7 +10,7 @@ const execFileAsync = promisify(execFile);
 
 /** Compile the workspace Java host, or use the host embedded in the published CLI. */
 export async function buildBdjHostApiJar(): Promise<Uint8Array> {
-  const builder = fileURLToPath(new URL("../../../../scripts/build-bdj-host.mjs", import.meta.url));
+  const builder = fileURLToPath(new URL("../../../../scripts/build/bdj-host.mjs", import.meta.url));
   try {
     await access(builder);
     const temporary = await mkdtemp(join(tmpdir(), "bdmv2web-bdj-host-"));

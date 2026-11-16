@@ -95,7 +95,7 @@ const latestPts = active.reduce((latest, scene) => BigInt(scene.source!.pts90k!)
 | `package.json:13` | `typecheck` 第一步 `corepack pnpm build` 整体重跑 CI 已执行的 build；`typecheck` 应只做 `-r typecheck` | 已复核 |
 | `package.json:16-17` | `test`（bail）与 `test:all`（`--no-bail`）双入口，CI 只用 `test:all` | 已复核 |
 | `scripts/ci.sh:11-15` | 门禁脚本预写 "It does NOT verify the integrity of the large binary fixtures" 免责块 | 已复核 |
-| `scripts/generate-synthetic-all-features.mjs:7-8` | "no bdmvkit checkout" 对已删除依赖（ba4119b）的陈旧否认；"no FFmpeg" 是现行事实可保留 | 已复核 |
+| `scripts/fixtures/generate-synthetic-all-features.mjs:7-8` | "no bdmvkit checkout" 对已删除依赖（ba4119b）的陈旧否认；"no FFmpeg" 是现行事实可保留 | 已复核 |
 
 ### 2.5 fixture 真实碟名（AGENTS.md 边界）
 
@@ -241,7 +241,7 @@ const latestPts = active.reduce((latest, scene) => BigInt(scene.source!.pts90k!)
 | `package.json:13` typecheck 含 build | 原判前提不成立：`scripts/ci.sh` 直接跑 `-r typecheck`，从不调用根 `typecheck`；各包 `package.json` 的 `types` 指向 `dist`，去掉 build 后干净检出会失败 | 保留 |
 | `package.json:16-17` `test` / `test:all` 双入口 | 原判不成立：两者语义不同（`test` 快速失败、`test:all` 收集全部失败），且 README、`testing.md`、`development.md`、`troubleshooting.md` 共 5 处按两种模式分别介绍；与 `lint` / `lint:fix` 结构相同 | 保留（删除后 `corepack pnpm test` 返回 exit 1，等于让文档命令失效） |
 | `scripts/ci.sh:11-15` 免责块 | 确认 | 已删除 |
-| `scripts/generate-synthetic-all-features.mjs:7-8` | 确认 `bdmvkit checkout` 是已删除依赖的陈旧否认 | 已删除该短语 |
+| `scripts/fixtures/generate-synthetic-all-features.mjs:7-8` | 确认 `bdmvkit checkout` 是已删除依赖的陈旧否认 | 已删除该短语 |
 | fixture 目录名与测试名中的碟名（§2.5） | 确认存在 | **未执行**，见 7.4 |
 | 否定式测试名（§2.6） | 确认存在 | 已改名：`cli` 4 处、`external-targets` 2 处、`linear` 1 处、`parser` 1 处、`runtime-web` 1 处、`linear-variants` 2 处 |
 

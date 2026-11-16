@@ -138,7 +138,7 @@ export function publishBuildOutcome(
 - `packages/media-export/src/external-targets.ts`
 - `packages/runtime-web/src/browser.ts`、`packages/runtime-web/src/bdmv-url.ts`
 - `packages/runtime-web/package.json`
-- `scripts/build-runtime-browser.mjs`
+- `scripts/build/runtime-browser.mjs`
 - 相关 `external-targets` 单测
 
 **实施步骤**：
@@ -297,7 +297,7 @@ packages/package-builder                   按输入写出静态包（T09 后不
 **实施步骤**：
 1. 将 `build.ts` 中提取后的重复领域运算移到 `planBuild()`，包含：BD-J 资源收集结果的引用、IGS 场景选择、菜单场景复用 Map、媒体闭包、外部播放目标、VM 程序、媒体输入数组与诊断集合。
 2. `planBuild()` 返回一个 `BuildPlan`，字段直接采用现有 `MenuPackageInput` 已定义的数据结构；不新设无实际字段用途的通用框架。BuildPlan 的 profile 只用于决定 `hdmv/bdj/mixed` 的字段组合，**不参与 `decideDelivery()` 规则推断**。
-3. 保留纯 HDMV 和包含 BD-J 两种必要的场景选择分支，但最终都调用同一个 `buildUseCase()` 返回最终 `MenuPackageInput`，而不是在分支中各写一份很长的 `buildMenuPackage({...})`。
+3. 保留纯 HDMV 和包含 BD-J 两种必要的场景选择分支；两者都交给同一个 `buildUseCase()` 生成最终 `MenuPackageInput`。
 4. `build.ts` 只负责现有参数读取、进度映射、`beginOutputTransaction/commit`、生成报告、`publishBuildOutcome`。`buildUseCase()` 不写 stdout、不设置 `process.exitCode`。
 5. 保留原来的 `--resume`/`--reuse`、媒体范围 (`none/auto/all`)、多 PlayItem 场景复用与编码选项；调用链顺序不因重构改变。
 
@@ -343,7 +343,7 @@ export async function assembleMenuPackage(
 3. `apps/cli/src/application/export-menu-media.ts` 调用 `@bdmv2web/media-export` 的 `exportMenuMedia()` 并映射现有进度回调；不复制编码算法。
 4. `assembleMenuPackage()` 只消费 `PreparedMenuMedia`，完成资源写入、`runtime/disc-data.js`、`asset-manifest.json`、`manifest.json`、`reports.json` 和静态 bundle。核心组包函数不再调用 FFmpeg 或 `exportMenuLoopMedia()`。
 5. 在 `buildUseCase()` 中固定调用顺序：`planBuild → exportMenuMedia → assembleMenuPackage → report`，现有媒体进度回调继续传递给 CLI。
-6. 既有公开 `buildMenuPackage(input)` 如仍有调用者，保留为 package-builder 的薄包装，**从 media-export 导入同一个 `exportMenuMedia()`，随后调用 `assembleMenuPackage()`**。不得从 package-builder 导入 `apps/cli`，不得保留第二份编码循环。
+6. 旧 `buildMenuPackage(input)` 入口已移除：CLI 使用应用层 `buildUseCase()` 串联 `exportMenuMedia()` 与 `assembleMenuPackage()`，仓库内没有其他生产调用方；外部消费者已确认不存在。媒体导出与包组装继续由各自的包负责。
 7. 保持文件命名、媒体复用、`reuse/resume`、音轨、时间戳和媒体计划记录原样。不要以新层次为由改变转码参数。
 
 **测试**：单个 PlayItem 只编码一次；共享媒体仍复用；`--menu-media none` 不执行编码；resume/reuse 沿用原有路径；纯组包测试传入 `PreparedMenuMedia` 不启动 FFmpeg；生成的 `asset-manifest`、`media-plans/`、`assets/media/` 路径与重构前相同。
@@ -405,7 +405,7 @@ corepack pnpm test
 | T06 | 完成 | 新增 `shared/hdmv-session.ts` 与 `HdmvUpdate`；`serve.ts` 统一 `emitHdmvUpdate()`，SSE 新连接发送当前快照；测试改断言 `hdmv-update`。 |
 | T07 | 完成 | 新增 `navigation/local-host.ts`、`remote-host.ts`、`action-routing.ts`；`MenuButtonExecution` 支持 `{kind:"pending"}`；BD-J 页面通过 `RemoteNavigationHost` 获取状态与动作；`hdmvUpdate` 回调驱动远端菜单。 |
 | T08 | 完成 | 新增 `application/build-plan.ts` 的 `planBuild()` 与 `application/build-use-case.ts`；`build.ts` 负责参数、进度、事务、报告与结果发布。 |
-| T09 | 完成 | 新增 `media-export/src/menu-media-layout.ts`、`export-menu-media.ts`；`assembleMenuPackage()` 消费 `PreparedMenuMedia` 写出静态包；`buildMenuPackage()` 为兼容包装；CLI 固定 `planBuild → exportMenuMedia → assembleMenuPackage`。 |
+| T09 | 完成 | 新增 `media-export/src/menu-media-layout.ts`、`export-menu-media.ts`；`assembleMenuPackage()` 消费 `PreparedMenuMedia` 写出静态包；旧 `buildMenuPackage()` 兼容入口已移除；CLI 固定 `planBuild → exportMenuMedia → assembleMenuPackage`。 |
 
 ### 验证
 

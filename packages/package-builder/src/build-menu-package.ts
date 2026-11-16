@@ -4,7 +4,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseDiscIR, type SerializedScene, type RuntimeMenuSceneEntry } from "@bdmv2web/core";
-import { exportMenuMedia, menuMediaPaths, priorMenuMediaPaths, type MenuLoopMediaResult, type PreparedMenuMedia } from "@bdmv2web/media-export";
+import { menuMediaPaths, priorMenuMediaPaths, type MenuLoopMediaResult, type PreparedMenuMedia } from "@bdmv2web/media-export";
 import { makePngBatches } from "./asset-batches.js";
 import { convertSounds } from "./sounds.js";
 import { createAssetBatchScript, createDataScript, createMenuIndexHtml, createReadme, packagedStyle, serializeSafeScriptData } from "./scripts.js";
@@ -76,7 +76,7 @@ function shareMenuScenes(entries: NonNullable<MenuPackageInput["menuScenes"]>): 
   return { scenes, menuScenes };
 }
 
-/** Write a self-contained menu folder and bundle its browser entry as a classic IIFE. */
+/** Assemble a self-contained menu folder from prepared media and bundle its browser entry as a classic IIFE. */
 export async function assembleMenuPackage(input: MenuPackageInput & { preparedMedia: PreparedMenuMedia }): Promise<MenuPackageResult> {
   const ir = parseDiscIR(input.ir);
   const bdjFiles = input.bdjFiles ?? [];
@@ -205,21 +205,4 @@ function getSceneSize(scene: unknown): { width: number; height: number } | undef
   if (scene === null) return undefined;
   if (typeof scene !== "object" || scene === null || !Number.isSafeInteger((scene as { width?: unknown }).width) || !Number.isSafeInteger((scene as { height?: unknown }).height) || (scene as { width: number }).width <= 0 || (scene as { height: number }).height <= 0) throw new TypeError("Menu scene must declare positive integer width and height");
   return { width: (scene as { width: number }).width, height: (scene as { height: number }).height };
-}
-
-/**
- * Compatibility entry: run media-export's `exportMenuMedia()`, then
- * `assembleMenuPackage()`. New callers use `planBuild()` and run both steps
- * through `buildUseCase()`.
- */
-export async function buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult> {
-  input.onPhase?.("media");
-  const preparedMedia = await exportMenuMedia(input.menuLoopMedia, input.additionalMenuMedia ?? [], {
-    outputDirectory: input.outputDirectory,
-    ...(input.mediaEncoding ? { mediaEncoding: input.mediaEncoding } : {}),
-    ...(input.reuseMediaFromDirectory ? { reuseFromDirectory: input.reuseMediaFromDirectory } : {}),
-    ...(input.mediaProcessRunner ? { runProcess: input.mediaProcessRunner } : {}),
-    ...(input.onMediaProgress ? { onProgress: input.onMediaProgress } : {}),
-  });
-  return assembleMenuPackage({ ...input, preparedMedia });
 }

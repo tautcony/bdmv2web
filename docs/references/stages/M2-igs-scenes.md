@@ -70,7 +70,7 @@
 - **参考方式：** igstools 整体页面模型在 `_find_button` 处抛出 `KeyError: Button not found`；不修改工具或输入。改用该工具自身的 M2TS、IGS、RLE、palette 解码及 `picture_to_png`，按项目产物中对象 ID/版本和调色板 ID 对应生成元素参考。其默认 `matrix_from_menu_height` 对 1080 行选择 BT.709；显式设置 BT.709、limited range。参考输出为 16-bit RGBA，以 `(value + 128) // 257` 取整为 8-bit 后与项目 PNG 比较全部通道。
 - **结果：** 项目产出的 168 个元素、14,881,965 像素全部精确一致，RGBA 差异像素为 0；逐项报告由脚本写到命令行指定目录，不入库。这证明在上述固定转换规则下，已导出对象与同类工具结果一致；不证明规范要求或其他未导出对象/不同版本/动画帧均一致。另按参考解码器的原始按钮状态核对：168 条非空状态引用对应 168 个元素，项目无缺漏或额外元素；本样本没有多帧对象范围，不能据此覆盖动画帧。页面模型组装失败不阻断这些元素的对比。
 - **更正：** 实现采用 BT.709 limited range；该显式矩阵下 Tamako 元素与参考结果一致。2026-11-03 首次对照按 BT.601 执行，当时与旧参考在同矩阵下一致只说明两者用了同一矩阵，不足以证明色彩正确；固定参考 BT.709 时旧实现 165/168 个元素存在差异（最大 RGB 差分别为 14/26/7，alpha 差 0）。背景视频 ffprobe 显示 1920×1080，但未返回色彩元数据；因此这些结果验证的是对照矩阵下的实现一致性，不判定原盘实际矩阵。
-- **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/compare-igstools-reference.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。
+- **复现：** 编译后用 CLI `extract` 提取当前 BDMV 到独立目录；在包含上述 igstools、pypng 和 Pillow 的隔离 Python 环境中运行 `PYTHONPATH=<igstools源码目录> python scripts/references/compare-igstools.py <00005.m2ts> <extract输出目录> <对照输出目录>`。脚本只读源素材，参考图片与计算结果输出到指定目录。
 
 ## 2026-11-04 — 多 fixture 逐元素独立参考对照
 
@@ -90,7 +90,7 @@
 | tamako | `00005` | 168 | 168 | 14,881,965 | 0 |
 | tamako | `00043` | 168 | 168 | 14,922,045 | 0 |
 
-- **执行脚本：** [compare-igstools-reference.py](../../../scripts/compare-igstools-reference.py) 与 [export-igs-packet-fixtures.mjs](../../../scripts/export-igs-packet-fixtures.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素报告由脚本输出到命令行指定目录，逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/tests/helpers/fixtures.ts) 生成。参考 PNG 的逐元素摘要由 [summarize-igstools-references.py](../../../scripts/summarize-igstools-references.py) 写入 `test-data/baselines/igs-reference-element-summary.json`。
+- **执行脚本：** [compare-igstools.py](../../../scripts/references/compare-igstools.py) 与 [export-igs-packets.mjs](../../../scripts/fixtures/export-igs-packets.mjs)。参考 PNG 输出到本地忽略目录 `.reference-cache/verification/igs-fixtures-20261104/reference/{case}/{clip}/reference/`；逐元素报告由脚本输出到命令行指定目录，逐项记录 PNG 文件名、尺寸、像素数、通道差异和元素版本。真实盘只使用已筛选 IGS packet fixture，没有复制整段 M2TS；合成用例由 [syntheticReferenceClip](../../../packages/igs/tests/helpers/fixtures.ts) 生成。参考 PNG 的逐元素摘要由 [summarize-igstools.py](../../../scripts/references/summarize-igstools.py) 写入 `test-data/baselines/igs-reference-element-summary.json`。
 - **igstools 效果段限制：** 固定 revision 的 igstools 以 `>4H` 读取效果对象描述符，把规范中的 window id（u8）与 forced-on 标志（u8）合并为一个 u16 作为窗口键（如 windowId=1、forced-on=0x40 时查键 0x140），任何非空效果序列都会触发 KeyError。2026-11-04 对照的 8 个 clip 能通过解析，说明它们的按钮段效果序列为空。`synthetic-all-features` `00001` 是第一个携带效果序列的 fixture，不纳入 igstools 对照与 libbluray IGS 基线；其菜单效果的解码行为由 libbluray 导航基线与项目单元测试覆盖。
 - **适用范围：** 结果覆盖这 9 个静态场景的当前图像元素、调色板、alpha 与固定颜色转换路径。任务 2.1 的逐字段依据见 [字段登记](M2-igs-field-register.md)；任务 2.4 的独立颜色向量和真实同 ODS 多 PDS 资产映射由 `packages/igs/tests/integration/extraction.test.ts` 与 `packages/igs/tests/integration/hdmv-navigation-packet-fixtures.test.ts` 断言。
 
@@ -104,7 +104,7 @@ Battle Royale UHD 的 `00005` 对照报告同样将 igstools 显式设置为 BT.
 
 ## 2026-11-07 — libbluray 1.5.0 IGS 元素级解码基线
 
-- **参考实现：** VideoLAN libbluray 1.5.0，固定 revision `d75c88e54c893e5cbf4c61d356477655eb435769`，解码入口 `src/libbluray/decoders/graphics_processor.c` 的 `graphics_processor_decode_ts()`。`scripts/libbluray-igs-dump.c` 链接本机 libbluray 静态库并由 `scripts/generate-libbluray-baselines.py` 调用。
+- **参考实现：** VideoLAN libbluray 1.5.0，固定 revision `d75c88e54c893e5cbf4c61d356477655eb435769`，解码入口 `src/libbluray/decoders/graphics_processor.c` 的 `graphics_processor_decode_ts()`。`scripts/references/libbluray-igs-dump.c` 链接本机 libbluray 静态库并由 `scripts/references/generate-libbluray-baselines.py` 调用。
 - **输入：** 已入库的 8 个 IG packet fixture（`test-data/fixtures/hdmv-navigation/disc-data/` 与 `test-data/fixtures/igs-parser/`）。192 字节 TS 包按 6144 字节 read unit 重新分组，不足处补 null packet；`stc=-1` 让 libbluray 立即解码完整 display set。
 - **入库证据：** [libbluray-1.5.0-igs-baseline.json](../../../test-data/baselines/libbluray-1.5.0-igs-baseline.json)。9 个 clip、52 组 256 项调色板、873 个对象。逐 case 记录 display set 的 complete/epochStart/validPts、ICS 的页面/BOG/按钮/进入退出效果/超时、按钮的 20 个字段、调色板 256 项 YCrCbT，以及对象 RLE 的宽高、run/EOL 计数、48 个等距索引采样和 16 个索引分箱。
 - **自动化对照：** `packages/igs/tests/integration/libbluray-igs-baseline.test.ts`（10 例）。逐 case 把 `extractIgsFromChunks()` 的结果与上述字段全部比对，并逐 case/clip 核对 libbluray 解出的 object id/version 集合与 igstools RGBA 参考摘要的 892 个资产名解析出的 873 个 object id/version 集合一致。测试只读入库 JSON 和夹具，运行时不需要本机 libbluray。

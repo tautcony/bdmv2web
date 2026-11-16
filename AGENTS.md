@@ -27,7 +27,7 @@ This file records cross-cutting requirements repeated in Codex conversations for
 
 ## Reference cache
 
-`.reference-cache/` is gitignored and populated with the pinned references below. Read them in place. `python3 scripts/fetch-reference-cache.py` refreshes `repositories/` at the revisions in `docs/references/cache-manifest.json`, including submodules; set `https_proxy`, `http_proxy` and `all_proxy` when the network needs a proxy. Each `.reference-cache/<id>` entry points to `repositories/<id>` through a relative symlink on POSIX or a directory junction on Windows, so both path styles resolve to one copy.
+`.reference-cache/` is gitignored and populated with the pinned references below. Read them in place. `python3 scripts/references/fetch-cache.py` refreshes `repositories/` at the revisions in `docs/references/cache-manifest.json`, including submodules; set `https_proxy`, `http_proxy` and `all_proxy` when the network needs a proxy. Each `.reference-cache/<id>` entry points to `repositories/<id>` through a relative symlink on POSIX or a directory junction on Windows, so both path styles resolve to one copy.
 
 | Path | Role |
 | --- | --- |
@@ -56,7 +56,7 @@ Keep disc content out of the cache and out of release output.
 - Register every new or moved doc in `docs/README.md` under its category, and every archived doc as a date/scope/status row in `docs/archive/README.md`. `docs/README.md` carries one current-state block and one history block; do not add parallel history sections.
 - Update current-state docs in the same change that changes the behavior they describe, and keep their scope labels accurate (for example, `protocol-support.md` states it covers M1 structure parsing only).
 - Archived docs are frozen records: keep their first-line positioning statement and their findings, and repair their navigation links when they break. Current-state docs must keep every relative markdown link resolvable: recompute relative link depths in the same change that creates, moves, or deletes a doc. When a doc is deleted, turn surviving markdown links to it into inline code paths and remove it from "current capability" authority lists.
-- Do not move or rename `docs/references/cache-manifest.json` or `docs/references/sources.json` without updating `scripts/fetch-reference-cache.py`, which reads the manifest from those paths.
+- Do not move or rename `docs/references/cache-manifest.json` or `docs/references/sources.json` without updating `scripts/references/fetch-cache.py`, which reads the manifest from those paths.
 
 ## Documentation and collaboration
 

@@ -34,7 +34,7 @@ class BinaryCursor
 
 ### 约束
 
-- 不引入 Node 内建。`scripts/build-core-browser.mjs` 会扫描 esbuild metafile，出现 `node:`/`fs`/`path`/`crypto` 直接失败。
+- 不引入 Node 内建。`scripts/build/core-browser.mjs` 会扫描 esbuild metafile，出现 `node:`/`fs`/`path`/`crypto` 直接失败。
 - 不做内容哈希/指纹校验。
 
 ### 改动入口

@@ -3,7 +3,7 @@
  *
  * test-data/baselines/libbluray-1.5.0-igs-baseline.json was produced by feeding the
  * checked-in IG packet fixtures to libbluray's graphics_processor_decode_ts
- * (see scripts/generate-libbluray-baselines.py). Every page, BOG, button,
+ * (see scripts/references/generate-libbluray-baselines.py). Every page, BOG, button,
  * palette entry and object above comes from that run. The tests read only the
  * golden and the fixtures; libbluray is not needed at test time.
  *

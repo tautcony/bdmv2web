@@ -10,6 +10,8 @@
 - JSON Schema to TypeScript: `15.0.4`; Ajv: `8.17.1`.
 - ESLint: `10.14.0` with `typescript-eslint` `8.72.1`.
 
+Repository scripts are grouped by role under `scripts/`; see the [scripts guide](../../scripts/README.md) for entry points and the folder layout.
+
 Install and run the reproducible workspace entry points:
 
 ```sh
@@ -21,7 +23,7 @@ corepack pnpm test
 corepack pnpm test:coverage
 ```
 
-`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. `@bdmv2web/bdmv-io` handles disc input and output transactions. Node filesystem utilities are available from `@bdmv2web/utils/node-fs`.
+`corepack pnpm typecheck` builds workspace dependency declarations first. The browser core is emitted as an ES2020 IIFE at `packages/core/dist/browser.js`; its build script inspects bundled imports and rejects Node built-ins. `packages/runtime-web` emits the menu runtime as an ES2020 IIFE at `packages/runtime-web/dist/browser.bundle.js` through `scripts/build/runtime-browser.mjs`; packaging reads that file. `@bdmv2web/core` uses the same schema for JSON validation and generated TypeScript types. `@bdmv2web/bdmv-io` handles disc input and output transactions. Node filesystem utilities are available from `@bdmv2web/utils/node-fs`.
 
 ## Architecture boundaries
 
@@ -42,9 +44,9 @@ A `file://` menu uses `LocalNavigationHost` and a page VM. A `local-jvm` menu us
 
 ## Linting
 
-`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/*.mjs`, then runs `lint:java`, which checks the BD-J host Java sources in `packages/runtime-web/bdj-host/src` with Checkstyle and compiles them to a Java 8 target with `javac --release 8` (JDK 21 or newer required). `corepack pnpm lint:fix` applies the automatic ESLint fixes.
+`corepack pnpm lint` runs ESLint over `apps/*/src`, `packages/*/src`, `apps/*/tests`, `packages/*/tests`, `vitest.config.ts`, and `scripts/**/*.mjs`, then runs `lint:java`, which checks the BD-J host Java sources in `packages/runtime-web/bdj-host/src` with Checkstyle and compiles them to a Java 8 target with `javac --release 8` (JDK 21 or newer required). `corepack pnpm lint:fix` applies the automatic ESLint fixes.
 
-Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. `corepack pnpm lint` and the `test` scripts run `scripts/ensure-build.mjs`, which builds the workspace once when those artifacts are missing. `scripts/ci.sh` builds first and runs lint as a parallel lane beside the typecheck and the test suites.
+Linting is type-aware. `eslint.config.mjs` parses linted TypeScript through `tsconfig.lint.json`, which spans every linted file, and workspace imports resolve through each package's `dist` declarations. `corepack pnpm lint` and the `test` scripts run `scripts/build/ensure-workspace.mjs`, which builds the workspace once when those artifacts are missing. `scripts/ci.sh` builds first and runs lint as a parallel lane beside the typecheck and the test suites.
 
 `eslint.config.mjs` encodes the style the sources use: double quotes, semicolons, trailing commas, dense single-line declarations, non-null assertions after bounds checks, and terse `condition && call()` / `error ? reject() : resolve()` statements. No formatter runs in this workspace, and ESLint 10 ships no formatting rules.
 
@@ -194,7 +196,7 @@ Eleven committed binary fixtures exceed 1 MiB:
 - `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/JAR/03001/composite2.png` — 1.9 MB
 - `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/JAR/03001/composite3.png` — 1.5 MB
 
-The `*.m2ts_ig-packets.bin` streams are the inputs `scripts/export-igs-packet-fixtures.mjs` reads to derive reference material; `scripts/package-hdmv-metadata-fixtures.mjs` and `scripts/package-igs-fixture-materials.mjs` package fixture materials from a source root. The Spider-Man OTF and composite PNG files are tracked disc sample content.
+The `*.m2ts_ig-packets.bin` streams are the inputs `scripts/fixtures/export-igs-packets.mjs` reads to derive reference material; `scripts/fixtures/package-hdmv-metadata.mjs` and `scripts/fixtures/package-igs-materials.mjs` package fixture materials from a source root. The Spider-Man OTF and composite PNG files are tracked disc sample content.
 
 
 ## Test and fixture entry points

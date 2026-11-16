@@ -3,7 +3,7 @@
  *
  * test-data/baselines/libbluray-1.5.0-navigation-baseline.json was produced from
  * bd_info, bd_list_titles -a, the pinned-source mobj_dump disassembly and
- * libbluray's own HDMV VM (see scripts/generate-libbluray-baselines.py). The
+ * libbluray's own HDMV VM (see scripts/references/generate-libbluray-baselines.py). The
  * graph rows are derived from libbluray's per-command semantics, so the whole
  * static control-flow graph has an independent source. Tests read only the
  * golden and the checked-in fixtures; libbluray is not needed at test time.

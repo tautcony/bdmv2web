@@ -2,7 +2,7 @@
 
 浏览器菜单运行时：把序列化场景渲染到 Canvas，处理键鼠/触摸输入，驱动 `HdmvVm` 的动作与事件，播放包内菜单媒体与音效。
 
-workspace build 期 `scripts/build-runtime-browser.mjs` 把 `src/browser.ts` 用 esbuild 打成 `dist/browser.bundle.js`（IIFE，ES2020）；打包时 `package-builder` 复制为 `runtime/app.bundle.js`。包内脚本不是 ES module。
+workspace build 期 `scripts/build/runtime-browser.mjs` 把 `src/browser.ts` 用 esbuild 打成 `dist/browser.bundle.js`（IIFE，ES2020）；打包时 `package-builder` 复制为 `runtime/app.bundle.js`。包内脚本不是 ES module。
 
 ## 文件
 

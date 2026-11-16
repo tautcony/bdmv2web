@@ -6,8 +6,9 @@
 
 ```ts
 assembleMenuPackage(input: MenuPackageInput & { preparedMedia: PreparedMenuMedia }): Promise<MenuPackageResult>
-buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>  // 兼容包装：先 exportMenuMedia 再 assemble
 ```
+
+调用方先使用 `media-export` 的 `exportMenuMedia()` 编码媒体，再将结果交给 `assembleMenuPackage()`。
 
 `MenuPackageResult` 只含 `diagnostics`（即写进 `manifest.json` 的那一份）。交付状态不进返回值：`status` 由调用方在打包前决定，而媒体编码警告只有打包后才知道，所以用返回值把它们交出去，由调用方并入 `reports.json`。
 
@@ -108,11 +109,10 @@ buildMenuPackage(input: MenuPackageInput): Promise<MenuPackageResult>  // 兼容
 - `preparedMedia.primary`/`additional` 携带每个编码单元的输入、结果与 `planPath`；目录与计划命名由 `media-export` 的 `menuMediaPaths()` 决定。
 - 计划文件按编码单元存在：`media-plans/` 的文件数等于实际编码单元数。共用同一媒体的 PlayItem，其 `planPath` 都指向该单元的计划。
 - 每个导出结果里的 `warnings`（HDR 色调映射缺失、H.264 + HDR 等）由组包转成 `diagnostics` 条目，`severity: "warning"`，按 `code` 去重后写进 `manifest.json`。警告不改变 `status`，出包视为完成。
-- 兼容入口 `buildMenuPackage()` 调用 media-export 的 `exportMenuMedia()`，随后调用 `assembleMenuPackage()`。
 
 ## 运行时打包
 
-`scripts/build-runtime-browser.mjs` 用 esbuild 从 `packages/runtime-web/src/browser.ts` 生成 `packages/runtime-web/dist/browser.bundle.js`（IIFE，ES2020）。构建期的 alias 指向源码入口：
+`scripts/build/runtime-browser.mjs` 用 esbuild 从 `packages/runtime-web/src/browser.ts` 生成 `packages/runtime-web/dist/browser.bundle.js`（IIFE，ES2020）。构建期的 alias 指向源码入口：
 
 ```ts
 alias: {

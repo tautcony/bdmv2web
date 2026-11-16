@@ -18,7 +18,7 @@
 
 参考命令 `bd_info` 和 `bd_list_titles -a` 分别对四个真实碟片目录单独计时。每条记录包含 Node 启动的参考工具子进程墙钟时间；RSS 字段仍是基准 Node 进程读数。两类命令输出的结构字段和 `parseBdmv` 的完整解析、文件图构建范围不同，结果单独列出。
 
-libbluray 1.5.0 的固定参考工具可以运行。通过 `scripts/generate-libbluray-baselines.py` 的生成函数，在临时目录编译工具并生成 9 个 IGS case、5 个 navigation case；生成对象与 `test-data/baselines/libbluray-1.5.0-{igs,navigation}-baseline.json` 完全相同。生成结果只在内存中比较，没有写入基线文件。`scripts/compare-igstools-reference.py` 在当前环境不能运行：Python 缺少 `png` 模块，且没有安装 `igstools` 模块。
+libbluray 1.5.0 的固定参考工具可以运行。通过 `scripts/references/generate-libbluray-baselines.py` 的生成函数，在临时目录编译工具并生成 9 个 IGS case、5 个 navigation case；生成对象与 `test-data/baselines/libbluray-1.5.0-{igs,navigation}-baseline.json` 完全相同。生成结果只在内存中比较，没有写入基线文件。`scripts/references/compare-igstools.py` 在当前环境不能运行：Python 缺少 `png` 模块，且没有安装 `igstools` 模块。
 
 ## 合成基准结果
 

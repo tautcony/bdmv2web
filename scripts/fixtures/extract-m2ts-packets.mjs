@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 
 function usage() {
-  console.error("Usage: node scripts/extract-m2ts-pid-packets.mjs --source FILE --output FILE --source-label RELATIVE_PATH --pids PID[,PID...]");
+  console.error("Usage: node scripts/fixtures/extract-m2ts-packets.mjs --source FILE --output FILE --source-label RELATIVE_PATH --pids PID[,PID...]");
   console.error("Retains complete 192-byte M2TS packets. Writes FILE.offset-runs.json beside the packet output.");
   process.exit(2);
 }

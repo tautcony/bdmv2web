@@ -29,7 +29,7 @@ npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
 /tmp/bdmv2web-prefix/bin/bdmv2web --version
 ```
 
-`pnpm pack` runs the `prepack` script (`scripts/bundle-cli.mjs`), which bundles `apps/cli/src/index.ts` with esbuild, copies the menu runtime and the BD-J client bundle, builds the BD-J host API JAR, copies the package-builder templates, and writes the build-mode marker. `packages/*/dist` must already exist, so run `corepack pnpm build` first.
+`pnpm pack` runs the `prepack` script (`scripts/build/cli.mjs`), which bundles `apps/cli/src/index.ts` with esbuild, copies the menu runtime and the BD-J client bundle, builds the BD-J host API JAR, copies the package-builder templates, and writes the build-mode marker. `packages/*/dist` must already exist, so run `corepack pnpm build` first.
 
 ## Package contents
 
@@ -93,4 +93,4 @@ Prerelease versions publish to the `latest` dist-tag; the workflow passes no `--
 
 ## Menu runtime bundle
 
-`corepack pnpm build` emits `packages/runtime-web/dist/browser.bundle.js` through `scripts/build-runtime-browser.mjs`. Packaging a disc copies that file to `dist/runtime/app.bundle.js` and then to `runtime/app.bundle.js` inside the generated package. `scripts/bundle-cli.mjs` performs the same copy for the published CLI, together with the BD-J client bundle, the host API JAR, and the templates.
+`corepack pnpm build` emits `packages/runtime-web/dist/browser.bundle.js` through `scripts/build/runtime-browser.mjs`. Packaging a disc copies that file to `dist/runtime/app.bundle.js` and then to `runtime/app.bundle.js` inside the generated package. `scripts/build/cli.mjs` performs the same copy for the published CLI, together with the BD-J client bundle, the host API JAR, and the templates.

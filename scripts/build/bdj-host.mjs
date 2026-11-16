@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
 const execFileAsync = promisify(execFile);
-const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const sourceDirectory = resolve(root, "packages/runtime-web/bdj-host/src");
 
 async function javaSources(directory) {

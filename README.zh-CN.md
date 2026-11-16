@@ -191,7 +191,7 @@ corepack pnpm --filter @bdmv2web/igs test
 拉取本地参考源码缓存：
 
 ```sh
-python3 scripts/fetch-reference-cache.py
+python3 scripts/references/fetch-cache.py
 ```
 
 ### 仓库结构

@@ -1,10 +1,10 @@
 import { build } from "esbuild";
 import { chmod, cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { writeBuildMode } from "./bench/store/build-mode.mjs";
-import { buildBdjHostApi } from "./build-bdj-host.mjs";
+import { writeBuildMode } from "../bench/store/build-mode.mjs";
+import { buildBdjHostApi } from "./bdj-host.mjs";
 
-const root = resolve(import.meta.dirname, "..");
+const root = resolve(import.meta.dirname, "../..");
 const cliDist = resolve(root, "apps/cli/dist");
 const profilingBuild = process.env.BDMV2WEB_PROFILE_BUILD === "1";
 

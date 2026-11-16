@@ -30,8 +30,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/copy-viewer-assets.mjs",
-    "bundle": "node ../../scripts/bundle-cli.mjs",
-    "prepack": "node ../../scripts/bundle-cli.mjs",
+    "bundle": "node ../../scripts/build/cli.mjs",
+    "prepack": "node ../../scripts/build/cli.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

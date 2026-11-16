@@ -96,7 +96,7 @@ ParsedDisc（结构 + 原始 12 字节命令 + 引用图 + 诊断）
 | 修改 DiscIR/时间/限流/运行时数据/播放目标契约 | [contracts.md](contracts.md) |
 | 新增包或重划职责 | [architecture.md](architecture.md)（职责边界与单源规则）、`packages/` 新增文档、[index.json](index.json)、`docs/guides/development.md` 的 Architecture boundaries |
 | 新增测试或调整基线 | [testing.md](testing.md)（逐包计数必须与 `docs/guides/development.md` 一致） |
-| 再生成 libbluray 导航基线（`scripts/generate-libbluray-baselines.py`） | [testing.md](testing.md) 与 `docs/references/stages/M3-hdmv-navigation.md` 中的盘数、MovieObject、命令与 CFG 边计数 |
+| 再生成 libbluray 导航基线（`scripts/references/generate-libbluray-baselines.py`） | [testing.md](testing.md) 与 `docs/references/stages/M3-hdmv-navigation.md` 中的盘数、MovieObject、命令与 CFG 边计数 |
 
 ## 与其他文档的关系
 
