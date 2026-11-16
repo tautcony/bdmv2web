@@ -42,7 +42,7 @@ jobs:
       - name: Run alternating synthetic baseline and candidate cases
         if: github.event_name == 'pull_request'
         run: |
-          node scripts/bench/ci.mjs \
+          node scripts/bench/commands/ci.mjs \
             --baseline-root baseline \
             --candidate-root . \
             --out "$RUNNER_TEMP/performance/pair" \

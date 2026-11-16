@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { chmod, cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { writeBuildMode } from "./bench/build-mode.mjs";
+import { writeBuildMode } from "./bench/store/build-mode.mjs";
 import { buildBdjHostApi } from "./build-bdj-host.mjs";
 
 const root = resolve(import.meta.dirname, "..");

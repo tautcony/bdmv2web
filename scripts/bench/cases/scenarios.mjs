@@ -227,7 +227,7 @@ async function runCli(root, caseDef, outputDir, sequence, observeChild = false) 
   const childReport = observeChild ? join(outputDir, `child-${sequence}-${process.pid}.json`) : null;
   const childEnvironment = childReport ? {
     ...process.env,
-    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import=${pathToFileURL(join(root, "scripts/bench/child-observer.mjs")).href}`].filter(Boolean).join(" "),
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import=${pathToFileURL(join(root, "scripts/bench/runner/child-observer.mjs")).href}`].filter(Boolean).join(" "),
     BDMV2WEB_BENCH_CHILD_REPORT: childReport,
   } : process.env;
   try { stdout = execFileSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024, env: childEnvironment }); }
@@ -322,7 +322,7 @@ export async function prepareScenarioCase(caseDef, root) {
     let packagePath;
     if (options.operation === "validate") {
       packagePath = join(temp, "synthetic-menu-package");
-      const { buildSyntheticPackage } = await import("./browser.mjs");
+      const { buildSyntheticPackage } = await import("../runner/browser.mjs");
       await buildSyntheticPackage(root, packagePath);
     }
     let materialized;
@@ -380,7 +380,7 @@ export async function prepareScenarioCase(caseDef, root) {
     return { input, fixture, scope: caseDef.scope, run, validate, describe, afterMeasurement: cleanup, cleanup };
   }
   if (category === "browser") {
-    const { prepareBrowserScenario } = await import("./browser.mjs");
+    const { prepareBrowserScenario } = await import("../runner/browser.mjs");
     try { return await prepareBrowserScenario(caseDef, root); }
     catch (error) { if (error?.code === "BENCH_SKIP") return { skip: error.message }; throw error; }
   }

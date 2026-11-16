@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Option } from "commander";
-import { BUILD_MODES } from "./build-mode.mjs";
-import { createProgram, exitWithError, parseOptions } from "./cli.mjs";
+import { BUILD_MODES } from "../store/build-mode.mjs";
+import { createProgram, exitWithError, parseOptions } from "../lib/cli.mjs";
 
 function skip(reason, cause) {
   const error = new Error(reason, cause ? { cause } : undefined);
@@ -202,7 +202,7 @@ export async function prepareBrowserScenario(caseDef, root) {
 function createBrowserCommand() {
   return createProgram("bench-browser", "Capture one Chromium file:// navigation with optional CPU profile and trace.")
     .option("--case <caseId>", "browser case ID", "browser.synthetic-menu.file-navigation")
-    .option("--root <dir>", "code root", fileURLToPath(new URL("../..", import.meta.url)))
+    .option("--root <dir>", "code root", fileURLToPath(new URL("../../..", import.meta.url)))
     .option("--fixture-root <dir>", "fixture root")
     .option("--out <dir>", "output root", "test-data/bench/runs")
     .addOption(new Option("--build-mode <mode>", "declared build mode").choices(BUILD_MODES))
@@ -215,12 +215,12 @@ async function main(argv) {
   const fixtureRoot = resolve(options.fixtureRoot ?? root);
   const buildMode = options.buildMode;
   const caseId = options.case;
-  const { getCaseDefinitions } = await import("./cases.mjs");
-  const { prepareScenarioCase } = await import("./scenarios.mjs");
+  const { getCaseDefinitions } = await import("../cases/registry.mjs");
+  const { prepareScenarioCase } = await import("../cases/scenarios.mjs");
   const definition = (await getCaseDefinitions({ root, fixtureRoot })).find((item) => item.caseId === caseId);
   if (!definition || definition.category !== "browser") throw new Error(`Unknown browser case ID: ${caseId}`);
   const outputRoot = options.out;
-  const { createProfileRunDirectory, profilePath, writeProfileRun } = await import("./profile-record.mjs");
+  const { createProfileRunDirectory, profilePath, writeProfileRun } = await import("../store/environment.mjs");
   const { runId, runDir } = await createProfileRunDirectory(root, outputRoot);
   definition.options = { ...definition.options, artifactDirectory: runDir, collectProfiles: true };
   const prepared = await prepareScenarioCase(definition, root);

@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { resolve } from "node:path";
-import { writeBuildMode } from "./bench/build-mode.mjs";
+import { writeBuildMode } from "./bench/store/build-mode.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const profilingBuild = process.env.BDMV2WEB_PROFILE_BUILD === "1";

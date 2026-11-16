@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCaseDefinitions } from "./cases.mjs";
+import { getCaseDefinitions } from "./registry.mjs";
 import { auditFixtures, fixturePathsOf } from "./fixture-audit.mjs";
 
 test("fixture paths skip virtual disc paths and keep repo-relative ones", () => {

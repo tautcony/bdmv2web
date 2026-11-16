@@ -3,11 +3,11 @@ import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Option } from "commander";
-import { createProgram, exitWithError, parseOptions } from "./cli.mjs";
-import { environmentIdentity, runIdentity, stable } from "./compatibility.mjs";
-import { DRIFT_LIMIT_PERCENT, forkMedians, median } from "./stats.mjs";
-import { readGcSeries, readSampleRef } from "./sample-store.mjs";
-import { cleanText, html } from "./report-html.mjs";
+import { createProgram, exitWithError, parseOptions } from "../lib/cli.mjs";
+import { environmentIdentity, runIdentity, stable } from "../store/compatibility.mjs";
+import { DRIFT_LIMIT_PERCENT, forkMedians, median } from "../lib/stats.mjs";
+import { readGcSeries, readSampleRef } from "../store/samples.mjs";
+import { cleanText, html } from "../render/html.mjs";
 
 /** Same defaults as bench:compare. */
 const CHANGE_RELATIVE_PERCENT = 10;

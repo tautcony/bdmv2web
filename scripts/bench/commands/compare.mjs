@@ -2,9 +2,9 @@
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "./cli.mjs";
-import { CONFIGURATION_FIELDS, ENVIRONMENT_FIELDS, mismatchedFields, stable } from "./compatibility.mjs";
-import { forkMedians, median } from "./stats.mjs";
+import { createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "../lib/cli.mjs";
+import { CONFIGURATION_FIELDS, ENVIRONMENT_FIELDS, mismatchedFields, stable } from "../store/compatibility.mjs";
+import { forkMedians, median } from "../lib/stats.mjs";
 
 const DEFAULTS = { relativeThreshold: 10, absoluteThresholdMs: 0.05, resamples: 10_000 };
 const MINIMUM_FORKS = 3;

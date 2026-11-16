@@ -3,8 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Option } from "commander";
-import { BUILD_MODES } from "./build-mode.mjs";
-import { createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "./cli.mjs";
+import { BUILD_MODES } from "../store/build-mode.mjs";
+import { createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "../lib/cli.mjs";
 
 export async function captureProfile({ run, mode, durationMs }) {
   if (mode !== "cpu" && mode !== "heap") throw new Error("Profile mode must be cpu or heap");
@@ -53,7 +53,7 @@ function createProfileCommand() {
   return createProgram("bench-profile", "Capture a Chrome DevTools CPU or heap sampling profile for one case.")
     .requiredOption("--case <caseId>", "stable case ID")
     .addOption(new Option("--mode <mode>", "profile mode").choices(["cpu", "heap"]).default("cpu"))
-    .option("--root <dir>", "code root", fileURLToPath(new URL("../..", import.meta.url)))
+    .option("--root <dir>", "code root", fileURLToPath(new URL("../../..", import.meta.url)))
     .option("--fixture-root <dir>", "fixture root")
     .option("--duration-ms <ms>", "capture duration in milliseconds", numberArgument)
     .option("--time-ms <ms>", "capture duration in milliseconds", numberArgument)
@@ -79,7 +79,7 @@ async function main(argv) {
   if (warmupRuns !== null && warmupRuns < 0) throw new Error("--warmup-runs must be a non-negative integer");
   const outputRoot = options.out;
   const artifactName = options.artifact ?? `profiles/${caseId}.${mode === "cpu" ? "cpuprofile" : "heapprofile"}`;
-  const { getCaseDefinitions } = await import("./cases.mjs");
+  const { getCaseDefinitions } = await import("../cases/registry.mjs");
   const { prepareCase } = await import("./worker.mjs");
   const definitions = await getCaseDefinitions({ root, fixtureRoot });
   const caseDef = definitions.find((item) => item.caseId === caseId);
@@ -108,7 +108,7 @@ async function main(argv) {
     const finalValue = await prepared.run();
     await prepared.validate?.(finalValue);
     const outputSummary = prepared.describe ? prepared.describe(finalValue) : undefined;
-    const { createProfileRunDirectory, profilePath, writeProfileRun } = await import("./profile-record.mjs");
+    const { createProfileRunDirectory, profilePath, writeProfileRun } = await import("../store/environment.mjs");
     const { runId, runDir } = await createProfileRunDirectory(root, outputRoot);
     const artifact = profilePath(runDir, artifactName);
     await writeProfile(artifact.target, profile);

@@ -3,8 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Option } from "commander";
-import { BUILD_MODES } from "./build-mode.mjs";
-import { createProgram, exitWithError, numberArgument, parseOptions } from "./cli.mjs";
+import { BUILD_MODES } from "../store/build-mode.mjs";
+import { createProgram, exitWithError, numberArgument, parseOptions } from "../lib/cli.mjs";
 
 function memorySnapshot() {
   const memory = process.memoryUsage();
@@ -103,7 +103,7 @@ export async function writeMemoryResult(file, result) {
 function createMemoryCommand() {
   return createProgram("bench-memory", "Capture process memory and GC observations for one case.")
     .requiredOption("--case <caseId>", "stable case ID")
-    .option("--root <dir>", "code root", fileURLToPath(new URL("../..", import.meta.url)))
+    .option("--root <dir>", "code root", fileURLToPath(new URL("../../..", import.meta.url)))
     .option("--fixture-root <dir>", "fixture root")
     .option("--duration-ms <ms>", "capture duration in milliseconds", numberArgument, 5_000)
     .option("--out <dir>", "output root")
@@ -120,7 +120,7 @@ async function main(argv) {
   const durationMs = options.durationMs;
   if (!(durationMs > 0)) throw new Error("--duration-ms must be positive");
   const outputRoot = options.out ?? options.output ?? "test-data/bench/runs";
-  const { getCaseDefinitions } = await import("./cases.mjs");
+  const { getCaseDefinitions } = await import("../cases/registry.mjs");
   const { prepareCase } = await import("./worker.mjs");
   const definitions = await getCaseDefinitions({ root, fixtureRoot });
   const caseDef = definitions.find((item) => item.caseId === caseId);
@@ -140,7 +140,7 @@ async function main(argv) {
       caseId, fixture: caseDef.fixture, category: caseDef.category, name: caseDef.name, sample: caseDef.sample, scope: prepared.scope,
       artifacts: ["memory.json"], forks: [{ index: 0, iterations: result.iterations, wallMs: result.durationMs, output: outputSummary, memory: result.memory, gc: result.gc }],
     };
-    const { writeProfileRun } = await import("./profile-record.mjs");
+    const { writeProfileRun } = await import("../store/environment.mjs");
     const record = await writeProfileRun({ root, outputRoot, mode: "memory", definition: caseDef, configuration: { caseId, requestedDurationMs: durationMs, startedAt }, row, buildMode });
     const detailsFile = join(record.runDir, "memory.json");
     await writeMemoryResult(detailsFile, { schemaVersion: 1, mode: "memory", runId: record.runId, caseId, fixture: caseDef.fixture, scope: prepared.scope, input: prepared.input, output: outputSummary, ...result });

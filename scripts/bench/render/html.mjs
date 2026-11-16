@@ -2,7 +2,7 @@ import { relative, resolve, sep } from "node:path";
 import {
   boxPlot, escapeXml, fmtBytes, fmtDeltaMs, fmtMs, fmtNumber, fmtPercent,
   heatColor, heatTextColor, rankingChart, sparkline, trendChart,
-} from "./report-charts.mjs";
+} from "./charts.mjs";
 
 const CHANGE_RELATIVE_PERCENT = 10;
 const CHANGE_ABSOLUTE_MS = 0.05;

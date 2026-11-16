@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 const env = { ...process.env, BDMV2WEB_PROFILE_BUILD: "1" };
 const command = process.platform === "win32" ? "corepack.cmd" : "corepack";
 for (const args of [["pnpm", "build"], ["pnpm", "bundle:cli"]]) {

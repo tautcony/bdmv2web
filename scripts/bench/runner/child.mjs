@@ -3,13 +3,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Option } from "commander";
-import { BUILD_MODES } from "./build-mode.mjs";
-import { createProgram, exitWithError, numberArgument, parseOptions } from "./cli.mjs";
+import { BUILD_MODES } from "../store/build-mode.mjs";
+import { createProgram, exitWithError, numberArgument, parseOptions } from "../lib/cli.mjs";
 
 function createChildCommand() {
   return createProgram("bench-child", "Capture GC and memory from the CLI child process for one case.")
     .requiredOption("--case <caseId>", "stable case ID")
-    .option("--root <dir>", "code root", fileURLToPath(new URL("../..", import.meta.url)))
+    .option("--root <dir>", "code root", fileURLToPath(new URL("../../..", import.meta.url)))
     .option("--fixture-root <dir>", "fixture root")
     .option("--duration-ms <ms>", "capture duration in milliseconds", numberArgument, 5_000)
     .option("--out <dir>", "output root")
@@ -22,7 +22,7 @@ async function main(argv) {
   const root = resolve(options.root), fixtureRoot = resolve(options.fixtureRoot ?? root);
   const durationMs = options.durationMs;
   if (!(durationMs > 0)) throw new Error("--duration-ms must be positive");
-  const { getCaseDefinitions } = await import("./cases.mjs");
+  const { getCaseDefinitions } = await import("../cases/registry.mjs");
   const { prepareCase } = await import("./worker.mjs");
   const definitions = await getCaseDefinitions({ root, fixtureRoot });
   const caseDef = definitions.find((item) => item.caseId === caseId);
@@ -47,7 +47,7 @@ async function main(argv) {
     await prepared.validate?.(last);
     const child = last?.child ?? null;
     const output = prepared.describe ? prepared.describe(last) : undefined;
-    const { createProfileRunDirectory, profilePath, writeProfileRun } = await import("./profile-record.mjs");
+    const { createProfileRunDirectory, profilePath, writeProfileRun } = await import("../store/environment.mjs");
     const outputRoot = options.out ?? "test-data/bench/runs";
     const { runId, runDir } = await createProfileRunDirectory(root, outputRoot);
     const artifact = profilePath(runDir, "child.json");

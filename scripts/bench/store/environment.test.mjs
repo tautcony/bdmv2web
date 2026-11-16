@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createProfileRunDirectory, writeProfileRun } from "./profile-record.mjs";
+import { createProfileRunDirectory, writeProfileRun } from "./environment.mjs";
 
 test("profile run record stores environment and relative artifact paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "bdmv2web-profile-record-"));

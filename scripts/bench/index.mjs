@@ -6,16 +6,18 @@ import { arch, cpus, platform, release, totalmem } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Option } from "commander";
-import { BUILD_MODES, readBuildMode } from "./build-mode.mjs";
-import { getCaseDefinitions } from "./cases.mjs";
-import { assertFixturesPresent, auditFixtures } from "./fixture-audit.mjs";
-import { appendArgument, createProgram, exitWithError, integerArgument, numberArgument, parseOptions, splitList } from "./cli.mjs";
-import { writeSampleStore } from "./sample-store.mjs";
-import { summarizeForks, summarizeSamples } from "./stats.mjs";
+import { BUILD_MODES, readBuildMode } from "./store/build-mode.mjs";
+import { getCaseDefinitions } from "./cases/registry.mjs";
+import { assertFixturesPresent, auditFixtures } from "./cases/fixture-audit.mjs";
+import { appendArgument, createProgram, exitWithError, integerArgument, numberArgument, parseOptions, splitList } from "./lib/cli.mjs";
+import { writeSampleStore } from "./store/samples.mjs";
+import { summarizeForks, summarizeSamples } from "./lib/stats.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
+const runnerDir = join(scriptDir, "runner");
 const workspace = resolve(scriptDir, "../..");
-const MODES = ["benchmark", "cpu", "heap", "memory", "child", "browser"];
+const MODE_RUNNERS = { cpu: "profile.mjs", heap: "profile.mjs", memory: "memory.mjs", child: "child.mjs", browser: "browser.mjs" };
+const MODES = ["benchmark", ...Object.keys(MODE_RUNNERS)];
 const SUITES = ["all", "real", "synthetic", "scenario"];
 
 function createBenchCommand() {
@@ -63,7 +65,7 @@ function git(root, args) { try { return execFileSync("git", args, { cwd: root, e
 function runWorker(def, options, index) {
   return new Promise((resolvePromise, reject) => {
     const inherited = process.execArgv.filter((arg) => supportedNodeFlag.test(arg));
-    const args = [...inherited, ...options.nodeArgs, join(scriptDir, "worker.mjs"), "--case", def.caseId, "--root", options.root, "--fixture-root", options.fixtureRoot, "--warmup-ms", String(options.warmupMs), "--time-ms", String(options.timeMs), "--min-samples", String(options.minSamples), ...(options.callsPerSample === undefined ? [] : ["--calls-per-sample", String(options.callsPerSample)])];
+    const args = [...inherited, ...options.nodeArgs, join(runnerDir, "worker.mjs"), "--case", def.caseId, "--root", options.root, "--fixture-root", options.fixtureRoot, "--warmup-ms", String(options.warmupMs), "--time-ms", String(options.timeMs), "--min-samples", String(options.minSamples), ...(options.callsPerSample === undefined ? [] : ["--calls-per-sample", String(options.callsPerSample)])];
     const child = spawn(process.execPath, args, { cwd: workspace, env: process.env, stdio: ["ignore", "pipe", "pipe", "ipc"] });
     let stdout = "", stderr = "";
     let message;
@@ -100,7 +102,8 @@ async function main() {
     }
   }
   if (cli.mode !== "benchmark") {
-    const file = cli.mode === "browser" ? "browser.mjs" : cli.mode === "memory" ? "memory.mjs" : cli.mode === "child" ? "child.mjs" : "profile.mjs";
+    const file = MODE_RUNNERS[cli.mode];
+    if (!file) throw new Error(`No runner is registered for --mode ${cli.mode}`);
     const caseId = cli.cases[0];
     if (!caseId) throw new Error(`--mode ${cli.mode} requires --case <caseId>`);
     const common = ["--case", caseId, "--root", root, "--fixture-root", fixtureRoot];
@@ -112,7 +115,7 @@ async function main() {
     else childArgs = [...common, ...declaredBuildMode, "--out", cli.out];
     const profileFlags = cli.mode === "cpu" || cli.mode === "heap" ? ["--enable-source-maps"] : [];
     const runtimeFlags = [...new Set([...process.execArgv.filter((arg) => supportedNodeFlag.test(arg)), ...cli.nodeArgs, ...profileFlags])];
-    const child = spawn(process.execPath, [...runtimeFlags, join(scriptDir, file), ...childArgs], { cwd: workspace, env: process.env, stdio: "inherit" });
+    const child = spawn(process.execPath, [...runtimeFlags, join(runnerDir, file), ...childArgs], { cwd: workspace, env: process.env, stdio: "inherit" });
     await new Promise((resolvePromise, reject) => { child.once("error", reject); child.once("close", (code) => code === 0 ? resolvePromise() : reject(new Error(`${file} exited ${code}`))); }); return;
   }
   const runId = `${new Date().toISOString().replaceAll(":", "").replaceAll(".", "-")}-${randomUUID().slice(0, 8)}`;

@@ -8,8 +8,8 @@ Local output of the performance tooling in [`scripts/bench/`](../../scripts/benc
 | --- | --- | --- |
 | `runs/<runId>/` | One benchmark run: `run.json` plus `samples.f64` | `pnpm bench` |
 | `profiles/<runId>/` | CPU, heap, memory, child, and browser captures with their artifacts | `pnpm bench --mode cpu\|heap\|memory\|child\|browser` |
-| `pairs/<label>/` | Baseline and candidate records, `comparison.json`, `summary.md` | `node scripts/bench/ci.mjs` |
-| `reports/<date>/` | `trend.md`, `trend.html`, `trend.json` rendered from `runs/` | `node scripts/bench/report.mjs` |
+| `pairs/<label>/` | Baseline and candidate records, `comparison.json`, `summary.md` | `node scripts/bench/commands/ci.mjs` |
+| `reports/<date>/` | `trend.md`, `trend.html`, `trend.json` rendered from `runs/` | `node scripts/bench/commands/report.mjs` |
 
 Only `runs/`, `profiles/`, `pairs/`, and `reports/` are regenerable from commands.
 
@@ -24,7 +24,7 @@ A full suite run with three forks is about 4 MB, mostly `run.json`; a one-fork r
 
 ## Fixtures ship with the code
 
-A case measures a fixture that ships with the repository. `scripts/bench/fixture-audit.mjs` resolves every input path a case declares, and a run stops before the first fork when one is missing; a path that exists but is ignored by git is reported on stderr and recorded as `untrackedFixtures` in the run, because nobody else can reproduce that record. `scripts/bench/fixture-audit.test.mjs` asserts that the whole case list reads only committed files, so a case that would need a local-only input has to be dropped rather than skipped.
+A case measures a fixture that ships with the repository. `scripts/bench/cases/fixture-audit.mjs` resolves every input path a case declares, and a run stops before the first fork when one is missing; a path that exists but is ignored by git is reported on stderr and recorded as `untrackedFixtures` in the run, because nobody else can reproduce that record. `scripts/bench/cases/fixture-audit.test.mjs` asserts that the whole case list reads only committed files, so a case that would need a local-only input has to be dropped rather than skipped.
 
 ## Record a run
 
@@ -37,7 +37,7 @@ corepack pnpm build
 corepack pnpm bench --mode benchmark --suite all --forks 3 --warmup-ms 100 --time-ms 500 --min-samples 10 --out test-data/bench/runs
 
 # Baseline/candidate pair on one runner, merged per side.
-node scripts/bench/ci.mjs --baseline-root . --candidate-root . --out test-data/bench/pairs/2026-11-10 --case perf.igs.battle-royale.parse
+node scripts/bench/commands/ci.mjs --baseline-root . --candidate-root . --out test-data/bench/pairs/2026-11-10 --case perf.igs.battle-royale.parse
 
 # Profiling and memory captures.
 corepack pnpm bench --mode cpu --case perf.igs.battle-royale.render --duration-ms 5000 --out test-data/bench/profiles
@@ -70,8 +70,8 @@ A keepable record has `schemaVersion` 1, no failures, no `untrackedFixtures`, a 
 ## Render trends
 
 ```sh
-node scripts/bench/report.mjs test-data/bench/runs --format markdown --out test-data/bench/reports/2026-11-10/trend.md
-node scripts/bench/report.mjs test-data/bench/runs --format html --out test-data/bench/reports/2026-11-10/trend.html
+node scripts/bench/commands/report.mjs test-data/bench/runs --format markdown --out test-data/bench/reports/2026-11-10/trend.md
+node scripts/bench/commands/report.mjs test-data/bench/runs --format html --out test-data/bench/reports/2026-11-10/trend.html
 ```
 
 The trend reads every `run.json` under the given directory, drops the source runs of merged pairs, and groups compatible environments into separate series.

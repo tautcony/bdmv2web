@@ -193,7 +193,7 @@ test("parent-only measurements are marked and stay out of work hotspots", () => 
 
 test("recorded failure paths are sanitized in reports", () => {
   const sample = run("paths", "2026-01-01");
-  sample.run.failures.push({ caseId: "other.case", reason: "at file:///Users/alice/repo/scripts/bench/worker.mjs:1:2" });
+  sample.run.failures.push({ caseId: "other.case", reason: "at file:///Users/alice/repo/scripts/bench/runner/worker.mjs:1:2" });
   const trend = buildTrend([sample]);
   const output = html(trend, "/reports");
   assert.doesNotMatch(output, /alice/);

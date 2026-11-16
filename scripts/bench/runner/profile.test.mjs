@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { captureProfile } from "./profile.mjs";
-import { parseBenchArguments } from "./index.mjs";
+import { parseBenchArguments } from "../index.mjs";
 
 test("CPU profile output is a Chrome DevTools profile with measured samples", async () => {
   let count = 0;

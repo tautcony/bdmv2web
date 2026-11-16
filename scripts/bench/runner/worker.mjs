@@ -5,9 +5,9 @@ import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import { Bench } from "tinybench";
 import { calibrateCallsPerSample } from "./batch.mjs";
-import { getCaseDefinitions, resolveInput } from "./cases.mjs";
-import { createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "./cli.mjs";
-import { toPortablePath } from "./fixture-input.mjs";
+import { getCaseDefinitions, resolveInput } from "../cases/registry.mjs";
+import { createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "../lib/cli.mjs";
+import { toPortablePath } from "../cases/fixture-input.mjs";
 import { normalizeMaxRssBytes, observeGc } from "./memory.mjs";
 
 const moduleCache = new Map();
@@ -92,7 +92,7 @@ function syntheticPgs(o) {
 
 export async function prepareCase(caseDef, root) {
   if (caseDef.suite === "scenario") {
-    const { prepareScenarioCase } = await import("./scenarios.mjs");
+    const { prepareScenarioCase } = await import("../cases/scenarios.mjs");
     return prepareScenarioCase(caseDef, root);
   }
   const o = caseDef.options ?? {};
@@ -223,7 +223,7 @@ export async function prepareCase(caseDef, root) {
       dist(root, "mediaExport", "packages/media-export/dist/index.js"),
       dist(root, "menuPlanning", "apps/cli/dist/commands/menu-planning.js"),
     ]);
-    const graphTree = o.files?.length ? await (await import("./fixture-input.mjs")).materializeBdmvFiles(caseDef.fixtureRoot, o.files) : null;
+    const graphTree = o.files?.length ? await (await import("../cases/fixture-input.mjs")).materializeBdmvFiles(caseDef.fixtureRoot, o.files) : null;
     if (!graphTree) throw new Error("menu-loop case needs input files");
     const bdmvDir = graphTree.directory;
     const parsed = await parser.parseBdmv(bdmvDir);
@@ -304,7 +304,7 @@ export async function prepareCase(caseDef, root) {
   }
   if (caseDef.category === "graph") {
     const [parser, parserSteps] = await Promise.all([dist(root, "parser", "packages/bdmv-parser/dist/index.js"), dist(root, "parserSteps", "packages/bdmv-parser/dist/parsing/parser.js")]);
-    const graphTree = o.files?.length ? await (await import("./fixture-input.mjs")).materializeBdmvFiles(caseDef.fixtureRoot, o.files) : null;
+    const graphTree = o.files?.length ? await (await import("../cases/fixture-input.mjs")).materializeBdmvFiles(caseDef.fixtureRoot, o.files) : null;
     const bdmvDir = graphTree?.directory ?? resolveInput(root, o.bdmvDir), parsed = await parser.parseBdmv(bdmvDir), paths = await walkFiles(bdmvDir);
     const files = await Promise.all(paths.map(async (path) => ({ rel: `BDMV/${relative(bdmvDir, path).replaceAll("\\", "/")}`, abs: path, size: (await stat(path)).size })));
     const run = () => parserSteps.buildGraph(parsed.entries, parsed.movieObjects, parsed.playlists, parsed.clips, parsed.sounds, files, []);
@@ -334,7 +334,7 @@ export async function prepareCase(caseDef, root) {
     return { run, validate: (v) => { const description = describeValue(v), d = description.details; expected(d, o.operation === "compose" ? o.expectedCompose : o.expected, caseDef.caseId); usefulOutput(description, caseDef.caseId); if (o.operation === "compose" && !d.visible) throw new Error("PGS display set is not visible"); }, describe: describeValue, scope: caseDef.scope, input: { path: o.source === "synthetic" ? null : toPortablePath(root, o.file), sourceBytes: bytes.length, selectedDisplaySet: index + 1 }, fixture: caseDef.fixture };
   }
   if (caseDef.category === "package") {
-    const { prepareIgsInput, assembleIgsMenuPackage } = await import("./graphics.mjs");
+    const { prepareIgsInput, assembleIgsMenuPackage } = await import("../cases/graphics.mjs");
     const prepared = await prepareIgsInput(root, { ...o, fixtureId: caseDef.fixture.id });
     const outputRoot = await mkdtemp(join(tmpdir(), "bdmv2web-package-bench-"));
     let sequence = 0;

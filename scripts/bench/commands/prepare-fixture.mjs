@@ -2,9 +2,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createProgram, exitWithError, parseOptions } from "./cli.mjs";
+import { createProgram, exitWithError, parseOptions } from "../lib/cli.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function createPrepareCommand() {
   return createProgram("prepare-igs-fixture", "Write the complete IGS packet stream fixture for one MNU case.")

@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getCaseDefinitions } from "./cases.mjs";
+import { getCaseDefinitions } from "./registry.mjs";
 import { prepareScenarioCase } from "./scenarios.mjs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 test("scenario registry exposes stable scale, CLI, and browser cases with actual input sizes", async () => {
   const cases = await getCaseDefinitions({ root });

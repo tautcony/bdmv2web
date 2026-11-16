@@ -3,12 +3,12 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { appendList, createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "./cli.mjs";
-import { writeSampleStore } from "./sample-store.mjs";
-import { summarizeForks } from "./stats.mjs";
+import { appendList, createProgram, exitWithError, integerArgument, numberArgument, parseOptions } from "../lib/cli.mjs";
+import { writeSampleStore } from "../store/samples.mjs";
+import { summarizeForks } from "../lib/stats.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
-const workspace = resolve(scriptDir, "../..");
+const workspace = resolve(scriptDir, "../../..");
 
 function createCiCommand() {
   return createProgram("bench-ci", "Run baseline and candidate benchmarks in alternating order and compare them.")
@@ -65,7 +65,7 @@ async function readRunDirectory(text) {
 }
 async function runPair(options, dependencies = {}) {
   const run = dependencies.runProcess ?? runProcess;
-  const harness = dependencies.harness ?? join(scriptDir, "index.mjs");
+  const harness = dependencies.harness ?? join(scriptDir, "..", "index.mjs");
   const sequence = ["baseline", "candidate", "candidate", "baseline"];
   const results = { baseline: [], candidate: [] };
   const rawDir = join(resolve(options.out), "raw");

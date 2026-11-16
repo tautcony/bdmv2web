@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GC_CHANNELS, GC_FILE, MEMORY_CHANNELS, MEMORY_FILE, SAMPLE_FILE, isSampleRef, readGcSeries, readMemorySeries, readSampleRef, writeSampleStore } from "./sample-store.mjs";
+import { GC_CHANNELS, GC_FILE, MEMORY_CHANNELS, MEMORY_FILE, SAMPLE_FILE, isSampleRef, readGcSeries, readMemorySeries, readSampleRef, writeSampleStore } from "./samples.mjs";
 
 const values = [0.0006671234567890123, 1 / 3, 1234.5678901234567, 0, 2 ** -42];
 

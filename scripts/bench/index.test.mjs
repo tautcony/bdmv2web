@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCaseDefinitions } from "./cases.mjs";
+import { getCaseDefinitions } from "./cases/registry.mjs";
 import { parseBenchArguments, summarizeSamples } from "./index.mjs";
-import { driftPercent } from "./stats.mjs";
+import { driftPercent } from "./lib/stats.mjs";
 
 test("legacy benchmark definitions retain the stable non-duplicate cases", async () => {
   const definitions = await getCaseDefinitions({ root: process.cwd() });
