@@ -237,7 +237,7 @@ function buildTrend(runs) {
       if (!seriesMap.has(key)) seriesMap.set(key, { caseId: row.caseId, fixture: row.fixture, category: row.category, name: row.name, sample: row.sample, source: row.source ?? null, scope: row.scope, environment: run.environment, environmentIdentity: identity, environmentSeries: "", runs: [] });
       const inlineProfiles = (row.forks ?? []).filter((fork) => fork.profilePath).map((fork) => ({ path: fork.profilePath, runDirectory: dirname(file) }));
       const outputStatuses = [...new Set((row.forks ?? []).map((fork) => fork.output?.details?.status ?? fork.output?.details?.decision ?? "measured").filter(Boolean))];
-      seriesMap.get(key).runs.push({ runId: run.runId, createdAt: run.createdAt, revision: run.environment?.revision ?? null, dirty: run.environment?.dirty ?? null, file, scope: row.scope, outputStatuses, ...forkSummary(row), profiles: [...inlineProfiles, ...(profileMap.get(profileKey(row, run)) ?? [])] });
+      seriesMap.get(key).runs.push({ runId: run.runId, createdAt: run.createdAt, revision: run.environment?.revision ?? null, dirty: run.environment?.dirty ?? null, file, scope: row.scope, baselineCaseId: row.baselineCaseId ?? null, floorRow: row.floorRow === true, outputStatuses, ...forkSummary(row), profiles: [...inlineProfiles, ...(profileMap.get(profileKey(row, run)) ?? [])] });
     }
     for (const item of [...(run.skipped ?? []), ...(run.failures ?? [])]) {
       if (run.rows?.some((row) => row.caseId === item.caseId)) continue;
@@ -252,6 +252,21 @@ function buildTrend(runs) {
     group.environmentSeries = seriesLabels.get(group.environmentIdentity);
   }
   for (const group of series) group.runs.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  // A CLI row is process start, the command's module graph, and the work. Its floor
+  // row measures everything but the work, so subtracting it is what turns "the CLI
+  // rows are the slowest" into "this is what the command actually spends".
+  const medianByRun = new Map();
+  for (const group of series) for (const run of group.runs) {
+    if (!medianByRun.has(run.runId)) medianByRun.set(run.runId, new Map());
+    medianByRun.get(run.runId).set(group.caseId, run.forkMedianMs);
+  }
+  for (const group of series) for (const run of group.runs) {
+    const floorMs = run.baselineCaseId ? medianByRun.get(run.runId)?.get(run.baselineCaseId) : undefined;
+    if (!Number.isFinite(floorMs) || !Number.isFinite(run.forkMedianMs)) continue;
+    run.floorCaseId = run.baselineCaseId;
+    run.floorMs = floorMs;
+    run.attributedMs = Math.max(0, run.forkMedianMs - floorMs);
+  }
   const benchmarkRuns = runs.filter((item) => item.run.mode === "benchmark");
   const newestRun = [...benchmarkRuns].sort((a, b) => String(a.run.createdAt).localeCompare(String(b.run.createdAt))).at(-1)?.run ?? null;
   const newestIdentity = newestRun ? runIdentity(newestRun) : null;
@@ -277,8 +292,11 @@ function buildTrend(runs) {
   for (const group of currentSeries) caseCounts.set(group.caseId, (caseCounts.get(group.caseId) ?? 0) + 1);
   for (const group of currentSeries) if (group.change && (caseCounts.get(group.caseId) ?? 0) > 1) group.change.label = `${group.caseId} · ${group.fixture?.id ?? group.scope ?? ""}`;
   const latestEntries = currentSeries.map((group) => ({ caseId: group.caseId, name: group.name, category: group.category, environmentSeries: group.environmentSeries, run: group.runs.at(-1) })).filter((entry) => entry.run);
-  const topEntries = (accessor, count = 5) => latestEntries
-    .map((entry) => ({ caseId: entry.caseId, name: entry.name, category: entry.category, environmentSeries: entry.environmentSeries, runId: entry.run.runId, value: accessor(entry.run) }))
+  // A floor row measures loading, not work; it stays in the table and feeds the
+  // subtraction, but it is not a hotspot of its own.
+  const rankedEntries = latestEntries.filter((entry) => !entry.run.floorRow);
+  const topEntries = (accessor, count = 5) => rankedEntries
+    .map((entry) => ({ caseId: entry.caseId, name: entry.name, category: entry.category, environmentSeries: entry.environmentSeries, runId: entry.run.runId, value: accessor(entry.run), medianMs: entry.run.forkMedianMs, floorMs: entry.run.floorMs ?? null, floorCaseId: entry.run.floorCaseId ?? null }))
     .filter((entry) => Number.isFinite(entry.value))
     .sort((a, b) => b.value - a.value).slice(0, count);
   const changes = currentSeries.map((group) => group.change).filter(Boolean);
@@ -295,7 +313,7 @@ function buildTrend(runs) {
     hotspots: {
       gc: topEntries((run) => run.gc?.parentOnly ? null : run.gc?.msPerCall),
       heap: topEntries((run) => run.memory?.parentOnly ? null : run.memory?.heapUsedBytes),
-      slowest: topEntries((run) => run.forkMedianMs),
+      slowest: topEntries((run) => run.attributedMs ?? run.forkMedianMs),
       variable: topEntries((run) => run.medianCvPercent),
     },
   };
@@ -305,6 +323,7 @@ function buildTrend(runs) {
     label: group.environmentSeries, node: group.environment?.node ?? null, platform: group.environment?.platform ?? null,
     architecture: group.environment?.architecture ?? null, cpuModel: group.environment?.cpuModel ?? null,
     cpuCount: group.environment?.cpuCount ?? null, buildMode: group.environment?.buildMode ?? null,
+    cliArtifact: group.environment?.cliArtifact?.mode ?? null,
   });
   return { schemaVersion: 1, mode: "trend", createdAt: new Date().toISOString(), runCount: summary.runs, profileRunCount: profileRuns.length, environmentSeriesCount: seriesLabels.size, summary, categories, environments, profileRuns, series, statuses };
 }
@@ -335,13 +354,18 @@ function markdown(trend, baseDir = process.cwd()) {
   for (const series of trend.series) for (const run of series.runs) {
     lines.push(`| ${series.caseId} | ${series.fixture?.id ?? "—"} | ${series.environmentSeries} | ${run.runId} | ${run.forkCount} | ${run.callsPerSample} | ${formatCell(run.forkMedianMs, 5)} | ${formatCell(run.p95Ms, 5)} | ${formatCell(run.p99Ms, 5)} | ${formatCell(run.opsPerSecond, 4)} | ${formatCell(run.worstCvPercent, 3)} | ${formatCell(run.outlierPercent, 3)} | ${formatDrift(run.driftPercent)}${unstableMark(run)} | ${profileLinks(run.profiles, baseDir)} |`);
   }
+  const attributed = trend.series.filter((group) => group.current).map((group) => ({ group, run: group.runs.at(-1) })).filter((item) => item.run && Number.isFinite(item.run.floorMs));
+  if (attributed.length) {
+    lines.push("", "## CLI cost after the load floor", "", "A CLI row times process start, the command's module graph, its input check, and the work. The floor row runs the same command against a path that does not exist, so `Work` is the part the command spends on its input.", "", "| Case | Floor row | Median (ms) | Floor (ms) | Work (ms) |", "| --- | --- | ---: | ---: | ---: |");
+    for (const { group, run } of attributed) lines.push(`| ${group.caseId} | ${run.floorCaseId} | ${formatCell(run.forkMedianMs, 5)} | ${formatCell(run.floorMs, 5)} | ${formatCell(run.attributedMs, 5)} |`);
+  }
   if (trend.statuses.length) {
     const counts = statusCounts(trend.statuses);
     lines.push("", "## Recorded run failures and skips", "", `${counts.failed} failed and ${counts.skipped} skipped case records come from the source runs; they do not describe this report's rendering.`, "", "| Run | Case | Status | Reason |", "| --- | --- | --- | --- |");
     const root = trend.series.find((series) => series.environment?.repositoryRoot)?.environment?.repositoryRoot ?? null;
     for (const item of trend.statuses) lines.push(`| ${item.runId} | ${item.caseId} | ${item.status} | ${cleanText(item.reason, root).replaceAll("|", "\\|").replaceAll("\n", " ")} |`);
   }
-  lines.push("", "Each plotted value is the median of independent process fork medians. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values. Drift is the change between the first and last fifth of a fork's samples as a share of its median; a row marked `!` drifted by 25% or more, and `! gc` adds that the fork recorded GC events during measurement.");
+  lines.push("", "Each plotted value is the median of independent process fork medians. Calls/sample is the number of operation calls divided into each timing sample. p95 and p99 are the median of per-fork percentiles, Ops/s derives from the median fork median, and the CV and outlier columns report the worst and median per-fork values. Drift is the change between the first and last fifth of a fork's samples as a share of its median; a row marked `!` drifted by 25% or more, and `! gc` adds that the fork recorded GC events during measurement. The slowest-median ranking uses the work column from the section above where a floor row exists, so process start and module loading do not outrank the work itself.");
   return `${lines.join("\n")}\n`;
 }
 

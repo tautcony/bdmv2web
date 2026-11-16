@@ -67,7 +67,7 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     ]) {
       result.push({
         caseId: `cli.perf.metadata.${operation}`, suite: "scenario", category: "cli", name, sample: graphCase.sample,
-        fixture: graphCase.fixture, fixtureRoot, scope, spawnsChild: true, options: { operation, files },
+        fixture: graphCase.fixture, fixtureRoot, scope, spawnsChild: true, baselineCaseId: `cli.floor.${operation}`, options: { operation, files },
       });
     }
   }
@@ -76,10 +76,22 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     sample: "cli-runtime", fixture: { id: "cli-runtime", version: "1", parameters: {} },
     scope: "cli-startup", spawnsChild: true, options: { operation: "version" },
   });
+  // A CLI row pays process start, argument parsing, the command's module graph, and
+  // its input check before any measured work. A floor row runs the same command
+  // against a path that does not exist, so a reader can subtract what the command
+  // costs to load instead of counting it as work. `cli.startup.version` measures the
+  // process and the program only: it exits before any command module loads.
+  for (const command of ["inspect", "list", "export", "render", "validate"]) {
+    result.push({
+      caseId: `cli.floor.${command}`, suite: "scenario", category: "cli", name: `CLI ${command} load floor (missing input)`,
+      sample: "cli-runtime", fixture: { id: "cli-runtime", version: "1", parameters: { command, input: "missing" } },
+      scope: "cli-load-floor", spawnsChild: true, floorRow: true, options: { operation: "floor", command },
+    });
+  }
   if (igsRenderCase) {
     result.push({
       caseId: "cli.perf.igs.render", suite: "scenario", category: "cli", name: "CLI MNU PNG render", sample: igsRenderCase.sample,
-      fixture: igsRenderCase.fixture, fixtureRoot, scope: "cli-mnu-png-render", spawnsChild: true, options: { operation: "render", input: igsRenderCase.options.file },
+      fixture: igsRenderCase.fixture, fixtureRoot, scope: "cli-mnu-png-render", spawnsChild: true, baselineCaseId: "cli.floor.render", options: { operation: "render", input: igsRenderCase.options.file },
     });
   }
   // `list` prints a per-clip payload line by scanning each clip; `export` reads a
@@ -88,13 +100,13 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
   result.push({
     caseId: "cli.perf.list.table", suite: "scenario", category: "cli", name: "CLI list table over 64 MiB of clip data", sample: "synthetic-clip-set",
     fixture: { id: "synthetic-clip-set", version: "1", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024 } },
-    fixtureRoot, scope: "cli-list-table", spawnsChild: true,
+    fixtureRoot, scope: "cli-list-table", spawnsChild: true, baselineCaseId: "cli.floor.list",
     options: { operation: "list", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024 },
   });
   result.push({
     caseId: "cli.perf.stream.export", suite: "scenario", category: "cli", name: "CLI stream export over a 64 MiB IGS and PGS clip", sample: "synthetic-clip-set",
     fixture: { id: "synthetic-clip-set", version: "1", parameters: { clip: "00002", pids: "0x1400,0x1200,0x1201", clipBytes: 64 * 1024 * 1024 } },
-    fixtureRoot, scope: "cli-stream-export", spawnsChild: true,
+    fixtureRoot, scope: "cli-stream-export", spawnsChild: true, baselineCaseId: "cli.floor.export",
     options: { operation: "stream-export", input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: 64 * 1024 * 1024 },
   });
   // A disc export reads each clip once for IGS and once for PGS. The filtered
@@ -105,14 +117,14 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
       caseId: `cli.perf.bdmv.export${suffix ? `.${suffix}` : ""}`, suite: "scenario", category: "cli",
       name: `CLI BDMV export${m2ts ? ` limited to clip ${m2ts}` : ""} over 64 MiB of clip data`, sample: "synthetic-clip-set",
       fixture: { id: "synthetic-clip-set", version: "1", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024, ...(m2ts ? { m2ts } : {}) } },
-      fixtureRoot, scope: "cli-bdmv-export", spawnsChild: true,
+      fixtureRoot, scope: "cli-bdmv-export", spawnsChild: true, baselineCaseId: "cli.floor.export",
       options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024, ...(m2ts ? { m2ts } : {}) },
     });
   }
   const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "buildMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
   result.push({
     caseId: "cli.synthetic-package.validate", suite: "scenario", category: "cli", name: "CLI synthetic package audit", sample: "synthetic-browser-menu",
-    fixture: browserFixture, scope: "cli-package-audit", spawnsChild: true, options: { operation: "validate", packageBuilder: "buildMenuPackage" },
+    fixture: browserFixture, scope: "cli-package-audit", spawnsChild: true, baselineCaseId: "cli.floor.validate", options: { operation: "validate", packageBuilder: "buildMenuPackage" },
   });
   if (igsPacketCase) {
     const expected = igsPacketCase.expected?.details ?? {};
@@ -209,12 +221,21 @@ async function paddedClip(fixtureRoot, sourcePath, directory, clipBytes) {
 
 async function runCli(root, caseDef, outputDir, sequence, observeChild = false) {
   const cli = fileFor(root, "apps/cli/dist/index.js");
-  const input = caseDef.options.operation === "validate" ? caseDef.options.packagePath
+  // A floor case aims at a path that cannot exist: the command still loads its
+  // module graph and validates the input, then exits non-zero.
+  const missingPath = caseDef.options.operation === "floor" ? join(outputDir, `missing-input-${caseDef.options.command}-${sequence}`) : null;
+  const input = missingPath ?? (caseDef.options.operation === "validate" ? caseDef.options.packagePath
     : caseDef.options.operation === "version" ? undefined
-      : fileFor(root, caseDef.options.input);
+      : fileFor(root, caseDef.options.input));
   const output = join(outputDir, `output-${sequence}-${caseDef.options.operation}`);
   let args;
-  if (caseDef.options.operation === "version") args = ["--version"];
+  if (caseDef.options.operation === "floor") {
+    const command = caseDef.options.command;
+    // `export` and `render` reject a run without an output directory before they
+    // read the input, so the floor row has to pass one to reach the same check.
+    args = ["export", "render"].includes(command) ? [command, missingPath, "--out", join(outputDir, `floor-output-${sequence}`)] : [command, missingPath];
+  }
+  else if (caseDef.options.operation === "version") args = ["--version"];
   else if (caseDef.options.operation === "inspect") args = ["inspect", input, "--allow-partial", "--format", "json"];
   else if (caseDef.options.operation === "export") args = ["export", input, "--type", "hdmv", "--out", output];
   else if (caseDef.options.operation === "list") args = ["list", input];
@@ -223,7 +244,7 @@ async function runCli(root, caseDef, outputDir, sequence, observeChild = false) 
   else if (caseDef.options.operation === "render") args = ["render", input, "--out", output];
   else if (caseDef.options.operation === "validate") args = ["validate", input, "--format", "json"];
   else throw new Error(`Unsupported prepared CLI operation: ${caseDef.options.operation}`);
-  let stdout;
+  let stdout, failure = null;
   const childReport = observeChild ? join(outputDir, `child-${sequence}-${process.pid}.json`) : null;
   const childEnvironment = childReport ? {
     ...process.env,
@@ -233,13 +254,27 @@ async function runCli(root, caseDef, outputDir, sequence, observeChild = false) 
   try { stdout = execFileSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024, env: childEnvironment }); }
   catch (error) {
     const stderr = error?.stderr?.toString?.().trim() ?? "";
-    throw new Error(`CLI ${args[0]} failed with exit ${error?.status ?? "unknown"}${stderr ? `: ${stderr}` : ""}`, { cause: error });
+    // The floor case expects this exit; a measured case treats it as a failure.
+    if (caseDef.options.operation !== "floor") throw new Error(`CLI ${args[0]} failed with exit ${error?.status ?? "unknown"}${stderr ? `: ${stderr}` : ""}`, { cause: error });
+    // `validate` reports a failed audit as a JSON decision on stdout, so the floor
+    // check looks at both streams.
+    failure = { status: error?.status ?? null, stderr, stdout: error?.stdout?.toString?.() ?? "" };
+    stdout = failure.stdout;
   }
   let child = null;
   if (childReport) {
     try { child = JSON.parse(await readFile(childReport, "utf8")); } catch { child = null; }
   }
   const childResult = child ? { child } : {};
+  if (caseDef.options.operation === "floor") {
+    const command = caseDef.options.command;
+    if (!failure) throw new Error(`CLI ${command} accepted the missing input; a floor case has to fail`);
+    if (!failure.status) throw new Error(`CLI ${command} exited ${failure.status ?? "without a status"} on the missing input`);
+    // The path in the message proves the command module ran its input check
+    // instead of failing earlier, in argument parsing.
+    if (!`${failure.stderr}${failure.stdout}`.includes(basename(missingPath))) throw new Error(`CLI ${command} failed before reading the input: ${(failure.stderr || failure.stdout).split("\n")[0]}`);
+    return { command: "floor", loaded: command, exitCode: failure.status, stderrBytes: Buffer.byteLength(failure.stderr), ...childResult };
+  }
   const report = args[0] === "inspect" || args[0] === "validate" ? JSON.parse(stdout) : null;
   // `--version` exits before any command module loads, so it measures the
   // process start and argument parsing that every CLI case also pays for.
@@ -370,13 +405,17 @@ export async function prepareScenarioCase(caseDef, root) {
       if (value.child) recordChild(value.child);
       return { ...value, child: childSummary() };
     };
-    // `stream-export` and `bdmv-export` are the `export` command on two input kinds.
-    const cliCommand = options.operation === "stream-export" || options.operation === "bdmv-export" ? "export" : options.operation;
+    // `stream-export`, `bdmv-export`, and the floor rows are the `export` command on
+    // different inputs; the record names the operation, the validation names the command.
+    const cliCommand = options.operation === "floor" ? "floor"
+      : options.operation === "stream-export" || options.operation === "bdmv-export" ? "export" : options.operation;
     const validate = (value) => { if (value.command !== cliCommand) throw new Error(`CLI ran ${value.command}; expected ${cliCommand}`); return { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }) }; };
-    const describe = (value) => ({ summary: `${value.command} CLI completed`, details: { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }), ...(value.checks === undefined ? {} : { checks: value.checks, decision: value.decision }) } });
+    const describe = (value) => options.operation === "floor"
+      ? { summary: `${value.loaded} CLI loaded and rejected a missing input`, details: { command: value.loaded, exitCode: value.exitCode, stderrBytes: value.stderrBytes } }
+      : { summary: `${value.command} CLI completed`, details: { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }), ...(value.checks === undefined ? {} : { checks: value.checks, decision: value.decision }) } };
     const cleanup = async () => { await materialized?.cleanup(); await rm(temp, { recursive: true, force: true }); };
     const fixturePath = toPortablePath(root, inputPath);
-    const input = { command: options.operation, ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1 } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
+    const input = { command: options.operation, ...(options.operation === "floor" ? { loaded: options.command } : {}), ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1 } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
     return { input, fixture, scope: caseDef.scope, run, validate, describe, afterMeasurement: cleanup, cleanup };
   }
   if (category === "browser") {

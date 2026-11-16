@@ -10,6 +10,7 @@ import { BUILD_MODES, readBuildMode } from "./store/build-mode.mjs";
 import { getCaseDefinitions } from "./cases/registry.mjs";
 import { assertFixturesPresent, auditFixtures } from "./cases/fixture-audit.mjs";
 import { appendArgument, createProgram, exitWithError, integerArgument, numberArgument, parseOptions, splitList } from "./lib/cli.mjs";
+import { cliArtifact } from "./store/environment.mjs";
 import { writeSampleStore } from "./store/samples.mjs";
 import { summarizeForks, summarizeSamples } from "./lib/stats.mjs";
 
@@ -141,12 +142,12 @@ async function main() {
       }
     }
     if (skip || !forkResults.length) continue;
-    rows.push({ caseId: def.caseId, fixture: def.fixture, category: def.category, name: def.name, sample: def.sample, scope: def.scope, unit: "ms/call", callsPerSample, ...(def.source ? { source: def.source } : {}), forks: forkResults, stats: summarizeForks(forkResults.map((fork) => fork.stats.median)) });
+    rows.push({ caseId: def.caseId, fixture: def.fixture, category: def.category, name: def.name, sample: def.sample, scope: def.scope, unit: "ms/call", callsPerSample, ...(def.source ? { source: def.source } : {}), ...(def.baselineCaseId ? { baselineCaseId: def.baselineCaseId } : {}), ...(def.floorRow ? { floorRow: true } : {}), forks: forkResults, stats: summarizeForks(forkResults.map((fork) => fork.stats.median)) });
   }
   const revision = git(root, ["rev-parse", "HEAD"]), dirty = Boolean(git(root, ["status", "--porcelain"]));
   const buildMode = await readBuildMode(root, cli.buildMode);
   const workerRuntime = rows[0]?.forks[0]?.runtime;
-  const report = { schemaVersion: 1, mode: "benchmark", runId, createdAt: new Date().toISOString(), environment: { repositoryRoot: root, revision, dirty, node: process.version, v8: process.versions.v8, platform: platform(), release: release(), architecture: arch(), cpuModel: cpus()[0]?.model ?? null, cpuCount: cpus().length, totalMemoryBytes: totalmem(), execArgv: workerRuntime?.execArgv ?? [...process.execArgv.filter((arg) => supportedNodeFlag.test(arg)), ...cli.nodeArgs], nodeOptions: workerRuntime?.nodeOptions ?? process.env.NODE_OPTIONS ?? null, ...buildMode }, configuration: { suite: cli.suite, caseIds: selected.map((item) => item.caseId), forks: cli.forks, warmupMs: cli.warmupMs, timeMs: cli.timeMs, minSamples: cli.minSamples, callsPerSample: cli.callsPerSample ?? null, nodeArgs: cli.nodeArgs, profile: false, ...buildMode, engine: "tinybench", engineVersion: "6.2.3" }, rows, skipped, failures, ...(audit?.untracked.length ? { untrackedFixtures: audit.untracked } : {}) };
+  const report = { schemaVersion: 1, mode: "benchmark", runId, createdAt: new Date().toISOString(), environment: { repositoryRoot: root, revision, dirty, node: process.version, v8: process.versions.v8, platform: platform(), release: release(), architecture: arch(), cpuModel: cpus()[0]?.model ?? null, cpuCount: cpus().length, totalMemoryBytes: totalmem(), execArgv: workerRuntime?.execArgv ?? [...process.execArgv.filter((arg) => supportedNodeFlag.test(arg)), ...cli.nodeArgs], nodeOptions: workerRuntime?.nodeOptions ?? process.env.NODE_OPTIONS ?? null, cliArtifact: await cliArtifact(root), ...buildMode }, configuration: { suite: cli.suite, caseIds: selected.map((item) => item.caseId), forks: cli.forks, warmupMs: cli.warmupMs, timeMs: cli.timeMs, minSamples: cli.minSamples, callsPerSample: cli.callsPerSample ?? null, nodeArgs: cli.nodeArgs, profile: false, ...buildMode, engine: "tinybench", engineVersion: "6.2.3" }, rows, skipped, failures, ...(audit?.untracked.length ? { untrackedFixtures: audit.untracked } : {}) };
   if (cli.json) {
     const store = await writeSampleStore(runDir, rows);
     if (store) report.samples = store;

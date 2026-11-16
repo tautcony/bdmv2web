@@ -17,7 +17,7 @@ Only `runs/`, `profiles/`, `pairs/`, and `reports/` are regenerable from command
 
 A run directory is written once under a new `runId`; the runner refuses to overwrite one. It holds:
 
-- `run.json` — `schemaVersion` 1 record with `environment`, `configuration`, `rows`, `skipped`, `failures`, an `untrackedFixtures` list when a case read a file that git ignores, and a `samples` pointer.
+- `run.json` — `schemaVersion` 1 record with `environment`, `configuration`, `rows`, `skipped`, `failures`, an `untrackedFixtures` list when a case read a file that git ignores, and a `samples` pointer. `environment.cliArtifact` names the CLI build shape the run timed, and a CLI row carries `baselineCaseId` pointing at the floor row the report subtracts from it.
 - `samples.f64` — one value per timing sample, normalized to milliseconds per call, written as little-endian float64; each fork references its block as `{ encoding, file, offset, count }`. A sample covers `callsPerSample` calls when the case is faster than the one-millisecond target.
 
 A full suite run with three forks is about 4 MB, mostly `run.json`; a one-fork run records about a third of that. Editing a record by hand breaks the offsets in `samples.f64`; delete the directory and rerun instead.

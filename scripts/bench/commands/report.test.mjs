@@ -29,6 +29,22 @@ test("trends group only matching environment and fixture identities", () => {
   assert.equal(trend.statuses.length, 3);
 });
 
+test("a CLI row reports the work left after its floor row", () => {
+  const sample = run("a", "2026-01-01");
+  sample.run.rows = [
+    { caseId: "cli.perf.list.table", callsPerSample: 1, fixture: { id: "synthetic-clip-set", version: "2", parameters: {} }, category: "cli", name: "CLI list", scope: "cli-list-table", baselineCaseId: "cli.floor.list", forks: [{ index: 0, stats: { median: 120 } }] },
+    { caseId: "cli.floor.list", callsPerSample: 1, fixture: { id: "cli-runtime", version: "1", parameters: {} }, category: "cli", name: "CLI list floor", scope: "cli-load-floor", floorRow: true, forks: [{ index: 0, stats: { median: 90 } }] },
+  ];
+  const trend = buildTrend([sample]);
+  const cli = trend.series.find((series) => series.caseId === "cli.perf.list.table");
+  assert.equal(cli.runs[0].floorMs, 90);
+  assert.equal(cli.runs[0].attributedMs, 30);
+  assert.equal(trend.summary.hotspots.slowest[0].caseId, "cli.perf.list.table");
+  assert.equal(trend.summary.hotspots.slowest[0].value, 30);
+  assert.equal(trend.summary.hotspots.slowest[0].medianMs, 120);
+  assert.match(markdown(trend), /\| cli\.perf\.list\.table \| cli\.floor\.list \| 120\.00 \| 90\.000 \| 30\.000 \|/);
+});
+
 test("trend identity includes scope and canonical fixture parameters", () => {
   const base = run("a", "2026-01-01");
   const reordered = run("b", "2026-01-02");
