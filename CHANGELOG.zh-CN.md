@@ -5,7 +5,9 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 项目版本遵循 [语义化版本规范](https://semver.org/spec/v2.0.0.html)。
 
-## [未发布]（计划作为 0.2.1 发布）
+## [未发布]
+
+## [0.2.1] - 2026-11-16
 
 ### 变更
 
@@ -22,6 +24,7 @@
 - 菜单停止、恢复和播放交接行为与 libbluray 对应行为一致；缺少交接源时会给出提示。
 - 媒体闭包分析可解析能够静态确定的标题跳转。
 - 报告仅列出实际执行的包审计检查项，并合并包报告。
+- 使用已准备媒体组装菜单包时保留主播放列表标识。
 
 ## [0.2.0] - 2026-11-15
 
@@ -67,7 +70,8 @@
 - 增加 `inspect`、`list`、`export`、`render`、`build`、`validate`、`compare`、`serve` 和 `visualize` CLI 命令；`convert` 是 `build` 的别名。
 - 增加可恢复的资源复用、媒体转换进度、通过 FFmpeg 执行 HDR 到 SDR 色调映射、发布审计报告和 npm 包发布工作流。
 
-[未发布]: https://github.com/tautcony/bdmv2web/compare/v0.2.0...HEAD
+[未发布]: https://github.com/tautcony/bdmv2web/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tautcony/bdmv2web/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tautcony/bdmv2web/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/tautcony/bdmv2web/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tautcony/bdmv2web/releases/tag/v0.1.0

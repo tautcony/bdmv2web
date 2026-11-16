@@ -43,7 +43,7 @@ npm install -g --prefix /tmp/bdmv2web-prefix /tmp/bdmv2web-pack/bdmv2web-*.tgz
 | `dist/bench-build-mode.json` | Build-mode marker written by the bundle script |
 | `package.json`, `README.md` | Package metadata |
 
-`pnpm pack` converts each `workspace:*` entry of `devDependencies` into the `version` of the corresponding workspace package. Those packages supply build-time source: `dist/index.js` bundles their code and the published CLI runs from that bundle. Their version numbers come from `packages/*/package.json` and stay independent of the `bdmv2web` release version, so a release changes only `apps/cli/package.json`. The published `devDependencies` field records the repository's build inputs. `dependencies.d3-force` supplies the UMD files that `visualize` inlines into the navigation viewer.
+`pnpm pack` converts each `workspace:*` entry of `devDependencies` into the `version` of the corresponding workspace package. Those packages supply build-time source: `dist/index.js` bundles their code and the published CLI runs from that bundle. Package versions are managed per package based on code changes, and align with the `bdmv2web` version for each release: set a workspace package to the CLI release version when its code changed since the previous release; keep its existing version when its code did not change. The published `devDependencies` field records the repository's build inputs. `dependencies.d3-force` supplies the UMD files that `visualize` inlines into the navigation viewer.
 
 ## Publish workflow
 
@@ -81,7 +81,7 @@ After the upload completes:
 
 ## Later releases
 
-Raise `version` in `apps/cli/package.json`, commit, create `v<version>`, and push the tag. The workflow publishes it without further local steps.
+Raise `version` in `apps/cli/package.json`. For every workspace package with code changes since the previous release, set `version` in its `packages/*/package.json` to the same release version; leave unchanged packages at their existing versions. Then commit, create `v<version>`, and push the tag. The workflow publishes the CLI without further local steps.
 
 ## Repository setup
 

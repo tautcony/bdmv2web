@@ -5,7 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] (planned as 0.2.1)
+## [Unreleased]
+
+## [0.2.1] - 2026-11-16
 
 ### Changed
 
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Align menu stop, resume, and playback handoff behavior with the corresponding libbluray behavior, and report a missing handoff source.
 - Resolve statically provable title jumps when computing the media closure.
 - Report only package-audit checks that actually ran and consolidate package reports.
+- Preserve the primary playlist identity when assembling packages from prepared media.
 
 ## [0.2.0] - 2026-11-15
 
@@ -67,7 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add the `inspect`, `list`, `export`, `render`, `build`, `validate`, `compare`, `serve`, and `visualize` CLI commands; provide `convert` as an alias for `build`.
 - Add resumable asset reuse, media conversion progress, HDR-to-SDR tone mapping through FFmpeg, release audit reports, and npm package publishing workflows.
 
-[Unreleased]: https://github.com/tautcony/bdmv2web/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tautcony/bdmv2web/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tautcony/bdmv2web/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tautcony/bdmv2web/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/tautcony/bdmv2web/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tautcony/bdmv2web/releases/tag/v0.1.0
