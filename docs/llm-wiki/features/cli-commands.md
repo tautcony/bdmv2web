@@ -18,6 +18,8 @@
 
 命令与选项由 `commander` 解析：`bdmv2web --help` 列出全部命令，`bdmv2web <command> --help` 列出该命令的选项与说明。
 
+参数里的相对路径按执行命令时所在的目录解析。`corepack pnpm run cli:dev` 会把脚本切到仓库根运行，CLI 启动时改用包管理器导出的 `INIT_CWD`，所以 `export Hyouka_01/clip.rsks --out 00005` 的输入和输出都落在这个目录；`INIT_CWD` 缺失、为同一目录或已不存在时保留进程继承的工作目录。
+
 `--format` 的生效范围：`inspect`、`list`、`visualize` 用它选择 `table|json`；`validate`、`compare` 只校验取值必须为 `json`；`export`、`render` 接受该选项但不改变输出。
 
 ## `inspect`

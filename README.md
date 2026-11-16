@@ -67,7 +67,7 @@ corepack pnpm build
 corepack pnpm bundle:cli
 ```
 
-After building from source, `apps/cli/dist/index.js` is the executable entry point. Inside the repository (Node `>=24.18.0`), call the CLI with `corepack pnpm run cli:dev <command> [options]`.
+After building from source, `apps/cli/dist/index.js` is the executable entry point. Inside the repository (Node `>=24.18.0`), call the CLI with `corepack pnpm run cli:dev <command> [options]`. Relative paths in arguments resolve against the directory you run the command from, not the repository root the script starts in.
 
 ## Usage
 
