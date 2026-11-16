@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { toPortablePath } from "./fixture-input.mjs";
-import { padClipBytes } from "./padded-clips.mjs";
+import { assertScanInput, growWithNullPackets, growWithRepeatedPackets } from "./clip-growth.mjs";
 
 function transportStats(bytes) {
   let packets = 0, nullPackets = 0;
@@ -95,19 +95,23 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     });
   }
   // `list` prints a per-clip payload line by scanning each clip; `export` reads a
-  // stream clip once for every graphics reader that runs. Both cases pad the
-  // committed clips so the scan, not process start, is what they measure.
+  // stream clip once for every graphics reader that runs. Both repeat the committed
+  // clip until the scan, not process start, is what they measure. The repeat keeps
+  // every PID continuous and leaves the extracted assets unchanged, so the input is
+  // a longer version of the same clip rather than stuffing around it.
+  const CLIP_BYTES = 8 * 1024 * 1024;
+  const STREAM_BYTES = 16 * 1024 * 1024;
   result.push({
-    caseId: "cli.perf.list.table", suite: "scenario", category: "cli", name: "CLI list table over 64 MiB of clip data", sample: "synthetic-clip-set",
-    fixture: { id: "synthetic-clip-set", version: "1", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024 } },
+    caseId: "cli.perf.list.table", suite: "scenario", category: "cli", name: "CLI list table over 16 MiB of clip data", sample: "synthetic-clip-set",
+    fixture: { id: "synthetic-clip-set", version: "2", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: CLIP_BYTES, fill: "repeated-packets" } },
     fixtureRoot, scope: "cli-list-table", spawnsChild: true, baselineCaseId: "cli.floor.list",
-    options: { operation: "list", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024 },
+    options: { operation: "list", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: CLIP_BYTES },
   });
   result.push({
-    caseId: "cli.perf.stream.export", suite: "scenario", category: "cli", name: "CLI stream export over a 64 MiB IGS and PGS clip", sample: "synthetic-clip-set",
-    fixture: { id: "synthetic-clip-set", version: "1", parameters: { clip: "00002", pids: "0x1400,0x1200,0x1201", clipBytes: 64 * 1024 * 1024 } },
+    caseId: "cli.perf.stream.export", suite: "scenario", category: "cli", name: "CLI stream export over a 16 MiB IGS and PGS clip", sample: "synthetic-clip-set",
+    fixture: { id: "synthetic-clip-set", version: "2", parameters: { clip: "00002", pids: "0x1400,0x1200,0x1201", clipBytes: STREAM_BYTES, fill: "repeated-packets" } },
     fixtureRoot, scope: "cli-stream-export", spawnsChild: true, baselineCaseId: "cli.floor.export",
-    options: { operation: "stream-export", input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: 64 * 1024 * 1024 },
+    options: { operation: "stream-export", input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: STREAM_BYTES },
   });
   // A disc export reads each clip once for IGS and once for PGS. The filtered
   // row narrows --m2ts to one clip, so its IGS scan touches one clip and the
@@ -115,12 +119,27 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
   for (const [suffix, m2ts] of [["", null], ["filtered", "00001"]]) {
     result.push({
       caseId: `cli.perf.bdmv.export${suffix ? `.${suffix}` : ""}`, suite: "scenario", category: "cli",
-      name: `CLI BDMV export${m2ts ? ` limited to clip ${m2ts}` : ""} over 64 MiB of clip data`, sample: "synthetic-clip-set",
-      fixture: { id: "synthetic-clip-set", version: "1", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024, ...(m2ts ? { m2ts } : {}) } },
+      name: `CLI BDMV export${m2ts ? ` limited to clip ${m2ts}` : ""} over 16 MiB of clip data`, sample: "synthetic-clip-set",
+      fixture: { id: "synthetic-clip-set", version: "2", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: CLIP_BYTES, fill: "repeated-packets", ...(m2ts ? { m2ts } : {}) } },
       fixtureRoot, scope: "cli-bdmv-export", spawnsChild: true, baselineCaseId: "cli.floor.export",
-      options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024, ...(m2ts ? { m2ts } : {}) },
+      options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: CLIP_BYTES, ...(m2ts ? { m2ts } : {}) },
     });
   }
+  // These rows exist to state the ceiling: the same commands over an input that is
+  // pure stuffing, so every packet is skipped. They say what a command costs when
+  // there is nothing to read; they are not a description of a clip.
+  result.push({
+    caseId: "cli.io.list.null-clip", suite: "scenario", category: "cli", name: "CLI list table over 64 MiB of null packets (I/O ceiling)", sample: "synthetic-clip-set",
+    fixture: { id: "synthetic-clip-set", version: "2", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024, fill: "null-packets" } },
+    fixtureRoot, scope: "cli-io-ceiling", spawnsChild: true, baselineCaseId: "cli.floor.list", ioCeiling: true,
+    options: { operation: "list", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024, fill: "null" },
+  });
+  result.push({
+    caseId: "cli.io.bdmv.export.null-clip", suite: "scenario", category: "cli", name: "CLI BDMV export over 64 MiB of null packets (I/O ceiling)", sample: "synthetic-clip-set",
+    fixture: { id: "synthetic-clip-set", version: "2", parameters: { disc: "synthetic-all-features", clips: SYNTHETIC_CLIPS.join(","), clipBytes: 32 * 1024 * 1024, fill: "null-packets" } },
+    fixtureRoot, scope: "cli-io-ceiling", spawnsChild: true, baselineCaseId: "cli.floor.export", ioCeiling: true,
+    options: { operation: "bdmv-export", input: SYNTHETIC_DISC, clips: SYNTHETIC_CLIPS, clipBytes: 32 * 1024 * 1024, fill: "null" },
+  });
   const browserFixture = { id: "synthetic-browser-menu", version: "1", parameters: { packageBuilder: "buildMenuPackage", buttonCount: 2, navigation: "Start menu preview, then ArrowRight and Enter" } };
   result.push({
     caseId: "cli.synthetic-package.validate", suite: "scenario", category: "cli", name: "CLI synthetic package audit", sample: "synthetic-browser-menu",
@@ -196,27 +215,30 @@ async function outputFileCount(directory) {
   return count;
 }
 
+const GROW = { repeated: growWithRepeatedPackets, null: growWithNullPackets };
+
 /** Copy the committed disc and grow its clips, so a scan case reads megabytes rather than a few packets. */
-async function paddedDisc(fixtureRoot, sourcePath, directory, clips, clipBytes) {
+async function grownDisc(fixtureRoot, sourcePath, directory, clips, clipBytes, fill) {
+  const grow = GROW[fill];
   const target = join(directory, "BDMV");
   await cp(fileFor(fixtureRoot, sourcePath), target, { recursive: true });
   let transport = { packets: 0, nullPackets: 0, nullPacketShare: 0 };
   for (const clip of clips) {
     const path = join(target, "STREAM", `${clip}.m2ts`);
-    const padded = padClipBytes(new Uint8Array(await readFile(path)), clipBytes);
-    await writeFile(path, padded);
-    transport = sumTransport(transport, transportStats(padded));
+    const grown = grow(new Uint8Array(await readFile(path)), clipBytes);
+    await writeFile(path, grown);
+    transport = sumTransport(transport, transportStats(grown));
   }
   return { directory: target, transport };
 }
 
 /** Copy one committed clip and grow it in place of the original. */
-async function paddedClip(fixtureRoot, sourcePath, directory, clipBytes) {
+async function grownClip(fixtureRoot, sourcePath, directory, clipBytes, fill) {
   const source = fileFor(fixtureRoot, sourcePath);
   const target = join(directory, basename(source));
-  const padded = padClipBytes(new Uint8Array(await readFile(source)), clipBytes);
-  await writeFile(target, padded);
-  return { file: target, transport: transportStats(padded) };
+  const grown = GROW[fill](new Uint8Array(await readFile(source)), clipBytes);
+  await writeFile(target, grown);
+  return { file: target, transport: transportStats(grown) };
 }
 
 async function runCli(root, caseDef, outputDir, sequence, observeChild = false) {
@@ -369,8 +391,10 @@ export async function prepareScenarioCase(caseDef, root) {
       inputPath = materialized.directory;
     }
     const fixtureRoot = caseDef.fixtureRoot ?? root;
-    if (options.operation === "list" || options.operation === "bdmv-export") { const padded = await paddedDisc(fixtureRoot, options.input, temp, options.clips, options.clipBytes); inputPath = padded.directory; transport = padded.transport; }
-    if (options.operation === "stream-export") { const padded = await paddedClip(fixtureRoot, options.input, temp, options.clipBytes); inputPath = padded.file; transport = padded.transport; }
+    if (options.operation === "list" || options.operation === "bdmv-export") { const grown = await grownDisc(fixtureRoot, options.input, temp, options.clips, options.clipBytes, options.fill ?? "repeated"); inputPath = grown.directory; transport = grown.transport; }
+    if (options.operation === "stream-export") { const grown = await grownClip(fixtureRoot, options.input, temp, options.clipBytes, options.fill ?? "repeated"); inputPath = grown.file; transport = grown.transport; }
+    // A whole-clip row is only informative while real packets dominate the input.
+    assertScanInput(caseDef.caseId, transport, { ioCeiling: caseDef.ioCeiling === true });
     const cliCase = { ...caseDef, options: { ...options, input: inputPath, packagePath } };
     const childTotals = { calls: 0, gcEvents: 0, gcDurationMs: 0, maxPauseMs: 0, major: 0, minor: 0, heapUsedBytes: 0, rssBytes: 0, maxRSSBytes: 0, externalBytes: 0, durationMs: 0, available: true };
     const recordChild = (child) => {
@@ -415,7 +439,7 @@ export async function prepareScenarioCase(caseDef, root) {
       : { summary: `${value.command} CLI completed`, details: { command: value.command, stdoutBytes: value.stdoutBytes, ...(value.clips === undefined ? {} : { clips: value.clips }), ...(value.checks === undefined ? {} : { checks: value.checks, decision: value.decision }) } };
     const cleanup = async () => { await materialized?.cleanup(); await rm(temp, { recursive: true, force: true }); };
     const fixturePath = toPortablePath(root, inputPath);
-    const input = { command: options.operation, ...(options.operation === "floor" ? { loaded: options.command } : {}), ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1 } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
+    const input = { command: options.operation, ...(options.operation === "floor" ? { loaded: options.command } : {}), ...(options.files ? { metadataFileCount: options.files.length } : {}), ...(options.clipBytes ? { clipBytes: options.clipBytes, clips: options.clips ?? 1, fill: options.fill ?? "repeated" } : {}), ...(transport ? { transport } : {}), ...(fixturePath ? { fixturePath } : {}), ...(options.operation === "validate" ? { packageBuilder: "buildMenuPackage" } : {}) };
     return { input, fixture, scope: caseDef.scope, run, validate, describe, afterMeasurement: cleanup, cleanup };
   }
   if (category === "browser") {
