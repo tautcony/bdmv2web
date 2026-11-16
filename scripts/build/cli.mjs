@@ -8,16 +8,27 @@ const root = resolve(import.meta.dirname, "../..");
 const cliDist = resolve(root, "apps/cli/dist");
 const profilingBuild = process.env.BDMV2WEB_PROFILE_BUILD === "1";
 
-/** Publish layout: one ESM entry plus the menu runtime the entry reads at packaging time. */
+/** Publish layout: the CLI entry, inspection worker, and packaged menu runtime assets. */
 await rm(cliDist, { recursive: true, force: true });
 await build({
   entryPoints: [resolve(root, "apps/cli/src/index.ts")],
   outfile: resolve(cliDist, "index.js"),
   bundle: true,
+  // Ink resolves terminal sizing, native layout, and React peers at runtime.
+  external: ["ink", "react", "@inkjs/ui"],
   platform: "node",
   format: "esm",
   target: "node22",
   ...(profilingBuild ? { sourcemap: true } : {}),
+  legalComments: "none",
+});
+await build({
+  entryPoints: [resolve(root, "apps/cli/src/commands/inspect-collection-worker.ts")],
+  outfile: resolve(cliDist, "inspect-collection-worker.js"),
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
   legalComments: "none",
 });
 await mkdir(resolve(cliDist, "runtime"), { recursive: true });

@@ -557,8 +557,10 @@ export function parseMpls(data: Uint8Array, file: FileEntry, origin: "primary" |
       const references = Array.from(r.bytes(count)); if (count & 1) { if (r.offset + 1 > stnEnd) throw new ContractError("BDMV_INVALID_SECTION", `/offset/${r.absolute}`, `MPLS ${label} reference padding exceeds STN section`); r.skip(1); }
       return references;
     };
-    for (let categoryIndex = 0; categoryIndex < counts.length; categoryIndex++) for (let localIndex = 0; localIndex < counts[categoryIndex]!; localIndex++) {
-      const stream = parseStream(r, stnEnd); const categorized: StreamDeclaration = { ...stream, category: categories[categoryIndex]!, categoryIndex: localIndex };
+    // In the STN body, PiP PG entries (count index 6) immediately follow primary PG (index 2), before IG (index 3).
+    const stnOrder = [0, 1, 2, 6, 3, 4, 5, 7] as const;
+    for (const categoryIndex of stnOrder) for (let localIndex = 0; localIndex < counts[categoryIndex]!; localIndex++) {
+      const stream = parseStream(r, stnEnd); const categorized: StreamDeclaration = { ...stream, category: categories[categoryIndex], categoryIndex: localIndex };
       if (categories[categoryIndex] === "secondaryAudio") categorized.primaryAudioReferences = readReferences("secondary audio");
       else if (categories[categoryIndex] === "secondaryVideo") { categorized.secondaryAudioReferences = readReferences("secondary video audio"); categorized.presentationGraphicsReferences = readReferences("secondary video PIP graphics"); }
       streams.push(categorized);

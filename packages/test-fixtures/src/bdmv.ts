@@ -139,6 +139,24 @@ export function buildM1ClipInfoProgramAndCpi(): Uint8Array {
   return out;
 }
 
+/** CLPI ProgramInfo with two ordered program sequences and one stream per sequence. */
+export function buildM1ClipInfoWithMultipleProgramSequences(): Uint8Array {
+  const programStart = 60;
+  const programLength = 2 + (8 + 8) + (8 + 8);
+  const out = new Uint8Array(programStart + 4 + programLength);
+  ascii(out, 0, "HDMV"); ascii(out, 4, "0200"); put32(out, 12, programStart);
+  put32(out, programStart, programLength);
+  out[programStart + 5] = 2;
+
+  let p = programStart + 6;
+  put32(out, p, 32); put16(out, p + 4, 0x1000); out[p + 6] = 1; out[p + 7] = 0; p += 8;
+  put16(out, p, 0x1100); out[p + 2] = 5; out[p + 3] = 0x80; out[p + 4] = 0x11; ascii(out, p + 5, "eng"); p += 8;
+
+  put32(out, p, 64); put16(out, p + 4, 0x1001); out[p + 6] = 1; out[p + 7] = 1; p += 8;
+  put16(out, p, 0x1011); out[p + 2] = 5; out[p + 3] = 0x1b; out.set([0x62, 0x30, 0, 0], p + 4);
+  return out;
+}
+
 /** CLPI HEVC coding attributes follow libbluray's CLPI order and retain the stream record offset. */
 export function buildM1ClipInfoWithHevcVideo(dynamicRangeType = 1, colorSpace = 2): Uint8Array {
   const original = buildM1ClipInfoProgramAndCpi();

@@ -95,13 +95,13 @@ A field length or value that cannot be confirmed against the reference implement
 
 ## CLI status
 
-`inspect`, `list`, `export`, `render`, `build`, `validate`, `compare`, `serve`, and `visualize` are implemented; `convert` is an alias of `build`. Commands, options, and dispatch are handled by `commander`; run `bdmv2web --help` for the current surface and `bdmv2web --version` for the package version. Progress output is headed `bdmv2web build`.
+`inspect`, `export`, `render`, `build`, `validate`, `compare`, `serve`, and `visualize` are implemented; `list` is an alias of `inspect`, and `convert` is an alias of `build`. Commands, options, and dispatch are handled by `commander`; run `bdmv2web --help` for the current surface and `bdmv2web --version` for the package version. Progress output is headed `bdmv2web build`.
 
 | Command | Behavior | Exit codes |
 | --- | --- | --- |
-| `inspect INPUT [--format table\|json] [--out FILE]` | stdout defaults to a structural summary table; `--format json` prints the complete report. `--out` always writes complete JSON and the file must not already exist. | stage `complete`/`partial` → 0, stage `failed` → 1 |
-| `inspect INPUT --allow-partial` | Same output; a `failed` stage keeps the exit code at 0 and the report keeps `stageStatus: "failed"`. | 0 |
-| `list INPUT [--type all\|igs\|sup] [--m2ts CLIP_ID] [--pid PID] [--format table\|json] [--out FILE]` | stdout prints an asset summary and a tree grouped by M2TS. Each M2TS entry shows the source file size; IGS and SUP entries show raw transport payload size by PID. `--out` writes the complete JSON report. | 0, 1 when failed |
+| `inspect INPUT [--type all\|igs\|sup] [--m2ts CLIP_ID] [--pid PID] [--format table\|json] [--out FILE]` | A terminal opens the interactive structure and graphics browser after collection. A pipe or `--format table` prints the combined text report. `--format json` prints the combined JSON report; `--out` writes that same JSON while stdout keeps its selected mode. The output file must be new. | structure or graphics `failed` → 1; `complete`/`partial` → 0 |
+| `inspect INPUT --allow-partial` | Keeps available data and independent structure/graphics stage states, including a failed structural result. | 0 |
+| `list INPUT [OPTIONS]` | Alias of `inspect`, with the same TUI, text, JSON, selection options, and output file. | same as `inspect` |
 | `export INPUT --out DIR [--type all\|metadata\|hdmv\|igs\|sup] [--metadata-only] [--m2ts CLIP_ID] [--pid PID] [--render] [--png-level 0-9] [--format table\|json] [--progress\|--no-progress]` | Exports igstools-compatible IGS `.mnu` files and/or reachable SUP tracks. `export`'s `--type` names outputs: `igs`/`sup` write those containers (plus their PNGs with `--render`), `hdmv` writes the command table and source map, `metadata` writes `manifest.json`, `hdmv/*.json`, `igs/*.json` and `sup/tracks.json`, and `all` writes every output. Without `--type` the containers are written. `INPUT` may be a single `.m2ts`/`.rsks` stream file: the declared PMT streams (`0x90` PGS, `0x91` IGS, reserved PIDs ignored) become the export set, assets are named after the file stem, and the SUP keeps the source 90 kHz timeline. Inputs are classified by content first (transport sync bytes, IGS `ICS`/`PDS`/`ODS` tags, PGS `PG` tag) and by extension second, so a renamed stream still reads as a stream. A `.mnu`/`.sup` input has nothing to export and fails with `CLI_EXPORT_SELECTION`, which names `render` instead. `--render` also writes PNG images for IGS elements and SUP display sets; display-set canvases compress on the libuv threadpool. `--metadata-only` writes only structural metadata: alone the whole set, with `--type igs` or `--type sup` that section only, and it conflicts with `--render` (`CLI_EXPORT_SELECTION`). `--type metadata` and `--type hdmv` reject `--render`. Invalid `--type` values are rejected by Commander with `CLI_INVALID_ARGUMENT`. `assets-manifest.json` records type, format, path, size, subtitle metadata, element identity, and display-set start/end time; a metadata-only run writes none. Transparent display sets are omitted. Progress follows `build`: a live step line on a terminal, silence when piped, one line per step plus every 10% with `--progress`. `--m2ts` and an undeclared `--pid` fail with `CLI_EXPORT_SELECTION`; a file without PAT/PMT fails with `EXPORT_INVALID_STREAM`. | 0, 1 when failed |
 | `render INPUT --out DIR [--type all\|igs\|sup] [--m2ts CLIP_ID] [--pid PID] [--language LANG] [--png-level 0-9] [--format table\|json] [--progress\|--no-progress]` | Renders IGS element and SUP display-set PNGs from a BDMV disc, a `.m2ts`/`.rsks` stream file, or a standalone `.mnu`/`.sup` file, into `assets-manifest.json`, without writing `.mnu`/`.sup`. The input kind comes from the file itself; `--type` and `--m2ts` apply only to a disc or stream input, `--pid` also sets the IGS scene identity of a standalone MNU, and `--language` applies only to a standalone SUP. Mismatched combinations report `CLI_RENDER_SELECTION`. For BDMV and stream input it runs the same pipeline as `export --render`: identical PNG bytes, paths, manifest records and progress steps; the manifest equals the `igs-png`/`sup-png` subset of the `export --render` manifest for the same input. Stream-input failures stay `EXPORT_INVALID_STREAM`. | 0, 1 when failed |
 | `build INPUT [--out DIR] [--title NAME] [--player-profile FILE] [--limits FILE] [--disc-id HEX] [--overwrite] [--no-reuse] [--resume] [--resume-dir <dir>] [--crf N] [--preset NAME] [--codec hevc\|h264] [--hdr tonemap\|preserve] [--video encode\|copy] [--menu-media auto\|all\|none] [--progress\|--no-progress]` | Produces the menu package. BD-J packages contain the host JAR, application JARs, authored resources and service launch data. Start them with `bdmv2web serve`; use Java 21 or a compatible runtime with `java.desktop`. | delivery `complete`/`partial` → 0, `failed` → 1 |
@@ -110,7 +110,52 @@ A field length or value that cannot be confirmed against the reference implement
 | `compare INPUT --actual FILE [--reference FILE] [--reference-tool NAME] [--reference-version VERSION] [--out FILE] [--format json]` | Compares an actual VM trace against an independent reference trace and prints the report JSON; `--out` writes it to a file. `--reference` must be a different file from `--actual`. | `pass` → 0, divergence/input error → 1, `not-verified` → 2 |
 | `validate DIR [--format json]` | Re-runs the package audit and rewrites `dependency-audit.json`, `reports.json`, and `reports/release-summary.json` from one summary. | 0, 1 when failed |
 
-Stage results and delivery results are separate types: `inspect`/`export`/`render` report `stageStatus` (`complete`/`partial`/`failed`), while only `build`/`validate` report a delivery `status`. A stage that reached its own goal never claims a complete delivery. Failed stage output uses `stageStatus` too, so one field never carries two meanings.
+`inspect` reports independent `stageStatus.structure` and `stageStatus.graphics` values. `export` and `render` report a single `stageStatus` (`complete`/`partial`/`failed`); `build` and `validate` report a delivery `status`. A structural failure returned before a combined inspection result uses the CLI failure object with `stageStatus: "failed"` and its diagnostic code.
+
+The combined inspector collects structure once and runs the existing graphics extraction once with payload measurement and PNG rendering disabled. It reuses the parser input table. File sizes and reachable SUP references are collected before browsing; every page uses the in-memory result. Interactive collection runs in a worker thread so terminal animation and elapsed time remain responsive. Navigation targets use indexed references, including cycles and conditional branches.
+
+The Ink/React TUI provides Navigation, MPLS, M2TS, Metadata, and Diagnostics entries, a current-location path, a selection table, and a structured detail pane. The selected object determines the detail sections: navigation targets and references, playlist intervals and marks, decoded commands and outgoing edges, media file state and payload measurements, CLPI stream declarations, or IGS/SUP asset metadata. Source locations appear in a dedicated section. Wide terminals place details beside the table; narrow terminals place them below it. Up/down selects a row, Enter opens its children or referenced target, Escape returns to the previous selection, left/right switches top-level entries, `/` filters the current table, `d` toggles details, Page Up/Page Down scrolls details, `?` shows help, and `q` exits. MPLS uses filename order, PlayItems use declared index order, and navigation shows declared or statically resolved targets with their conditions and unknown states.
+
+The `--format table` report has disc, navigation, playlist directory, playlist detail, mark, CLPI clip mark, graphics asset, and diagnostic sections. The disc name and language come from `META/DL`; UHD and disc application fields come from `index.bdmv`. Navigation entries come from `index.bdmv`, and movie objects come from `MovieObject.bdmv`. Playlist, PlayItem, angle, and stream declarations come from MPLS. CLPI program streams and clip marks are shown separately with their CLPI source. Source paths are relative to the BDMV root, and source offsets are byte offsets rendered as decimal text. MPLS IN/OUT values and marks use 45 kHz ticks; CLPI clip mark PTS values use 90 kHz ticks. Displayed times use `HH:MM:SS.mmm` and truncate to milliseconds. A playlist duration is the sum of its valid PlayItem intervals; it displays `unknown` when an interval is invalid. Missing fields and unavailable chapter times display `unknown`; empty collections display `none`. Stream rows contain declared category, PID, coding type, and language. The report describes parsed structure and timestamps; it contains no measured bitrate or playback result.
+
+Structural section of the text report:
+
+```text
+BDMV inspection (structural analysis; stage partial)
+Disc: eng: Example Film (META/DL/bdmt_eng.xml @ 0 (primary)) | UHD: yes
+Disc source: index.bdmv @ 96 (primary)
+Disc application: content exists yes, initial output mode yes, dynamic range type 1, video format code 6, frame-rate code 1 (index.bdmv @ 48 (primary))
+
+Navigation entries:
+  firstPlay firstPlay:0 → HDMV 0 (index.bdmv @ 64 (primary))
+Movie objects: 0 (1 instructions; MovieObject.bdmv @ 32 (primary))
+
+Playlists (1):
+  00001  duration 00:02:00.000  1 PlayItem(s)  source PLAYLIST/00001.mpls @ 80 (primary)
+
+Playlist 00001 details:
+  PlayItem 0  clip 00001.M2TS  IN 00:00:00.000  OUT 00:02:00.000  source PLAYLIST/00001.mpls @ 92 (primary)
+    Angle: count 1, multi-angle no, seamless no
+    Declared angles:
+      none
+    MPLS stream declarations:
+      primaryVideo[0]  PID 0x1011  coding 0x24  language unknown  (PLAYLIST/00001.mpls @ 142 (primary))
+    CLPI program stream declarations:
+      unknown (CLPI unavailable)
+  Playlist marks:
+    none
+
+CLPI clip marks:
+  none
+
+Diagnostics (1)
+  error BDMV_MISSING_STREAM — PlayItem 00001/0 references missing STREAM clip 00001
+    source PLAYLIST/00001.mpls @ 92
+```
+
+The graphics section identifies source-file bytes separately from scanned transport payload bytes. IGS rows show each stream PID, scene composition, source path, and image element dimensions. SUP rows retain PID, language, stream number, payload bytes, and the Playlist/PlayItem declaration. Empty selections display `none`; unavailable paths or sizes display `unknown`. Parser and IGS extraction diagnostics include severity, code, source path, and available byte or packet offsets. `--type`, `--m2ts`, and `--pid` select graphics assets while structural declarations remain available. In the M2TS browser, `structure-only` means structural declarations are collected and no payload measurement is available for that clip in the existing graphics extraction scope. Details show related IGS clips reached through SubPath references; Enter can follow those references. `SUP refs` counts reachable subtitle declarations.
+
+The combined JSON report contains `schemaVersion`, `disc`, `graphics`, `stageStatus`, `fileSizes`, and `reachableSup`. `disc` contains the parsed structural report and its stage status; `graphics` contains extracted scene metadata, stream records, diagnostics, and payload measurements. `stageStatus.structure` and `stageStatus.graphics` describe their respective stages; graphics is `not-run` when structural failure prevents extraction. Payload Maps are serialized as objects keyed by clip ID and decimal PID, such as `{"00001":{"5120":429}}`, and large binary image data is represented by metadata. `--format json` emits JSON alone, and `--out` writes the same report. JSON consumers read structural fields under `disc`, IGS records under `graphics`, and SUP declarations under `reachableSup`.
 
 Delivery status is decided only by failure evidence: `fail` checks, `fatal` diagnostics, blocking `error` diagnostics, `hasMissingRequiredAsset`, unresolved reachability, and unsupported reachable capabilities lower it. Checks that never ran, unmeasured coverage, and stale browser evidence appear in `notVerified` (and in `gaps`) while the status stays `complete`. `build` records conversion and compatibility details in `reports.json` and package status in `manifest.json`; `validate` never rewrites `manifest.status` and reports a mismatch as `MANIFEST_STATUS_UNVERIFIED`.
 
@@ -144,6 +189,10 @@ The GitHub Actions test matrix runs each package with coverage enabled, uploads 
 Test scope is fixed by each package's `vitest.config.ts` (`include`), so the aggregate run and the per-package runs collect the same files; compiled `dist/**/*.test.js` are never loaded. A package whose configuration matches no test file fails.
 
 Tests live in `src/` when they cover one module, and in `tests/integration/` or `tests/e2e/` when they combine modules, packages, or the built CLI. `tests/helpers/` holds test-only fixtures. Shared `test-data/` files are addressed from the repository root.
+
+`@bdmv2web/bdmv-parser` includes a fixed-seed structural mutation replay in `src/parsing/parser-mutations.test.ts`. It uses an in-test xorshift32 generator with seed `0x5eedc0de` and creates 96 bounded inputs: eight mutations for each of length, count, offset and truncation across project-built INDEX 0100, MPLS 0200 and CLPI 0200 fixtures. The inputs come from `buildM1Index()`, `buildM1PlaylistGolden()` and `buildM1ClipInfoProgramAndCpi()` in `packages/test-fixtures/src/bdmv.ts`; no upstream bytes are copied. Lengths and offsets move 1–256 bytes beyond the input, counts exceed the fixture section bounds, and truncation cuts at a seeded byte position from 0 through input length minus one. Parser `ContractError` results are accepted; other exceptions fail the replay. Run it as part of the parser suite with `CI=true corepack pnpm --filter @bdmv2web/bdmv-parser test`. The existing CI parser-package job collects the replay through `src/**/*.test.ts` and runs it with the package suite.
+
+The 2026-11-16 local parser-suite baseline is 86 Vitest tests, including the 96-input mutation replay as one test. Two targeted fixed-seed replays each passed in 3 ms; no unexpected parser exception required a new regression input. The complete parser suite took 465 ms on Node 24.18.0, pnpm 11.25.0, Vitest 4.0.8.
 
 The reference comparisons read committed baselines: `test-data/baselines/libbluray-1.5.0-igs-baseline.json` for IG decoder output, `test-data/baselines/libbluray-1.5.0-navigation-baseline.json` for the index, per-command disassembly, title list, VM events and control-flow graph, and `test-data/baselines/igs-reference-element-summary.json` for the element-level comparison against the igstools reference PNGs. The tests read those files and the checked-in fixtures, so CI needs no local libbluray or igstools.
 

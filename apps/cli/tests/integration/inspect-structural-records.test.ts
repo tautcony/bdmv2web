@@ -49,7 +49,7 @@ describe("inspect structural records", () => {
       const result = await runCommand(["inspect", discRoot, "--format", "json"]);
       expect(result.status, result.stderr.toString()).toBe(0);
       expect(result.stderr.toString()).toBe("");
-      const parsed = JSON.parse(result.stdout.toString());
+      const parsed = JSON.parse(result.stdout.toString()).disc;
       expect(parsed.declarations).toMatchObject({ bdjos: 1, metadata: 1 });
       expect(parsed.bdjos[0]).toMatchObject({
         path: "BDJO/00042.bdjo",

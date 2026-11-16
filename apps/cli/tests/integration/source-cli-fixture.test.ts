@@ -14,19 +14,19 @@ describe("source CLI commands on the existing synthetic BDMV fixture", () => {
   beforeAll(async () => { outputRoot = await mkdtemp(join(tmpdir(), "bdmv2web-source-cli-")); });
   afterAll(async () => { await rm(outputRoot, { recursive: true, force: true }); });
 
-  it("runs inspect in-process and writes its structural report", async () => {
+  it("runs inspect in-process and writes its combined report", async () => {
     const reportPath = join(outputRoot, "inspect.json");
     await runCommand("inspect", fixture, "--format", "json", "--out", reportPath);
     const report = JSON.parse(await readFile(reportPath, "utf8"));
-    expect(report.declarations).toMatchObject({ entries: 4, movieObjects: 4, playlists: 3 });
-    expect(report.stageStatus).toBe("complete");
+    expect(report.disc.declarations).toMatchObject({ entries: 4, movieObjects: 4, playlists: 3 });
+    expect(report.stageStatus).toEqual({ structure: "complete", graphics: "complete" });
   });
 
   it("runs list in-process and writes the fixture asset inventory", async () => {
     const reportPath = join(outputRoot, "list.json");
     await runCommand("list", fixture, "--format", "json", "--out", reportPath);
     const report = JSON.parse(await readFile(reportPath, "utf8"));
-    expect(report.summary).toMatchObject({ igsScenes: 2, igsStreams: 2, igsImageElements: 2, supTracks: 5 });
+    expect(report.graphics.summary).toMatchObject({ igsScenes: 2, igsStreams: 2, igsImageElements: 2, supTracks: 5 });
   });
 
   it("runs structural extraction in-process and writes HDMV artifacts", async () => {

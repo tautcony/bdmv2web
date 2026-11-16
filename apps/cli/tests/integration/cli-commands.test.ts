@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { dirname, join, resolve } from "node:path";
-import { buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
+import { buildM1ClipInfoProgramAndCpi, buildM1ClipInfoWithIgsCue, buildM1Index, buildM1MovieObject, buildM1PlaylistWithAudioPid } from "@bdmv2web/test-fixtures";
 import { encodeTimestampForFixture } from "@bdmv2web/igs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -403,10 +403,30 @@ describe("M1 structural CLI", () => {
     const root = join(parent, "BDMV"); await mkdir(join(root, "PLAYLIST"), { recursive: true }); await mkdir(join(root, "CLIPINF"), { recursive: true }); await mkdir(join(root, "STREAM"), { recursive: true });
     await writeFile(join(root, "index.bdmv"), index); await writeFile(join(root, "MovieObject.bdmv"), buildM1MovieObject()); return root;
   }
-  it("writes independently parseable structural JSON to stdout with no progress text", async () => {
+  it("writes independently parseable combined JSON to stdout with no progress text", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv inspect ")); const root = await makeDisc(parent, buildM1Index({ hdmvTitle: 3, bdjTitle: "00042", titleAccess: 2 }));
-    try { const result = await runCommand(["inspect", root, "--format", "json"]); expect(result.status).toBe(0); expect(result.stderr.toString()).toBe(""); const parsed = JSON.parse(result.stdout.toString()); expect(parsed.analysisStage).toBe("structural"); expect(parsed.supportPrediction.status).toBe("partial"); expect(parsed.declarations.entries).toBe(4); expect(parsed.entries.map((entry: any) => entry.target.objectType)).toEqual(["HDMV", "HDMV", "HDMV", "BDJ"]); expect(parsed.entries[2].target.target).toBe(3); expect(parsed.entries[3].target).toMatchObject({ objectType: "BDJ", target: "00042", accessType: 2 }); }
+    try { const result = await runCommand(["inspect", root, "--format", "json"]); expect(result.status).toBe(0); expect(result.stderr.toString()).toBe(""); const parsed = JSON.parse(result.stdout.toString()).disc; expect(parsed.analysisStage).toBe("structural"); expect(parsed.supportPrediction.status).toBe("partial"); expect(parsed.declarations.entries).toBe(4); expect(parsed.entries.map((entry: any) => entry.target.objectType)).toEqual(["HDMV", "HDMV", "HDMV", "BDJ"]); expect(parsed.entries[2].target.target).toBe(3); expect(parsed.entries[3].target).toMatchObject({ objectType: "BDJ", target: "00042", accessType: 2 }); }
     finally { await rm(parent, { recursive: true, force: true }); }
+  });
+  it("prints the combined report in a pipe and writes the same JSON through --out and --format json", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "bdmv inspect report ")); const root = await makeDisc(parent); const target = join(parent, "inspect.json");
+    await writeFile(join(root, "PLAYLIST", "00001.mpls"), buildM1PlaylistWithAudioPid());
+    await writeFile(join(root, "CLIPINF", "00001.clpi"), buildM1ClipInfoProgramAndCpi());
+    await writeFile(join(root, "STREAM", "00001.m2ts"), new Uint8Array());
+    try {
+      const text = await runCommand(["inspect", root, "--out", target]);
+      expect(text.status).toBe(0);
+      expect(text.stdout.toString()).toContain("BDMV inspection (structural analysis; stage complete)");
+      expect(text.stdout.toString()).toContain("Navigation entries:");
+      expect(text.stdout.toString()).toContain("Playlists (1):");
+      expect(text.stdout.toString()).toContain("MPLS stream declarations:");
+      expect(text.stdout.toString()).toContain("CLPI program stream declarations:");
+      const saved = JSON.parse(await readFile(target, "utf8"));
+      expect(saved).toMatchObject({ schemaVersion: "1.0", disc: { analysisStage: "structural", stageStatus: "complete" }, stageStatus: { structure: "complete" } });
+      const json = await runCommand(["inspect", root, "--format", "json"]);
+      expect(json.status).toBe(0);
+      expect(JSON.parse(json.stdout.toString())).toEqual(saved);
+    } finally { await rm(parent, { recursive: true, force: true }); }
   });
   it("exports only structural metadata through the output transaction and preserves source bytes", async () => {
     const parent = await mkdtemp(join(tmpdir(), "bdmv extract ")); const root = await makeDisc(parent); const target = join(parent, "out");
@@ -628,7 +648,7 @@ describe("stage and argument contracts", () => {
 
       const allowed = await runCommand(["inspect", disc, "--allow-partial", "--format", "json"]);
       expect(allowed.status).toBe(0);
-      expect(JSON.parse(allowed.stdout.toString()).stageStatus).toBe("failed");
+      expect(JSON.parse(allowed.stdout.toString()).stageStatus).toEqual({ structure: "failed", graphics: "not-run" });
     } finally { await rm(parent, { recursive: true, force: true }); }
   });
 

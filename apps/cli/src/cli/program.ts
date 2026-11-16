@@ -13,7 +13,7 @@ const loaders: Record<CommandName, () => Promise<() => Promise<void>>> = {
   build: async () => (await import("../commands/build.js")).build,
   validate: async () => (await import("../commands/validate.js")).validate,
   compare: async () => (await import("../commands/compare.js")).compareReference,
-  list: async () => (await import("../commands/list.js")).listAssets,
+  list: async () => (await import("../commands/inspect.js")).inspect,
   export: async () => (await import("../commands/export.js")).exportAssets,
   render: async () => (await import("../commands/render.js")).renderPng,
   serve: async () => (await import("../commands/serve.js")).serve,
@@ -57,10 +57,14 @@ export function buildProgram(version?: string): Command {
   if (version !== undefined) program.version(version);
 
   const inspectCommand = program.command("inspect")
-    .description("Inspect the disc structure and report a stage status")
+    .alias("list")
+    .description("Inspect disc structure and graphics assets")
     .argument("[input]", "BDMV root or its parent directory")
     .option("--out <file>", "write the JSON report to a file", nonEmpty)
-    .option("--format <format>", "table or json", nonEmpty)
+    .option("--format <format>", "table text report or json", oneOf("format", ["table", "json"]))
+    .option("--type <type>", "graphics assets to show: all, igs, or sup", oneOf("type", ["all", "igs", "sup"]))
+    .option("--m2ts <clip>", "restrict graphics assets to one clip", nonEmpty)
+    .option("--pid <pid>", "restrict graphics assets to one PID", nonEmpty)
     .option("--allow-partial", "exit 0 even when the stage failed");
   inspectCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("inspect", input, options));
 
@@ -129,16 +133,6 @@ export function buildProgram(version?: string): Command {
     .option("--out <file>", "write the comparison report to this path", nonEmpty)
     .option("--format <format>", "json", nonEmpty);
   compareCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("compare", input, options));
-
-  const listCommand = program.command("list")
-    .description("List IGS and SUP assets of a disc")
-    .argument("[input]", "BDMV root or its parent directory")
-    .option("--type <type>", "assets to list: all, igs, or sup", oneOf("type", ["all", "igs", "sup"]))
-    .option("--m2ts <clip>", "restrict to one clip, for example 00001", nonEmpty)
-    .option("--pid <pid>", "restrict to one PID, for example 0x1200", nonEmpty)
-    .option("--out <file>", "write the JSON report to a file", nonEmpty)
-    .option("--format <format>", "table or json", nonEmpty);
-  listCommand.action((input: string | undefined, options: ParsedOptions) => dispatch("list", input, options));
 
   const exportCommand = program.command("export")
     .description("Export IGS .mnu files, SUP tracks, PNG frames and structural metadata from a BDMV disc or a stream file")

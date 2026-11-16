@@ -48,9 +48,14 @@
     "@bdmv2web/test-runner": "workspace:*",
     "@bdmv2web/utils": "workspace:*",
     "@types/node": "24.10.0",
+    "@types/react": "19.3.0",
     "commander": "^15.0.0"
   },
   "dependencies": {
-    "d3-force": "^3.0.1"
+    "@inkjs/ui": "2.0.0",
+    "d3-force": "^3.0.1",
+    "ink": "8.0.0",
+    "react": "19.3.1",
+    "wrap-ansi": "10.0.2"
   }
 }
