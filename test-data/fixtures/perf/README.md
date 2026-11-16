@@ -1,6 +1,6 @@
 # Performance fixture inputs
 
-[`manifest.json`](manifest.json) is the fixture registry: nine `perf.*` inputs for component measurements. Each `input.path` is relative to this directory and each `source.path` is relative to its disc's `BDMV` directory. The set holds selected primary metadata, one complete filtered IGS packet stream, one prepared MNU payload, and one complete PGS SUP. No raw M2TS input is part of the set.
+[`manifest.json`](manifest.json) is the fixture registry: eleven `perf.*` inputs for component measurements. Each `input.path` is relative to this directory and each `source.path` is relative to its disc's `BDMV` directory. The set holds selected primary metadata, one complete filtered IGS packet stream, one prepared MNU payload, and two complete PGS SUP tracks. No raw M2TS input is part of the set.
 
 ## Prepared inputs
 
@@ -13,6 +13,7 @@
 | `graph-heavy-tamako-v1` | 44 typed-file mappings in `manifest.json` | Graph build | 1,216 nodes, 8,110 edges | `TAMAKO LOVE STORY BD` | `index.bdmv`, `MovieObject.bdmv`, 26 playlist files, 16 CLPI files listed in `manifest.json` |
 | `menu-battle-royale-igs-v1` | `mnu/Battle.Royale_00002_pid-1400.mnu` | IGS scene parse and asset render | 1 scene, 21 pages, 215 objects, 21 palettes; 215 rendered assets | `Battle.Royale.2000.Director's.Cut.2160p.UHD.Blu-ray.HEVC.DTS-HD.MA.5.1-DiY@HDHome` | `STREAM/00002.m2ts`, clip `00002`, PID `0x1400` |
 | `media-baja-pgs-jpn-v1` | `sup/Baja.Studio_jpn.sup` | PGS parse and selected display-set composition | 508 display sets, 254 bitmaps, 14,019,858 decoded pixels; display set 83 renders to a visible 1920×1080 PNG | Local SUP file | `sup/Baja.Studio_jpn.sup` |
+| `media-hyoka-pgs-00005-v1` | `sup/hyoka_vol1_00005_SumiSora.sup` | PGS parse and selected display-set composition | 216 display sets, 249 bitmaps, 9,320,506 decoded pixels; display set 178 renders to a visible 1920×1080 PNG | Local SUP file | `sup/hyoka_vol1_00005_SumiSora.sup` |
 
 `menu-battle-royale-igs-v1` supplies two inputs: the filtered packet stream `ig-packets/Battle.Royale_00002_pid-1400.bin` and the prepared payload `mnu/Battle.Royale_00002_pid-1400.mnu`.
 

@@ -16,7 +16,7 @@ test("scenario registry exposes stable scale, CLI, and browser cases with actual
     "scale.png-1x.encode", "scale.png-2x.encode", "scale.png-4x.encode",
     "scale.pes-1x.extract", "scale.pes-2x.extract", "scale.pes-4x.extract",
     "perf.index.small.parse", "perf.igs.battle-royale.parse", "perf.igs.battle-royale.render",
-    "perf.pgs.baja.parse", "perf.pgs.baja.compose", "perf.package.igs-assembly",
+    "perf.pgs.baja.parse", "perf.pgs.baja.compose", "perf.pgs.hyoka.parse", "perf.pgs.hyoka.compose", "perf.package.igs-assembly",
     "cli.perf.metadata.inspect", "cli.perf.metadata.export", "cli.perf.igs.render", "cli.synthetic-package.validate",
     "browser.synthetic-menu.file-navigation",
   ]) assert.ok(ids.has(id), `missing ${id}`);

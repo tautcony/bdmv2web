@@ -521,6 +521,68 @@
       }
     },
     {
+      "caseId": "perf.pgs.hyoka.parse",
+      "suite": "real",
+      "category": "pgs",
+      "name": "PGS display-set parse · Hyoka vol. 1 Chinese SUP",
+      "sample": "hyoka-vol1-00005",
+      "fixture": {
+        "id": "media-hyoka-pgs-00005-v1",
+        "version": "1",
+        "parameters": {
+          "operation": "parse",
+          "displaySet": "largest"
+        }
+      },
+      "scope": "pgs-display-set-parse",
+      "kind": "pgs",
+      "input": {
+        "path": "sup/hyoka_vol1_00005_SumiSora.sup"
+      },
+      "source": {
+        "type": "local-file",
+        "path": "sup/hyoka_vol1_00005_SumiSora.sup"
+      },
+      "expected": {
+        "details": {
+          "displaySets": 216,
+          "bitmaps": 249,
+          "decodedPixels": 9320506
+        }
+      }
+    },
+    {
+      "caseId": "perf.pgs.hyoka.compose",
+      "suite": "real",
+      "category": "pgs",
+      "name": "PGS display-set compose · Hyoka vol. 1 Chinese SUP",
+      "sample": "hyoka-vol1-00005",
+      "fixture": {
+        "id": "media-hyoka-pgs-00005-v1",
+        "version": "1",
+        "parameters": {
+          "operation": "compose",
+          "displaySet": "largest"
+        }
+      },
+      "scope": "pgs-compose-and-encode",
+      "kind": "pgs",
+      "input": {
+        "path": "sup/hyoka_vol1_00005_SumiSora.sup"
+      },
+      "source": {
+        "type": "local-file",
+        "path": "sup/hyoka_vol1_00005_SumiSora.sup"
+      },
+      "expected": {
+        "details": {
+          "visible": true,
+          "width": 1920,
+          "height": 1080
+        }
+      }
+    },
+    {
       "caseId": "media.menu-loop-tamako.copy",
       "suite": "real",
       "category": "menu-loop",

@@ -180,11 +180,12 @@ Measured 2026-11-08 on an idle machine (Node 24.18.0 via corepack, pnpm 11.25.0,
 
 ## Repository hygiene
 
-Ten committed binary fixtures exceed 1 MiB:
+Eleven committed binary fixtures exceed 1 MiB:
 
 - `test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV/STREAM/00043.m2ts_ig-packets.bin` — 11.0 MB
 - `test-data/fixtures/hdmv-navigation/disc-data/tamako/BDMV/STREAM/00005.m2ts_ig-packets.bin` — 8.5 MB
 - `test-data/fixtures/perf/sup/Baja.Studio_jpn.sup` — 5.2 MB
+- `test-data/fixtures/perf/sup/hyoka_vol1_00005_SumiSora.sup` — 4.0 MB
 - `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/AUXDATA/05010.otf` — 2.8 MB
 - `test-data/fixtures/hdmv-navigation/disc-data/spider-man-into-the-spider-verse/BDMV/JAR/03001/composite1.png` — 2.7 MB
 - `test-data/fixtures/perf/ig-packets/Battle.Royale_00002_pid-1400.bin` — 2.4 MB
