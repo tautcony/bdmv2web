@@ -3,6 +3,7 @@ import type { InspectionCollection } from "./inspect-collection.js";
 import { selectedClip, selectedPid } from "../cli/assets.js";
 import { buildNavigationGraph, disassemble, type NavigationGraphEdge } from "@bdmv2web/hdmv";
 import { buildButtonPrograms } from "../shared/media.js";
+import { collectDeclaredSupForClip, decodeSupStream, resolveClipM2tsPath, supStreamKey, type SupDisplaySetSummary, type SupReference } from "./inspect-sup.js";
 
 export type InspectionSection = "Navigation" | "MPLS" | "M2TS" | "Metadata" | "Diagnostics";
 export interface BrowserRow {
@@ -12,6 +13,8 @@ export interface BrowserRow {
   source?: string;
   children?: BrowserRow[];
   navigateTo?: string;
+  imagePreview?: { kind?: "igs"; scene: import("@bdmv2web/igs").IgsScene; object: import("@bdmv2web/igs").IgsObject } | { kind: "sup"; summary: SupDisplaySetSummary };
+  supLoader?: { clipId: string; m2tsPath: string; item: SupReference };
 }
 export interface InspectionBrowserModel {
   Navigation: BrowserRow[];
@@ -36,6 +39,30 @@ function row(label: string, value: unknown, source?: string, cells: string[] = [
   return { label, cells, value, ...(source === undefined ? {} : { source }), ...(children === undefined ? {} : { children }), ...(navigateTo === undefined ? {} : { navigateTo }) };
 }
 
+export function buildSupDisplaySetRows(clipId: string, item: SupReference, supBytes: Uint8Array): { rows: BrowserRow[]; totalDisplaySets: number; visibleCount: number } {
+  const trackEnd90k = Math.max(0, Number(item.sourceOut90k) - Number(item.sourceIn90k)) || undefined;
+  const { totalDisplaySets, visibleSets, allSets } = decodeSupStream(supBytes, trackEnd90k);
+  const sets = visibleSets.length ? visibleSets : allSets;
+  const rows = sets.map((summary) => {
+    const r = row(
+      "SUP display set #" + summary.displaySetNumber + " · " + summary.startTimeText + " → " + summary.endTimeText,
+      { kind: "supDisplaySet", clipId, pid: item.pid, language: item.language, summary },
+      item.source,
+      [
+        String(summary.displaySetNumber),
+        summary.startTimeText + " → " + summary.endTimeText,
+        summary.visible ? summary.boxWidth + "×" + summary.boxHeight : "clear",
+        summary.visible ? `${summary.boxX},${summary.boxY} (${summary.displaySet.width}×${summary.displaySet.height})` : `${summary.displaySet.width}×${summary.displaySet.height}`,
+      ]
+    );
+    if (summary.visible) {
+      r.imagePreview = { kind: "sup", summary };
+    }
+    return r;
+  });
+  return { rows, totalDisplaySets, visibleCount: visibleSets.length };
+}
+
 function normalizedCommands(program: { instructions: unknown[] }, fallbackPath: string): Array<{ bytes: string; source: { path: string; offset: string } }> {
   return program.instructions.map((instruction, index) => {
     if (typeof instruction === "string") return { bytes: instruction, source: { path: fallbackPath, offset: String(index) } };
@@ -51,11 +78,38 @@ function m2tsRow(data: InspectionCollection, clipId: string): BrowserRow {
   const clip = data.disc.clips.find((item) => item.id.toUpperCase() === clipId.toUpperCase());
   const graphics = data.graphics;
   const scenes = data.assetType === "sup" ? [] : graphics?.scenes.filter((scene) => scene.clipId === clipId && selectedClip(scene.clipId, data.assetSelection) && selectedPid(scene.pid, data.assetSelection)) ?? [];
-  const sup = data.assetType === "igs" ? [] : data.reachableSup.filter((item) => item.clipId === clipId);
+  const sup = data.assetType === "igs" ? [] : collectDeclaredSupForClip(data.disc, data.reachableSup, clipId, data.assetSelection, data.assetType);
+  const supRows = sup.map((item) => {
+    const prefix = (item.reachable !== false ? "Reachable SUP PID 0x" : "SUP PID 0x") + item.pid.toString(16) + " · " + (item.language ?? "unknown") + (item.playlistId === "CLPI" ? " · CLPI" : " · MPLS " + item.playlistId + " / PlayItem " + item.playItemIndex);
+    const supBytes = data.supStreams?.get(supStreamKey(item.clipId, item.pid, item.sourceIn90k));
+    if (supBytes) {
+      const decoded = buildSupDisplaySetRows(clipId, item, supBytes);
+      const val = { ...item, totalDisplaySets: decoded.totalDisplaySets, visibleCount: decoded.visibleCount };
+      return row(
+        prefix + ` · ${decoded.visibleCount}/${decoded.totalDisplaySets} display sets`,
+        val,
+        item.source,
+        ["0x" + item.pid.toString(16), item.language ?? "unknown", item.playlistId === "CLPI" ? "CLPI" : "MPLS " + item.playlistId, item.playlistId === "CLPI" ? "—" : "PlayItem " + item.playItemIndex],
+        decoded.rows
+      );
+    }
+    const m2tsPath = resolveClipM2tsPath(data.disc, clipId);
+    const r = row(
+      prefix + " · Enter loads subtitle frames",
+      item,
+      item.source,
+      ["0x" + item.pid.toString(16), item.language ?? "unknown", item.playlistId === "CLPI" ? "CLPI" : "MPLS " + item.playlistId, item.playlistId === "CLPI" ? "—" : "PlayItem " + item.playItemIndex]
+    );
+    if (m2tsPath) {
+      r.supLoader = { clipId, m2tsPath, item };
+    }
+    return r;
+  });
+
   const children: BrowserRow[] = [
     ...(clip ? [row("CLPI " + clip.id, clip, sourceText(clip.source))] : []),
-    ...scenes.map((scene) => row("IGS scene " + scene.id + " · composition " + scene.compositionNumber + " · " + scene.objects.length + " image elements", scene, sourceText(scene.source), [scene.id, String(scene.compositionNumber), String(scene.objects.length)], scene.objects.map((object) => row("Image element " + object.id + " v" + object.version, object, sourceText(object.source), [String(object.id), "v" + object.version, object.width + "×" + object.height])))),
-    ...sup.map((item) => row("Reachable SUP PID 0x" + item.pid.toString(16) + " · " + (item.language ?? "unknown") + " · MPLS " + item.playlistId + " / PlayItem " + item.playItemIndex, item, item.source, ["0x" + item.pid.toString(16), item.language ?? "unknown", "MPLS " + item.playlistId, "PlayItem " + item.playItemIndex])),
+    ...scenes.map((scene) => row("IGS scene " + scene.id + " · composition " + scene.compositionNumber + " · " + scene.objects.length + " image elements", scene, sourceText(scene.source), [scene.id, String(scene.compositionNumber), String(scene.objects.length)], scene.objects.map((object) => ({ ...row("Image element " + object.id + " v" + object.version, object, sourceText(object.source), [String(object.id), "v" + object.version, object.width + "×" + object.height]), imagePreview: { scene, object } })))),
+    ...supRows,
   ];
   const relatedIgsClips = [...new Set(data.disc.playlists.flatMap((playlist) => playlist.playItems
     .filter((playItem) => playItem.clipId.toUpperCase() === clipId.toUpperCase())
@@ -69,7 +123,8 @@ function m2tsRow(data: InspectionCollection, clipId: string): BrowserRow {
   const fileBytes = data.fileSizes[clipId] ?? null;
   const scanned = graphics?.payloadBytesByClip?.has(clipId) ?? false;
   const clipError = graphics?.diagnostics.some((diagnostic) => diagnostic.severity === "error" && diagnostic.source?.clipId === clipId) ?? false;
-  const scanStatus = fileNode?.state === "missing" ? "missing" : graphics === null ? "not-run"
+  const isLoading = data.loadingClips?.has(clipId) ?? false;
+  const scanStatus = fileNode?.state === "missing" ? "missing" : isLoading ? "loading..." : graphics === null ? "not-run"
     : scanned ? clipError ? "partial" : "scanned" : clipError ? "failed" : "structure-only";
   const reversePlayItems = data.disc.playlists.flatMap((playlist) => playlist.playItems.filter((item) => item.clipId.toUpperCase() === clipId.toUpperCase()).map((item) => ({ playlist: playlist.id, playItemIndex: item.index, source: item.source })));
   const reverseSubPaths = data.disc.playlists.flatMap((playlist) => playlist.subPaths.flatMap((subPath, subPathIndex) => subPath.items.filter((item) => item.clipId.toUpperCase() === clipId.toUpperCase()).map((item) => ({ playlist: playlist.id, subPathIndex, source: item.source }))));
@@ -241,7 +296,8 @@ export function buildInspectionBrowserModel(data: InspectionCollection): Inspect
     if (!selectedClip(clipId, data.assetSelection)) return false;
     if (data.assetSelection.pid === undefined) return true;
     const hasIgs = data.assetType !== "sup" && (data.graphics?.scenes.some((scene) => scene.clipId === clipId && selectedPid(scene.pid, data.assetSelection)) ?? false);
-    const hasSup = data.assetType !== "igs" && data.reachableSup.some((item) => item.clipId === clipId && selectedPid(item.pid, data.assetSelection));
+    const supDeclarations = collectDeclaredSupForClip(data.disc, data.reachableSup, clipId, data.assetSelection, data.assetType);
+    const hasSup = data.assetType !== "igs" && supDeclarations.some((item) => selectedPid(item.pid, data.assetSelection));
     return hasIgs || hasSup;
   }).sort().map((clipId) => targets.get("clip:" + clipId)!);
   return {

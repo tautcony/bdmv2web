@@ -5,7 +5,7 @@ import { firstBlockingCode, stageFailure } from "../cli/stages.js";
 import { assertDisjointRoots } from "@bdmv2web/bdmv-io";
 import { decideStageOutcome } from "@bdmv2web/test-runner";
 import { resolve } from "node:path";
-import { collectInspection } from "./inspect-collection.js";
+import { collectInspection, collectStructuralInspection } from "./inspect-collection.js";
 import { assetSelection, assetTypeOption } from "../cli/assets.js";
 import { renderCombinedInspection, serializeCombinedInspection } from "./inspect-output.js";
 
@@ -19,8 +19,8 @@ export async function inspect(): Promise<void> {
   const type = assetTypeOption();
   const interactive = optionValue("--format") === undefined && process.stdout.isTTY;
   const tui = interactive ? await import("./inspect-tui.js") : undefined;
-  const collected = tui
-    ? await tui.collectInspectionWithProgress(input, selection, type)
+  const collected = tui && !out
+    ? await collectStructuralInspection(input, selection, type)
     : await collectInspection(input, selection, type);
   const { disc } = collected;
   const outcome = decideStageOutcome({ stage: "inspect", diagnostics: disc.diagnostics });

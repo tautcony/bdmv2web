@@ -135,13 +135,35 @@ export function buildInspectionDetails(row: BrowserRow, data: InspectionCollecti
       field("  Default selected / activated", `${display(page.defaultSelectedButtonId)} / ${display(page.defaultActivatedButtonId)}`);
       for (const button of records(page.buttons)) field(`  Button ${display(button.id)}`, `position ${display(button.x)}, ${display(button.y)} · ${records(button.commands).length} commands`);
     }
+  } else if (item.kind === "supDisplaySet") {
+    const summary = record(item.summary);
+    const displaySet = record(summary.displaySet);
+    heading("SUP display set");
+    field("Clip / PID", `${String(item.clipId)} / ${hex(item.pid)}`);
+    field("Language", String(item.language));
+    field("Display set", String(summary.displaySetNumber));
+    field("Timeline", `${String(summary.startTimeText)} → ${String(summary.endTimeText)}`);
+    field("PTS (90 kHz)", String(summary.startTime90k));
+    field("Canvas", `${String(displaySet.width)}×${String(displaySet.height)}`);
+    field("Subtitle bounds", summary.visible ? `${String(summary.boxWidth)}×${String(summary.boxHeight)} at (${String(summary.boxX)}, ${String(summary.boxY)})` : "clear");
+    field("Placements", String(records(displaySet.placements).length));
+    field("Palette ID", String(displaySet.paletteId));
   } else if (item.indices instanceof Uint8Array && "width" in item) {
     heading("Image element"); field("Object ID", item.id); field("Version", item.version);
     field("Dimensions", `${display(item.width)} × ${display(item.height)}`); field("Indexed pixels", item.indices.byteLength);
   } else if (typeof item.playlistId === "string" && typeof item.pid === "number") {
-    heading("Reachable SUP declaration"); field("Clip", item.clipId); field("PID", hex(item.pid)); field("Language", item.language);
-    field("Stream number", item.streamNumber); field("MPLS / PlayItem", `${item.playlistId} / ${display(item.playItemIndex)}`);
-    const bytes = data.graphics?.payloadBytesByClip?.get(String(item.clipId))?.get(item.pid);
+    heading("Reachable SUP declaration");
+    field("Clip", item.clipId);
+    field("PID", hex(item.pid));
+    field("Language", item.language);
+    field("Stream number", item.streamNumber);
+    field("MPLS / PlayItem", `${item.playlistId} / ${display(item.playItemIndex)}`);
+    if (typeof item.totalDisplaySets === "number") {
+      field("Display sets", `${String(item.visibleCount)} visible / ${String(item.totalDisplaySets)} total`);
+    } else if (row.supLoader) {
+      field("Display sets", "Enter loads subtitle frames from M2TS");
+    }
+    const bytes = data.graphics?.payloadBytesByClip?.get(String(item.clipId))?.get(Number(item.pid));
     field("Measured PID payload", bytes === undefined ? "unknown" : `${bytes} bytes`);
   } else if (typeof item.bytes === "string") {
     heading("HDMV command");
