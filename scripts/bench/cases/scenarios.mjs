@@ -321,7 +321,11 @@ async function runCli(root, caseDef, outputDir, sequence, observeChild = false) 
   // `--version` exits before any command module loads, so it measures the
   // process start and argument parsing that every CLI case also pays for.
   if (args[0] === "--version") return { command: "version", stdoutBytes: Buffer.byteLength(stdout.trim()), output: null, ...childResult };
-  if (args[0] === "inspect" && !["complete", "partial"].includes(report.stageStatus)) throw new Error(`CLI inspect stageStatus is ${String(report.stageStatus)}`);
+  if (args[0] === "inspect") {
+    const { stageStatus } = report;
+    const structureStatus = typeof stageStatus === "string" ? stageStatus : stageStatus?.structure;
+    if (!["complete", "partial"].includes(structureStatus)) throw new Error(`CLI inspect structure status is ${String(structureStatus)}`);
+  }
   if (args[0] === "list") {
     const clips = [...stdout.matchAll(/M2TS \d{5} ·/g)].length;
     if (!clips) throw new Error("CLI list printed no per-clip asset tree");

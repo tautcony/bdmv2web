@@ -1168,7 +1168,7 @@ describe("M1 BDMV discovery and structure", () => {
       return [(pid >>> 8) & 0xff, pid & 0xff, attrLen, codingType, ...attrs, ...isrcBytes];
     };
     const streams = [
-      ...entry(0x1101, 0x81, [0x61, 0x65, 0x6e, 0x67], "USABC2600001 "), // AC-3 out-of-PID-order first, with ISRC
+      ...entry(0x1101, 0x81, [0x61, 0x65, 0x6e, 0x67], "USABC2600001"), // AC-3 out-of-PID-order first, with ISRC
       ...entry(0x1011, 0x1b, [0x62, 0x32, 0, 0]), // AVC 1080p/24, aspect 3 (16:9), ocFlag=true
       ...entry(0x1100, 0x86, [0x61, 0x64, 0x65, 0x75]), // DTS-HD MA deu
       ...entry(0x1200, 0x90, [0x65, 0x6e, 0x67, 0]), // PG eng
