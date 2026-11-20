@@ -6,7 +6,8 @@ import { errorText } from "@bdmv2web/utils";
 import { extractIgsScenes } from "@bdmv2web/igs";
 import { reachablePgsReferences } from "../shared/pgs.js";
 import { selectedClip, selectedPid, uniquePgsReferences } from "../cli/assets.js";
-import { collectDeclaredSupForClip, extractSupStreamsFromM2ts, resolveClipM2tsPath } from "./inspect-sup.js";
+import { canCollectSupPreview, collectDeclaredSupForClip, extractSupStreamsFromM2ts, extractSupStreamsFromPackets, resolveClipM2tsPath } from "./inspect-sup.js";
+import { DiscPgsPacketCache } from "../shared/disc-pgs-packets.js";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 
 interface WorkerRequest {
@@ -42,6 +43,12 @@ try {
     const disc = request.disc!;
     const fileSizes = request.fileSizes ?? {};
     const activeControllers = new Map<string, AbortController>();
+    const reachableSup = request.assetType === "igs" ? [] : uniquePgsReferences(reachablePgsReferences(disc, []))
+      .filter((item) => selectedClip(item.clipId, request.assetSelection) && selectedPid(item.pid, request.assetSelection));
+    const pgsPackets = new DiscPgsPacketCache((clipId) => {
+      if (canCollectSupPreview(fileSizes[clipId])) return new Set(collectDeclaredSupForClip(disc, reachableSup, clipId, request.assetSelection, request.assetType).map(({ pid }) => pid));
+      return undefined;
+    });
 
     port.on("message", (msg: unknown) => {
       void (async () => {
@@ -87,6 +94,7 @@ try {
           const extraction = await extractIgsScenes(disc, {
             renderAssets: false,
             measurePayloadBytes: true,
+            scanClipPackets: pgsPackets.scan,
             clipFilter: (id) => id.toUpperCase() === clipId.toUpperCase(),
           });
           const scenes = extraction.scenes;
@@ -104,9 +112,6 @@ try {
 
     // 2. Small SUP clips progressive worker (<= 64 MiB)
     if (request.assetType !== "igs") {
-      const reachable = reachablePgsReferences(disc, []);
-      const reachableSup = uniquePgsReferences(reachable).filter((item) => selectedClip(item.clipId, request.assetSelection) && selectedPid(item.pid, request.assetSelection));
-
       const allClipIds = new Set<string>([
         ...disc.playlists.flatMap((pl) => pl.playItems.map((item) => item.clipId)),
         ...disc.playlists.flatMap((pl) => pl.subPaths.flatMap((sp) => sp.items.map((item) => item.clipId))),
@@ -116,8 +121,7 @@ try {
       const smallSupClips: string[] = [];
       for (const clipId of allClipIds) {
         if (!selectedClip(clipId, request.assetSelection)) continue;
-        const fileBytes = fileSizes[clipId];
-        if (fileBytes !== null && fileBytes !== undefined && fileBytes > 0 && fileBytes <= 64 * 1024 * 1024) {
+        if (canCollectSupPreview(fileSizes[clipId])) {
           const decls = collectDeclaredSupForClip(disc, reachableSup, clipId, request.assetSelection, request.assetType);
           if (decls.length > 0) smallSupClips.push(clipId);
         }
@@ -133,7 +137,10 @@ try {
         try {
           const controller = new AbortController();
           activeControllers.set(clipId.toUpperCase(), controller);
-          const extracted = await extractSupStreamsFromM2ts(clipId, m2tsPath, supDecls, controller.signal);
+          const batches = pgsPackets.take(m2tsPath, supDecls);
+          const extracted = batches === undefined
+            ? await extractSupStreamsFromM2ts(clipId, m2tsPath, supDecls, controller.signal)
+            : await extractSupStreamsFromPackets(clipId, batches, supDecls, controller.signal);
           activeControllers.delete(clipId.toUpperCase());
           if (!controller.signal.aborted && extracted.streams.size > 0) {
             const streamsObj = Object.fromEntries(extracted.streams);

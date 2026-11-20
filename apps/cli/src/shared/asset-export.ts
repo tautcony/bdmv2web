@@ -8,9 +8,10 @@ import { writeMetadataArtifacts } from "./metadata.js";
 import type { SupTrackRecord } from "./metadata.js";
 import { commandProgress, countOf } from "../progress.js";
 import type { ProgressReporter } from "../progress.js";
-import { extractReachablePgsTracks, pgsTrackPngPlan, reachablePgsReferences, trackProgress, writeDisplaySetPngs } from "./pgs.js";
+import { extractReachablePgsTracks, pgsTrackPngPlan, primaryPgsPidsByClip, reachablePgsReferences, trackProgress, writeDisplaySetPngs } from "./pgs.js";
 import { BDMV_STEPS, STREAM_STEPS } from "./steps.js";
 import { fanOutPackets } from "./packet-fanout.js";
+import { DiscPgsPacketCache } from "./disc-pgs-packets.js";
 import { classifyInput, discoverGraphicsStreamsFromPrefix, streamProbeDiagnostics } from "./stream-input.js";
 import type { StreamTarget } from "./stream-input.js";
 import { assertDisjointRoots, beginOutputTransaction, readFileChunks } from "@bdmv2web/bdmv-io";
@@ -78,12 +79,15 @@ export async function exportBdmvAssets(input: string, out: string, type: OutputT
   if (facts.hasFatal) { failStage(progress, BDMV_STEPS.structure, firstBlockingCode(facts.blocking), facts.blocking, out); return; }
   progress.done(BDMV_STEPS.structure, `${countOf(disc.entries.length, "entry", "entries")} · ${countOf(disc.clips.length, "clip", "clips")}`);
   const roots = await assertDisjointRoots(disc.root, out);
+  const pgsPids = needsSupTracks ? primaryPgsPidsByClip(disc, (pid) => selectedPid(pid, selection)) : undefined;
+  const pgsPackets = pgsPids ? new DiscPgsPacketCache((clipId) => pgsPids.get(clipId.toUpperCase())) : undefined;
   // SUP tracks are discovered through the IGS scenes, so `--type hdmv` is the one
   // selection that skips IGS extraction entirely.
   progress.start(BDMV_STEPS.igs);
   const igs = needsIgs
     ? await extractIgsScenes(disc, {
       renderAssets: selection.renderPng && outputs.png.igs, captureStreams: writesMnu, pngLevel: pngLevelOption(), table,
+      ...(pgsPackets ? { scanClipPackets: pgsPackets.scan } : {}),
       ...(selection.clipId === undefined ? {} : { clipFilter: (clipId: string) => selectedClip(clipId, selection) }),
     })
     : { scenes: [], assets: [], streams: [], diagnostics: [], status: "complete" as const, support: { format: "Blu-ray IGS" as const, status: "unverified" as const } };
@@ -116,7 +120,7 @@ export async function exportBdmvAssets(input: string, out: string, type: OutputT
       // directory that never reaches the output target.
       const trackDirectory = writesSup ? transaction.stagingPath : await mkdtemp(resolve(tmpdir(), "bdmv-render-png-"));
       try {
-        const tracks = await extractReachablePgsTracks(disc, igs.scenes, trackDirectory, (_reference, index) => supTrackPath(references[index]!.clipId, references[index]!.pid, index, trackSuffixes[index]), references);
+        const tracks = await extractReachablePgsTracks(disc, igs.scenes, trackDirectory, (_reference, index) => supTrackPath(references[index]!.clipId, references[index]!.pid, index, trackSuffixes[index]), references, pgsPackets);
         const uniqueTracks = [...new Map(tracks.map((track) => [track.path, track])).values()];
         progress.done(BDMV_STEPS.sup, countOf(uniqueTracks.length, "track", "tracks"));
         // Each track's PNGs follow its SUP record, so the manifest keeps grouping by

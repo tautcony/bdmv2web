@@ -1,5 +1,5 @@
 import { checkedObjectPixels, DEFAULT_LIMITS, type Limits } from "@bdmv2web/core";
-import { bytesToHex, concatBytes as join, readU16BE as u16, readU24BE as u24 } from "@bdmv2web/utils";
+import { bytesToHex, concatBytes as join, equalBytes, readU16BE as u16, readU24BE as u24 } from "@bdmv2web/utils";
 import type { IgsButton, IgsDiagnostic, IgsObject, IgsPage, IgsPalette, IgsScene, PtsValue } from "./types.js";
 import { source } from "../transport/transport.js";
 
@@ -21,6 +21,50 @@ export interface IgsStreamState {
 
 export function createIgsState(): IgsStreamState {
   return { objects: new Map(), palettes: new Map(), pendingObjects: new Map(), scenes: [], diagnostics: [], current: new Map() };
+}
+
+interface DecodedObject {
+  width: number;
+  height: number;
+  encoded: Uint8Array;
+  indices?: Uint8Array;
+  bytes: number;
+}
+
+interface DecodedObjects { entries: Map<string, DecodedObject>; bytes: number; }
+const decodedObjects = new WeakMap<IgsStreamState, DecodedObjects>();
+
+function decodeObject(state: IgsStreamState, identity: string, width: number, height: number, encoded: Uint8Array, limits: Limits): Uint8Array {
+  const pixels = checkedObjectPixels(width, height, limits);
+  if (encoded.byteLength + pixels > limits.maxReassemblyBytes) return decodeRle(encoded, width, height, limits);
+  let cache = decodedObjects.get(state);
+  if (!cache) {
+    cache = { entries: new Map(), bytes: 0 };
+    decodedObjects.set(state, cache);
+  }
+  const previous = cache.entries.get(identity);
+  const repeated = previous?.width === width && previous.height === height && equalBytes(encoded, previous.encoded);
+  if (repeated && previous.indices) return previous.indices.slice();
+
+  const indices = decodeRle(encoded, width, height, limits);
+  if (previous) {
+    cache.entries.delete(identity);
+    cache.bytes -= previous.bytes;
+  }
+  // Keep the assembled buffer on first encounter. Create a private pixel template
+  // when the object repeats so each published object owns its pixel buffer.
+  const cached: DecodedObject = repeated
+    ? { width, height, encoded: encoded.slice(), indices: indices.slice(), bytes: encoded.byteLength + pixels }
+    : { width, height, encoded, bytes: encoded.buffer.byteLength };
+  if (cached.bytes > limits.maxReassemblyBytes) return indices;
+  while (cache.bytes + cached.bytes > limits.maxReassemblyBytes) {
+    const [key, oldest] = cache.entries.entries().next().value!;
+    cache.entries.delete(key);
+    cache.bytes -= oldest.bytes;
+  }
+  cache.entries.set(identity, cached);
+  cache.bytes += cached.bytes;
+  return indices;
 }
 
 export function parseSegments(input: Uint8Array, baseOffset = 0n, residual: Uint8Array<ArrayBufferLike> = new Uint8Array(), clipId = "", pid = 0, pts: PtsValue | null = null): SegmentParseResult {
@@ -257,7 +301,9 @@ function consumeObjectSegment(state: IgsStreamState, data: Uint8Array, src: IgsO
   if (pending.received > limits.maxReassemblyBytes || pending.received > pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} fragment bytes exceed declared object length`);
   if (!pending.last) return;
   if (pending.received !== pending.declaredLength - 4) throw new IgsError("IGS_INVALID_SEGMENT", `ODS object ${id} ended at ${pending.received} bytes; expected ${pending.declaredLength - 4}`);
-  const indices = decodeRle(pending.bytes.subarray(0, pending.received), pending.width, pending.height, limits);
+  // Each epoch assembles and validates its ODS. The resulting object carries the
+  // current source location and owns its pixel buffer.
+  const indices = decodeObject(state, `${src.clipId}:${src.pid}:${id}:${version}`, pending.width, pending.height, pending.bytes.subarray(0, pending.received), limits);
   const object: IgsObject = { id, version, width: pending.width, height: pending.height, indices, source: pending.source };
   state.objects.set(key, object);
   const current = state.current.get(src.pid);

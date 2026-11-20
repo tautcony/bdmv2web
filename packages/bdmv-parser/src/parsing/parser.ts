@@ -8,7 +8,7 @@ import type { AtcSequence, BdjoInfo, ClipHeader, ClipInfo, CpiMapEntry, DiscAppI
 
 const VERSION_3D_MVC = "0240";
 const SUPPORTED_VERSIONS = new Set(["0100", "0200", VERSION_3D_MVC, "0300"]);
-const asUtf8 = (bytes: Uint8Array) => new TextDecoder("ascii").decode(bytes);
+const asciiDecoder = new TextDecoder("ascii");
 
 class Bits {
   private bit = 0;
@@ -31,7 +31,7 @@ class Bits {
   u16(): number { this.align(); this.cursor.seek(this.offset); const value = this.cursor.u16be(); this.bit += 16; return value; }
   u32(): number { this.align(); this.cursor.seek(this.offset); const value = this.cursor.u32be(); this.bit += 32; return value; }
   bytes(n: number): Uint8Array { this.align(); this.cursor.seek(this.offset); const bytes = this.cursor.bytes(n); this.bit += n * 8; return bytes; }
-  text(n: number): string { return asUtf8(this.bytes(n)); }
+  text(n: number): string { return asciiDecoder.decode(this.bytes(n)); }
   seek(byte: number): void { this.align(); this.cursor.seek(byte); this.bit = byte * 8; }
   sub(byteLength: number): Bits { this.align(); const start = this.offset; if (!Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > this.data.length - start) throw new ContractError("TRUNCATED_INPUT", "/offset", `Section length ${byteLength} exceeds file`); this.bit += byteLength * 8; return new Bits(this.data.subarray(start, start + byteLength), this.base + start); }
   checkMagic(value: string): void { const at = this.offset; const actual = this.text(value.length); if (actual !== value) throw new ContractError("BDMV_INVALID_MAGIC", `/offset/${at}`, `Expected ${value}, got ${actual}`); }

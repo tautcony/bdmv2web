@@ -94,11 +94,9 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
       fixture: igsRenderCase.fixture, fixtureRoot, scope: "cli-mnu-png-render", spawnsChild: true, baselineCaseId: "cli.floor.render", options: { operation: "render", input: igsRenderCase.options.file },
     });
   }
-  // `list` prints a per-clip payload line by scanning each clip; `export` reads a
-  // stream clip once for every graphics reader that runs. Both repeat the committed
-  // clip until the scan, not process start, is what they measure. The repeat keeps
-  // every PID continuous and leaves the extracted assets unchanged, so the input is
-  // a longer version of the same clip rather than stuffing around it.
+  // Repeat the committed clips to measure packet scanning and graphics extraction
+  // at larger input sizes. Repetition keeps every PID continuous and can produce
+  // more timed display sets and button programs from the same graphics content.
   const CLIP_BYTES = 8 * 1024 * 1024;
   const STREAM_BYTES = 16 * 1024 * 1024;
   result.push({
@@ -113,9 +111,8 @@ export async function getScenarioDefinitions({ root, fixtureRoot = root, manifes
     fixtureRoot, scope: "cli-stream-export", spawnsChild: true, baselineCaseId: "cli.floor.export",
     options: { operation: "stream-export", input: `${SYNTHETIC_DISC}/STREAM/00002.m2ts`, clipBytes: STREAM_BYTES },
   });
-  // A disc export reads each clip once for IGS and once for PGS. The filtered
-  // row narrows --m2ts to one clip, so its IGS scan touches one clip and the
-  // row measures the effect of pushing the filter into that scan.
+  // Disc export replays retained PGS packets from complete IGS scans when available.
+  // The filtered row narrows this work to the one clip selected by --m2ts.
   for (const [suffix, m2ts] of [["", null], ["filtered", "00001"]]) {
     result.push({
       caseId: `cli.perf.bdmv.export${suffix ? `.${suffix}` : ""}`, suite: "scenario", category: "cli",

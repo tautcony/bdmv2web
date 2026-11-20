@@ -67,7 +67,7 @@ export async function extractPgsTracksFromChunks(sourcePath: string, chunks: Asy
  * diagnostics of that reader are checked here so a shared scan keeps the same
  * per-PID failure contract as a dedicated one.
  */
-export async function extractPgsTracksFromPacketBatches(sourcePath: string, batches: AsyncIterable<readonly TsPacket[]>, requests: readonly PgsTrackRequest[], options: ExtractPgsTracksOptions = {}, transportDiagnostics: readonly IgsDiagnostic[] = []): Promise<ExtractedPgsTrack[]> {
+export async function extractPgsTracksFromPacketBatches(sourcePath: string, batches: AsyncIterable<readonly TsPacket[]> | Iterable<readonly TsPacket[]>, requests: readonly PgsTrackRequest[], options: ExtractPgsTracksOptions = {}, transportDiagnostics: readonly IgsDiagnostic[] = []): Promise<ExtractedPgsTrack[]> {
   const maxBytes = options.maxBytes;
   if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)) throw new RangeError("maxBytes must be a positive safe integer.");
   const source = resolve(sourcePath);

@@ -51,6 +51,15 @@ export function computeMediaClosure(
   buttonRoots: readonly MediaClosureButtonRoot[] = [],
   options: MediaClosureOptions = {},
 ): MediaClosure {
+  return computeClosure(disc, movieGraph, buttonRoots, options, false);
+}
+
+/** Select the playlists using the same structural checks and conservative fallback as the full closure. */
+export function computeReachablePlaylists(disc: ParsedDisc, movieGraph: NavigationGraph, buttonRoots: readonly MediaClosureButtonRoot[] = [], options: MediaClosureOptions = {}): string[] {
+  return computeClosure(disc, movieGraph, buttonRoots, options, true).playlistIds;
+}
+
+function computeClosure(disc: ParsedDisc, movieGraph: NavigationGraph, buttonRoots: readonly MediaClosureButtonRoot[], options: MediaClosureOptions, playlistsOnly: boolean): MediaClosure {
   const maxStates = options.maxStates ?? 100_000;
   if (!Number.isSafeInteger(maxStates) || maxStates < 0) throw new RangeError("maxStates must be a non-negative safe integer");
 
@@ -61,6 +70,9 @@ export function computeMediaClosure(
     if (list) list.push(edge); else structuralEdges.set(edge.from, [edge]);
   }
   const allPlaylists = disc.graph.nodes.filter((node) => node.type === "playlist").map((node) => node.id);
+  // The state count is bounded by the navigation nodes plus one structural walk per
+  // playlist. Share visits when this bound fits strictly below the budget.
+  const shareVisits = playlistsOnly && movieGraph.nodes.length + disc.graph.nodes.length * allPlaylists.length < maxStates;
   const selectedPlaylists = new Set<string>();
   const requiredNodes = new Set<string>();
   const routes: MediaClosureRoute[] = [];
@@ -89,6 +101,7 @@ export function computeMediaClosure(
   };
   const widenToAllPlaylists = () => {
     for (const id of allPlaylists) selectedPlaylists.add(id);
+    if (playlistsOnly) return;
     // Widen by scanning the already parsed structural graph. This bounded
     // graph walk runs independently of the navigation exploration budget.
     for (const node of disc.graph.nodes) {
@@ -175,20 +188,22 @@ export function computeMediaClosure(
     const pending: string[] = [];
     const projectedEdges: RouteEdge[] = [];
     for (const root of roots) {
+    if (playlistsOnly && unknown.length > 0) return;
     walkGeneration += 1;
     const walk = walkGeneration;
     pending.length = 0; pending.push(root.id);
     projectedEdges.length = 0;
     while (pending.length) {
+      if (playlistsOnly && unknown.length > 0) return;
       const id = pending.pop()!;
-      if (seenGenerations.get(id) === walk) continue;
+      if (shareVisits ? visited.has(id) : seenGenerations.get(id) === walk) continue;
       const node = nodes.get(id);
       if (!node) {
         markUnknown("MEDIA_NAVIGATION_TARGET_MISSING", `${label} navigation target '${id}' is absent.`);
         widenToAllPlaylists();
         continue;
       }
-      seenGenerations.set(id, walk);
+      if (!shareVisits) seenGenerations.set(id, walk);
       if (node.status === "unknown") {
         markUnknown("MEDIA_NAVIGATION_NODE_UNKNOWN", `${label} navigation node '${id}' has unknown status.`, node.source);
         widenToAllPlaylists();
@@ -205,7 +220,7 @@ export function computeMediaClosure(
       if (!visited.has(id)) { visited.add(id); explored++; }
       for (const edge of edgesBySource.get(id) ?? EMPTY_EDGES) {
         const observedKey = edgeKeys.get(edge) ?? navigationEdgeKey(edge);
-        if (observedGenerations.get(observedKey) !== walk) {
+        if (!playlistsOnly && observedGenerations.get(observedKey) !== walk) {
           observedGenerations.set(observedKey, walk);
           projectedEdges.push({ from: edge.from, to: edge.to, kind: edge.kind, condition: edge.condition, source: edge.source });
         }
@@ -232,7 +247,7 @@ export function computeMediaClosure(
       if (edge.kind === "play") {
         if (edge.to !== null && structuralNodes.get(edge.to)?.type === "playlist" && edge.resolution === "resolved") {
           includePlaylist(edge.to);
-          recordRoute({ playlistId: edge.to, origin: root.origin, entryId: root.entryId, entrySource: root.entrySource, buttonProgramId: root.buttonProgramId }, observed, root.id);
+          if (!playlistsOnly) recordRoute({ playlistId: edge.to, origin: root.origin, entryId: root.entryId, entrySource: root.entrySource, buttonProgramId: root.buttonProgramId }, observed, root.id);
           return;
         }
         if (markOnce()) { markUnknown("MEDIA_PLAY_TARGET_UNKNOWN", `${graphLabel} play/title navigation edge from '${edge.from}' has no proven playlist target.`, edge.source); widenToAllPlaylists(); }
@@ -269,10 +284,12 @@ export function computeMediaClosure(
   }
   runNavigation(movieGraph, entryRoots, "MovieObject");
   for (const root of buttonRoots) {
+    if (playlistsOnly && unknown.length > 0) break;
     runNavigation(movieGraph, [{ id: root.nodeId, entryId: null, entrySource: null, buttonProgramId: root.programId, origin: "button-program" }], `button program ${root.programId}`);
   }
 
   if (budgetExhausted || unknown.length > 0) widenToAllPlaylists();
+  if (playlistsOnly) return { playlistIds: [...selectedPlaylists].sort(), clipIds: [], streamIds: [], requiredNodeIds: [], routes, unknown, complete: unknown.length === 0, explored };
   for (const playlistId of selectedPlaylists) if (!routes.some((route) => route.playlistId === playlistId)) recordRoute({ playlistId, origin: "conservative-fallback", entryId: null, entrySource: null, buttonProgramId: null });
   for (const playlistId of selectedPlaylists) includePlaylist(playlistId);
   const clipIds = new Set([...requiredNodes].filter((id) => id.startsWith("clip:")).map((id) => id.slice("clip:".length)));

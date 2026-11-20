@@ -4,3 +4,4 @@ export * from "./export-menu-media.js";
 export * from "./encoding-defaults.js";
 export * from "./diagram/overview-mermaid.js";
 export * from "./diagram/viewer-data.js";
+export { computeReachablePlaylists } from "./closure.js";

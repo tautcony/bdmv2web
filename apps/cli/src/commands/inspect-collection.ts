@@ -6,7 +6,8 @@ import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
 import { selectedClip, selectedPid, uniquePgsReferences, type AssetSelection, type AssetType } from "../cli/assets.js";
-import { collectDeclaredSupForClip, extractSupStreamsFromM2ts, resolveClipM2tsPath } from "./inspect-sup.js";
+import { canCollectSupPreview, collectDeclaredSupForClip, extractSupStreamsFromM2ts, extractSupStreamsFromPackets, resolveClipM2tsPath } from "./inspect-sup.js";
+import { DiscPgsPacketCache } from "../shared/disc-pgs-packets.js";
 
 export interface InspectionCollection {
   disc: ParsedDisc;
@@ -44,8 +45,7 @@ export async function collectStructuralInspection(
     try { fileSizes[clipId] = (await stat(resolve(disc.root, relative))).size; }
     catch { fileSizes[clipId] = null; }
   }
-  const reachable = reachablePgsReferences(disc, []);
-  const reachableSup = assetType !== "igs" ? uniquePgsReferences(reachable).filter((item) => selectedClip(item.clipId, assetSelection) && selectedPid(item.pid, assetSelection)) : [];
+  const reachableSup = assetType !== "igs" ? uniquePgsReferences(reachablePgsReferences(disc, [])).filter((item) => selectedClip(item.clipId, assetSelection) && selectedPid(item.pid, assetSelection)) : [];
   const graphicsStageStatus = structural.hasFatal ? "not-run" : "loading";
   const graphics = structural.hasFatal ? null : {
     scenes: [],
@@ -75,13 +75,27 @@ export async function collectInspection(input: string, assetSelection: AssetSele
   const { disc, table } = await parseBdmvWithInputTable(input);
   const structural = classifyDiagnostics(disc.diagnostics);
   onPhase?.("graphics");
+  const explicitClip = assetSelection.clipId !== undefined;
+  const knownSizes = new Map<string, number | null>();
+  const readSize = async (path: string): Promise<number | null> => {
+    if (knownSizes.has(path)) return knownSizes.get(path)!;
+    const size = await stat(path).then((info) => info.size, () => null);
+    knownSizes.set(path, size);
+    return size;
+  };
+  const pgsPackets = assetType === "igs" ? undefined : new DiscPgsPacketCache(async (clipId, path) => {
+    const size = await readSize(path);
+    if (!canCollectSupPreview(size, explicitClip)) return undefined;
+    return new Set(collectDeclaredSupForClip(disc, [], clipId, assetSelection, assetType).map(({ pid }) => pid));
+  });
   const extraction = structural.hasFatal ? null : await extractIgsScenes(disc, {
     renderAssets: false, measurePayloadBytes: true, table,
+    ...(pgsPackets ? { scanClipPackets: pgsPackets.scan } : {}),
     ...(assetSelection.clipId === undefined ? {} : { clipFilter: (clipId: string) => selectedClip(clipId, assetSelection) }),
   });
-  const reachable = extraction ? reachablePgsReferences(disc, extraction.scenes) : [];
   const graphics = extraction;
-  const reachableSup = assetType !== "igs" ? uniquePgsReferences(reachable).filter((item) => selectedClip(item.clipId, assetSelection) && selectedPid(item.pid, assetSelection)) : [];
+  const reachableSup = extraction && assetType !== "igs"
+    ? uniquePgsReferences(reachablePgsReferences(disc, extraction.scenes)).filter((item) => selectedClip(item.clipId, assetSelection) && selectedPid(item.pid, assetSelection)) : [];
   const fileSizes: Record<string, number | null> = {};
   // These are already-declared PlayItem targets, not an expanded STREAM scan.
   const clipIds = new Set(structural.hasFatal ? [] : [
@@ -97,20 +111,21 @@ export async function collectInspection(input: string, assetSelection: AssetSele
     const source = node?.state === "present" ? node.source?.path : undefined;
     const relative = source === undefined ? undefined : bdmvRelativePath(source);
     if (!relative || !new RegExp(`^STREAM/${clipId}\\.m2ts$`, "i").test(relative)) { fileSizes[clipId] = null; continue; }
-    try { fileSizes[clipId] = (await stat(resolve(disc.root, relative))).size; }
-    catch { fileSizes[clipId] = null; }
+    fileSizes[clipId] = await readSize(resolve(disc.root, relative));
   }
 
   const supStreams = new Map<string, Uint8Array>();
   if (assetType !== "igs") {
     for (const clipId of [...clipIds].sort()) {
       const supDecls = collectDeclaredSupForClip(disc, reachableSup, clipId, assetSelection, assetType);
-      const fileBytes = fileSizes[clipId] ?? null;
-      if (supDecls.length > 0 && fileBytes !== null && fileBytes > 0 && (fileBytes <= 64 * 1024 * 1024 || assetSelection.clipId !== undefined)) {
+      if (supDecls.length > 0 && canCollectSupPreview(fileSizes[clipId], explicitClip)) {
         const m2tsPath = resolveClipM2tsPath(disc, clipId);
         if (m2tsPath) {
           try {
-            const extracted = await extractSupStreamsFromM2ts(clipId, m2tsPath, supDecls);
+            const batches = pgsPackets?.take(m2tsPath, supDecls);
+            const extracted = batches === undefined
+              ? await extractSupStreamsFromM2ts(clipId, m2tsPath, supDecls)
+              : await extractSupStreamsFromPackets(clipId, batches, supDecls);
             for (const [k, v] of extracted.streams) supStreams.set(k, v);
             if (extracted.payloadBytes.size > 0 && graphics?.payloadBytesByClip instanceof Map) {
               const existing = graphics.payloadBytesByClip.get(clipId) as ReadonlyMap<number, number> | undefined;

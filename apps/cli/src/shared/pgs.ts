@@ -1,18 +1,19 @@
-import { buildMediaClosure } from "./media.js";
+import { reachableMediaPlaylists } from "./media.js";
 import { mapWithConcurrency } from "./concurrency.js";
 import { countOf } from "../progress.js";
 import type { ProgressReporter } from "../progress.js";
 import type { AssetRecord } from "../cli/assets.js";
 import { resolveInputFile } from "@bdmv2web/bdmv-io";
 import { extractIgsScenes } from "@bdmv2web/igs";
-import { extractPgsTracks, renderPgsDisplaySetAsync } from "@bdmv2web/media-export";
+import { extractPgsTracks, extractPgsTracksFromPacketBatches, renderPgsDisplaySetAsync } from "@bdmv2web/media-export";
 import type { PgsDisplaySet, RenderedPgsDisplaySet } from "@bdmv2web/media-export";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
+import type { ParsedDisc, StreamDeclaration } from "@bdmv2web/bdmv-parser";
 import { equalsIgnoreCase } from "@bdmv2web/utils";
+import type { DiscPgsPacketCache } from "./disc-pgs-packets.js";
 
-export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], outputDirectory: string, pathForReference?: (reference: ReturnType<typeof reachablePgsReferences>[number], index: number) => string, selectedReferences?: ReturnType<typeof reachablePgsReferences>) {
+export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"], outputDirectory: string, pathForReference?: (reference: ReturnType<typeof reachablePgsReferences>[number], index: number) => string, selectedReferences?: ReturnType<typeof reachablePgsReferences>, packets?: DiscPgsPacketCache) {
   const references = selectedReferences ?? reachablePgsReferences(disc, scenes);
   const extracted = new Map<string, { packagePath: string; displaySets: Awaited<ReturnType<typeof extractPgsTracks>>[number]["displaySets"] }>();
   const byClip = new Map<string, Array<{ key: string; relativePath: string; reference: typeof references[number] }>>();
@@ -27,7 +28,9 @@ export async function extractReachablePgsTracks(disc: ParsedDisc, scenes: Awaite
   }
   for (const tracks of byClip.values()) {
     const sourcePath = await resolveInputFile(disc.root, `STREAM/${tracks[0]!.reference.clipId}.m2ts`);
-    const outputs = await extractPgsTracks(sourcePath, tracks.map(({ reference, relativePath }) => ({ pid: reference.pid, outputPath: resolve(outputDirectory, relativePath), timestampOffset90k: BigInt(reference.sourceIn90k) })));
+    const requests = tracks.map(({ reference, relativePath }) => ({ pid: reference.pid, outputPath: resolve(outputDirectory, relativePath), timestampOffset90k: BigInt(reference.sourceIn90k) }));
+    const batches = packets?.take(sourcePath, requests);
+    const outputs = batches === undefined ? await extractPgsTracks(sourcePath, requests) : await extractPgsTracksFromPacketBatches(sourcePath, batches, requests);
     for (const [index, track] of outputs.entries()) extracted.set(tracks[index]!.key, { packagePath: tracks[index]!.relativePath, displaySets: track.displaySets });
   }
   return references.map((reference) => {
@@ -40,13 +43,30 @@ export function trackIdentityBySourceIn(reference: { clipId: string; pid: number
   return `${reference.clipId.toLocaleLowerCase("en-US")}:${reference.pid}:${reference.sourceIn90k}`;
 }
 
+function isPrimaryPgs(stream: StreamDeclaration): stream is StreamDeclaration & { pid: number } {
+  return stream.pid !== null && stream.streamType === 1 && stream.codingType === 0x90;
+}
+
+export function primaryPgsPidsByClip(disc: ParsedDisc, includePid: (pid: number) => boolean): Map<string, Set<number>> {
+  const byClip = new Map<string, Set<number>>();
+  for (const playlist of disc.playlists) for (const item of playlist.playItems) {
+    for (const stream of item.streams) {
+      if (!isPrimaryPgs(stream) || !includePid(stream.pid)) continue;
+      const clipId = item.clipId.toUpperCase();
+      const pids = byClip.get(clipId) ?? new Set<number>();
+      pids.add(stream.pid);
+      byClip.set(clipId, pids);
+    }
+  }
+  return byClip;
+}
+
 export function reachablePgsReferences(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
-  const closure = buildMediaClosure(disc, scenes);
-  return closure.playlistIds.flatMap((nodeId) => {
+  return reachableMediaPlaylists(disc, scenes).flatMap((nodeId) => {
     const playlistId = nodeId.slice("playlist:".length);
     const playlist = disc.playlists.find((item) => equalsIgnoreCase(item.id, playlistId));
-    return playlist?.playItems.flatMap((item) => item.streams.filter((stream) => stream.pid !== null && stream.streamType === 1 && stream.codingType === 0x90)
-      .map((stream, index) => ({ playlistId, playlistNumber: Number(playlistId), playItemIndex: item.index, clipId: item.clipId, pid: stream.pid!, streamNumber: index + 1, language: stream.language ?? "und", sourceIn90k: String(item.inTime45k * 2), sourceOut90k: String(item.outTime45k * 2), source: `BDMV/STREAM/${item.clipId}.m2ts` }))) ?? [];
+    return playlist?.playItems.flatMap((item) => item.streams.filter(isPrimaryPgs)
+      .map((stream, index) => ({ playlistId, playlistNumber: Number(playlistId), playItemIndex: item.index, clipId: item.clipId, pid: stream.pid, streamNumber: index + 1, language: stream.language ?? "und", sourceIn90k: String(item.inTime45k * 2), sourceOut90k: String(item.outTime45k * 2), source: `BDMV/STREAM/${item.clipId}.m2ts` }))) ?? [];
   });
 }
 

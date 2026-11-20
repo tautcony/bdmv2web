@@ -2,13 +2,17 @@ import { createReadStream } from "node:fs";
 import { resolve } from "node:path";
 import { bdmvRelativePath } from "@bdmv2web/core/disc-path";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
-import { M2tsPacketReader, PesAssembler, type PesPacket } from "@bdmv2web/igs";
+import { M2tsPacketReader, PesAssembler, type PesPacket, type TsPacket } from "@bdmv2web/igs";
 import { parsePgsSup, pgsDisplaySetEnd90k, type PgsDisplaySet } from "@bdmv2web/media-export";
 import { concatByteChunks, equalsIgnoreCase } from "@bdmv2web/utils";
 import { selectedClip, selectedPid, type AssetSelection, type AssetType } from "../cli/assets.js";
 import type { reachablePgsReferences } from "../shared/pgs.js";
 
 export type SupReference = ReturnType<typeof reachablePgsReferences>[number] & { reachable?: boolean };
+
+export function canCollectSupPreview(fileBytes: number | null | undefined, explicitClip = false): boolean {
+  return fileBytes != null && fileBytes > 0 && (explicitClip || fileBytes <= 64 * 1024 * 1024);
+}
 
 export function supStreamKey(clipId: string, pid: number, sourceIn90k: string): string {
   return `${clipId.toUpperCase()}:${pid}:${sourceIn90k}`;
@@ -176,9 +180,19 @@ function appendPesToState(state: InMemorySupState, pes: PesPacket): void {
  * Extracts raw SUP byte streams and transport payload byte counts for the requested
  * PIDs from an M2TS file in memory without writing temporary files.
  */
-export async function extractSupStreamsFromM2ts(
+export function extractSupStreamsFromM2ts(
   clipId: string,
   m2tsPath: string,
+  requests: ReadonlyArray<{ pid: number; sourceIn90k: string }>,
+  signal?: AbortSignal,
+): Promise<{ streams: Map<string, Uint8Array>; payloadBytes: Map<number, number> }> {
+  const pids = new Set(requests.map(({ pid }) => pid));
+  return extractSupStreamsFromPackets(clipId, readSupPacketBatches(clipId, m2tsPath, pids, signal), requests, signal);
+}
+
+export async function extractSupStreamsFromPackets(
+  clipId: string,
+  batches: AsyncIterable<readonly TsPacket[]> | Iterable<readonly TsPacket[]>,
   requests: ReadonlyArray<{ pid: number; sourceIn90k: string }>,
   signal?: AbortSignal,
 ): Promise<{ streams: Map<string, Uint8Array>; payloadBytes: Map<number, number> }> {
@@ -205,8 +219,6 @@ export async function extractSupStreamsFromM2ts(
     statesByPid.set(request.pid, list);
   }
 
-  const pids = new Set(statesByPid.keys());
-  const reader = new M2tsPacketReader(clipId);
   const assembler = new PesAssembler(clipId);
   const accept = (pesPackets: PesPacket[]) => {
     for (const pes of pesPackets) {
@@ -214,73 +226,63 @@ export async function extractSupStreamsFromM2ts(
     }
   };
 
-  let remainder = new Uint8Array(0);
-  const stream = createReadStream(m2tsPath, { highWaterMark: 1024 * 1024, ...(signal ? { signal } : {}) });
   try {
-    for await (const rawChunk of stream) {
-      if (signal?.aborted) {
-        stream.destroy();
-        break;
-      }
-      const chunk = rawChunk as Uint8Array;
-      const buffer = remainder.length ? concatByteChunks([remainder, chunk], remainder.length + chunk.length) : chunk;
-      const alignedLength = buffer.length - (buffer.length % 192);
-      remainder = alignedLength < buffer.length ? new Uint8Array(Buffer.from(buffer.buffer, buffer.byteOffset + alignedLength, buffer.byteLength - alignedLength)) : new Uint8Array(0);
-      if (alignedLength === 0) continue;
-
-      // Fast path: when 192-byte M2TS sync bytes are intact, filter to requested SUP PIDs
-      // before constructing TsPacket objects for unrelated video/audio packets.
-      let syncIntact = true;
-      const matchingOffsets: number[] = [];
-      for (let pos = 0; pos < alignedLength; pos += 192) {
-        if (buffer[pos + 4] !== 0x47) { syncIntact = false; break; }
-        const pid = ((buffer[pos + 5]! & 0x1f) << 8) | buffer[pos + 6]!;
-        if (pids.has(pid)) matchingOffsets.push(pos);
-      }
-
-      let packets;
-      if (syncIntact) {
-        if (matchingOffsets.length === 0) continue;
-        const filtered = new Uint8Array(matchingOffsets.length * 192);
-        for (let i = 0; i < matchingOffsets.length; i++) {
-          const start = matchingOffsets[i]!;
-          filtered.set(buffer.subarray(start, start + 192), i * 192);
-        }
-        packets = reader.feed(filtered);
-      } else {
-        packets = reader.feed(buffer.subarray(0, alignedLength));
-      }
-
-      for (const packet of packets) {
-        if (!pids.has(packet.pid)) continue;
+    for await (const batch of batches) {
+      if (signal?.aborted) return { streams, payloadBytes };
+      for (const packet of batch) {
+        if (!statesByPid.has(packet.pid)) continue;
         payloadBytes.set(packet.pid, (payloadBytes.get(packet.pid) ?? 0) + packet.payload.byteLength);
         accept(assembler.push(packet));
       }
     }
   } catch (error: unknown) {
-    if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
-      return { streams, payloadBytes };
-    }
+    if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) return { streams, payloadBytes };
     throw error;
   }
-  if (remainder.length) {
-    for (const packet of reader.feed(remainder)) {
-      if (!pids.has(packet.pid)) continue;
-      payloadBytes.set(packet.pid, (payloadBytes.get(packet.pid) ?? 0) + packet.payload.byteLength);
-      accept(assembler.push(packet));
-    }
-  }
-  reader.end();
   accept(assembler.end());
 
   for (const list of statesByPid.values()) {
     for (const state of list) {
-      if (state.byteLength > 0) {
-        streams.set(state.key, concatByteChunks(state.chunks, state.byteLength));
-      }
+      if (state.byteLength > 0) streams.set(state.key, concatByteChunks(state.chunks, state.byteLength));
     }
   }
   return { streams, payloadBytes };
+}
+
+async function* readSupPacketBatches(clipId: string, m2tsPath: string, pids: ReadonlySet<number>, signal?: AbortSignal): AsyncGenerator<readonly TsPacket[]> {
+  const reader = new M2tsPacketReader(clipId);
+  let remainder = new Uint8Array(0);
+  const stream = createReadStream(m2tsPath, { highWaterMark: 1024 * 1024, ...(signal ? { signal } : {}) });
+  for await (const rawChunk of stream) {
+    const chunk = rawChunk as Uint8Array;
+    const buffer = remainder.length ? concatByteChunks([remainder, chunk], remainder.length + chunk.length) : chunk;
+    const alignedLength = buffer.length - (buffer.length % 192);
+    remainder = alignedLength < buffer.length ? new Uint8Array(Buffer.from(buffer.buffer, buffer.byteOffset + alignedLength, buffer.byteLength - alignedLength)) : new Uint8Array(0);
+    if (alignedLength === 0) continue;
+
+    // With intact 192-byte sync, filtering before parsing saves packet allocations.
+    let syncIntact = true;
+    const matchingOffsets: number[] = [];
+    for (let pos = 0; pos < alignedLength; pos += 192) {
+      if (buffer[pos + 4] !== 0x47) { syncIntact = false; break; }
+      const pid = ((buffer[pos + 5]! & 0x1f) << 8) | buffer[pos + 6]!;
+      if (pids.has(pid)) matchingOffsets.push(pos);
+    }
+
+    if (syncIntact) {
+      if (matchingOffsets.length === 0) continue;
+      const filtered = new Uint8Array(matchingOffsets.length * 192);
+      for (let i = 0; i < matchingOffsets.length; i++) {
+        const start = matchingOffsets[i]!;
+        filtered.set(buffer.subarray(start, start + 192), i * 192);
+      }
+      yield reader.feed(filtered);
+    } else {
+      yield reader.feed(buffer.subarray(0, alignedLength));
+    }
+  }
+  if (remainder.length) yield reader.feed(remainder);
+  reader.end();
 }
 
 export interface SupDisplaySetSummary {

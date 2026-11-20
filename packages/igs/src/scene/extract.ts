@@ -11,7 +11,14 @@ import { M2tsPacketReader, PesAssembler, PsiAssembler, source, type PesPacket } 
 /** Shared empty residual; `parseSegments` only ever reads it. */
 const NO_BYTES = new Uint8Array();
 
-export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & { table?: InputFileTable } = {}): Promise<IgsExtraction> {
+export type IgsClipPacketScan = (clipId: string, path: string, batches: AsyncIterable<readonly TsPacket[]>, diagnostics: readonly IgsDiagnostic[]) => AsyncIterable<readonly TsPacket[]>;
+
+interface DiscIgsOptions extends IgsOptions {
+  table?: InputFileTable;
+  scanClipPackets?: IgsClipPacketScan;
+}
+
+export async function extractIgsScenes(disc: ParsedDisc, options: DiscIgsOptions = {}): Promise<IgsExtraction> {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const table = options.table ?? (await discoverBdmvInput(disc.root)).table;
   const diagnostics: IgsDiagnostic[] = [];
@@ -87,17 +94,12 @@ export async function extractIgsScenes(disc: ParsedDisc, options: IgsOptions & {
 
 export async function extractIgsFromChunks(clipId: string, chunks: AsyncIterable<Uint8Array>, expectedPidCues: Array<{ pid: number; source: SourceLocation }> = [], options: IgsOptions = {}): Promise<IgsExtraction> {
   const reader = new M2tsPacketReader(clipId, options.limits ?? DEFAULT_LIMITS);
-  async function* packetBatches(): AsyncGenerator<readonly TsPacket[]> {
-    let completed = false;
-    try {
-      for await (const chunk of chunks) yield reader.feed(chunk);
-      completed = true;
-    } finally {
-      // A clip abandoned on a PID conflict has no EOF to report.
-      if (completed) reader.end();
-    }
-  }
-  return extractIgsFromPacketBatches(clipId, packetBatches(), expectedPidCues, options, reader.diagnostics);
+  return extractIgsFromPacketBatches(clipId, readPacketBatches(reader, chunks), expectedPidCues, options, reader.diagnostics);
+}
+
+async function* readPacketBatches(reader: M2tsPacketReader, chunks: AsyncIterable<Uint8Array>): AsyncGenerator<readonly TsPacket[]> {
+  for await (const chunk of chunks) yield reader.feed(chunk);
+  reader.end();
 }
 
 /**
@@ -264,9 +266,12 @@ export async function extractIgsFromPacketBatches(clipId: string, batches: Async
   };
 }
 
-async function extractClip(clipId: string, path: string, expected: Array<StreamDeclaration | { pid: number; source: SourceLocation }>, streamSource: { path: string; origin: "primary" | "backup" | null }, options: IgsOptions): Promise<IgsExtraction> {
-  const chunks = readFileChunks(path, options.limits ?? DEFAULT_LIMITS, options.chunkSize ?? (options.limits ?? DEFAULT_LIMITS).maxReadWindowBytes);
-  const extraction = await extractIgsFromChunks(clipId, chunks, expected.flatMap((cue) => cue.pid === null ? [] : [{ pid: cue.pid, source: cue.source }]), options);
+async function extractClip(clipId: string, path: string, expected: Array<{ pid: number; source: SourceLocation }>, streamSource: { path: string; origin: "primary" | "backup" | null }, options: DiscIgsOptions): Promise<IgsExtraction> {
+  const limits = options.limits ?? DEFAULT_LIMITS;
+  const reader = new M2tsPacketReader(clipId, limits);
+  const batches = readPacketBatches(reader, readFileChunks(path, limits, options.chunkSize ?? limits.maxReadWindowBytes));
+  const scan = options.scanClipPackets?.(clipId, path, batches, reader.diagnostics) ?? batches;
+  const extraction = await extractIgsFromPacketBatches(clipId, scan, expected, options, reader.diagnostics);
   const withStreamSource = (sourceValue: IgsScene["source"]): IgsScene["source"] => ({ ...sourceValue, path: streamSource.path, origin: streamSource.origin, stage: "transport" });
   for (const scene of extraction.scenes) {
     scene.source = withStreamSource(scene.source);

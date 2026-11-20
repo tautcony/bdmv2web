@@ -1,6 +1,6 @@
 import { buildNavigationGraph, type VmProgram } from "@bdmv2web/hdmv";
 import { extractIgsScenes } from "@bdmv2web/igs";
-import { computeMediaClosure, createExternalMediaTargets, type MediaClosureButtonRoot } from "@bdmv2web/media-export";
+import { computeMediaClosure, computeReachablePlaylists, createExternalMediaTargets, type MediaClosureButtonRoot } from "@bdmv2web/media-export";
 import type { ParsedDisc } from "@bdmv2web/bdmv-parser";
 
 /**
@@ -33,11 +33,21 @@ export function buildButtonPrograms(scenes: Awaited<ReturnType<typeof extractIgs
   }));
 }
 
-export function buildMediaClosure(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
+function mediaNavigation(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
   const buttonEntries = buildButtonPrograms(scenes);
   const buttonPrograms = buttonEntries.map((entry) => entry.program);
   const buttonRoots: MediaClosureButtonRoot[] = buttonEntries.map((entry) => ({ nodeId: `object:${entry.vmId}`, programId: entry.programId }));
-  return computeMediaClosure(disc, buildNavigationGraph(disc.movieObjects, buttonPrograms, { entries: disc.entries }), buttonRoots);
+  return { graph: buildNavigationGraph(disc.movieObjects, buttonPrograms, { entries: disc.entries }), buttonRoots };
+}
+
+export function buildMediaClosure(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {
+  const { graph, buttonRoots } = mediaNavigation(disc, scenes);
+  return computeMediaClosure(disc, graph, buttonRoots);
+}
+
+export function reachableMediaPlaylists(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]): string[] {
+  const { graph, buttonRoots } = mediaNavigation(disc, scenes);
+  return computeReachablePlaylists(disc, graph, buttonRoots);
 }
 
 export function buildExternalTargets(disc: ParsedDisc, scenes: Awaited<ReturnType<typeof extractIgsScenes>>["scenes"]) {

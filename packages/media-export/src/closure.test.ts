@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ParsedDisc, SourceLocation } from "@bdmv2web/bdmv-parser";
 import { buildNavigationGraph, type NavigationGraph } from "@bdmv2web/hdmv";
 import { m3Fixtures } from "@bdmv2web/test-fixtures";
-import { computeMediaClosure, createMediaPlan } from "./index.js";
+import { computeMediaClosure, computeReachablePlaylists, createMediaPlan } from "./index.js";
 
 const source: SourceLocation = { path: "BDMV/index.bdmv", origin: "primary", offset: "0" };
 
@@ -148,13 +148,18 @@ describe("conservative M1/M3 media closure", () => {
     // Six distinct navigation nodes serve the three roots (ten per-root visits),
     // and the structural closure re-walks add the rest; twenty-eight fits the
     // distinct-node total while a per-root budget trips during re-walks.
-    const closure = computeMediaClosure(discFixture(), graph, [{ nodeId: "object:100", programId: 0 }, { nodeId: "object:101", programId: 1 }], { maxStates: 28 });
+    const disc = discFixture();
+    const roots = [{ nodeId: "object:100", programId: 0 }, { nodeId: "object:101", programId: 1 }];
+    const closure = computeMediaClosure(disc, graph, roots, { maxStates: 28 });
     expect(closure.unknown.some((item) => item.code === "MEDIA_CLOSURE_BUDGET")).toBe(false);
     expect(closure.routes.filter((route) => route.origin === "button-program")).toEqual([
       expect.objectContaining({ playlistId: "playlist:00001", origin: "button-program", buttonProgramId: 0 }),
       expect.objectContaining({ playlistId: "playlist:00001", origin: "button-program", buttonProgramId: 1 }),
     ]);
     expect(closure.complete).toBe(true);
+    expect(computeReachablePlaylists(disc, graph, roots)).toEqual(["playlist:00001"]);
+    expect(computeReachablePlaylists(disc, graph, roots, { maxStates: 28 })).toEqual(closure.playlistIds);
+    expect(computeReachablePlaylists(disc, graph, roots, { maxStates: 1 })).toEqual(["playlist:00001", "playlist:00002"]);
   });
 });
 
