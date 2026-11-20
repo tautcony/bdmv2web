@@ -1,6 +1,9 @@
 import com.bdmv2web.bdj.BdjApplicationManager;
 import com.bdmv2web.bdj.LifecycleState;
 import com.bdmv2web.bdj.BdjHostBridge;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import org.bluray.ti.Title;
 import org.bluray.ti.selection.TitleContext;
 import javax.tv.service.selection.ServiceContextFactory;
@@ -13,10 +16,9 @@ public final class LifecycleProbe {
         if (!condition) throw new IllegalStateException(message);
     }
 
-    private static void await(java.util.function.BooleanSupplier condition, String message) throws Exception {
-        long deadline = System.currentTimeMillis() + 3000L;
-        while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) Thread.sleep(10L);
-        require(condition.getAsBoolean(), message);
+    private static void awaitTitleStarted(BlockingQueue<String> startedTitles, int title) throws InterruptedException {
+        String startedTitle = startedTitles.poll(3L, TimeUnit.SECONDS);
+        require(Integer.toString(title).equals(startedTitle), "Expected title-start for " + title + ", received " + startedTitle + ".");
     }
 
     private static Title title(final int number) {
@@ -55,20 +57,27 @@ public final class LifecycleProbe {
         manager.activate("00001", 1);
         require(LifecycleState.titleInitialized == 1 && LifecycleState.titleDestroyed == 0 && titleProxy.getState() == AppProxy.STARTED,
             "A title selection without restart replaced the title-bound application.");
+        BlockingQueue<String> startedTitles = new LinkedBlockingQueue<String>();
+        manager.setEventSink((event, value) -> {
+            if ("title-start".equals(event)) startedTitles.add(value);
+        });
         BdjHostBridge.setTitleSink(manager::dispatchTitle);
         TitleContext titleContext = (TitleContext) ServiceContextFactory.getInstance().getServiceContext(null);
         titleContext.start(title(2), false);
-        await(() -> LifecycleState.titleInitialized == 2 && LifecycleState.titleDestroyed == 1, "A different title did not restart its title-bound application.");
+        awaitTitleStarted(startedTitles, 2);
+        require(LifecycleState.titleInitialized == 2 && LifecycleState.titleDestroyed == 1, "Title 2 should replace the title-bound application once.");
         require(LifecycleState.titleStarted == 2 && LifecycleState.discInitialized == 1 && titleProxy.getState() == AppProxy.STARTED,
             "A title change did not retain the disc-bound menu and start the title-bound application.");
         titleContext.start(title(3), false);
-        await(() -> LifecycleState.titleInitialized == 3 && LifecycleState.titleDestroyed == 2, "A second different title did not restart its title-bound application.");
+        awaitTitleStarted(startedTitles, 3);
+        require(LifecycleState.titleInitialized == 3 && LifecycleState.titleDestroyed == 2, "Title 3 should replace the title-bound application once.");
         titleContext.start(title(3), false);
-        Thread.sleep(50L);
+        awaitTitleStarted(startedTitles, 3);
         require(LifecycleState.titleInitialized == 3 && LifecycleState.titleDestroyed == 2,
             "Starting the same title without restart replaced the title-bound application.");
         titleContext.select(title(3));
-        await(() -> LifecycleState.titleInitialized == 4 && LifecycleState.titleDestroyed == 3, "Selecting a service did not force a title-bound restart.");
+        awaitTitleStarted(startedTitles, 3);
+        require(LifecycleState.titleInitialized == 4 && LifecycleState.titleDestroyed == 3, "Selecting title 3 as a service should restart its title-bound application.");
         require(LifecycleState.titleStarted == 4 && LifecycleState.discInitialized == 1 && LifecycleState.discDestroyed == 0
                 && LifecycleState.presentStartRequested == 4,
             "TitleContext lifecycle changed the retained disc-bound menu instance.");

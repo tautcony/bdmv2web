@@ -63,6 +63,7 @@
 
 ### Verified
 
+- The synthetic lifecycle probe waits for the host's `title-start` event before asserting Xlet state. A scratch fixture that delayed the second `startXlet()` by 100 ms reproduced the CI assertion with the previous probe and passed all five runs with the updated probe. The local Java 21 `runtime-web` coverage run passed all 159 tests, including lifecycle and IXC integration.
 - `corepack pnpm --filter @bdmv2web/media-export build`, `corepack pnpm --filter @bdmv2web/runtime-web build`, `corepack pnpm --filter bdmv2web typecheck`, and `corepack pnpm --filter bdmv2web build` passed.
 - `corepack pnpm --filter bdmv2web exec vitest run src/shared/disc-id.test.ts src/commands/build.test.ts` passed (8 tests). Runtime media and Java player regression results for immediate skip are recorded below after the current run.
 - Root ran `tests/e2e/serve-bdj.test.ts` outside the restricted listener environment; 9/9 passed. Targeted ESLint and `git diff --check` passed on the final changes.
